@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { join } from 'node:path';
@@ -462,7 +462,8 @@ const { copySkillConfined } = await import(modulePath);
 try { copySkillConfined(source, destination); console.log('copied'); }
 catch (err) { console.log(err.message); }
 `);
-    const source = dir.replaceAll('\\', '/');
+    // Real path: the race hook must see the path the copy uses, and macOS's tmpdir() is behind /var -> /private/var.
+    const source = realpathSync(dir).replaceAll('\\', '/');
     const result = execFileSync(process.execPath, ['--import', 'tsx', script, source, join(home, 'copy'), outside, new URL('../src/library.ts', import.meta.url).href], { encoding: 'utf8' });
     expect(result).toContain('leaves the skill folder');
     expect(existsSync(join(home, 'copy', 'SKILL.md'))).toBe(false);
@@ -521,7 +522,7 @@ catch (err) { console.log(err.message); }
       for (let i = 0; i < 2_000; i++) writeFileSync(join(dir, `${i}.txt`), '');
     } else mkdirSync(join(dir, ...Array.from({ length: 11 }, () => 'nested')), { recursive: true });
     expect(() => materialize(decision, 'codex', config, tempDir('loadout-s-'))).toThrow(budget === 'files' ? /more than 2000 files/ : /deeper than 10 folders/);
-  });
+  }, 60_000); // 2,000 confined copies take ~14 s on a Windows CI runner.
 
   it('escapes and frames Jev skill names, origin keys, descriptions and excerpts', async () => {
     const base = scanLibrary(LIBRARY).find((c) => c.name === 'webapp-testing')!;
