@@ -22,7 +22,7 @@ New router tuning only happens on new held-out requests (C1).
 
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
-| A2 | P0 | `loadout audit`: what your installed skills cost you | Claude | cloud | todo |
+| A2 | P0 | `loadout audit`: what your installed skills cost you | Claude | cloud | review |
 | A1 | P1 | README rewrite around the problem, 3-command quickstart, GIF | Claude | cloud | todo (after A2, B1) |
 | A3 | P1 | `loadout init` wizard + starter packs | Codex | cloud | todo |
 | A4 | P1 | npm package under an available name + release workflow | Codex | cloud + erik | blocked: npm name decision |
@@ -49,6 +49,8 @@ Acceptance:
   edits host configs (AGENTS.md rule 3).
 - Tests use fake home directories.
 - It never writes outside `~/.loadout`.
+
+A2 learnings: inventory is not request overhead; overrides are host-specific, MCP counts describe configuration, and adoption must exclude real library locations discovered through host links (PR #3).
 
 **A1. README rewrite.**
 
@@ -96,7 +98,7 @@ Acceptance:
 
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
-| B1 | P0 | Token-waste study: measured per-request overhead of popular skill packs | Claude | local (measure) + cloud (analysis) | todo |
+| B1 | P0 | Token-waste study: measured per-request overhead of popular skill packs | Claude | local (measure) + cloud (analysis) | review ([PR #6](https://github.com/erik-hedstrom/loadout/pull/6); local measurements pending) |
 | B3 | P1 | Fact-checked comparison with alternatives | Codex | cloud | todo |
 | B2 | P1 | Launch kit drafts | Claude | cloud | todo (after A1, B1) |
 | B4 | P1 | Repo polish: description, topics, social preview, badges | Claude | cloud + erik | todo |
@@ -106,6 +108,8 @@ Acceptance:
 **B1. Token-waste study.**
 
 Why: the headline must be measured, not estimated.
+
+Learnings: [PR #6](https://github.com/erik-hedstrom/loadout/pull/6) round 4 requires stable Claude ambient inventory beyond declared treatment additions and distinguishes its isolated baseline from Codex's ambient baseline (14 Claude calls; paid Codex deferred). Measured 2026-10-07: see "B1 results" in bench/RESULTS.md. The inventory guard stopped the first attempt when a synced plugin vanished between calls. Left: paid Codex (blocked on unified_exec); real skill names instead of generated ones; an arm between 50 and 1,232 skills; cost per 1,000 requests at list prices; cached multi-turn cost; the chart. Before the repo goes public, Erik decides whether the raw rows may keep his ambient plugin and skill names, or whether they get hashed. Pack MCP servers stay excluded: starting them runs downloaded code (AGENTS rule 5).
 
 Acceptance:
 - A script in `bench/` installs well-known packs (Superpowers, anthropics/skills,
@@ -117,8 +121,6 @@ Acceptance:
 - It reports tokens, the cost per 1,000 requests at list prices (cached and
   uncached), and whether the host truncates descriptions silently.
 - A chart and a RESULTS entry.
-- Starting point: 1,262 skills' descriptions are about 140k tokens; the top 50
-  about 6.8k (HANDOFF).
 
 **B2. Launch kit.**
 
