@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { audit, formatAudit } from '../src/audit.js';
-import { findSkillDirs, parseFrontmatter, parseSkill } from '../src/library.js';
+import { addSkills, findSkillDirs, parseFrontmatter, parseSkill } from '../src/library.js';
 
 let home: string;
 let project: string;
@@ -457,6 +457,26 @@ await new Promise(setImmediate);`;
     expect(readdirSync(join(library, 'linked')).sort()).toEqual(['.loadout-source.json', 'SKILL.md', 'reference.txt']);
     expect(readFileSync(join(library, 'linked', 'reference.txt'), 'utf8')).toBe('kept');
     expect(JSON.parse(readFileSync(join(library, 'linked', '.loadout-source.json'), 'utf8')).origin).toBe(join(real, 'linked'));
+  });
+
+  it('does not copy the library back into itself when Codex links to its skills directory', async () => {
+    const original = join(home, 'original');
+    const library = join(home, '.loadout', 'library');
+    skill(original, 'already');
+    addSkills(original, library);
+    const sourceFile = join(library, 'skills', 'already', '.loadout-source.json');
+    const before = readFileSync(sourceFile, 'utf8');
+    const codexSkills = join(home, 'codex-custom', 'skills');
+    mkdirSync(dirname(codexSkills), { recursive: true });
+    symlinkSync(join(library, 'skills'), codexSkills, process.platform === 'win32' ? 'junction' : 'dir');
+    if (process.platform === 'win32') vi.stubEnv('LOADOUT_HOME', join(home, '.LOADOUT'));
+    for (let i = 0; i < 2; i++) {
+      const result = await audit(project, true);
+      expect(result.hosts.find((h) => h.host === 'Codex')!.skills.map((s) => s.name)).toEqual(['already']);
+      expect(result.adopted).toEqual({ added: 0, updated: 0, skipped: 1 });
+      expect(readdirSync(join(library, 'skills'))).toEqual(['already']);
+      expect(readFileSync(sourceFile, 'utf8')).toBe(before);
+    }
   });
 
   it('keeps OpenCode project name precedence without applying permission rules', async () => {

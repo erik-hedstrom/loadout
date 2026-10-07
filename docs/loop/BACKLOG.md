@@ -50,7 +50,7 @@ Acceptance:
 - Tests use fake home directories.
 - It never writes outside `~/.loadout`.
 
-A2 learnings: inventory is not request overhead; Claude visibility overrides exclude plugins and include legacy commands, YAML warnings can expose source text, and MCP counts describe configuration rather than authenticated tools (PR #3).
+A2 learnings: inventory is not request overhead; overrides are host-specific, MCP counts describe configuration, and adoption must exclude real library locations discovered through host links (PR #3).
 
 **A1. README rewrite.**
 

@@ -355,9 +355,15 @@ export async function audit(cwd = process.cwd(), adopt = false): Promise<AuditRe
   };
   if (adopt) {
     checkAdoptTarget(paths.library());
+    const destination = canonicalSkillPath(paths.library());
     report.adopted = { added: 0, updated: 0, skipped: 0 };
-    for (const { capability: skill, listings } of found.values()) {
+    for (const [source, { capability: skill, listings }] of found) {
       if (![...listings.values()].some((s) => active.has(s))) continue;
+      const rel = relative(destination, source);
+      if (!isAbsolute(rel) && !rel.split(/[\\/]/).includes('..')) {
+        report.adopted.skipped++;
+        continue;
+      }
       let result: ReturnType<typeof addSkills>;
       try { result = addSkills(skill.source, paths.library()); } catch {
         throw new Error('Could not adopt a discovered skill: check library locks and file access. Earlier copies were retained; host files were unchanged.');
