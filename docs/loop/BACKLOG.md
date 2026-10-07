@@ -357,9 +357,9 @@ Acceptance:
 
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
-| E1 | P0 | GitHub Actions CI | Codex | cloud | todo |
+| E1 | P0 | GitHub Actions CI | Codex | cloud | review |
 | E2 | P0 | LICENSE, CONTRIBUTING, SECURITY.md, templates | Claude | cloud + erik | todo (license: confirm MIT) |
-| E7 | P0 | Bench judges and expander that run inside a cloud session | Claude | cloud | todo |
+| E7 | P0 | Vendor-independent bench judges and expander | Codex | cloud | review ([PR #5](https://github.com/erik-hedstrom/loadout/pull/5)) |
 | E8 | P0 | Repo-wide simplification pass | Claude (pr-reviewer finds, worker fixes) + Codex review | cloud | todo |
 | E3 | P1 | Split the test file per module | Codex | cloud | todo |
 | E5 | P1 | Changelog and release automation | Codex | cloud | todo (with A4) |
@@ -369,9 +369,11 @@ Acceptance:
 
 Acceptance:
 - Runs on push and PR: `npm ci`, build, typecheck, test.
-- Matrix: Ubuntu, macOS, Windows × Node 20 and 24.
+- Matrix: Ubuntu, macOS, Windows × Node 22 and 24 (Node 20 is end-of-life since 2026-04-30).
 - No secrets needed.
 - The badge goes in the README.
+
+Learnings: WSL hook assertions need a Linux runtime fixture on native Windows; Vitest 5 needs Node ≥ 22, so engines moved to >=22 (Node 20 is EOL); plain `npm ci` preserves Rolldown's optional native bindings.
 
 **E2. Community files.**
 
@@ -385,19 +387,31 @@ Acceptance:
 
 **E7. Bench judging in a cloud session.**
 
-Why: the $100 credit pays for cloud sessions only (not the API, not
-Routines), and C1/C3 need judging. `bench/lib.ts` judges through `claude -p`.
-
 Acceptance:
-- Check whether `claude -p` works inside a cloud session.
-- If it does not, add a file-based mode:
-  - `judge.ts` and `expand.ts` write batch prompts and read JSON answers;
-  - an Opus subagent of the session produces the answers, with the catalog
-    passed once per batch.
-- An Anthropic API backend (`ANTHROPIC_API_KEY`, prompt caching) stays
-  optional.
-- Re-judging 40 v4 requests reproduces their verdicts within noise, and the
-  cost is reported.
+- One `modelJson` seam for judge/expander: `--backend claude|codex|files`,
+  default Claude; shared schema validation, regular-file answers and resumable batches.
+- Sequential judges; escaped third-party catalog after the rubric in Claude's
+  cached system prefix, first in Codex's prompt. Dev/test/combined Wilson reports.
+- Exact, nonempty expansion coverage before append; reject duplicate request IDs.
+  Exact verdict ratings and catalog-only missed keys; retry once, exclude and count
+  unresolved disputes. Backend/model/effort provenance and resume checks; reject
+  Claude effort. Files producers unverified; warn on same-family/global context.
+- Codex read-only sandbox, credential env stripping, shell/unified-exec/view-image
+  disabling flags; offline preflight requires shell_tool and unified_exec false.
+  Offline adversarial tests, `npm test` and typecheck (E1 owns the Windows hook failure).
+
+Remaining (orchestrator): record the 0.160.1 negative result in RESULTS:
+unified_exec stays true, so preflight refuses Codex. No Codex kappa until preflight
+and a one-call hostile temporary AGENTS.md canary both pass (answer unchanged);
+verify installed-skill isolation without relocating CODEX_HOME. Check `claude -p`
+in cloud; re-judge 40 v4 requests with an Opus subagent via `files` and, when safe,
+`codex`. Preserve IDs/splits and raw results; report stored-verdict agreement,
+inter-judge Cohen's kappa, intervals and measured cost. The judge prompt changed
+(catalog escaping/framing, rubric line), as did logic (1 retry instead of 2;
+unresolved disputes excluded). Agreement measures prompt and logic changes plus
+the judge, and must be reported that way. Budget: 4–8 batches before retries;
+Claude CLI ~$1.20–$2.40 cached, ~$3.60–$7.20 uncached (files/Opus cloud overhead
+extra); Codex quota cost not exposed. No paid calls during implementation.
 
 **E8. Simplification pass.**
 

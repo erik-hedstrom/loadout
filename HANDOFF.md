@@ -139,7 +139,7 @@ setup, the iteration protocol, the context discipline and the prompts.
 
 ```bash
 git clone https://github.com/erik-hedstrom/loadout && cd loadout
-npm install && npm run build && npm link          # Node ≥ 20 (developed on 24)
+npm install && npm run build && npm link          # Node ≥ 22 (developed on 24)
 loadout init --key-file ~/keys/typesafe.txt       # the key file is NOT in git; keep it safe
 sh bench/data/library.sh                          # rebuild the 1,262-skill library the results used (~10 min)
 npm test && npm run typecheck
