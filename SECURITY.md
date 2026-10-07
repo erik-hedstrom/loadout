@@ -56,12 +56,20 @@ HTTP; remote access needs a trusted HTTPS tunnel or TLS terminator.
 `jev.apiKeyFile`; `jevClient` uses it as a bearer credential
 ([config.ts](src/config.ts), [jev.ts](src/jev.ts)).
 
-E9 is a merge prerequisite: this branch cannot yet promise that MCP server
-environment and header values are never printed, saved or placed in argv.
-`materialize` writes server configuration to session files, `codexArgs`
-serializes these values into arguments, and CLI JSON/dry-run output can expose
-them ([launch.ts](src/launch.ts), [cli.ts](src/cli.ts)). Recheck these paths
-after E9 merges before replacing this warning with a protection claim.
+For Codex, library MCP env/header values stay in the library and the
+`loadout mcp-launch <key>` relay process, absent from agent argv/environment,
+session files and `--json`/dry-run output (`codexArgs`, `materialize`, `launch`
+in [launch.ts](src/launch.ts), `launchMcp` in [relay.ts](src/relay.ts)). MCP
+reports list only type, command, cwd, URL origin and env/header key names
+(`reportJson` in [types.ts](src/types.ts)).
+
+HTTP servers without headers or URL credentials keep native Codex `url`
+entries for `codex mcp login` OAuth. Secrets in URL paths are not detected
+and stay in native config (`codexArgs`); userinfo and query strings use the relay.
+Relay transport and Jev diagnostics contain only fixed facts: capability key,
+URL origin, HTTP status, errno or a fixed category; never upstream or SDK text
+(`diagnostic`, `relay` in [relay.ts](src/relay.ts), `jevClient`, `validateResponse`
+in [jev.ts](src/jev.ts)).
 
 ## Out of scope
 
@@ -70,6 +78,12 @@ loadout does not sandbox the host agent or opted-in MCP server processes
 or control TypeSafe's data retention or a tunnel provider's security. Skills
 must still be reviewed before use; framing and confined reads are limited
 protections, not a trust decision.
+
+A server echoing its credential in a tool result exposes it to the host:
+`relay` deliberately forwards JSON-RPC payloads unchanged, as native Codex would.
+Claude's session `mcp.json` contains server values; `materialize` writes it
+0600 in a 0700 directory on POSIX ([launch.ts](src/launch.ts)). Windows ACLs
+are inherited from the temp directory.
 
 ## Reporting
 
