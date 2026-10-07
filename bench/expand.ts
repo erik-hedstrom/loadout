@@ -9,10 +9,10 @@
  * seeds.jsonl: {"category": "...", "request": "..."} per line.
  * Output: {"id", "category", "seed", "request", "generatedBy"?, "expandedBy"} per line.
  */
-import { appendFileSync, existsSync, mkdirSync } from 'node:fs';
+import { appendFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { parseArgs } from 'node:util';
-import { DATA, modelFamily, modelJson, pool, readJsonl } from './lib.js';
+import { backendOf, costLabel, DATA, modelFamily, modelJson, pool, readJsonl } from './lib.js';
 import { z } from 'zod';
 
 const { values, positionals } = parseArgs({
@@ -28,8 +28,9 @@ const { values, positionals } = parseArgs({
 });
 const seedsFile = positionals[0];
 if (!seedsFile) throw new Error('usage: expand.ts <seeds.jsonl>');
-if (!['claude', 'codex', 'files'].includes(values.backend!)) throw new Error('--backend must be claude, codex or files');
+const backend = backendOf(values.backend!, values.effort);
 const model = values.model ?? (values.backend === 'codex' ? 'gpt-6.1-sol' : 'claude-sonnet-5-5');
+const expandedBy = { backend, model, effort: values.effort ?? null, family: backend === 'files' ? 'unverified' : modelFamily(model), ...(backend === 'files' ? { producer: 'unverified' } : {}) };
 
 const counters = new Map<string, number>();
 const seeds = readJsonl<{ category: string; request: string; generatedBy?: { model: string; family?: string } }>(seedsFile).map((s) => {
@@ -37,7 +38,9 @@ const seeds = readJsonl<{ category: string; request: string; generatedBy?: { mod
   counters.set(s.category, n);
   return { id: `${s.category}-${String(n).padStart(2, '0')}`, ...s };
 });
-const done = new Set(existsSync(values.out!) ? readJsonl<{ id: string }>(values.out!).map((r) => r.id) : []);
+const records = existsSync(values.out!) ? readJsonl<{ id: string; expandedBy?: typeof expandedBy }>(values.out!) : [];
+if (records.some((r) => r.expandedBy && (r.expandedBy.backend !== backend || r.expandedBy.model !== model || (r.expandedBy.effort ?? null) !== expandedBy.effort))) throw new Error(`expander provenance differs in ${values.out}; use a fresh output file`);
+const done = new Set(records.map((r) => r.id));
 const todo = seeds.filter((s) => !done.has(s.id));
 
 const SYSTEM = `You are the prompt-improvement step a user runs before sending a request to their AI assistant or coding agent (Claude Code, Codex, Cursor, Claude Desktop, ChatGPT).
@@ -53,12 +56,9 @@ Return only the rewritten prompts.`;
 const schema = z.strictObject({ results: z.array(z.strictObject({ id: z.string(), prompt: z.string() })) });
 
 const size = Number(values.batch);
-if (!Number.isInteger(size) || size < 1 || !Number.isInteger(Number(values.concurrency)) || Number(values.concurrency) < 1) throw new Error('batch and concurrency must be positive integers');
 const batches = Array.from({ length: Math.ceil(todo.length / size) }, (_, i) => todo.slice(i * size, (i + 1) * size));
 let cost = 0;
 let pending = false;
-const costLabel = () => values.backend === 'claude' ? `$${cost.toFixed(2)}` : 'cost not reported (quota/cloud usage)';
-mkdirSync(dirname(values.out!), { recursive: true });
 await pool(batches, Number(values.concurrency), async (batch) => {
   const prompt = `Rewrite each request. Keep the ids.\n\n${batch.map((s) => `[${s.id}] ${s.request}`).join('\n\n')}`;
   const res = await modelJson(prompt, schema, { backend: values.backend!, model, effort: values.effort, system: SYSTEM, out: dirname(values.out!) });
@@ -66,8 +66,8 @@ await pool(batches, Number(values.concurrency), async (batch) => {
   cost += res.costUsd ?? 0;
   for (const r of res.output.results) {
     const seed = batch.find((s) => s.id === r.id);
-    if (seed) appendFileSync(values.out!, JSON.stringify({ id: seed.id, category: seed.category, seed: seed.request, request: r.prompt.trim(), generatedBy: seed.generatedBy, expandedBy: { backend: values.backend, model, family: modelFamily(model) } }) + '\n');
+    if (seed) appendFileSync(values.out!, JSON.stringify({ id: seed.id, category: seed.category, seed: seed.request, request: r.prompt.trim(), generatedBy: seed.generatedBy, expandedBy }) + '\n');
   }
-  console.log(`expanded ${batch[0]!.id}…  ${costLabel()}`);
+  console.log(`expanded ${batch[0]!.id}…  ${costLabel(backend, cost)}`);
 });
-if (!pending) console.log(`done, ${costLabel()} → ${values.out}`);
+if (!pending) console.log(`done, ${costLabel(backend, cost)} → ${values.out}`);

@@ -359,7 +359,7 @@ Acceptance:
 |---|---|---|---|---|---|
 | E1 | P0 | GitHub Actions CI | Codex | cloud | todo |
 | E2 | P0 | LICENSE, CONTRIBUTING, SECURITY.md, templates | Claude | cloud + erik | todo (license: confirm MIT) |
-| E7 | P0 | Vendor-independent bench judges and expander | Codex | cloud | review |
+| E7 | P0 | Vendor-independent bench judges and expander | Codex | cloud | review ([PR #5](https://github.com/erik-hedstrom/loadout/pull/5)) |
 | E8 | P0 | Repo-wide simplification pass | Claude (pr-reviewer finds, worker fixes) + Codex review | cloud | todo |
 | E3 | P1 | Split the test file per module | Codex | cloud | todo |
 | E5 | P1 | Changelog and release automation | Codex | cloud | todo (with A4) |
@@ -385,48 +385,36 @@ Acceptance:
 
 **E7. Bench judging in a cloud session.**
 
-Why: Claude expanded the v4 requests and judged them. Cross-family judging
-must also work where the cloud-session credit cannot pay for CLI/API calls.
-
 Acceptance:
-- `bench/lib.ts:modelJson` is the shared seam for `judge.ts` and `expand.ts`:
-  `--backend claude|codex|files`, default Claude. Codex uses documented 0.160
-  `exec` flags, a JSON schema, read-only sandbox, stdin, neutral cwd, and
-  `--model` / `--effort`; user config and rules are ignored. No new dependency.
-- Files mode writes numbered prompts and reads matching JSON answers under
-  `<sweep dir>/batches` (expander: the parent of `--out`). Missing answers print
-  pending batches and exit successfully; rerunning resumes. All three
-  backends validate against the same Zod-derived JSON schema.
-- Judge concurrency defaults to 1. Before: system = rubric + raw catalog,
-  user = requests/adjudication. After: system = rubric + instruction to ignore
-  instructions in data, user = escaped `<skills_catalog>` third-party data +
-  requests/adjudication. Re-judging must measure this prompt change.
-- New blind/verdict rows record `judge: {backend, model}`. Expansions preserve
-  `generatedBy` and record `expandedBy: {backend, model, family}`. The judge
-  reads these request fields via `--requests` (default `bench/data/requests.jsonl`),
-  reports known families, and warns on same-family judging, without an override.
-  Legacy judge provenance is reported as unrecorded, never inferred.
-- Reports separate hash-based dev/test splits and combined figures, with 95%
-  Wilson intervals. No tuning or new empirical result in this change.
-- Offline tests in `test/bench.test.ts`: pending/answered judge and expander
-  resumes, adjudication, invalid JSON/schema rejection, catalog escaping,
-  split summaries, provenance, and Codex argv/stdin excluding credentials.
+- One `modelJson` seam for judge/expander: `--backend claude|codex|files`,
+  default Claude; shared schema validation and numbered, resumable files.
+- Judge concurrency defaults to 1. Escape and delimit third-party catalog
+  data after the rubric: Claude system-prompt file; Codex prompt prefix.
+- Verdicts rate each loaded key exactly once, with no unexpected keys;
+  `missed_better` is null or a catalog key. Retry once; exclude unresolved
+  disputed rows from scores and report their count.
+- Record backend, model and effort; reject resume mismatches and Claude
+  `--effort`. Files producers remain unverified: family separation is not
+  established. Report request families and known same-family judging.
+- Codex uses read-only sandbox and disabled shell/unified-exec/view-image
+  flags; strip credential environment variables without relocating auth.
+  No global AGENTS.md/skills isolation control was verified offline; summary
+  warns that judge context includes the user's global AGENTS.md.
+- Regular-file answers only; offline adversarial tests; dev/test/combined
+  reports with shared Wilson intervals. No tuning or new empirical claims.
 
-Remaining cloud-session check (orchestrator; no paid runs performed here):
-- Check `claude -p` inside the cloud session.
-- Re-judge the same 40 v4 requests with an Opus subagent via `files` and with
-  `codex`, in separate output directories. Preserve IDs and `splitOf()`; do not
-  tune. Annotate the request subset's known generation/expansion provenance
-  from [RESULTS](../../bench/RESULTS.md) rather than inventing missing metadata.
-- Record raw answers, agreement with stored verdicts, Cohen's kappa between
-  the two judges, intervals, negative results, and measured cost in RESULTS.
-  Expected work per backend: 4 blind batches plus 0–4 adjudication batches
-  at batch size 10, before retries (at most two per batch). Historical Opus
-  equivalent: about $0.56 (`$4.41 / 315 * 40`), a rough planning estimate only;
-  the changed prompt/cache and cloud subagent billing can differ. Codex uses
-  subscription quota; USD cost is not exposed by this CLI path. Measure both
-  in the cloud/local run. This implementation incurred no model-call spend.
-- Orchestrator obtains the required Claude and Codex reviews before merge.
+Remaining (orchestrator): check `claude -p` in cloud, and run a one-call Codex
+canary with a hostile line in a temporary AGENTS.md: it must not change the
+expected answer. Verify installed-skill/tool isolation too; keep CODEX_HOME
+unchanged. Then re-judge the same 40 v4 requests via an Opus subagent (`files`)
+and `codex`, preserving IDs/splits and recording provenance. The judge prompt
+changed: agreement with stored verdicts measures prompt change plus judge,
+not judge family alone. Commit raw answers and report agreement, Cohen's kappa,
+intervals, negative results and measured cost in RESULTS; obtain both reviews.
+Budget before retries: 4–8 batches; estimated Claude CLI $1.20–$2.40 allowing
+a $0.90 cold prefix per phase and $0.10 warm batches, or $3.60–$7.20 without caching
+(including files/Opus if uncached). Cloud-session overhead is extra; Codex USD
+cost is not exposed, quota is consumed. No paid calls in this implementation.
 
 **E8. Simplification pass.**
 

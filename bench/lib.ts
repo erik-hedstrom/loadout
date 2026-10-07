@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { pathTranslator, which } from '../src/launch.js';
@@ -113,32 +113,51 @@ export const modelFamily = (model: string): string => {
   return 'unknown';
 };
 
+export function backendOf(backend: string, effort?: string): string {
+  if (!['claude', 'codex', 'files'].includes(backend)) throw new Error('--backend must be claude, codex or files');
+  if (backend === 'claude' && effort !== undefined) throw new Error('--effort is not supported by the claude backend');
+  return backend;
+}
+
+export const costLabel = (backend: string, cost: number): string => backend === 'claude' ? `$${cost.toFixed(2)}` : 'cost not reported (quota/cloud usage)';
+
+/** 95% Wilson score interval for k successes out of n. */
+export const wilson = (k: number, n: number): string => {
+  if (!n) return '—';
+  const z = 1.96, p = k / n, d = 1 + (z * z) / n;
+  const c = (p + (z * z) / (2 * n)) / d, h = (z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n))) / d;
+  return `${(100 * Math.max(0, c - h)).toFixed(0)}–${(100 * Math.min(1, c + h)).toFixed(0)}%`;
+};
+
 export async function modelJson<T>(prompt: string, schema: z.ZodType<T>, opts: {
   backend: string; model: string; system: string; out: string; effort?: string;
 }): Promise<(Omit<ClaudeResult<T>, 'costUsd'> & { costUsd: number | null }) | null> {
+  backendOf(opts.backend, opts.effort);
   const jsonSchema = z.toJSONSchema(schema, { target: 'draft-07' });
   if (opts.backend === 'claude') {
     const res = await claudeJson<unknown>(prompt, jsonSchema, opts);
     return { ...res, output: schema.parse(res.output) };
   }
-  const content = `Backend: ${opts.backend}\nModel: ${opts.model}\n\n## System\n\n${opts.system}\n\n## User\n\n${prompt}\n\n## JSON output schema\n\n${JSON.stringify(jsonSchema, null, 2)}\n`;
+  const content = `Backend: ${opts.backend}\nModel: ${opts.model}\nEffort: ${opts.effort ?? 'default'}\n\n## System\n\n${opts.system}\n\n## User\n\n${prompt}\n\n## JSON output schema\n\n${JSON.stringify(jsonSchema, null, 2)}\n`;
   if (opts.backend === 'files') {
     const dir = join(opts.out, 'batches');
     mkdirSync(dir, { recursive: true });
     const prompts = readdirSync(dir).filter((f) => /^\d+\.prompt\.md$/.test(f)).sort();
     // Match by content so completed rows and retries cannot shift answers onto another batch.
-    const existing = prompts.find((f) => readFileSync(join(dir, f), 'utf8') === content);
+    const existing = prompts.find((f) => readFileSync(join(dir, f), 'utf8').replace(/^Effort: .*\n/m, '') === content.replace(/^Effort: .*\n/m, ''));
+    if (existing && readFileSync(join(dir, existing), 'utf8') !== content) throw new Error(`effort differs in ${existing}; use a fresh output directory`);
     const number = Math.max(0, ...prompts.map((f) => Number(f.split('.')[0]))) + 1;
     const file = existing ?? `${String(number).padStart(3, '0')}.prompt.md`;
     if (!existing) writeFileSync(join(dir, file), content, { flag: 'wx' });
     const answer = join(dir, file.replace('.prompt.md', '.answer.json'));
-    if (!existsSync(answer)) {
+    const stat = lstatSync(answer, { throwIfNoEntry: false });
+    if (!stat) {
       console.log(`pending batch ${file.replace('.prompt.md', '')}: ${answer}`);
       return null;
     }
+    if (!stat.isFile()) throw new Error(`answer must be a regular file: ${answer}`);
     return { output: schema.parse(JSON.parse(readFileSync(answer, 'utf8'))), costUsd: null, inputTokens: approxTokens(content), ms: 0 };
   }
-  if (opts.backend !== 'codex') throw new Error('--backend must be claude, codex or files');
   const dir = mkdtempSync(join(tmpdir(), 'loadout-bench-codex-'));
   try {
     const schemaFile = join(dir, 'schema.json');
@@ -147,6 +166,7 @@ export async function modelJson<T>(prompt: string, schema: z.ZodType<T>, opts: {
     const args = [
       'exec', '--ignore-user-config', '--ignore-rules', '--ephemeral', '--skip-git-repo-check',
       '--sandbox', 'read-only', '--model', opts.model,
+      '-c', 'features.shell_tool=false', '-c', 'features.unified_exec=false', '-c', 'features.view_image=false',
       ...(opts.effort ? ['-c', `model_reasoning_effort=${JSON.stringify(opts.effort)}`] : []),
       '--output-schema', schemaFile, '--output-last-message', answerFile, '-',
     ];
@@ -158,7 +178,8 @@ export async function modelJson<T>(prompt: string, schema: z.ZodType<T>, opts: {
     }
     const start = Date.now();
     await new Promise<void>((resolve, reject) => {
-      const child = spawn(bin, args, { cwd: dir, stdio: ['pipe', 'ignore', 'ignore'] });
+      const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/_(?:KEY|TOKEN|SECRET)$/i.test(key)));
+      const child = spawn(bin, args, { cwd: dir, env, stdio: ['pipe', 'ignore', 'ignore'] });
       const timer = setTimeout(() => child.kill(), 300_000);
       child.on('error', (err) => { clearTimeout(timer); reject(err); });
       child.on('close', (code) => {
@@ -167,7 +188,7 @@ export async function modelJson<T>(prompt: string, schema: z.ZodType<T>, opts: {
         else reject(new Error(`codex exited ${code}`));
       });
       child.stdin.on('error', reject);
-      child.stdin.end(`Use only the supplied data; do not use tools. Return JSON matching the schema.\n\n${content}`);
+      child.stdin.end(`${prompt}\n\n## System\n\n${opts.system}\n\nUse only the supplied data; do not use tools. Return JSON matching this schema:\n${JSON.stringify(jsonSchema)}`);
     });
     return { output: schema.parse(JSON.parse(readFileSync(answerFile, 'utf8'))), costUsd: null, inputTokens: approxTokens(content), ms: Date.now() - start };
   } finally {
