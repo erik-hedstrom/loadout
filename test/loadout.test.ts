@@ -1137,6 +1137,27 @@ describe('claude hook', () => {
     expect(result.stderr).toBe(`${HOOK_FAILURE_NOTE}\n`);
   });
 
+  // Windows cannot run a script as `wslpath` without a shell; the path is WSL-only anyway.
+  it.skipIf(process.platform === 'win32')('keeps a failing wslpath diagnostic out of stderr', () => {
+    const home = tempDir('loadout-hook-wslpath-');
+    writeFileSync(join(home, 'config.json'), JSON.stringify({ ...DEFAULT_CONFIG, embeddings: false }));
+    mkdirSync(join(home, 'library/skills/canary'), { recursive: true });
+    writeFileSync(join(home, 'library/skills/canary/SKILL.md'), '---\nname: canary\ndescription: Playwright tests\n---\nTesting instructions.');
+    mkdirSync(join(home, 'bin'));
+    writeFileSync(join(home, 'bin/wslpath'), '#!/bin/sh\necho WSLPATH-CANARY >&2\nexit 1\n', { mode: 0o755 });
+    const file = join(home, 'preload.mjs');
+    writeFileSync(file, outage);
+    // A named skill is listed even on fallback, so its folder goes through wslpath.
+    const result = spawnSync(process.execPath, ['--import', 'tsx', '--import', pathToFileURL(file).href, join(import.meta.dirname, '../src/cli.ts'), 'hook', 'claude', '--windows-paths'], {
+      encoding: 'utf8', timeout: 10_000,
+      env: { ...process.env, PATH: `${join(home, 'bin')}:${process.env.PATH}`, LOADOUT_HOME: home, TYPESAFE_API_KEY: 'hook-test-fake' },
+      input: JSON.stringify({ prompt: '/canary write the release notes', cwd: home }),
+    });
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toBe(`${JEV_FALLBACK_NOTE}\n${HOOK_FAILURE_NOTE}\n`);
+  });
+
   it('routes each prompt once per session and injects a clear winner', async () => {
     const stateDir = tempDir('loadout-hook-');
     const { client, calls } = fakeClient({ 'webapp-testing': 0.95, 'gh-actions-debug': 0.1 }, { exact: 1 });

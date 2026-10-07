@@ -1,11 +1,10 @@
 #!/usr/bin/env node
-import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { loadConfig, paths, resolveApiKey, writeDefaultConfig, type Config } from './config.js';
 import { jevClient } from './jev.js';
-import { claudeArgs, codexArgs, hostSetup, HOSTS, launch, materialize, pathTranslator, which, type Agent, type Host } from './launch.js';
+import { claudeArgs, codexArgs, hostSetup, HOSTS, launch, materialize, pathTranslator, which, windowsPath, type Agent, type Host } from './launch.js';
 import { addFromGitHub, addSkills, librarySources, parseGitHub, scanLibrary, skillExcerpt, type AddResult } from './library.js';
 import { repoSignals } from './repo.js';
 import { route } from './route.js';
@@ -147,7 +146,7 @@ async function runHook(rest: string[]): Promise<number> {
       embeddings: client && config.embeddings ? await cachedEmbeddings(paths.embeddings()) : undefined,
       repo: repoSignals(input.cwd && existsSync(input.cwd) ? input.cwd : process.cwd()),
       stateDir: join(paths.sessions(), 'hook'),
-      ...(values['windows-paths'] ? { toPath: (p: string) => execFileSync('wslpath', ['-w', p], { encoding: 'utf8' }).trim() } : {}),
+      ...(values['windows-paths'] ? { toPath: windowsPath } : {}),
     });
     if (context) console.log(hookOutput(context));
   } catch {
@@ -283,7 +282,7 @@ async function main(): Promise<number> {
           'allowed-host': { type: 'string', multiple: true },
         },
       });
-      const toPath = values['windows-paths'] ? (p: string) => execFileSync('wslpath', ['-w', p], { encoding: 'utf8' }).trim() : undefined;
+      const toPath = values['windows-paths'] ? windowsPath : undefined;
       const library = scanLibrary(paths.library());
       const client = router(config, Boolean(values.lexical));
       // Loaded on demand: the MCP SDK is the heaviest import, and only this command needs it.

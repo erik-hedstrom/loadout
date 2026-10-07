@@ -328,8 +328,11 @@ export function which(bin: string): string | undefined {
  */
 export function pathTranslator(binPath: string | undefined): (p: string) => string {
   if (process.platform !== 'linux' || !binPath || !/^\/mnt\/[a-z]\//.test(binPath)) return (p) => p;
-  return (p) => execFileSync('wslpath', ['-w', p], { encoding: 'utf8' }).trim();
+  return windowsPath;
 }
+
+/** `wslpath -w`. Its stderr is dropped, not forwarded: it can name library folders, and callers report failure in fixed text. */
+export const windowsPath = (p: string) => execFileSync('wslpath', ['-w', p], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
 
 export interface LaunchOptions {
   /** Run once and exit (`claude -p`, `codex exec`) instead of an interactive session. */

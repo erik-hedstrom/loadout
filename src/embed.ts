@@ -18,7 +18,8 @@ const TRANSFORMERS_MODULE = '@huggingface/transformers';
 
 type Extractor = (texts: string[], opts: { pooling: 'cls'; normalize: true }) => Promise<{ data: Float32Array }>;
 type Transformers = {
-  env: { cacheDir: string };
+  env: { cacheDir: string; logLevel: number };
+  LogLevel: { NONE: number };
   pipeline: (task: 'feature-extraction', model: string, opts: { dtype: 'q8' }) => Promise<Extractor>;
 };
 
@@ -34,6 +35,9 @@ async function getExtractor(modelDir: string): Promise<Extractor> {
       throw new Error('embeddings need the optional dependency @huggingface/transformers (npm install @huggingface/transformers)');
     }
     transformers.env.cacheDir = modelDir;
+    // Its failed-inference log prints the model inputs (the prompt's token ids), and info goes to
+    // stdout, where hook JSON and MCP stdio travel. Failures surface through loadout's own handling.
+    transformers.env.logLevel = transformers.LogLevel.NONE;
     return await transformers.pipeline('feature-extraction', EMBED_MODEL, { dtype: 'q8' });
   })();
   return extractor;
