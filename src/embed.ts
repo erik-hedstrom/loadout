@@ -146,6 +146,21 @@ export async function libraryEmbeddings(library: Capability[], dir: string, log:
   }
 }
 
+/**
+ * The cached index only, never embedding the library now: for latency-bound
+ * callers (a per-prompt hook). Undefined if the optional package or the cache
+ * is missing. Skills without a cached vector are ranked by keywords alone.
+ */
+export async function cachedEmbeddings(dir: string): Promise<EmbeddingStore | undefined> {
+  try {
+    await import('@huggingface/transformers');
+  } catch {
+    return undefined;
+  }
+  const store = new EmbeddingStore(dir);
+  return store.size > 0 ? store : undefined;
+}
+
 /** Cosine similarity of unit vectors. */
 export function dot(a: Float32Array, b: Float32Array): number {
   let s = 0;

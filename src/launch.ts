@@ -45,13 +45,30 @@ export const SEARCH_HINT = "When the work involves a format, product, service or
  * shows Windows paths. Uses this install's CLI and runtime, so dev (tsx) runs work too.
  */
 export function searchServer(windowsAgent: boolean): McpServerConfig {
-  // This module's sibling cli: dist/cli.js when built, src/cli.ts under tsx (whose loader is in execArgv).
+  return loadoutCommand(['mcp'], windowsAgent);
+}
+
+/**
+ * How an agent runs this loadout with `sub` (e.g. `mcp`, `hook claude`): this
+ * install's CLI and runtime (dist/cli.js when built, src/cli.ts under tsx,
+ * whose loader is in execArgv). A Windows agent under WSL goes through wsl.exe
+ * and asks for Windows paths.
+ */
+export function loadoutCommand(sub: string[], windowsAgent: boolean): McpServerConfig {
   const entry = fileURLToPath(new URL(import.meta.url.endsWith('.ts') ? './cli.ts' : './cli.js', import.meta.url));
-  const cli = [...process.execArgv, entry, 'mcp'];
+  const cli = [...process.execArgv, entry, ...sub];
   if (!windowsAgent) return { command: process.execPath, args: cli, ...(process.env.LOADOUT_HOME ? { env: { LOADOUT_HOME: process.env.LOADOUT_HOME } } : {}) };
   const home = process.env.LOADOUT_HOME ? ['/usr/bin/env', `LOADOUT_HOME=${process.env.LOADOUT_HOME}`] : [];
   const distro = process.env.WSL_DISTRO_NAME ? ['-d', process.env.WSL_DISTRO_NAME] : [];
   return { command: 'wsl.exe', args: [...distro, '--exec', ...home, process.execPath, ...cli, '--windows-paths'] };
+}
+
+/** A Claude Code settings.json block that runs `loadout hook claude` on every prompt. */
+export function claudeHookSettings(windowsAgent: boolean): object {
+  const h = loadoutCommand(['hook', 'claude'], windowsAgent);
+  const env = Object.entries(h.env ?? {}).map(([k, v]) => `${k}=${quote(v)} `).join('');
+  const command = `${env}${[h.command!, ...(h.args ?? [])].map(quote).join(' ')}`;
+  return { hooks: { UserPromptSubmit: [{ hooks: [{ type: 'command', command, timeout: 30 }] }] } };
 }
 
 const PLUGIN_NAME = 'loadout';
@@ -212,8 +229,12 @@ export function hostSetup(host: Host, windows: boolean): { where: string; snippe
   switch (host) {
     case 'claude-code':
       return {
-        where: 'run once (user scope: every project)',
-        snippet: `claude mcp add --scope user${Object.entries(s.env ?? {}).map(([k, v]) => ` -e ${k}=${quote(v)}`).join('')} loadout -- ${cmd.map(quote).join(' ')}`,
+        where: 'run once (user scope: every project); then, to route every prompt, merge the hook into ~/.claude/settings.json',
+        snippet: [
+          `claude mcp add --scope user${Object.entries(s.env ?? {}).map(([k, v]) => ` -e ${k}=${quote(v)}`).join('')} loadout -- ${cmd.map(quote).join(' ')}`,
+          '',
+          json(claudeHookSettings(windows)),
+        ].join('\n'),
       };
     case 'codex':
       return {

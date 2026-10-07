@@ -5,6 +5,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { DEFAULT_CONFIG, type Config } from '../src/config.js';
 import { JevError, validateResponse, type Question, type SystemOneClient } from '../src/jev.js';
 import { claudeArgs, codexArgs, hostSetup, materialize, searchServer, toToml } from '../src/launch.js';
+import { hookOutput, isFollowUp, promptContext } from '../src/hook.js';
 import { createServer, readSkillFile } from '../src/mcp.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
@@ -325,7 +326,9 @@ describe('launch', () => {
     expect(codex).not.toContain('call_server_tool');
     expect(JSON.parse(hostSetup('opencode', false).snippet).mcp.loadout).toMatchObject({ type: 'local', enabled: true });
     expect(JSON.parse(hostSetup('claude-desktop', true).snippet).mcpServers.loadout.command).toBe('wsl.exe');
-    expect(hostSetup('claude-code', false).snippet).toMatch(/^claude mcp add --scope user loadout -- \S+ .* mcp$/);
+    const claudeCode = hostSetup('claude-code', false).snippet.split('\n\n');
+    expect(claudeCode[0]).toMatch(/^claude mcp add --scope user loadout -- \S+ .* mcp$/);
+    expect(JSON.parse(claudeCode[1]!).hooks.UserPromptSubmit[0].hooks[0].command).toMatch(/ hook claude$/);
   });
 });
 
@@ -432,4 +435,34 @@ describe('mcp server', () => {
     expect((await s.call('server_tools', { server: 'canary', tool: 'ledger_memo' })).text).toMatch(/^ledger_memo: .*\ninput schema: \{/);
     await s.close();
   }, 20_000);
+});
+
+describe('claude hook', () => {
+  const library = scanLibrary(LIBRARY);
+
+  it('routes each prompt once per session and injects a clear winner', async () => {
+    const stateDir = tempDir('loadout-hook-');
+    const { client, calls } = fakeClient({ 'webapp-testing': 0.95, 'gh-actions-debug': 0.1 }, { exact: 1 });
+    const deps = { library, config: DEFAULT_CONFIG, client, stateDir };
+    expect(await promptContext({ session_id: 's1', prompt: 'yes please' }, deps)).toBeUndefined();
+    expect(calls).toHaveLength(0);
+
+    const first = await promptContext({ session_id: 's1', prompt: TASK }, deps);
+    expect(first).toMatch(/^<skill_relevance>\n[\s\S]*Most relevant:\n- webapp-testing \(fit 0\.95\): /);
+    expect(first).toContain('<skill name="webapp-testing" trust="third-party">');
+    // Already offered in this session: nothing new to add.
+    expect(await promptContext({ session_id: 's1', prompt: TASK }, deps)).toBeUndefined();
+    expect(await promptContext({ session_id: 's2', prompt: TASK }, deps)).toContain('webapp-testing');
+
+    expect(JSON.parse(hookOutput('x'))).toEqual({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: 'x' } });
+  });
+
+  it('says nothing for general work or without Jev', async () => {
+    const stateDir = tempDir('loadout-hook-');
+    const { client } = fakeClient({ 'webapp-testing': 0.95 }, { need: 0.1 });
+    expect(await promptContext({ session_id: 'g', prompt: 'rename cnt to count in utils.py' }, { library, config: DEFAULT_CONFIG, client, stateDir })).toBeUndefined();
+    expect(await promptContext({ session_id: 'g', prompt: TASK }, { library, config: DEFAULT_CONFIG, stateDir })).toBeUndefined();
+    expect(isFollowUp('continue')).toBe(true);
+    expect(isFollowUp('/pdf')).toBe(false);
+  });
 });

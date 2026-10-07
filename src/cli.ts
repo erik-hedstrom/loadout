@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { loadConfig, paths, resolveApiKey, writeDefaultConfig, type Config } from './config.js';
 import { jevClient } from './jev.js';
@@ -10,7 +10,8 @@ import { addFromGitHub, addSkills, librarySources, parseGitHub, scanLibrary, ski
 import { repoSignals } from './repo.js';
 import { serveStdio } from './mcp.js';
 import { route } from './route.js';
-import { libraryEmbeddings } from './embed.js';
+import { cachedEmbeddings, libraryEmbeddings } from './embed.js';
+import { hookOutput, promptContext, type HookInput } from './hook.js';
 import type { Capability, RouteDecision } from './types.js';
 
 const USAGE = `loadout — pick the model, skills and MCP servers for each agent session
@@ -26,6 +27,8 @@ Usage:
                                           --headless runs once and exits (claude -p / codex exec)
   loadout mcp [--lexical]                 Serve the library over MCP (stdio): find_skills, load_skill,
                                           and a gateway to the library's MCP servers
+  loadout hook claude [--windows-paths]   Claude Code UserPromptSubmit hook: routes each prompt and adds
+                                          the skills that fit as context (reads the hook JSON on stdin)
   loadout setup <host> [--windows]        Print the config that attaches \`loadout mcp\` to a host:
                                           ${HOSTS.join(', ')}
 
@@ -220,6 +223,31 @@ async function main(): Promise<number> {
         embeddings: client ? embeddingsFor(library, config) : undefined,
         ...(toPath ? { toPath } : {}),
       });
+      return 0;
+    }
+
+    case 'hook': {
+      // Never block or break a prompt: any problem means no output and exit 0.
+      try {
+        const { values, positionals } = parseArgs({ args: rest, allowPositionals: true, options: { 'windows-paths': { type: 'boolean' } } });
+        if (positionals[0] !== 'claude') fail('usage: loadout hook claude');
+        const chunks: Buffer[] = [];
+        for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
+        const input = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}') as HookInput;
+        const client = router(config, false);
+        const context = await promptContext(input, {
+          library: scanLibrary(paths.library()),
+          config,
+          client,
+          embeddings: client && config.embeddings ? await cachedEmbeddings(paths.embeddings()) : undefined,
+          repo: repoSignals(input.cwd && existsSync(input.cwd) ? input.cwd : process.cwd()),
+          stateDir: join(paths.sessions(), 'hook'),
+          ...(values['windows-paths'] ? { toPath: (p: string) => execFileSync('wslpath', ['-w', p], { encoding: 'utf8' }).trim() } : {}),
+        });
+        if (context) console.log(hookOutput(context));
+      } catch (err) {
+        note(`hook: ${err instanceof Error ? err.message : err}`);
+      }
       return 0;
     }
 
