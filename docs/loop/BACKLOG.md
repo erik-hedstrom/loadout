@@ -311,6 +311,7 @@ Acceptance:
 | E2 | P0 | LICENSE, CONTRIBUTING, SECURITY.md, templates | Claude | cloud + erik | todo (license: confirm MIT) |
 | E7 | P0 | Bench judges and expander that run inside a cloud session | Claude | cloud | todo |
 | E8 | P0 | Repo-wide simplification pass | Claude (pr-reviewer finds, worker fixes) + Codex review | cloud | todo |
+| E9 | P0 | Security hardening from the read-only Sol review | Codex | cloud | review |
 | E3 | P1 | Split the test file per module | Codex | cloud | todo |
 | E5 | P1 | Changelog and release automation | Codex | cloud | todo (with A4) |
 | E6 | P2 | Architecture diagram in DESIGN.md | Claude | cloud | todo |
@@ -366,6 +367,25 @@ Acceptance:
 - No behavior change: tests unchanged and green, and the bench scripts still
   run.
 - Report lines removed per area.
+
+**E9. Security hardening.**
+
+Acceptance:
+- `list --json`, `route --json` and saved decisions retain MCP config keys
+  with env/header values redacted; launch configs retain the required values.
+- Codex uses `env_vars` and `env_http_headers` with child environment values,
+  never credential values in argv. Conflicting stdio environment values fail
+  explicitly: these references cannot give different values to the same key.
+- Session skill copies reject links and read regular files through
+  `readConfined()` under the existing manifest, total-size, file and depth limits.
+- Skill paths, keys, names, descriptions and excerpts are escaped at prompt
+  boundaries. Tag-bearing Jev data is marked third-party; tag-free prompt bytes
+  stay unchanged. `decide()` and `bench/judge.ts` stay untouched.
+- Upstream errors redact the resolved Jev key and cap text at 512 characters.
+- Adversarial tests use `fakeClient`; `npm test` and `npm run typecheck` pass.
+
+Handoff: see `HANDOFF.md` E9 notes. PR/commit left to the orchestrator.
+No Jev, judge or agent invocations; incurred API cost $0.
 
 **E3. Test split.**
 

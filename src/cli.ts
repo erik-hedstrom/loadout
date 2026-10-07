@@ -11,7 +11,7 @@ import { repoSignals } from './repo.js';
 import { route } from './route.js';
 import { cachedEmbeddings, libraryEmbeddings } from './embed.js';
 import { hookOutput, promptContext, type HookInput } from './hook.js';
-import type { Capability, RouteDecision } from './types.js';
+import { reportJson, type Capability, type RouteDecision } from './types.js';
 
 const USAGE = `loadout — pick the model, skills and MCP servers for each agent session
 
@@ -202,7 +202,7 @@ async function main(): Promise<number> {
         return 0;
       }
       const library = scanLibrary(paths.library());
-      if (values.json) console.log(JSON.stringify(library, null, 2));
+      if (values.json) console.log(reportJson(library));
       else {
         for (const c of library) console.log(`${c.kind.padEnd(5)} ${c.name}  ${c.description.slice(0, 80)}`);
         console.log(`${library.length} capabilities in ${paths.library()}`);
@@ -219,7 +219,7 @@ async function main(): Promise<number> {
       const task = positionals.join(' ').trim();
       if (!task) fail('route needs a task');
       const decision = await decide(task, config, Boolean(values.lexical));
-      console.log(values.json ? JSON.stringify(decision, null, 2) : explain(decision));
+      console.log(values.json ? reportJson(decision) : explain(decision));
       return 0;
     }
 
@@ -250,7 +250,7 @@ async function main(): Promise<number> {
         return 0;
       }
       if (!bin) fail(`${agent} not found on PATH`);
-      return launch(bin, args, opts);
+      return launch(bin, args, { ...opts, env: session.env });
     }
 
     case 'mcp': {

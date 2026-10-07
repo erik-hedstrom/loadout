@@ -39,6 +39,7 @@ export class JevError extends Error {
 
 /** Probabilities over a distribution may be rounded by the API; anything further off is malformed. */
 const SUM_TOLERANCE = 0.05;
+const ERROR_DETAIL_CHARS = 512;
 
 /**
  * Check that every question came back with an answer of the right shape: a
@@ -81,6 +82,13 @@ export function validateResponse(body: unknown, questions: Record<string, Questi
 }
 
 export function jevClient(opts: { apiKey: string; baseUrl: string; model: string; timeoutMs?: number; retries?: number }): SystemOneClient {
+  const safeDetail = (text: string): string => {
+    let redacted = text;
+    if (opts.apiKey) {
+      for (const key of new Set([opts.apiKey, JSON.stringify(opts.apiKey).slice(1, -1)])) redacted = redacted.split(key).join('[REDACTED]');
+    }
+    return redacted.length > ERROR_DETAIL_CHARS ? `${redacted.slice(0, ERROR_DETAIL_CHARS)}…` : redacted;
+  };
   const once = async (state: unknown, questions: Record<string, Question>) => {
     const res = await fetch(`${opts.baseUrl.replace(/\/$/, '')}/v1/systemone`, {
       method: 'POST',
@@ -88,10 +96,10 @@ export function jevClient(opts: { apiKey: string; baseUrl: string; model: string
       body: JSON.stringify({ model: opts.model, state, questions }),
       signal: AbortSignal.timeout(opts.timeoutMs ?? 12_000),
     });
-    const body = (await res.json().catch(() => ({}))) as Record<string, unknown> & { detail?: unknown; message?: string };
+    const body = (await res.json().catch(() => ({}))) as Record<string, unknown> & { detail?: unknown; message?: unknown };
     if (!res.ok) {
-      const detail = typeof body.detail === 'string' ? body.detail : (body.message ?? JSON.stringify(body.detail ?? body));
-      throw new JevError(`TypeSafe API ${res.status}: ${detail}`, res.status);
+      const detail = typeof body.detail === 'string' ? body.detail : typeof body.message === 'string' ? body.message : JSON.stringify(body.detail ?? body);
+      throw new JevError(`TypeSafe API ${res.status}: ${safeDetail(detail)}`, res.status);
     }
     return validateResponse(body, questions);
   };
@@ -101,6 +109,11 @@ export function jevClient(opts: { apiKey: string; baseUrl: string; model: string
         try {
           return await once(state, questions);
         } catch (err) {
+          if (err instanceof Error) {
+            // Validation and transport errors can also contain upstream text.
+            const message = safeDetail(err.message);
+            err = err instanceof JevError ? new JevError(message, err.status, err.retryable) : new Error(message);
+          }
           // Network errors and timeouts are not JevErrors and are worth one more try.
           const retryable = err instanceof JevError ? err.retryable : true;
           if (!retryable || attempt >= (opts.retries ?? 1)) throw err;

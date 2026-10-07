@@ -4,6 +4,7 @@ import type { Question, SystemOneClient, Text } from './jev.js';
 import { repoQueryText } from './repo.js';
 import { bm25 } from './prefilter.js';
 import { hybridRank } from './retrieve.js';
+import { escapeSkillTags } from './launch.js';
 import {
   TIERS,
   type Capability,
@@ -153,18 +154,20 @@ export function optionKeys(capabilities: Capability[]): Map<string, Capability> 
       c.name,
       c.origin ? `${c.name} (${c.origin.replace(/^github\.com\//, '')})` : undefined,
       `${c.name} (${c.kind === 'mcp' ? 'MCP server' : 'skill'})`,
-    ].filter((k): k is string => Boolean(k) && k !== NONE);
+    ].filter((k): k is string => Boolean(k) && k !== NONE).map(escapeSkillTags);
     let key = variants.find((k) => !keys.has(k));
-    for (let i = 2; !key; i++) if (!keys.has(`${c.name} #${i}`)) key = `${c.name} #${i}`;
+    for (let i = 2; !key; i++) if (!keys.has(`${escapeSkillTags(c.name)} #${i}`)) key = `${escapeSkillTags(c.name)} #${i}`;
     keys.set(key, c);
   }
   return keys;
 }
 
 const describe = (c: Capability, n: number, excerpt?: string): Text => {
-  const fields: Record<string, string> = { does: clip(c.description, n) };
+  const fields: Record<string, string> = { does: escapeSkillTags(clip(c.description, n)) };
   if (c.kind === 'mcp') fields.kind = 'MCP server (tools the agent can call)';
-  if (excerpt) fields.instructions_begin = clip(excerpt, n);
+  if (excerpt) fields.instructions_begin = escapeSkillTags(clip(excerpt, n));
+  // Keep measured prompts unchanged for tag-free skills; contaminated text needs explicit attribution.
+  if ([c.name, c.origin ?? '', c.description, excerpt ?? ''].some((s) => escapeSkillTags(s) !== s)) fields.trust = 'third-party';
   return Object.keys(fields).length === 1 ? fields.does! : fields;
 };
 

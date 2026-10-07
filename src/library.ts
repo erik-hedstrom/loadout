@@ -75,6 +75,28 @@ export function readConfined(root: string, rel: string, maxBytes: number): Buffe
   }
 }
 
+export function copySkillConfined(source: string, destination: string): void {
+  let files = 0;
+  let bytes = 0;
+  const walk = (rel: string, depth: number): void => {
+    const path = join(source, rel);
+    const st = lstatSync(path);
+    if (st.isSymbolicLink()) throw new Error(`skill contains a link: ${rel || '.'}`);
+    if (st.isDirectory()) {
+      if (depth > LIMITS.skillDepth) throw new Error(`skill nested deeper than ${LIMITS.skillDepth} folders`);
+      mkdirSync(join(destination, rel), { recursive: true });
+      for (const entry of readdirSync(path)) walk(join(rel, entry), depth + 1);
+    } else if (st.isFile()) {
+      if (++files > LIMITS.skillFiles) throw new Error(`skill has more than ${LIMITS.skillFiles} files`);
+      const maxBytes = Math.min(LIMITS.skillBytes - bytes, rel === 'SKILL.md' ? LIMITS.manifestBytes : LIMITS.skillBytes);
+      const body = readConfined(source, rel, maxBytes);
+      bytes += body.length;
+      writeFileSync(join(destination, rel), body, { mode: st.mode });
+    } else throw new Error(`not a regular skill file: ${rel}`);
+  };
+  walk('', 0);
+}
+
 /** A skill's SKILL.md text, or undefined if it is missing, a link, outside the folder or oversized. */
 function readManifest(dir: string): string | undefined {
   try {

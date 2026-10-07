@@ -30,6 +30,14 @@ export interface McpServerConfig {
   headers?: Record<string, string>;
 }
 
+/** Reports retain server configuration shape without persisting credentials. */
+export function reportJson(value: unknown): string {
+  return JSON.stringify(value, (key, v) =>
+    (key === 'env' || key === 'headers') && v && typeof v === 'object'
+      ? Object.fromEntries(Object.keys(v).map((k) => [k, '[REDACTED]']))
+      : v, 2);
+}
+
 export type Tier = 'small' | 'medium' | 'large';
 export const TIERS: readonly Tier[] = ['small', 'medium', 'large'];
 
