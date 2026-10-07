@@ -1,0 +1,26 @@
+name: Bug report
+description: Report unexpected loadout behavior.
+body:
+  - type: markdown
+    attributes:
+      value: Do not paste keys or MCP configs. Remove credentials from commands and output. Private vulnerability reporting opens when the repository becomes public. Until then, report to the maintainer directly.
+  - type: textarea
+    id: environment
+    attributes:
+      label: Version and environment
+      description: Include the commit SHA (git rev-parse --short HEAD) or package version, OS, and host agent or app with its version.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Command and reproduction steps
+      description: Include the exact command, steps, and sanitized output.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true

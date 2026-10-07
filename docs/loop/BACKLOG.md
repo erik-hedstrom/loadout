@@ -359,11 +359,11 @@ Acceptance:
 
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
-| E1 | P0 | GitHub Actions CI | Codex | cloud | review |
-| E2 | P0 | LICENSE, CONTRIBUTING, SECURITY.md, templates | Claude | cloud + erik | todo (license: confirm MIT) |
-| E7 | P0 | Vendor-independent bench judges and expander | Codex | cloud | review ([PR #5](https://github.com/erik-hedstrom/loadout/pull/5)) |
+| E1 | P0 | GitHub Actions CI | Codex | cloud | done ([PR #2](https://github.com/erik-hedstrom/loadout/pull/2)) |
+| E2 | P0 | LICENSE, CONTRIBUTING, SECURITY.md, templates | Claude | cloud + erik | review ([PR #1](https://github.com/erik-hedstrom/loadout/pull/1)) |
+| E7 | P0 | Vendor-independent bench judges and expander | Codex | cloud | done ([PR #5](https://github.com/erik-hedstrom/loadout/pull/5)) |
 | E8 | P0 | Repo-wide simplification pass | Claude (pr-reviewer finds, worker fixes) + Codex review | cloud | todo |
-| E9 | P0 | Security hardening from the read-only Sol review | Codex | cloud | review |
+| E9 | P0 | Security hardening from the read-only Sol review | Codex | cloud | done ([PR #4](https://github.com/erik-hedstrom/loadout/pull/4)); routing re-measure owed |
 | E3 | P1 | Split the test file per module | Codex | cloud | todo |
 | E5 | P1 | Changelog and release automation | Codex | cloud | todo (with A4) |
 | E6 | P2 | Architecture diagram in DESIGN.md | Claude | cloud | todo |
@@ -381,12 +381,14 @@ Learnings: WSL hook assertions need a Linux runtime fixture on native Windows; V
 **E2. Community files.**
 
 Acceptance:
-- `LICENSE` (MIT, as `package.json` says, once Erik confirms).
+- `LICENSE` (Apache-2.0, decided by Erik on 2026-10-07).
 - `CONTRIBUTING.md`: setup, the evaluation discipline from AGENTS.md, PR
   rules.
 - `SECURITY.md`: the threat model, covering third-party skill text, the
   hook's data flow, HTTP exposure, and how to report issues.
 - Issue and PR templates.
+
+Learnings: loopback HTTP permits no token; recheck credential protections after E9; native Windows has a WSL-path test failure (28/29 pass); private reporting availability is unverified offline.
 
 **E7. Bench judging in a cloud session.**
 
