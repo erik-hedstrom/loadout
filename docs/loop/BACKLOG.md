@@ -307,7 +307,7 @@ Acceptance:
 
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
-| E1 | P0 | GitHub Actions CI | Codex | cloud | todo |
+| E1 | P0 | GitHub Actions CI | Codex | cloud | review |
 | E2 | P0 | LICENSE, CONTRIBUTING, SECURITY.md, templates | Claude | cloud + erik | todo (license: confirm MIT) |
 | E7 | P0 | Bench judges and expander that run inside a cloud session | Claude | cloud | todo |
 | E8 | P0 | Repo-wide simplification pass | Claude (pr-reviewer finds, worker fixes) + Codex review | cloud | todo |
@@ -322,6 +322,8 @@ Acceptance:
 - Matrix: Ubuntu, macOS, Windows × Node 20 and 24.
 - No secrets needed.
 - The badge goes in the README.
+
+Learnings: WSL hook assertions need a Linux runtime fixture on native Windows; Node 20 requires Vitest 4; plain `npm ci` preserves Rolldown's optional native bindings.
 
 **E2. Community files.**
 
