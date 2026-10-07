@@ -22,7 +22,7 @@ New router tuning only happens on new held-out requests (C1).
 
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
-| A2 | P0 | `loadout audit`: what your installed skills cost you | Claude | cloud | todo |
+| A2 | P0 | `loadout audit`: what your installed skills cost you | Claude | cloud | review |
 | A1 | P1 | README rewrite around the problem, 3-command quickstart, GIF | Claude | cloud | todo (after A2, B1) |
 | A3 | P1 | `loadout init` wizard + starter packs | Codex | cloud | todo |
 | A4 | P1 | npm package under an available name + release workflow | Codex | cloud + erik | blocked: npm name decision |
@@ -49,6 +49,8 @@ Acceptance:
   edits host configs (AGENTS.md rule 3).
 - Tests use fake home directories.
 - It never writes outside `~/.loadout`.
+
+A2 learnings: installed listings are estimates, not measured overhead; MCP connection configs do not supply offline schemas, and project config discovery must work from subdirectories.
 
 **A1. README rewrite.**
 
