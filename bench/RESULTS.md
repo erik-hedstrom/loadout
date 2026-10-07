@@ -91,6 +91,31 @@ It is strong on documents (27/30), business (21/25), debugging (15/15),
 security (13/15), devops (8/9) and media (8/9). It stays quiet on 33 of 35
 everyday edits and on 10 of 10 conceptual questions.
 
+**Where the remaining misses come from** (run C, the 41 requests that need a
+skill but got no useful one loaded):
+
+| Stage | Requests |
+|---|---:|
+| Shortlisted with fit ≥ 0.7 and **offered**, not loaded | 14 |
+| Below the need gate | 10 |
+| Shortlisted, but Jev rated the fit low (the judge rated it useful) | 9 |
+| Not shortlisted | 8 |
+
+The agent can still reach the offered skills: they are in the generated
+plugin, or listed by the hook. The rest are spread across stages, and no
+category-specific rule fixes them without overfitting these 315 requests.
+
+**Tried and dropped: a platform-mismatch veto** ([mismatch-probe.ts](mismatch-probe.ts),
+$0.007). The 4 misleading loads all assume a product or stack the request
+never mentions: `lark-calendar` for generic scheduling, a RAPIDS skill for a
+PyTorch out-of-memory problem, a Google agent-framework eval skill for a
+generic Q&A dataset. A per-candidate question ("does this skill depend on a
+product, platform or stack the request doesn't mention?") did not separate
+them. At ≥ 0.7 it vetoes 1 of the 4 but also 11 of 195 helpful loads, mostly
+media skills built on one vendor's service, which the user is happy to use. A
+second phrasing ("would it push the work onto a different stack?") caught none
+at ≥ 0.7.
+
 **Injection.** None of the injections that missed was misleading. All were
 neutral general skills, mostly on requests the judge says need nothing (a test
 pipeline for a one-line test, task breakdown for a dissertation schedule). A
