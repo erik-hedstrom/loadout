@@ -20,7 +20,6 @@ import { bm25, prefilter } from '../src/prefilter.js';
 import { mentionedSkills, NONE, optionKeys, route } from '../src/route.js';
 import type { RepoSignals } from '../src/types.js';
 import { relay } from '../src/relay.js';
-import { safeDetail } from '../src/errors.js';
 
 const LIBRARY = join(import.meta.dirname, 'fixtures', 'library');
 
@@ -150,8 +149,8 @@ describe('E9 security', () => {
     const [back, serverTransport] = InMemoryTransport.createLinkedPair();
     const host = new Client({ name: 'relay-test', version: '0.0.1' });
     await server.connect(serverTransport);
-    const completed = relay(front, back);
-    const closed = side === 'server' ? expect(completed).rejects.toThrow('MCP server closed') : expect(completed).resolves.toBeUndefined();
+    const completed = relay(front, back, 'mcp:canary');
+    const closed = side === 'server' ? expect(completed).rejects.toThrow('transport failed') : expect(completed).resolves.toBeUndefined();
     let hostClosed = false;
     let serverClosed = false;
     host.onclose = () => { hostClosed = true; };
@@ -175,7 +174,7 @@ describe('E9 security', () => {
     const [back, serverTransport] = InMemoryTransport.createLinkedPair();
     const host = new Client({ name: 'response-test', version: '0.0.1' });
     await server.connect(serverTransport);
-    const completed = relay(front, back);
+    const completed = relay(front, back, 'mcp:canary');
     const log = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
       await host.connect(hostTransport);
@@ -187,7 +186,7 @@ describe('E9 security', () => {
       await expect(server.server.request({ method: 'ping' }, EmptyResultSchema, { timeout: 100 })).rejects.toThrow('Request timed out');
       expect(received).toContainEqual(expect.objectContaining({ method: 'ping' }));
       expect(received).not.toContainEqual(expect.objectContaining({ error: expect.anything() }));
-      expect(log).toHaveBeenCalledWith('loadout: response forward failed');
+      expect(log).toHaveBeenCalledWith('loadout: mcp-launch mcp:canary: transport failed');
     } finally {
       vi.restoreAllMocks();
       await host.close();
@@ -205,7 +204,7 @@ describe('E9 security', () => {
     expect(result.status).toBe(1);
     expect(result.stdout).toBe('');
     expect(result.stdout + result.stderr).not.toMatch(/Bearer|e9-first-canary|e9-second-canary/);
-    expect(result.stderr.trim()).toBe('loadout: invalid header value for Authorization');
+    expect(result.stderr.trim()).toBe('loadout: mcp-launch mcp:invalid: transport failed from https://example.invalid');
   });
 
   it('reports invalid HTTP URLs without header guidance or credentials', async () => {
@@ -216,7 +215,7 @@ describe('E9 security', () => {
     const result = spawnSync(process.execPath, ['--import', 'tsx', join(import.meta.dirname, '../src/cli.ts'), 'mcp-launch', 'mcp:invalid'], { encoding: 'utf8', env: { ...process.env, LOADOUT_HOME: home } });
     expect(result.status).toBe(1);
     expect(result.stdout).toBe('');
-    expect(result.stderr.trim()).toBe('loadout: invalid MCP HTTP URL');
+    expect(result.stderr.trim()).toBe('loadout: mcp-launch mcp:invalid: transport failed');
   });
 
   it.each(['headers', 'query', 'userinfo'])('sends HTTP %s credentials only from the relay to the local MCP server', async (mode) => {
@@ -282,13 +281,12 @@ describe('E9 security', () => {
   });
 
   it.each([
-    { status: 401, credentials: 'bearer' },
-    { status: 500, credentials: 'bearer' },
-    { status: 500, credentials: 'userinfo' },
-    { status: 500, credentials: 'env-header' },
-  ])('keeps relaying after HTTP $status with redacted $credentials credentials and negotiated POST/GET headers', async ({ status, credentials }) => {
+    { credentials: 'bearer', user: '', secret: 'e9-header"secret\\value' },
+    { credentials: 'userinfo', user: 'user', secret: 'e9-userinfo-canary' },
+    { credentials: 'query', user: '', secret: 'e9/encoded+canary' },
+    { credentials: 'overlap', user: 'admin', secret: 'admin-long-secret-canary' },
+  ].flatMap((entry) => [401, 500].map((status) => ({ ...entry, status }))))('keeps relaying after HTTP $status without echoing $credentials credentials in diagnostics', async ({ status, credentials, user, secret }) => {
     const home = tempDir('loadout-e9-failure-');
-    const secret = credentials === 'userinfo' ? 'admin-long-secret-canary' : 'e9-header"secret\\value';
     const seen: { method: string | undefined; version: string | string[] | undefined }[] = [];
     let failed = false;
     const http = createHttpServer(async (req, res) => {
@@ -307,7 +305,7 @@ describe('E9 security', () => {
       if (message.method === 'notifications/initialized') { res.writeHead(202).end(); return; }
       if (message.method === 'tools/call' && !failed) {
         failed = true;
-        res.writeHead(status).end(`upstream rejected ${status === 401 ? secret : JSON.stringify(secret)} -y mcp json 1 e9-query-secret`);
+        res.writeHead(status).end(JSON.stringify({ target: req.url, headers: req.headers, secret }));
         return;
       }
       const result = message.method === 'initialize'
@@ -321,9 +319,8 @@ describe('E9 security', () => {
     const port = (http.address() as { port: number }).port;
     mkdirSync(join(home, 'library'));
     writeFileSync(join(home, 'library/mcp.json'), JSON.stringify({ mcpServers: { http: {
-      url: `http://${credentials === 'userinfo' ? `admin:${secret}@` : ''}127.0.0.1:${port}/mcp?format=json&page=1&api_key=e9-query-secret`,
-      ...(credentials === 'userinfo' ? {} : { headers: { Authorization: `Bearer ${secret}` } }),
-      ...(credentials === 'env-header' ? { env: { TOKEN: 'e9-header' } } : {}),
+      url: `http://${user ? `${user}:${secret}@` : ''}127.0.0.1:${port}/mcp${credentials === 'query' ? `?api_key=${encodeURIComponent(secret)}` : ''}`,
+      ...(credentials === 'bearer' ? { headers: { Authorization: `Bearer ${secret}` } } : {}),
       description: 'Playwright',
     } } }));
     await runRoute(scanLibrary(join(home, 'library')));
@@ -335,22 +332,16 @@ describe('E9 security', () => {
       await client.connect(transport);
       expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual(['canary']);
       const failure = await client.callTool({ name: 'canary', arguments: {} }).catch((error: Error) => error.message);
-      expect(failure).toContain('upstream rejected');
-      expect(failure).toContain(`upstream rejected ${status === 401 ? '[REDACTED]' : '"[REDACTED]"'} -y mcp`);
-      expect(failure).toContain('[REDACTED]');
-      expect(failure).toContain('-y mcp');
-      expect(failure).toContain('json 1 [REDACTED]');
-      expect(failure).not.toContain('e9-query-secret');
-      expect(failure).not.toContain(secret);
-      expect(failure).not.toContain(JSON.stringify(secret).slice(1, -1));
+      const diagnostic = `mcp-launch mcp:http: upstream HTTP ${status} from http://127.0.0.1:${port}`;
+      expect(failure).toBe(`MCP error -32603: ${diagnostic}`);
       expect(await client.callTool({ name: 'canary', arguments: {} })).toMatchObject({ content: [{ text: secret }] });
       await vi.waitFor(() => { expect(seen.some((entry) => entry.method === 'GET')).toBe(true); });
       expect(seen.every((entry) => entry.version === '2025-03-26')).toBe(true);
       await client.close();
-      expect(stderr).toContain('upstream rejected');
-      expect(stderr).toContain(`upstream rejected ${status === 401 ? '[REDACTED]' : '"[REDACTED]"'} -y mcp`);
-      expect(stderr).not.toContain(secret);
-      expect(stderr).not.toContain(JSON.stringify(secret).slice(1, -1));
+      expect(stderr.split(/\r?\n/).filter((line) => line.startsWith('loadout:'))).toEqual([`loadout: ${diagnostic}`]);
+      for (const value of [secret, encodeURIComponent(secret), JSON.stringify(secret).slice(1, -1), Buffer.from(`${user}:${secret}`).toString('base64'), ...(user ? [user] : [])]) {
+        expect(failure + stderr).not.toContain(value);
+      }
     } finally {
       await client.close();
       await new Promise<void>((resolve) => { http.close(() => resolve()); });
@@ -369,14 +360,6 @@ describe('E9 security', () => {
       await client.connect(new StdioClientTransport({ command: process.execPath, args: ['--import', 'tsx', join(import.meta.dirname, '../src/cli.ts'), 'mcp-launch', 'mcp:shim'], env: { LOADOUT_HOME: home }, stderr: 'ignore' }));
       expect(await client.callTool({ name: 'ledger_memo', arguments: { entry: 3 } })).toMatchObject({ content: [{ text: 'entry 3: LOADOUT-MCP-CANARY-5521' }] });
     } finally { await client.close(); }
-  });
-
-  it.each([
-    { text: 'prefix abcdef suffix', secrets: ['abcd', 'cdef'], expected: 'prefix [REDACTED] suffix' },
-    { text: 'ababa', secrets: ['aba'], expected: '[REDACTED]' },
-    { text: 'top-secret', secrets: ['top-secret', 'REDACTED'], expected: '[REDACTED]' },
-  ])('redacts overlapping spans in the original text: $text', ({ text, secrets, expected }) => {
-    expect(safeDetail(text, secrets)).toBe(expected);
   });
 
   it('starts the requested MCP server without scanning skill directories', async () => {
@@ -398,10 +381,10 @@ describe('E9 security', () => {
     expect(codexArgs(session, TASK, []).find((arg) => arg.startsWith('mcp_servers.oauth='))).toBe('mcp_servers.oauth={ "url" = "https://example.invalid/mcp", "default_tools_approval_mode" = "approve" }');
   });
 
-  it('exits on closure after a stdio startup error', async () => {
+  it('reports ENOENT without server args and exits on closure', async () => {
     const home = tempDir('loadout-e9-missing-');
     mkdirSync(join(home, 'library'));
-    writeFileSync(join(home, 'library/mcp.json'), JSON.stringify({ mcpServers: { missing: { command: 'loadout-e9-missing-command', description: 'Playwright' } } }));
+    writeFileSync(join(home, 'library/mcp.json'), JSON.stringify({ mcpServers: { missing: { command: 'loadout-e9-missing-command', args: ['--api-key', 'e9-spawn-arg-canary'], description: 'Playwright' } } }));
     await runRoute(scanLibrary(join(home, 'library')));
     const child = spawn(process.execPath, ['--import', 'tsx', join(import.meta.dirname, '../src/cli.ts'), 'mcp-launch', 'mcp:missing'], { env: { ...process.env, LOADOUT_HOME: home }, stdio: 'pipe' });
     let stderr = '';
@@ -409,7 +392,8 @@ describe('E9 security', () => {
     try {
       const code = await new Promise<number | null>((resolve, reject) => { child.once('error', reject); child.once('close', resolve); });
       expect(code).toBe(1);
-      expect(stderr).toContain('ENOENT');
+      expect(stderr).toContain('mcp-launch mcp:missing: stdio transport failed (ENOENT)');
+      expect(stderr).not.toMatch(/--api-key|e9-spawn-arg-canary/);
     } finally { child.kill(); }
   });
 

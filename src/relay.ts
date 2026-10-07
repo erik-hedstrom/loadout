@@ -1,24 +1,31 @@
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { StreamableHTTPClientTransport, StreamableHTTPError } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { JSONRPCMessage, RequestId } from '@modelcontextprotocol/sdk/types.js';
 import { readMcpServers } from './library.js';
-import { safeDetail } from './errors.js';
+import { constants } from 'node:os';
 
-export function relay(front: Transport, back: Transport, secrets: string[] = []): Promise<void> {
+function diagnostic(key: string, origin: string | undefined, error: unknown): string {
+  const prefix = `mcp-launch ${key}:`;
+  if (origin && error instanceof StreamableHTTPError && error.code !== undefined && Number.isInteger(error.code) && error.code >= 100 && error.code <= 599) return `${prefix} upstream HTTP ${error.code} from ${origin}`;
+  if (!origin && error instanceof Error && 'code' in error && typeof error.code === 'string' && Object.hasOwn(constants.errno, error.code)) return `${prefix} stdio transport failed (${error.code})`;
+  return `${prefix} transport failed${origin ? ` from ${origin}` : ''}`;
+}
+
+export function relay(front: Transport, back: Transport, key: string, origin?: string): Promise<void> {
   return new Promise((resolve, reject) => {
     let closing = false;
     let initializeId: RequestId | undefined;
-    const detail = (error: unknown) => safeDetail(error instanceof Error ? error.message : String(error), secrets);
+    const detail = (error: unknown) => diagnostic(key, origin, error);
     const report = (error: unknown) => { console.error(`loadout: ${detail(error)}`); };
     const finish = (error?: Error) => {
       if (closing) return;
       closing = true;
       void Promise.allSettled([front.close(), back.close()]).then((results) => {
         const failed = results.find((r) => r.status === 'rejected');
-        if (error) reject(error);
-        else if (failed?.status === 'rejected') reject(failed.reason);
+        if (error) reject(new Error(detail(error)));
+        else if (failed?.status === 'rejected') reject(new Error(detail(failed.reason)));
         else resolve();
       });
     };
@@ -51,39 +58,29 @@ export async function launchMcp(key: string, libraryDir: string): Promise<void> 
   const name = key.slice(4);
   if (!Object.hasOwn(servers, name)) throw new Error('mcp-launch requires a library MCP server key');
   const { description, autoApprove, gateway, ...server } = servers[name]!;
-  const secrets = [
-    ...Object.values(server.env ?? {}),
-    ...Object.values(server.headers ?? {}).flatMap((value) => [value, ...value.split(/\s+/).filter((part) => part.length >= 8)]),
-    ...(server.url ? [server.url] : []),
-  ];
+  let origin: string | undefined;
   let back: Transport;
-  if (server.url) {
-    let url: URL;
-    try { url = new URL(server.url); }
-    catch { throw new Error('invalid MCP HTTP URL'); }
-    if (server.type === 'sse') throw new Error('mcp-launch requires Streamable HTTP, not SSE');
-    const headers = new Headers();
-    for (const [name, value] of Object.entries(server.headers ?? {})) {
-      try { headers.set(name, value); }
-      catch { throw new Error(`invalid header value for ${name}`); }
-    }
-    secrets.push(...[...url.searchParams.values()].filter((value) => value.length >= 8));
-    if (url.username || url.password) {
-      const user = decodeURIComponent(url.username);
-      const password = decodeURIComponent(url.password);
-      secrets.push(user, password);
-      if (!headers.has('Authorization')) {
-        const credential = Buffer.from(`${user}:${password}`).toString('base64');
-        const value = `Basic ${credential}`;
-        secrets.push(value, ...(credential.length >= 8 ? [credential] : []));
-        headers.set('Authorization', value);
+  try {
+    if (server.url) {
+      const url = new URL(server.url);
+      origin = url.origin;
+      if (server.type === 'sse') throw new Error('mcp-launch requires Streamable HTTP, not SSE');
+      const headers = new Headers(server.headers);
+      if (url.username || url.password) {
+        const user = decodeURIComponent(url.username);
+        const password = decodeURIComponent(url.password);
+        if (!headers.has('Authorization')) {
+          headers.set('Authorization', `Basic ${Buffer.from(`${user}:${password}`).toString('base64')}`);
+        }
+        url.username = url.password = '';
       }
-      url.username = url.password = '';
+      back = new StreamableHTTPClientTransport(url, { requestInit: { headers } });
+    } else {
+      if (!server.command) throw new Error('library MCP server has no command');
+      back = new StdioClientTransport({ ...server, command: server.command });
     }
-    back = new StreamableHTTPClientTransport(url, { requestInit: { headers } });
-  } else {
-    if (!server.command) throw new Error('library MCP server has no command');
-    back = new StdioClientTransport({ ...server, command: server.command });
+  } catch (error) {
+    throw new Error(diagnostic(key, origin, error));
   }
   const front = new StdioServerTransport();
   const end = () => { front.onclose?.(); };
@@ -93,10 +90,8 @@ export async function launchMcp(key: string, libraryDir: string): Promise<void> 
   process.once('SIGINT', interrupt);
   process.once('SIGTERM', interrupt);
   try {
-    await relay(front, back, secrets);
-    if (interrupted) throw new Error('MCP relay interrupted');
-  } catch (error) {
-    throw new Error(safeDetail(error instanceof Error ? error.message : String(error), secrets));
+    await relay(front, back, key, origin);
+    if (interrupted) throw new Error(diagnostic(key, origin, undefined));
   } finally {
     process.stdin.off('end', end);
     process.off('SIGINT', interrupt);

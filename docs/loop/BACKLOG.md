@@ -438,8 +438,8 @@ Acceptance:
 - Relayed MCP credentials stay in the library and server process, absent from
   agent argv, environment and session files. Library keys are validated.
 - Public HTTP servers retain native Codex OAuth. Relays support credential-bearing
-  URLs, negotiated protocol versions and recoverable request errors with bounded,
-  redacted diagnostics even for overlapping credentials. Windows shims and
+  URLs, negotiated protocol versions and recoverable request errors. Diagnostics
+  contain controlled metadata only, never upstream error text. Windows shims and
   server startup logs work.
 - MCP startup reads only its config; Claude MCP session files retain private modes.
 - Skill copies reject links and retain pinned confinement and size limits.
