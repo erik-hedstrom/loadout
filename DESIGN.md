@@ -69,7 +69,8 @@ Isolation needs per-CLI support that is not uniform yet (Claude Code has
 |---|---|---|---|
 | **Launcher** (v0.1) | once per session | `--model`, `--plugin-dir`, `--mcp-config` | `-m`, `-c` overrides |
 | **Search server** (`loadout mcp`) | mid-session, on demand | `find_skills`, `load_skill`, gateway to library MCP servers; attached by the launcher | same — Codex speaks MCP |
-| **Prompt hook** (planned) | every turn | `UserPromptSubmit` injects a shortlist as context (cache-safe: appended to messages) | if/when hooks support it |
+| **Prompt hook** (`loadout hook claude`) | every prompt | `UserPromptSubmit` adds the skills that fit as context (cache-safe: appended to the user turn), once per skill per session | if/when hooks support it |
+| **HTTP** (`loadout mcp --http`) | remote hosts | — | ChatGPT chat, behind an HTTPS tunnel; skills only, optional bearer token |
 
 The launcher fixes the session's tool set up front, which also keeps the prompt
 cache intact. The gateway is the escape hatch when the router misses.
@@ -271,8 +272,6 @@ worth evaluating as the harness before building our own.
   one generic `call_server_tool`. MCP's `tools/list_changed` could add a
   server's real tools to the session instead (native schemas, per-tool
   approvals) on hosts that honour it.
-- **ChatGPT chat.** It only connects to remote HTTPS MCP servers; local use
-  needs an HTTP transport plus OpenAI's Secure MCP Tunnel.
 - **Independent evaluation.** Requests written by people who never saw the
   skill descriptions, with several acceptable skills per request, and
   end-to-end task outcomes, not just what was loaded.

@@ -6,7 +6,9 @@ import { DEFAULT_CONFIG, type Config } from '../src/config.js';
 import { JevError, validateResponse, type Question, type SystemOneClient } from '../src/jev.js';
 import { claudeArgs, claudeHookSettings, codexArgs, hostSetup, loaderArgs, materialize, searchServer, toToml } from '../src/launch.js';
 import { hookOutput, isFollowUp, promptContext } from '../src/hook.js';
-import { createServer, readSkillFile } from '../src/mcp.js';
+import { createServer, readSkillFile, serveHttp } from '../src/mcp.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { request } from 'node:http';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { addSkills, parseGitHub, parseSkill as parseSkillDir, scanLibrary } from '../src/library.js';
@@ -423,6 +425,36 @@ describe('mcp server', () => {
     expect(ref.match(/<\/skill_file>/g)).toHaveLength(1);
     expect(ref).toContain('&lt;/skill_file>');
     await s2.close();
+  });
+
+  it('serves skills only over HTTP, behind a token and a host check', async () => {
+    const http = await serveHttp({ library: [...skills, canary], config: DEFAULT_CONFIG }, { port: 0, host: '127.0.0.1', token: 'secret-token' });
+    try {
+      const url = new URL(http.url);
+      const raw = (path: string, headers: Record<string, string>) =>
+        new Promise<number>((resolve, reject) => {
+          const req = request({ host: url.hostname, port: url.port, path, method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', ...headers } }, (res) => {
+            res.resume();
+            resolve(res.statusCode ?? 0);
+          });
+          req.on('error', reject);
+          req.end(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }));
+        });
+      expect(await raw('/mcp', {})).toBe(401);
+      expect(await raw('/mcp', { authorization: 'Bearer wrong-token!' })).toBe(401);
+      expect(await raw('/elsewhere', { authorization: 'Bearer secret-token' })).toBe(404);
+      expect(await raw('/mcp', { authorization: 'Bearer secret-token', host: 'evil.example' })).toBe(403);
+
+      const client = new Client({ name: 'test', version: '0' });
+      await client.connect(new StreamableHTTPClientTransport(url, { requestInit: { headers: { authorization: 'Bearer secret-token' } } }));
+      // No gateway over HTTP, even though the library has a gateway server.
+      expect((await client.listTools()).tools.map((t) => t.name)).toEqual(['find_skills', 'load_skill']);
+      const loaded = (await client.callTool({ name: 'load_skill', arguments: { skill: 'pdf' } })) as { content: { text: string }[] };
+      expect(loaded.content[0]!.text).toContain('<skill name="pdf"');
+      await client.close();
+    } finally {
+      await http.close();
+    }
   });
 
   it('lists and calls the tools of a library MCP server through the gateway', async () => {

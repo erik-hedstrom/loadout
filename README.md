@@ -160,7 +160,25 @@ everything else, `loadout setup <host>` prints the config for this machine:
 | Claude Desktop | `loadout setup claude-desktop` |
 | Cursor | `loadout setup cursor` |
 | OpenCode | `loadout setup opencode` |
-| ChatGPT chat | not yet: it only connects to remote HTTPS MCP servers |
+| ChatGPT chat (developer mode) | `loadout mcp --http` behind an HTTPS tunnel (see below) |
+
+ChatGPT only connects to remote HTTPS MCP servers. `loadout mcp --http`
+serves the same search on `http://127.0.0.1:8787/mcp`:
+- it serves skills only, never the MCP gateway, so a remote client cannot
+  start or call your local servers;
+- `--token-file` requires a bearer token on every request;
+- requests whose Host header is not localhost or an `--allowed-host` are
+  refused.
+
+Put OpenAI's Secure MCP Tunnel, or another HTTPS tunnel, in front of it.
+Pass the tunnel's domain as `--allowed-host`, then add the tunnel URL as a
+connector in ChatGPT's developer mode.
+
+**Claude Code hook.** `loadout setup claude-code` also prints a
+`UserPromptSubmit` hook. It routes every prompt and adds the skills that fit
+as context, so sessions started without the launcher get the right skills
+without relying on the agent to search. Each skill is offered once per
+session, and short follow-ups ("yes", "go on") are not routed.
 
 Under WSL, Windows apps reach the server through `wsl.exe` and get Windows
 paths. Keep the TypeSafe key in the config's `apiKeyFile` (environment

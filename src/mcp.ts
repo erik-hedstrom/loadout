@@ -11,6 +11,7 @@
  *
  * stdout is the protocol channel: nothing here may print to it.
  */
+import { timingSafeEqual } from 'node:crypto';
 import { readdirSync } from 'node:fs';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { join, relative, sep } from 'node:path';
@@ -321,6 +322,63 @@ export function createServer(deps: SearchDeps): { server: McpServer; gateway: Ga
     );
   }
   return { server, gateway };
+}
+
+export interface HttpOptions {
+  port: number;
+  /** Interface to bind; keep 127.0.0.1 and put a tunnel in front for remote hosts. */
+  host: string;
+  /** Require `Authorization: Bearer <token>` on every request. */
+  token?: string;
+  /** Extra Host header values to accept (e.g. a tunnel's domain), on top of localhost. */
+  allowedHosts?: string[];
+}
+
+/**
+ * Serve over Streamable HTTP, for hosts that only connect to remote servers
+ * (ChatGPT, behind OpenAI's Secure MCP Tunnel or another HTTPS tunnel).
+ * Stateless: each request gets a fresh server. The gateway to the library's
+ * MCP servers is never offered over HTTP, so a remote client cannot start or
+ * call local servers; only skills are searched and read.
+ */
+export async function serveHttp(deps: SearchDeps, opts: HttpOptions): Promise<{ url: string; close: () => Promise<void> }> {
+  const { createServer: createHttpServer } = await import('node:http');
+  const { StreamableHTTPServerTransport } = await import('@modelcontextprotocol/sdk/server/streamableHttp.js');
+  const remote: SearchDeps = { ...deps, library: deps.library.filter((c) => c.kind === 'skill') };
+  const expected = opts.token ? Buffer.from(`Bearer ${opts.token}`) : undefined;
+  const authorized = (header: string | undefined) => {
+    if (!expected) return true;
+    const got = Buffer.from(header ?? '');
+    return got.length === expected.length && timingSafeEqual(got, expected);
+  };
+  let allowedHosts: string[] = [];
+  const http = createHttpServer(async (req, res) => {
+    try {
+      if (new URL(req.url ?? '/', 'http://localhost').pathname !== '/mcp') return void res.writeHead(404).end();
+      if (!authorized(req.headers.authorization)) return void res.writeHead(401, { 'WWW-Authenticate': 'Bearer' }).end();
+      const { server } = createServer(remote);
+      const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true, enableDnsRebindingProtection: true, allowedHosts });
+      res.on('close', () => {
+        void transport.close();
+        void server.close();
+      });
+      await server.connect(transport);
+      await transport.handleRequest(req, res);
+    } catch (err) {
+      if (!res.headersSent) res.writeHead(500).end(err instanceof Error ? err.message : String(err));
+    }
+  });
+  await new Promise<void>((resolve, reject) => {
+    http.once('error', reject);
+    http.listen(opts.port, opts.host, () => resolve());
+  });
+  const address = http.address();
+  const port = typeof address === 'object' && address ? address.port : opts.port;
+  allowedHosts = [`127.0.0.1:${port}`, `localhost:${port}`, `[::1]:${port}`, ...(opts.allowedHosts ?? [])];
+  return {
+    url: `http://${opts.host.includes(':') ? `[${opts.host}]` : opts.host}:${port}/mcp`,
+    close: () => new Promise((resolve) => http.close(() => resolve())),
+  };
 }
 
 /** Serve over stdio until the host closes the pipe. */

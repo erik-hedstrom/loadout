@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { loadConfig, paths, resolveApiKey, writeDefaultConfig, type Config } from './config.js';
@@ -26,6 +26,9 @@ Usage:
                                           --headless runs once and exits (claude -p / codex exec)
   loadout mcp [--lexical]                 Serve the library over MCP (stdio): find_skills, load_skill,
                                           and a gateway to the library's MCP servers
+  loadout mcp --http [--port 8787] [--host 127.0.0.1] [--token-file f] [--allowed-host h]
+                                          The same over Streamable HTTP (skills only), for remote hosts
+                                          such as ChatGPT behind a tunnel
   loadout hook claude [--windows-paths]   Claude Code UserPromptSubmit hook: routes each prompt and adds
                                           the skills that fit as context (reads the hook JSON on stdin)
   loadout setup <host> [--windows]        Print the config that attaches \`loadout mcp\` to a host:
@@ -209,12 +212,33 @@ async function main(): Promise<number> {
 
     case 'mcp': {
       // stdout carries the protocol: everything else goes to stderr.
-      const { values } = parseArgs({ args: rest, options: { lexical: { type: 'boolean' }, 'windows-paths': { type: 'boolean' } } });
+      const { values } = parseArgs({
+        args: rest,
+        options: {
+          lexical: { type: 'boolean' },
+          'windows-paths': { type: 'boolean' },
+          http: { type: 'boolean' },
+          port: { type: 'string', default: '8787' },
+          host: { type: 'string', default: '127.0.0.1' },
+          'token-file': { type: 'string' },
+          'allowed-host': { type: 'string', multiple: true },
+        },
+      });
       const toPath = values['windows-paths'] ? (p: string) => execFileSync('wslpath', ['-w', p], { encoding: 'utf8' }).trim() : undefined;
       const library = scanLibrary(paths.library());
       const client = router(config, Boolean(values.lexical));
       // Loaded on demand: the MCP SDK is the heaviest import, and only this command needs it.
-      const { serveStdio } = await import('./mcp.js');
+      const { serveHttp, serveStdio } = await import('./mcp.js');
+      if (values.http) {
+        const token = values['token-file'] ? readFileSync(values['token-file'], 'utf8').trim() : undefined;
+        if (values['token-file'] && !token) fail(`empty token file: ${values['token-file']}`);
+        const { url } = await serveHttp(
+          { library, config, client, repo: repoSignals(process.cwd()), embeddings: client ? embeddingsFor(library, config) : undefined },
+          { port: Number(values.port), host: values.host!, token, allowedHosts: values['allowed-host'] },
+        );
+        note(`MCP (skills only) at ${url}${token ? ', bearer token required' : ''}; stop with Ctrl+C`);
+        await new Promise(() => {});
+      }
       await serveStdio({
         library,
         config,
