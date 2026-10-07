@@ -108,7 +108,7 @@ export function parseFrontmatter(text: string): Record<string, unknown> {
   const match = FRONTMATTER.exec(text);
   if (!match?.[1]) return {};
   try {
-    const meta: unknown = parseYaml(match[1]);
+    const meta: unknown = parseYaml(match[1], { logLevel: 'error' });
     return meta !== null && typeof meta === 'object' && !Array.isArray(meta) ? meta as Record<string, unknown> : {};
   } catch {
     return {};

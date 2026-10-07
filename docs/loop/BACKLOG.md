@@ -50,7 +50,7 @@ Acceptance:
 - Tests use fake home directories.
 - It never writes outside `~/.loadout`.
 
-A2 learnings: report installed inventory, not simulated request cost; Claude keeps every name and budgets descriptions at 1% of context, simple local off switches are excluded, and OpenCode permission evaluation stays out of scope (PR #3).
+A2 learnings: inventory is not request overhead; Claude visibility overrides exclude plugins and include legacy commands, YAML warnings can expose source text, and MCP counts describe configuration rather than authenticated tools (PR #3).
 
 **A1. README rewrite.**
 

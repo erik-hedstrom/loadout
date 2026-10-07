@@ -105,7 +105,7 @@ function addSkillRoot(root: string, host: HostAudit, found: Map<string, FoundSki
   }
 }
 
-function addMarkdown(root: string, host: HostAudit, seen: Set<string>, kind: 'commands' | 'agents', prefix = '') {
+function addMarkdown(root: string, host: HostAudit, seen: Set<string>, kind: 'commands' | 'agents', prefix = '', overrides: Record<string, unknown> = {}) {
   if (!existsSync(root) || lstatSync(root).isSymbolicLink()) return;
   const confinement = lstatSync(root).isFile() ? dirname(root) : root;
   let entries = 0;
@@ -124,7 +124,9 @@ function addMarkdown(root: string, host: HostAudit, seen: Set<string>, kind: 'co
         if (kind === 'commands' && meta['disable-model-invocation'] === true) return;
         const name = prefix + (typeof meta.name === 'string' ? meta.name : basename(path, '.md'));
         const description = typeof meta.description === 'string' ? meta.description : '';
-        if (description) host.listings.push(listing(name, description));
+        const override = kind === 'commands' && !prefix ? overrides[name] : undefined;
+        if (override === 'off' || override === 'user-invocable-only') return;
+        if (description || override === 'name-only') host.listings.push(listing(name, override === 'name-only' ? undefined : description));
         else host.warnings.push(`A plugin ${kind} description is missing; its listing is not counted.`);
       } catch {
         host.warnings.push(`A ${kind} file could not be counted.`);
@@ -236,7 +238,7 @@ function checkAdoptTarget(library: string) {
   if (rel.startsWith('..') || isAbsolute(rel)) throw new Error('audit adoption must stay under ~/.loadout; unset the outside LOADOUT_HOME override');
   for (let dir = resolve(library, 'skills');; dir = dirname(dir)) {
     if (existsSync(dir) && lstatSync(dir).isSymbolicLink()) throw new Error('audit adoption refuses a symlink in the loadout destination');
-    if (dir === allowed) break;
+    if (relative(allowed, dir) === '' || dirname(dir) === dir) break;
   }
 }
 
@@ -268,17 +270,22 @@ export async function audit(cwd = process.cwd(), adopt = false): Promise<AuditRe
   const [claude, codex, open, cursor] = hosts as [HostAudit, HostAudit, HostAudit, HostAudit];
   const serverMaps = hosts.map(() => new Map<string, unknown>());
   const [claudeServers, codexServers, openServers, cursorServers] = serverMaps as [Map<string, unknown>, Map<string, unknown>, Map<string, unknown>, Map<string, unknown>];
+  const userSettings = readJson(join(claudeHome, 'settings.json'), claude, 'user settings');
+  const claudeSettings = object(userSettings.enabledPlugins);
+  const skillOverrides = object(userSettings.skillOverrides);
+  for (const settings of ['settings.json', 'settings.local.json']) for (const dir of dirs) {
+    const config = readJson(join(dir, '.claude', settings), claude, 'project settings');
+    Object.assign(claudeSettings, object(config.enabledPlugins));
+    Object.assign(skillOverrides, object(config.skillOverrides));
+  }
   addSkillRoot(join(claudeHome, 'skills'), claude, found);
-  addMarkdown(join(claudeHome, 'commands'), claude, seenDescriptions, 'commands');
+  addMarkdown(join(claudeHome, 'commands'), claude, seenDescriptions, 'commands', '', skillOverrides);
   addMarkdown(join(claudeHome, 'agents'), claude, seenDescriptions, 'agents');
   addSkillRoot(join(codexHome, 'skills'), codex, found);
   addSkillRoot(join(home, '.agents', 'skills'), codex, found);
   if (existsSync(join(codexHome, 'plugins'))) codex.warnings.push('Plugin cache skills are not counted: this audit cannot establish which cached plugins are enabled.');
   for (const root of [join(home, '.claude', 'skills'), join(home, '.agents', 'skills'), join(openHome, 'skill'), join(openHome, 'skills')]) addSkillRoot(root, open, found);
   for (const root of [join(home, '.cursor', 'skills'), join(home, '.claude', 'skills'), join(home, '.codex', 'skills'), join(home, '.agents', 'skills')]) addSkillRoot(root, cursor, found);
-  const userSettings = readJson(join(claudeHome, 'settings.json'), claude, 'user settings');
-  const claudeSettings = object(userSettings.enabledPlugins);
-  const skillOverrides = object(userSettings.skillOverrides);
   const claudeConfig = readJson(join(process.env.CLAUDE_CONFIG_DIR || home, '.claude.json'), claude, 'user MCP config');
   addServers(claudeConfig.mcpServers, claudeServers);
   for (const dir of dirs) addServers(object(object(claudeConfig.projects)[dir]).mcpServers, claudeServers);
@@ -287,7 +294,7 @@ export async function audit(cwd = process.cwd(), adopt = false): Promise<AuditRe
   const openConfigs = [join(openHome, 'opencode.json'), join(openHome, 'opencode.jsonc')];
   for (const dir of dirs) {
     addSkillRoot(join(dir, '.claude', 'skills'), claude, found);
-    addMarkdown(join(dir, '.claude', 'commands'), claude, seenDescriptions, 'commands');
+    addMarkdown(join(dir, '.claude', 'commands'), claude, seenDescriptions, 'commands', '', skillOverrides);
     addMarkdown(join(dir, '.claude', 'agents'), claude, seenDescriptions, 'agents');
     addSkillRoot(join(dir, '.agents', 'skills'), codex, found);
     codexConfig(join(dir, '.codex', 'config.toml'), codex, codexServers, disabledSkills);
@@ -297,19 +304,14 @@ export async function audit(cwd = process.cwd(), adopt = false): Promise<AuditRe
     addServers(readJson(join(dir, '.cursor', 'mcp.json'), cursor, 'project MCP config').mcpServers, cursorServers);
     openConfigs.push(join(dir, 'opencode.json'), join(dir, 'opencode.jsonc'), join(dir, '.opencode', 'opencode.json'), join(dir, '.opencode', 'opencode.jsonc'));
   }
-  for (const settings of ['settings.json', 'settings.local.json']) for (const dir of dirs) {
-    const config = readJson(join(dir, '.claude', settings), claude, 'project settings');
-    Object.assign(claudeSettings, object(config.enabledPlugins));
-    Object.assign(skillOverrides, object(config.skillOverrides));
-  }
   claudePlugins(claudeHome, dirs, claude, found, seenDescriptions, claudeServers, claudeSettings);
   for (const configFile of [...new Set(openConfigs)]) {
     const config = readJson(configFile, open, 'MCP config');
     addServers(config.mcp, openServers);
   }
   for (const { capability, listings } of found.values()) for (const [identity, entry] of listings) {
-    if (!identity.startsWith('Claude Code:')) continue;
-    const name = identity.slice('Claude Code:'.length) + capability.name;
+    if (identity !== 'Claude Code:') continue;
+    const name = capability.name;
     const override = skillOverrides[name];
     if (override === 'off' || override === 'user-invocable-only') claude.skills = claude.skills.filter((s) => s !== entry);
     else if (override === 'name-only') Object.assign(entry, listing(name));
@@ -346,7 +348,7 @@ export async function audit(cwd = process.cwd(), adopt = false): Promise<AuditRe
     caveats: [
       'Claude Code keeps descriptions within 1% of the context window; Codex within 2% or 8,000 characters; OpenCode and Cursor do not document one; B1 measures what is actually sent.',
       'Claude Code always lists names; on overflow it drops descriptions from least-invoked skills first. Descriptions plus when_to_use are cut at 1,536 characters; skillListingBudgetFraction and SLASH_COMMAND_TOOL_CHAR_BUDGET configure the budget.',
-      'MCP schemas, bundled skills and claude.ai connectors are not counted; no servers were started or contacted. Codex/Cursor plugin caches are not inspected.',
+      'MCP schemas, bundled skills and claude.ai connectors are not counted; no servers were started or contacted. Servers awaiting authentication add no tools. Codex/Cursor plugin caches are not inspected.',
       'OpenCode permission rules are not applied.',
       'loadout comparison covers real tool definitions plus up to 3 largest descriptions; bodies, suggestions and instructions are excluded.',
     ],
@@ -371,14 +373,14 @@ export async function audit(cwd = process.cwd(), adopt = false): Promise<AuditRe
       'Cursor: move adopted folders out of .cursor/.claude/.codex/.agents skill directories at user and project scope.',
     ];
   }
-  report.summary = hosts.map((h) => `${h.host}: ${h.skills.length} skills installed, ~${h.estimatedTokens.toLocaleString('en-US')} description tokens ${h.host === 'Claude Code' ? 'before its listing cap (1% of context)' : h.host === 'Codex' ? 'before its listing cap (2% or 8,000 characters)' : '(listing budget not documented)'}; ${h.servers.length} MCP servers; MCP schemas not counted.`).join('\n');
+  report.summary = hosts.map((h) => `${h.host}: ${h.skills.length} skills installed, ~${h.estimatedTokens.toLocaleString('en-US')} description tokens ${h.host === 'Claude Code' ? 'before its listing cap (1% of context)' : h.host === 'Codex' ? 'before its listing cap (2% or 8,000 characters)' : '(listing budget not documented)'}; ${h.servers.length} MCP servers configured; MCP schemas not counted.`).join('\n');
   return report;
 }
 
 export function formatAudit(report: AuditReport): string {
   const lines = [report.summary, `loadout comparison: ~${report.loadout.estimatedTokens} tokens (${report.loadout.toolTokens} tokens for real tool definitions + ${report.loadout.skillTokens} for up to ${report.loadout.pickedSkills} descriptions).`, report.method];
   for (const host of report.hosts) {
-    lines.push(`\n${host.host}: ${host.skills.length} skills, ${host.descriptionCharacters} description characters, ~${host.estimatedTokens} inventory tokens; ${host.servers.length} MCP servers`);
+    lines.push(`\n${host.host}: ${host.skills.length} skills, ${host.descriptionCharacters} description characters, ~${host.estimatedTokens} inventory tokens; ${host.servers.length} MCP servers configured`);
     if (host.listings.length) lines.push(`  Separate command/agent inventory: ${host.listings.length} descriptions, ${host.listings.reduce((sum, s) => sum + s.characters, 0)} characters.`);
     for (const entry of [...host.skills, ...host.listings]) lines.push(`  ${entry.name}: ${entry.description} (~${entry.tokens} tokens)`);
     for (const server of host.servers) lines.push(`  MCP ${server.name}: not counted (schemas unavailable offline)`);

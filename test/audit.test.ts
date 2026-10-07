@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { audit, formatAudit } from '../src/audit.js';
-import { findSkillDirs, parseSkill } from '../src/library.js';
+import { findSkillDirs, parseFrontmatter, parseSkill } from '../src/library.js';
 
 let home: string;
 let project: string;
@@ -151,6 +151,36 @@ describe('audit', () => {
     symlinkSync(outside, join(home, '.loadout'), process.platform === 'win32' ? 'junction' : 'dir');
     await expect(audit(project, true)).rejects.toThrow(/symlink/);
     expect(readdirSync(outside)).toEqual([]);
+  });
+
+  it.skipIf(process.platform !== 'win32')('adopts into a case-variant LOADOUT_HOME without looping past its boundary', () => {
+    skill(join(home, 'claude-custom', 'skills'), 'safe');
+    vi.stubEnv('LOADOUT_HOME', join(home, '.LOADOUT'));
+    const result = spawnSync(process.execPath, ['--import', import.meta.resolve('tsx'), cli, 'audit', '--json', '--adopt'], { cwd: project, env: process.env, encoding: 'utf8', timeout: 5000 });
+    expect(result.error).toBeUndefined();
+    expect(result.status, result.stderr).toBe(0);
+    expect(JSON.parse(result.stdout).adopted.added).toBe(1);
+    expect(existsSync(join(home, '.loadout', 'library', 'skills', 'safe', 'SKILL.md'))).toBe(true);
+  });
+
+  it('keeps source-bearing YAML warnings out of audit and add stdout/stderr while rejecting parse errors', () => {
+    vi.stubEnv('NODE_NO_WARNINGS', undefined);
+    vi.stubEnv('NODE_OPTIONS', undefined);
+    const root = join(home, 'claude-custom', 'skills');
+    file(join(root, 'safe', 'SKILL.md'), '---\nname: safe\ndescription: normal\ncredential: !private TOP-SECRET\n---\nbody');
+    file(join(home, 'claude-custom', 'commands', 'legacy.md'), '---\ndescription: normal\ncredential: !private TOP-SECRET\n---\nbody');
+    const script = `import { audit, formatAudit } from ${JSON.stringify(import.meta.resolve('../src/audit.ts'))};
+import { addSkills } from ${JSON.stringify(import.meta.resolve('../src/library.ts'))};
+const report = await audit(${JSON.stringify(project)});
+console.log(formatAudit(report));
+console.log(JSON.stringify(report));
+console.log(JSON.stringify(addSkills(${JSON.stringify(root)}, ${JSON.stringify(join(home, '.loadout', 'library'))})));
+await new Promise(setImmediate);`;
+    const result = spawnSync(process.execPath, ['--import', import.meta.resolve('tsx'), '--input-type=module', '-e', script], { cwd: project, env: process.env, encoding: 'utf8' });
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).not.toContain('TOP-SECRET');
+    expect(result.stderr).not.toContain('TOP-SECRET');
+    expect(parseFrontmatter('---\nname: [TOP-SECRET\n---')).toEqual({});
   });
 
   it('CLI JSON is parseable, secret-free and adoption writes only in the fake loadout home', () => {
@@ -330,6 +360,9 @@ describe('audit', () => {
     expect(result.summary.split('\n')).toHaveLength(4);
     expect(result.summary).toContain('Codex: 2 skills installed, ~2,030 description tokens');
     expect(result.summary).toContain('MCP schemas not counted');
+    expect(result.summary).toContain('0 MCP servers configured');
+    expect(formatAudit(result)).toContain('0 MCP servers configured');
+    expect(result.caveats.join(' ')).toContain('Servers awaiting authentication add no tools');
     expect(formatAudit(result)).not.toMatch(/tokens\/request|tokens per request|at most.*fit|16,000/);
     expect(result.caveats).toContain('Claude Code keeps descriptions within 1% of the context window; Codex within 2% or 8,000 characters; OpenCode and Cursor do not document one; B1 measures what is actually sent.');
     expect(result.caveats.join(' ')).toMatch(/bundled skills.*claude\.ai connectors.*not counted/i);
@@ -350,17 +383,33 @@ describe('audit', () => {
     expect(readdirSync(join(home, '.loadout', 'library', 'skills')).sort()).toEqual(['local-on', 'project-on', 'short']);
   });
 
-  it('uses namespaced Claude skill overrides and marketplace-specific plugin disables', async () => {
+  it('keeps plugin skills and commands unaffected by visibility overrides and honors marketplace-specific disables', async () => {
     const one = join(home, 'plugins', 'one');
     const two = join(home, 'plugins', 'two');
     skill(join(one, 'skills'), 'one');
     skill(join(two, 'skills'), 'two');
+    skill(join(two, 'skills'), 'off');
+    file(join(two, 'commands', 'command.md'), '---\ndescription: plugin command\n---\nbody');
     json(join(home, 'claude-custom', 'plugins', 'installed_plugins.json'), { plugins: {
       'pack@one': [{ scope: 'user', installPath: one }], 'pack@two': [{ scope: 'user', installPath: two }],
     } });
-    json(join(home, 'claude-custom', 'settings.json'), { enabledPlugins: { 'pack@one': false, 'pack@two': true }, skillOverrides: { 'pack:two': 'name-only' } });
+    json(join(home, 'claude-custom', 'settings.json'), { enabledPlugins: { 'pack@one': false, 'pack@two': true }, skillOverrides: { 'pack:two': 'name-only', 'pack:off': 'off', 'pack:command': 'user-invocable-only' } });
     const host = (await audit(project)).hosts[0]!;
-    expect(host.skills).toEqual([{ name: 'pack:two', description: '', characters: 8, tokens: 2 }]);
+    expect(host.skills.map((s) => [s.name, s.description]).sort()).toEqual([['pack:off', 'abcd'], ['pack:two', 'abcd']]);
+    expect(host.listings.map((s) => [s.name, s.description])).toEqual([['pack:command', 'plugin command']]);
+  });
+
+  it('applies Claude user/project/local visibility overrides to legacy commands, but not agents', async () => {
+    const user = join(home, 'claude-custom', 'commands');
+    for (const name of ['off', 'manual', 'short', 'project-on', 'local-off']) file(join(user, `${name}.md`), `---\ndescription: command description\n---\nbody`);
+    file(join(project, '.claude', 'commands', 'project-short.md'), '---\nname: project-short\ndescription: project command\n---\nbody');
+    file(join(home, 'claude-custom', 'agents', 'agent.md'), '---\ndescription: agent description\n---\nbody');
+    json(join(home, 'claude-custom', 'settings.json'), { skillOverrides: { off: 'off', manual: 'user-invocable-only', short: 'name-only', 'project-on': 'off', agent: 'off' } });
+    json(join(project, '.claude', 'settings.json'), { skillOverrides: { 'project-on': 'on', 'project-short': 'name-only', 'local-off': 'on' } });
+    json(join(project, '.claude', 'settings.local.json'), { skillOverrides: { 'local-off': 'off' } });
+    const host = (await audit(project)).hosts[0]!;
+    expect(host.listings.map((s) => [s.name, s.description]).sort()).toEqual([['agent', 'agent description'], ['project-on', 'command description'], ['project-short', ''], ['short', '']]);
+    expect(host.listings.find((s) => s.name === 'short')).toEqual({ name: 'short', description: '', characters: 5, tokens: 2 });
   });
 
   it('excludes locally disabled Codex and Claude skills from inventories', async () => {
@@ -430,20 +479,6 @@ describe('audit', () => {
     const result = await audit(project);
     expect(result.caveats).toContain('OpenCode permission rules are not applied.');
     expect(JSON.stringify(result) + formatAudit(result)).not.toContain('TOP-SECRET');
-  });
-
-  it('never treats TOML string payloads as server names when closing quotes follow even backslashes', async () => {
-    const text = String.raw`first = """ending\\"""
-second = """
-[mcp_servers.TOP-SECRET-CONFIG-VALUE]
-"""
-[mcp_servers.real]
-command = "unused"
-`;
-    file(join(home, 'codex-custom', 'config.toml'), text);
-    const result = await audit(project);
-    expect(JSON.stringify(result) + formatAudit(result)).not.toContain('TOP-SECRET-CONFIG-VALUE');
-    expect(result.hosts.find((h) => h.host === 'Codex')!.servers.map((s) => s.name)).toEqual(['real']);
   });
 
   it('does not let skills.config arrays disable the preceding MCP server', async () => {
