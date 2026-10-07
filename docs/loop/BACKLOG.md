@@ -177,6 +177,7 @@ cross-vendor agents). Erik publishes.
 | C5 | P2 | Retrieval beyond 200 candidates (Jev tournament) | Codex | cloud | todo |
 | C6 | P2 | Multi-intent requests | Claude | cloud | todo |
 | C7 | P1 | Recommended packs with measured upside (first: frontend with Impeccable) | Codex (harness) + Claude (runs) | cloud (fixtures) + local (runs) | todo (after B1, C2) |
+| C8 | P1 | Skill use with the hook-only plugin | Claude | local | todo |
 
 **C1. New held-out requests.**
 
@@ -263,11 +264,20 @@ Acceptance:
 - The pack list (A3 starter packs, README) only quotes numbers measured
   here.
 
+**C8. Skill use with the hook-only plugin.** RESULTS has 6 of 10 for the
+search tool plus the hook, and 2 of 10 for the search tool alone. The plugin
+users install has the hook only. Add a plugin arm (`--plugin-dir`) to
+`bench/invoke.ts` and run the same 10 requests.
+
+Acceptance: a third row in that RESULTS table, with raw results. The README's
+"has not been measured" is then replaced by the number.
+
 ## D. Integrations and robustness
 
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
-| D10 | P0 | In-host first: loadout as a Claude Code plugin (hook), CLI then desktop app | Codex | cloud + local + erik | review (plugin and bench); live checks pending |
+| D10 | P0 | In-host first: loadout as a Claude Code plugin (hook), CLI then desktop app | Codex | cloud + local + erik | review (plugin, CLI check, latency); desktop app check pending (Erik) |
+| D11 | P1 | Cut the hook's per-prompt start cost | Codex | cloud + local | todo |
 | D1 | P0 | Validate on the new native Linux machine | Claude | local | todo (machine pending) |
 | D7 | P1 | `loadout doctor` | Codex | cloud | todo |
 | D2 | P1 | Live Codex hook test | Claude | local + erik | todo |
@@ -302,8 +312,7 @@ Acceptance:
 - Desktop app: Erik installs the plugin, and one Code-tab session shows the
   hook context. Record what differs from the CLI.
 
-Learnings (first PR: plugin, setup output and bench; the live checks are
-still to do):
+Learnings (PR #9; only the desktop app check is still to do):
 - `claude plugin validate` passes for the plugin and the marketplace. Its one
   warning is the missing version, which is deliberate until E5.
 - The plugin and the settings snippet share `claudeHookBlock(command)`. An
@@ -314,8 +323,36 @@ still to do):
   import plus the model load. Every hook call is a new process, so the real
   run must show whether every prompt pays that cost. It is not in RESULTS,
   because fake Jev measures nothing.
-- On this Windows machine the library and key exist only in WSL, so the CLI
-  check needs either a Windows-side `loadout init` or the Linux machine (D1).
+- On this Windows machine the library and key exist only in WSL. The CLI
+  check therefore used a session-only `loadout` shim on PATH, which ran the
+  branch in WSL with `--windows-paths`. The shim needs `MSYS_NO_PATHCONV=1`,
+  or Git Bash rewrites `/tmp/...` into a Windows path for `wsl.exe`.
+- CLI (2026-10-08): one `claude -p --plugin-dir` run with
+  `--include-hook-events` showed the plugin loading and the context arriving
+  ([RESULTS](../../bench/RESULTS.md#the-hook-plugin-in-the-claude-code-cli-2026-10-08)).
+  That replaced the planned 10-request run: wiring needs one run, and
+  skill-use rates need a plugin arm in `bench/invoke.ts` (C8).
+- Latency: p50 2.6 s and p95 3.1 s per routed prompt; the deadline never
+  bound, so it stays at 20 s. About 1.25 s is new-process start-up (D11).
+- Hook diagnostics took five Sol rounds. stderr now carries only fixed text:
+  the Jev fallback note (route's warning can name skills from the prompt),
+  the failure note (parse errors quote the prompt or a config credential),
+  transformers.js at `LogLevel.NONE` (a failed inference logs the prompt's
+  token ids), and one `windowsPath` helper that drops wslpath's stderr.
+- Declined (round 5): the tokenizer bundled in transformers.js warns with a
+  malformed `tokenizer.json` pattern, bypassing `NONE`. Only a tampered model
+  file triggers it, and it prints that file's text, never the prompt, config
+  or a credential. Containing it would take a console patch or a subprocess.
+  Sol's non-blocking notes: native onnxruntime global logging stays at error,
+  and debug flags or a WASM backend could add output.
+
+**D11. The hook's per-prompt start cost.** Every routed prompt waits about
+2.6 s (p50); the new process's median is 1.25 s above the in-process run
+(start-up, imports, library scan, embedding model load). Find where the time
+goes and cut it.
+
+Acceptance: `bench/hook-latency.ts` with real Jev shows a lower p50 for the
+new process, with raw results and a RESULTS entry.
 
 **D1. Native Linux validation.**
 
@@ -511,6 +548,10 @@ Starting points from Sol's review (2026-10-07):
 - Markdown, ≈ 100–150 lines: DESIGN's benchmark-arms section is stale; the
   usage sections repeat README; HANDOFF's tables repeat both; absolutes at
   DESIGN:5, 29 and HANDOFF:17 overstate what the benchmarks show.
+- `test/`: bench.test.ts "keeps the escaped Claude catalog…" fails on a
+  machine where `which('claude')` finds a Windows `claude` under `/mnt/c`.
+  `pathTranslator` then calls the mocked `execFileSync`. Seen in WSL during
+  D10; CI does not have that PATH.
 
 **E9. Security hardening.**
 

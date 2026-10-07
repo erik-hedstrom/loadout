@@ -331,7 +331,7 @@ export function pathTranslator(binPath: string | undefined): (p: string) => stri
   return windowsPath;
 }
 
-/** `wslpath -w`. Its stderr is dropped, not forwarded: it can name library folders, and callers report failure in fixed text. */
+/** `wslpath -w`. Its stderr is dropped, not forwarded: it can name library folders, and the hook reports failure in fixed text. */
 export const windowsPath = (p: string) => execFileSync('wslpath', ['-w', p], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
 
 export interface LaunchOptions {

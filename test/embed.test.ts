@@ -1,4 +1,4 @@
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, it, vi } from 'vitest';
@@ -17,11 +17,12 @@ vi.mock('@huggingface/transformers', () => ({
 
 it('keeps the prompt out of stderr when inference fails', async () => {
   const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+  const dir = mkdtempSync(join(tmpdir(), 'loadout-embed-'));
   try {
-    const store = new EmbeddingStore(mkdtempSync(join(tmpdir(), 'loadout-embed-')));
-    await expect(store.query('PROMPT-CANARY')).rejects.toThrow('inference failed');
+    await expect(new EmbeddingStore(dir).query('PROMPT-CANARY')).rejects.toThrow('inference failed');
     expect(errors).not.toHaveBeenCalled();
   } finally {
     errors.mockRestore();
+    rmSync(dir, { recursive: true, force: true });
   }
 });
