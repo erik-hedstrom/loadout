@@ -879,9 +879,18 @@ describe('launch', () => {
     expect(codex).toMatch(/\[\[hooks\.UserPromptSubmit\]\]\n\[\[hooks\.UserPromptSubmit\.hooks\]\]\ntype = "command"\ncommand = ".* hook codex"\ntimeout = 30$/);
     expect(JSON.parse(hostSetup('opencode', false).snippet).mcp.loadout).toMatchObject({ type: 'local', enabled: true });
     expect(JSON.parse(hostSetup('claude-desktop', true).snippet).mcpServers.loadout.command).toBe('wsl.exe');
-    const claudeCode = hostSetup('claude-code', false).snippet.split('\n\n');
-    expect(claudeCode[0]).toMatch(/^claude mcp add --scope user loadout -- \S+ .* mcp$/);
-    expect(JSON.parse(claudeCode[1]!).hooks.UserPromptSubmit[0].hooks[0].command).toMatch(/ hook claude$/);
+    const claudeCode = hostSetup('claude-code', false).snippet;
+    expect(claudeCode).toMatch(/^claude plugin marketplace add erik-hedstrom\/loadout\nclaude plugin install loadout@loadout/);
+    expect(claudeCode).toContain('+546 input tokens/request');
+    expect(claudeCode).toContain('https://github.com/erik-hedstrom/loadout/blob/main/bench/RESULTS.md');
+    expect(claudeCode).toMatch(/claude mcp add --scope user loadout -- \S+ .* mcp$/);
+    expect(claudeCode).not.toContain('UserPromptSubmit');
+    const wsl = hostSetup('claude-code', true);
+    expect(wsl.where).toContain('WSL');
+    expect(wsl.snippet).not.toContain('claude plugin install');
+    const settings = JSON.parse(wsl.snippet.split('\n\n')[0]!);
+    expect(settings).toEqual(claudeHookSettings(true));
+    expect(settings.hooks.UserPromptSubmit[0].hooks[0].command).toMatch(/^wsl\.exe .* hook claude --windows-paths$/);
     expect(loaderArgs(['-e', 'x', '--require', 'a.cjs', '--import=file:///b.mjs', '--max-old-space-size=99'])).toEqual(['--require', 'a.cjs', '--import=file:///b.mjs']);
   });
 

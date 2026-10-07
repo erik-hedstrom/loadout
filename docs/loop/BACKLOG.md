@@ -267,7 +267,7 @@ Acceptance:
 
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
-| D10 | P0 | In-host first: loadout as a Claude Code plugin (hook), CLI then desktop app | Codex | cloud + local + erik | in progress |
+| D10 | P0 | In-host first: loadout as a Claude Code plugin (hook), CLI then desktop app | Codex | cloud + local + erik | review (plugin and bench); live checks pending |
 | D1 | P0 | Validate on the new native Linux machine | Claude | local | todo (machine pending) |
 | D7 | P1 | `loadout doctor` | Codex | cloud | todo |
 | D2 | P1 | Live Codex hook test | Claude | local + erik | todo |
@@ -301,6 +301,21 @@ Acceptance:
   numbers.
 - Desktop app: Erik installs the plugin, and one Code-tab session shows the
   hook context. Record what differs from the CLI.
+
+Learnings (first PR: plugin, setup output and bench; the live checks are
+still to do):
+- `claude plugin validate` passes for the plugin and the marketplace. Its one
+  warning is the missing version, which is deliberate until E5.
+- The plugin and the settings snippet share `claudeHookBlock(command)`. An
+  earlier draft changed `claudeHookSettings` itself, which would have made
+  `bench/invoke.ts` run whatever loadout is on PATH instead of the checkout.
+- An offline smoke run (fake Jev, three-skill library) took 3.6 s for
+  `cachedEmbeddings` on the first call in a process: the optional package's
+  import plus the model load. Every hook call is a new process, so the real
+  run must show whether every prompt pays that cost. It is not in RESULTS,
+  because fake Jev measures nothing.
+- On this Windows machine the library and key exist only in WSL, so the CLI
+  check needs either a Windows-side `loadout init` or the Linux machine (D1).
 
 **D1. Native Linux validation.**
 

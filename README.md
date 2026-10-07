@@ -187,13 +187,28 @@ Put OpenAI's Secure MCP Tunnel, or another HTTPS tunnel, in front of it.
 Pass the tunnel's domain as `--allowed-host`, then add the tunnel URL as a
 connector in ChatGPT's developer mode.
 
-**Prompt hook.** `loadout setup claude-code` and `loadout setup codex` also
-print a `UserPromptSubmit` hook. It routes every prompt and adds the skills
-that fit as context, so sessions started without the launcher get the right
-skills without relying on the agent to search. In tests it raised Claude
-Code's skill use from 2 to 6 of 10 sessions. Each skill is offered once per
-session, and short follow-ups ("yes", "go on") are not routed. Codex runs a
-new hook only after you trust it with `/hooks`.
+**Prompt hook.** Install the hook-only Claude Code plugin (CLI and the desktop
+app's Code tab); it requires `loadout` on PATH and Node 22.12+:
+
+```bash
+claude plugin marketplace add erik-hedstrom/loadout
+claude plugin install loadout@loadout
+```
+
+You can also use `/plugin` inside a session. The plugin routes every prompt
+and adds the skills that fit as context, so sessions started without the
+launcher get the right skills without relying on the agent to search. In
+tests it raised Claude Code's skill use from 2 to 6 of 10 sessions. Each skill
+is offered once per session, and short follow-ups ("yes", "go on") are not
+routed. `loadout setup codex` prints a hook for Codex; trust a new hook there
+with `/hooks`.
+
+For loadout running in WSL behind Windows Claude Code, use `loadout setup
+claude-code --windows` and merge its settings.json hook snippet into
+`~/.claude/settings.json` instead. The plugin's fixed command cannot carry
+the required `wsl.exe` wrapper. Optional MCP library search is still available
+through `loadout setup claude-code`; its fixed token cost is measured in
+[RESULTS](bench/RESULTS.md).
 
 Privacy: with the hook installed, every routed prompt goes to TypeSafe's Jev
 API, together with the repository's top-level file names and dependencies.
