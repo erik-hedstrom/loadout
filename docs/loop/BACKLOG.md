@@ -169,6 +169,7 @@ cross-vendor agents). Erik publishes.
 | C4 | P1 | Demote generic "fits everything" skills | Codex | cloud | todo (after C1) |
 | C5 | P2 | Retrieval beyond 200 candidates (Jev tournament) | Codex | cloud | todo |
 | C6 | P2 | Multi-intent requests | Claude | cloud | todo |
+| C7 | P1 | Recommended packs with measured upside (first: frontend with Impeccable) | Codex (harness) + Claude (runs) | cloud (fixtures) + local (runs) | todo (after B1, C2) |
 
 **C1. New held-out requests.**
 
@@ -231,6 +232,28 @@ Acceptance:
 - Detect composite requests and allow one skill per intent.
 - Evaluate on C1's dev split.
 
+**C7. Recommended packs with measured upside.**
+
+Why (Erik, 2026-10-07): people install packs such as Impeccable for their
+upside and pay for them on every request. A pack recommendation backed by
+two numbers ("costs X% less per request with loadout, wins Y% of blind
+comparisons against the host's defaults") is the strongest adoption and
+founder-facing argument, if the numbers hold.
+
+Acceptance:
+- Preregister in `bench/RESULTS.md` before any run: the metrics, the
+  fixtures, the sample size and the arms. Report whatever comes out,
+  including no gain.
+- Overhead: tokens per request with the pack installed natively vs in
+  loadout's library, on a fixed request mix, with B1's method, for Claude
+  Code and Codex.
+- Quality: fixed frontend fixtures (C2's harness). Arms: host defaults,
+  host + pack native, host + loadout with the pack in the library. Blind
+  pairwise judging in both orders, by the other family (Sol judges Claude
+  Code's output, Claude judges Codex's), from screenshots plus a rubric.
+- The pack list (A3 starter packs, README) only quotes numbers measured
+  here.
+
 ## D. Integrations and robustness
 
 | ID | P | Task | Agent | Lane | Status |
@@ -242,6 +265,8 @@ Acceptance:
 | D5 | P2 | Isolation mode | Codex | cloud | todo |
 | D4 | P2 | Gateway: native tools via `tools/list_changed` | Codex | cloud | todo |
 | D6 | P2 | HTTP: cancellation reaches Jev | Codex | cloud | todo |
+| D8 | P1 | Host capability matrix (verified vs generated) | Codex | cloud | todo |
+| D9 | P1 | Codex parity: neutral session skill dir, tier presets | Codex | cloud | todo (after E9) |
 
 **D1. Native Linux validation.**
 
@@ -294,6 +319,31 @@ Acceptance:
 - An AbortSignal flows from the MCP request through `route()` and `askJev()`
   to `fetch`.
 - A test shows a disconnected client stops the Jev call.
+
+**D8. Host capability matrix.**
+
+Why (Sol review, 2026-10-07): the README promises model, skill and MCP
+selection for six hosts, but only Claude Code and Codex get launch, tier and
+hook support; Cursor, OpenCode and Claude Desktop get an MCP search snippet,
+and ChatGPT skills-only HTTP search. A non-Claude user notices.
+
+Acceptance:
+- `docs/hosts.md`: one table, hosts × {launch, tier, hook, search, gateway},
+  each cell "verified" (with the date and how), "generated, untested" or
+  "not supported".
+- README and `setup` output claim no more than the table.
+
+**D9. Codex parity.**
+
+Why (Sol review): Codex sessions get Claude plugin metadata and plain prompt
+pointers, while Claude gets native registration; Codex medium and large tiers
+map to one model with different effort, and that economics is unmeasured.
+
+Acceptance:
+- The session skill directory is host-neutral; Claude metadata is written
+  only for Claude.
+- Tier mappings are documented as model/effort presets, labelled
+  unvalidated until C3 measures them.
 
 **D7. `loadout doctor`.**
 
@@ -368,6 +418,19 @@ Acceptance:
   run.
 - Report lines removed per area.
 
+Starting points from Sol's review (2026-10-07):
+- `src/`, ≈ 40–60 lines: `prefilter()` is used only by tests
+  (production uses `hybridRank()`); the `inverted` metadata in route.ts is
+  unused; `oneLine` is duplicated in hook.ts and mcp.ts; some module
+  introductions repeat DESIGN.
+- `bench/`, ≈ 50–75 lines: `sweep.ts` duplicates `capabilityKey()`;
+  `invoke.ts` and `outcome.ts` duplicate decision reconstruction and timeouts;
+  `route-bench.ts` retries around a client that already retries;
+  `outcome.ts --agent` has one implemented value.
+- Markdown, ≈ 100–150 lines: DESIGN's benchmark-arms section is stale; the
+  usage sections repeat README; HANDOFF's tables repeat both; absolutes at
+  DESIGN:5, 29 and HANDOFF:17 overstate what the benchmarks show.
+
 **E9. Security hardening.**
 
 Acceptance:
@@ -379,11 +442,7 @@ Acceptance:
 - Skill copies reject links and retain pinned confinement and size limits.
 - Third-party prompt data is escaped and framed; Jev error details redact
   the resolved key and stay bounded. `decide()` and `bench/judge.ts` are unchanged.
-- Adversarial tests and typecheck pass, except the known Windows hook test
-  awaiting E1. Routing remeasurement remains with the orchestrator.
-
-PR/commit and routing remeasurement are left to the orchestrator.
-No live Jev, judge or agent invocations; incurred API cost $0.
+- Adversarial tests for each path; routing re-measured after the Jev framing change.
 
 **E3. Test split.**
 
@@ -405,3 +464,4 @@ integration layers, readable in both light and dark themes.
 | Date | Merged | In flight | Spend (Jev / Claude / Codex) | Decisions needed |
 |---|---|---|---|---|
 | 2026-10-07 | Handoff written (HANDOFF, AGENTS with Code Review Rules, ORCHESTRATOR, BACKLOG, `.claude/agents/{worker,pr-reviewer}.md`, auto-compact 500k) | — | — | License, public timing, npm name, budget caps, hook default; cloud setup (ORCHESTRATOR.md §One-time setup) |
+| 2026-10-07 (iter 1) | None: GitHub outage (Git, PRs, Actions) from 15:16 UTC; no CI run yet | E1 #2 (pr-reviewer APPROVE, Sol clean; waits for CI); E2 #1 (draft until E9); E9 (both reviews blocked it: server env reaches the agent process [High], credentials in args/URLs [High], conditional Jev framing [Med]; Sol on round 2); A2 #3 (draft; reviews running); E7 (Sol building judge backends) | Jev $0 / Claude: orchestrator + pr-reviewer runs (main usage) / Codex: 1 repo review, 5 builds, 3 reviews (ChatGPT plan) | Decided by Erik: Apache-2.0; full CI matrix on every PR; Node ≥ 22; Sol builds, Claude reviews. Open: enable private vulnerability reporting; hook default; npm name; going public |
