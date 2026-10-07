@@ -99,7 +99,7 @@ export function jevClient(opts: { apiKey: string; baseUrl: string; model: string
     const body = (await res.json().catch(() => ({}))) as Record<string, unknown> & { detail?: unknown; message?: unknown };
     if (!res.ok) {
       const detail = typeof body.detail === 'string' ? body.detail : typeof body.message === 'string' ? body.message : JSON.stringify(body.detail ?? body);
-      throw new JevError(`TypeSafe API ${res.status}: ${safeDetail(detail)}`, res.status);
+      throw new JevError(`TypeSafe API ${res.status}: ${detail}`, res.status);
     }
     return validateResponse(body, questions);
   };

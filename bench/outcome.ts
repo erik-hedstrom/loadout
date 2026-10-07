@@ -23,7 +23,7 @@ import { join, relative } from 'node:path';
 import { parseArgs } from 'node:util';
 import { loadConfig, paths } from '../src/config.js';
 import { capabilityKey, scanLibrary } from '../src/library.js';
-import { codexArgs, materialize, which } from '../src/launch.js';
+import { codexArgs, materialize, mergeEnvironment, which } from '../src/launch.js';
 import type { RouteDecision, ScoredCapability } from '../src/types.js';
 import { claudeJson, pool, readJsonl } from './lib.js';
 import type { SweepRow } from './sweep.js';
@@ -71,9 +71,9 @@ function decisionFor(row: SweepRow, arm: Arm): RouteDecision {
   };
 }
 
-function run(bin: string, args: string[], cwd: string, timeoutMs: number): Promise<{ code: number | null; timedOut: boolean }> {
+function run(bin: string, args: string[], cwd: string, timeoutMs: number, env?: Record<string, string>): Promise<{ code: number | null; timedOut: boolean }> {
   return new Promise((resolve) => {
-    const child = spawn(bin, args, { cwd, stdio: ['ignore', 'ignore', 'ignore'], detached: true });
+    const child = spawn(bin, args, { cwd, stdio: ['ignore', 'ignore', 'ignore'], detached: true, env: mergeEnvironment(process.env, env) });
     let timedOut = false;
     const timer = setTimeout(() => {
       timedOut = true;
@@ -143,7 +143,7 @@ if (!values['judge-only']) {
     const session = materialize(decisionFor(row, arm), 'codex', config, sessions);
     const cwd = mkdtempSync(join(tmpdir(), 'loadout-outcome-work-'));
     const started = Date.now();
-    const res = await run(bin, codexArgs(session, row.request + NOTE, ['-s', 'workspace-write', '--skip-git-repo-check'], { headless: true }), cwd, Number(values['timeout-s']) * 1000);
+    const res = await run(bin, codexArgs(session, row.request + NOTE, ['-s', 'workspace-write', '--skip-git-repo-check'], { headless: true }), cwd, Number(values['timeout-s']) * 1000, session.env);
     rmSync(target, { recursive: true, force: true });
     mkdirSync(target, { recursive: true });
     cpSync(cwd, target, { recursive: true, filter: (src) => !/[/\\](node_modules|\.git|\.venv|venv|__pycache__)([/\\]|$)/.test(src) });

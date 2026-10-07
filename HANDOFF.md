@@ -171,27 +171,6 @@ native machine:
 | `bench/results/*` | Raw rows and judge files (committed, so results are reproducible) |
 | `bench/data/` | Tasks, seeds, requests, hand-written cases, `library.sh` |
 
-## E9 working-tree handoff (2026-10-07)
-
-- `src/types.ts: reportJson(value: unknown): string` redacts env/header values
-  for CLI reports and `src/launch.ts: materialize()`'s saved decision, without
-  changing the live decision or Claude's launch config.
-- `src/library.ts: copySkillConfined(source, destination): void` rejects links
-  and copies regular files through `readConfined()` using the existing budgets.
-- `src/launch.ts: codexArgs()` fills `Session.env`; the CLI passes it through
-  `LaunchOptions.env` to `launch()`. The installed Codex CLI's offline `mcp get`
-  output confirmed `env_vars` and `env_http_headers`. Stdio uses original env
-  names; HTTP uses per-server variable references. Conflicting values for one
-  stdio name fail without exposing values; no undocumented alias mechanism.
-- `src/route.ts: optionKeys()` / `describe()` escape third-party Jev data.
-  Tag-bearing data gets a `trust: third-party` field. SHA-256 regression checks
-  pin both tag-free prompts to the pre-E9 bytes; `decide()` is unchanged.
-- `src/jev.ts: jevClient()` sanitizes upstream error details and validation or
-  transport errors, with a 512-character cap. Tests live under `E9 security`
-  in `test/loadout.test.ts` and use `fakeClient`, fake fetch and local fixtures.
-- No network, commit or push. Expected/incurred API cost: $0. The orchestrator
-  owns the independent reviews, commit and merge gate.
-
 ## Known issues and debt
 
 - **HTTP searches:** cancellation does not reach Jev when a client

@@ -45,10 +45,10 @@ const LIMITS = {
  * checked to lie inside `root`: through /proc on Linux, elsewhere by matching
  * the descriptor's inode with the resolved path's. Swapping a path component
  * between a check and the read therefore cannot redirect it. Throws otherwise.
+ * Multi-file copies pin `realRoot` so later reads cannot reset confinement.
  */
-export function readConfined(root: string, rel: string, maxBytes: number): Buffer {
+export function readConfined(root: string, rel: string, maxBytes: number, realRoot = realpathSync(root)): Buffer {
   if (isAbsolute(rel) || rel.split(/[\\/]/).includes('..')) throw new Error('give a path relative to the skill folder');
-  const realRoot = realpathSync(root);
   let fd: number;
   try {
     fd = openSync(join(root, rel), constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
@@ -76,10 +76,12 @@ export function readConfined(root: string, rel: string, maxBytes: number): Buffe
 }
 
 export function copySkillConfined(source: string, destination: string): void {
+  if (lstatSync(source).isSymbolicLink()) throw new Error('skill contains a link: .');
+  const root = realpathSync(source);
   let files = 0;
   let bytes = 0;
   const walk = (rel: string, depth: number): void => {
-    const path = join(source, rel);
+    const path = join(root, rel);
     const st = lstatSync(path);
     if (st.isSymbolicLink()) throw new Error(`skill contains a link: ${rel || '.'}`);
     if (st.isDirectory()) {
@@ -89,7 +91,7 @@ export function copySkillConfined(source: string, destination: string): void {
     } else if (st.isFile()) {
       if (++files > LIMITS.skillFiles) throw new Error(`skill has more than ${LIMITS.skillFiles} files`);
       const maxBytes = Math.min(LIMITS.skillBytes - bytes, rel === 'SKILL.md' ? LIMITS.manifestBytes : LIMITS.skillBytes);
-      const body = readConfined(source, rel, maxBytes);
+      const body = readConfined(root, rel, maxBytes, root);
       bytes += body.length;
       writeFileSync(join(destination, rel), body, { mode: st.mode });
     } else throw new Error(`not a regular skill file: ${rel}`);

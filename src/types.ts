@@ -30,12 +30,27 @@ export interface McpServerConfig {
   headers?: Record<string, string>;
 }
 
-/** Reports retain server configuration shape without persisting credentials. */
+/** Reports allow only server metadata that is useful without credentials. */
 export function reportJson(value: unknown): string {
-  return JSON.stringify(value, (key, v) =>
-    (key === 'env' || key === 'headers') && v && typeof v === 'object'
-      ? Object.fromEntries(Object.keys(v).map((k) => [k, '[REDACTED]']))
-      : v, 2);
+  return JSON.stringify(value, (key, v) => {
+    if (key !== 'server' || !v || typeof v !== 'object') return v;
+    const server = v as McpServerConfig;
+    let url: string | undefined;
+    if (server.url) {
+      try {
+        const parsed = new URL(server.url);
+        url = parsed.origin + parsed.pathname;
+      } catch { url = '[invalid URL]'; }
+    }
+    return {
+      transport: server.url ? (server.type === 'sse' ? 'sse' : 'http') : 'stdio',
+      command: server.command,
+      argCount: server.args?.length ?? 0,
+      url,
+      env: Object.keys(server.env ?? {}),
+      headers: Object.keys(server.headers ?? {}),
+    };
+  }, 2);
 }
 
 export type Tier = 'small' | 'medium' | 'large';

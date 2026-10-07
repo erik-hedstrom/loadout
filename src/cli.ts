@@ -11,7 +11,7 @@ import { repoSignals } from './repo.js';
 import { route } from './route.js';
 import { cachedEmbeddings, libraryEmbeddings } from './embed.js';
 import { hookOutput, promptContext, type HookInput } from './hook.js';
-import { reportJson, type Capability, type RouteDecision } from './types.js';
+import { reportJson, type Capability, type McpServerConfig, type RouteDecision } from './types.js';
 
 const USAGE = `loadout — pick the model, skills and MCP servers for each agent session
 
@@ -156,6 +156,14 @@ async function runHook(rest: string[]): Promise<number> {
 async function main(): Promise<number> {
   const [command, ...rest] = process.argv.slice(2);
   if (command === 'hook') return runHook(rest);
+  if (command === 'mcp-launch') {
+    try {
+      const server = JSON.parse(readFileSync(rest[0]!, 'utf8')) as McpServerConfig;
+      if (!server.command) throw new Error('session MCP server has no command');
+      return await launch(server.command, server.args ?? [], { env: server.env });
+    }
+    catch { throw new Error('could not start session MCP server'); }
+  }
   const config = loadConfig();
 
   switch (command) {
