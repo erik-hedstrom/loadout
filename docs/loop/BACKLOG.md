@@ -107,7 +107,7 @@ Acceptance:
 
 Why: the headline must be measured, not estimated.
 
-Learnings: [PR #6](https://github.com/erik-hedstrom/loadout/pull/6) round 3 saves offline Codex characters/visibility despite feature refusal and gates Claude on a paired smallest-pack positive control (14 Claude calls; paid Codex deferred). No paid calls or results yet.
+Learnings: [PR #6](https://github.com/erik-hedstrom/loadout/pull/6) round 4 requires stable Claude ambient inventory beyond declared treatment additions and distinguishes its isolated baseline from Codex's ambient baseline (14 Claude calls; paid Codex deferred). No paid calls or results yet.
 
 Acceptance:
 - A script in `bench/` installs well-known packs (Superpowers, anthropics/skills,

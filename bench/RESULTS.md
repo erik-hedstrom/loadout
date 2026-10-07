@@ -8,7 +8,7 @@ task.
 
 ## B1 method (preregistered)
 
-Revised 2026-10-07 after PR #6 round 3; **no paid measurements or results yet**.
+Revised 2026-10-07 after PR #6 round 4; **no paid measurements or results yet**.
 
 - Prompt: `Reply with exactly OK. Do not use tools, skills, commands, agents, or external services.`
 - Named arms: baseline, obra/superpowers, anthropics/skills, skills.sh snapshot, pbakaus/impeccable, whole library, loadout MCP.
@@ -26,8 +26,10 @@ Revised 2026-10-07 after PR #6 round 3; **no paid measurements or results yet**.
   Shared model/sandbox/MCP/features apply to exec, prompt-input and model-free skills/list.
 - Loadout MCP is required=true; Codex must expose find_skills/load_skill. Failed startup/discovery
   prevents a valid row. Free app-server queries create no threads/turns.
-- Claude uses --restricted, --tools Skill, disabled hooks and session-only text plugins.
-  Baseline is **the user's ambient setup**: retain init names; reject plugins outside baseline plus b1; count by b1: prefix.
+- Claude baseline is the **isolated CLI configuration**: `-p --output-format stream-json --verbose --no-session-persistence --restricted --setting-sources '' --settings '{"disableAllHooks":true}' --strict-mcp-config --mcp-config '{"mcpServers":{}}' --tools Skill --model haiku`.
+  Record actual plugins, skills, slash commands and MCP names/statuses from init, including anything still loaded (such as synced plugins).
+  Treatments add the b1 text plugin or loadout MCP; all remaining inventory must match baseline. Count pack skills by b1: prefix.
+  Codex's ambient baseline with the explicit overrides above is separate from this Claude baseline.
   Baseline pair then smallest copied pack pair: both need discovered b1: skills and positive paired input deltas before other Claude arms.
   Reject zero-discovery treatments. No init-only offline CLI is documented; safe-mode pack compatibility is unverified.
   Claude missing entries are **omitted, cause unverified**; init does not prove visibility.

@@ -190,7 +190,7 @@ describe('round 2 validity', () => {
     await expect(runStudy(plan, temp(), { ...good, run: async (command, host) => {
       const output = await good.run(command, host);
       return host === 'claude' && command.cwd.endsWith('superpowers') ? output.replace('"name":"b1"', '"name":"unexpected"') : output;
-    } })).rejects.toThrow('plugin drift');
+    } })).rejects.toThrow('inventory drift');
     const { rows } = await runStudy(plan, temp(), { ...good, run: async (command, host) => {
       const output = await good.run(command, host);
       if (host !== 'claude') return output;
@@ -200,6 +200,48 @@ describe('round 2 validity', () => {
     } });
     expect(summarize(rows)).toContain('omitted, cause unverified');
     expect(summarize(rows)).not.toContain('Claude truncation');
+  });
+  it('rejects ambient skill, plugin, command and MCP inventory changes before saving a treatment row', async () => {
+    const plan = buildPlan(fixture(), temp());
+    const good = fakeStudy(plan);
+    const mutations = [
+      (init: any) => init.skills.push('new-account-skill'),
+      (init: any) => { init.plugins = init.plugins.filter((p: any) => p.name !== 'ambient'); },
+      (init: any) => init.slash_commands.push('new-account-command'),
+      (init: any) => init.mcp_servers.push({ name: 'new-account-server', status: 'connected' }),
+      (init: any) => { init.mcp_servers[0].status = 'failed'; },
+    ];
+    for (const mutate of mutations) {
+      const out = temp();
+      await expect(runStudy(plan, out, { ...good, run: async (command, host) => {
+        const output = await good.run(command, host);
+        if (host !== 'claude') return output;
+        const events = output.split('\n').map((s) => JSON.parse(s));
+        events[0].mcp_servers.push({ name: 'ambient-server', status: 'connected' });
+        if (command.cwd.endsWith('superpowers')) mutate(events[0]);
+        return jsonl(...events);
+      } })).rejects.toThrow('inventory drift');
+      const rows = readFileSync(join(out, 'rows.jsonl'), 'utf8').trim().split('\n').map((s) => JSON.parse(s));
+      expect(rows.map((r) => r.configuration)).toEqual(['baseline', 'baseline']);
+    }
+  });
+  it('accepts reordered ambient inventory and the declared b1 and loadout additions', async () => {
+    const plan = buildPlan(fixture(), temp());
+    const good = fakeStudy(plan);
+    const { rows } = await runStudy(plan, temp(), { ...good, run: async (command, host) => {
+      const output = await good.run(command, host);
+      if (host !== 'claude') return output;
+      const events = output.split('\n').map((s) => JSON.parse(s));
+      events[0].skills.push('second-ambient-skill');
+      events[0].plugins.push({ name: 'second-ambient-plugin' });
+      events[0].slash_commands.push('second-ambient-command');
+      events[0].mcp_servers.push({ name: 'ambient-server', status: 'connected' }, { name: 'second-ambient-server', status: 'connected' });
+      if (!command.cwd.endsWith('baseline')) for (const field of ['skills', 'plugins', 'slash_commands', 'mcp_servers']) events[0][field].reverse();
+      return jsonl(...events);
+    } });
+    expect(rows).toHaveLength(30);
+    expect(summarize(rows)).toContain('Claude baseline: isolated CLI configuration');
+    expect(summarize(rows)).toContain("Codex baseline: user's ambient setup");
   });
   it('runs the smallest Claude pack first and rejects zero discovery or either nonpositive paired delta before other packs', async () => {
     const library = fixture();
@@ -289,7 +331,7 @@ describe('text-only configurations', () => {
     expect(plan.calls.find((c) => c.host === 'claude')!.command.args).toContain('--strict-mcp-config');
     expect(plan.calls.find((c) => c.host === 'claude')!.command.args).toContain('Skill');
     expect(plan.calls.find((c) => c.host === 'claude')!.command.args).toContain('--restricted');
-    expect(plan.calls.find((c) => c.host === 'claude')!.command.args).not.toContain('--setting-sources');
+    expect(plan.calls.find((c) => c.host === 'claude')!.command.args).toContain('--setting-sources');
     expect(existsSync(join(root, 'auth.json'))).toBe(false);
     expect(plan.calls.find((c) => c.configuration === 'top50')!.copiedSkills).toBe(50);
     expect(() => buildPlan(fixture(), join(homedir(), '.codex', 'overhead'))).toThrow('temporary');

@@ -202,7 +202,7 @@ export function buildPlan(library: string, root: string): Plan {
       const settings = [...DISABLED_FEATURES.flatMap((feature) => ['--disable', feature]), '-c', `model=${toToml(MODELS.codex)}`, '-c', 'sandbox_mode="read-only"', '-c', `mcp_servers=${toToml(configuration === 'loadout' ? { loadout: { ...server, required: true } } : {})}`];
       const command = (args: string[]): Command => ({ bin: binary.bin, args: [...binary.prefix, ...args], cwd });
       const base = host === 'claude'
-        ? ['-p', '--output-format', 'stream-json', '--verbose', '--no-session-persistence', '--restricted', '--settings', '{"disableAllHooks":true}', '--strict-mcp-config', '--mcp-config', JSON.stringify({ mcpServers: mcp }), '--tools', 'Skill', '--model', MODELS.claude, ...(copied.skills > 0 ? ['--plugin-dir', plugin] : [])]
+        ? ['-p', '--output-format', 'stream-json', '--verbose', '--no-session-persistence', '--restricted', '--setting-sources', '', '--settings', '{"disableAllHooks":true}', '--strict-mcp-config', '--mcp-config', JSON.stringify({ mcpServers: mcp }), '--tools', 'Skill', '--model', MODELS.claude, ...(copied.skills > 0 ? ['--plugin-dir', plugin] : [])]
         : ['exec', '--json', '--ephemeral', '--skip-git-repo-check', ...settings];
       const common = { host, configuration, copiedSkills: copied.skills, rejectedSkills: copied.rejected, listingCharacters: copied.characters, manifestHash: copied.hash,
         ...(host === 'codex' ? { free: { features: command(['features', 'list', ...settings]), prompt: command(['debug', 'prompt-input', ...settings, PROMPT]), inventory: command(['app-server', ...settings]) } } : {}) };
@@ -379,6 +379,16 @@ export async function preflight(plan: Plan, deps: StudyDeps = {}, save?: (config
   }
   return results;
 }
+// Remove only declared treatment additions; inventory order is not evidence of drift.
+function ambientInventory(inventory: Inventory, configuration: Configuration) {
+  const outsidePack = (name: string) => !name.startsWith('b1:');
+  return JSON.stringify({
+    plugins: inventory.plugins.filter((name) => name !== 'b1' && outsidePack(name)).sort(),
+    skills: inventory.skills.filter(outsidePack).sort(),
+    slashCommands: inventory.slashCommands.filter(outsidePack).sort(),
+    mcp: inventory.mcp.filter((m) => outsidePack(m.name) && !(configuration === 'loadout' && m.name === 'loadout')).map((m) => JSON.stringify(m)).sort(),
+  });
+}
 export async function runStudy(plan: Plan, out: string, deps: StudyDeps = {}) {
   mkdirSync(out, { recursive: true });
   const checked = await preflight(plan, deps, (configuration, result) => appendFileSync(join(out, 'preflight.jsonl'), JSON.stringify({ host: 'codex', configuration, ...result }) + '\n'));
@@ -389,7 +399,7 @@ export async function runStudy(plan: Plan, out: string, deps: StudyDeps = {}) {
     if (call.host === 'codex' && !codexReady) continue;
     const usage = (call.host === 'claude' ? parseClaude : parseCodex)(await (deps.run ?? execute)(call.command, call.host));
     const baselineInventory = rows.find((r) => r.host === 'claude' && r.configuration === 'baseline')?.inventory ?? usage.inventory;
-    if (usage.inventory && usage.inventory.plugins.some((name) => !baselineInventory!.plugins.includes(name) && name !== 'b1')) throw new Error('Claude ambient plugin drift; measurement invalid');
+    if (usage.inventory && ambientInventory(usage.inventory, call.configuration) !== ambientInventory(baselineInventory!, 'baseline')) throw new Error('Claude ambient inventory drift; measurement invalid');
     const listedPackSkills = usage.inventory?.skills.filter((s) => s.startsWith('b1:')).length ?? 0;
     if (call.copiedSkills > 0 && call.host === 'claude' && !usage.inventory!.plugins.includes('b1')) throw new Error('Claude did not load the text plugin; measurement invalid');
     if (call.host === 'claude' && call.copiedSkills > 0 && listedPackSkills === 0) throw new Error('Claude pack has zero discovery; measurement invalid');
@@ -409,7 +419,9 @@ export async function runStudy(plan: Plan, out: string, deps: StudyDeps = {}) {
 }
 
 export function summarize(rows: Row[], offline: Map<Configuration, Preflight> = new Map()) {
-  const lines = ["B1 deltas over the user's ambient setup; costs are computed in analysis.",
+  const lines = ['B1 deltas over each host baseline; costs are computed in analysis.',
+    'Claude baseline: isolated CLI configuration plus the actual inventory recorded from init, including any synced plugins.',
+    "Codex baseline: user's ambient setup with the declared model/sandbox/MCP/features overrides.",
     '| Host | Configuration | Call | Input | Delta | Uncached | Cache creation | Cache read | Copied | Discovered pack | Visible pack | Rejected |',
     '| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | ---: |'];
   for (const row of rows) {
