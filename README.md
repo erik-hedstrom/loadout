@@ -58,7 +58,8 @@ other third):
 | Cost per decision | $0.0011, about 1 s |
 
 The agents use what they are given: in headless runs, Claude Code opened a
-loaded skill in 9 of 10 sessions, and Codex in 11 of 11.
+loaded skill in 9 of 10 sessions, and Codex in 11 of 11. Without the launcher,
+the Claude Code prompt hook raised that from 2 to 6 of 10.
 
 **Synthetic benchmark** (199 generated tasks, a library of 20,000 real skills
 from GitSkills; the rule was tuned on a dev split and reported on test):

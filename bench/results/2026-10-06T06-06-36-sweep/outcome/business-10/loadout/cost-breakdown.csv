@@ -1,0 +1,4 @@
+vendor,currency,purchased_quantity,operating_quantity,hardware_or_bundle_ex_tax,shipping_ex_tax,setup_ex_tax,installation_ex_tax,initial_known_ex_tax,annual_filters_ex_tax,annual_subscription_ex_tax,year_1_known_ex_tax,year_3_known_ex_tax,initial_known_inc_tax,year_3_known_inc_tax,tax_rate,unpriced_items
+Atlas Air,SEK,10,10,4200,180,300,500,5180,600,240,6020,7700,6475,9625,0.25,"Warranty outbound freight; out-of-warranty repair; electricity; staff time; disposal; downtime"
+Boreal Office,SEK,10,10,4720,0,0,0,4720,750,0,5470,6970,5900,8712.50,0.25,"Shipping/setup/installation included in bundle; out-of-warranty repair; electricity; staff time; disposal; downtime"
+Cedar Supply,SEK,12,10,5400,250,200,,5850,500,0,6350,7350,7312.50,9187.50,0.25,"Installation; possible survey fee; warranty labor/travel/freight; vendor maintenance visits; cancellation; late fees; out-of-warranty repair; electricity; staff time; disposal; downtime"

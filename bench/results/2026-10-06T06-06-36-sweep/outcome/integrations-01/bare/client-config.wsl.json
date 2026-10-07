@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "internal-docs": {
+      "command": "wsl.exe",
+      "args": [
+        "--distribution", "Ubuntu",
+        "--exec", "/usr/bin/node",
+        "/tmp/loadout-outcome-work-FcCzw1/dist/server.js",
+        "--docs-root", "/tmp/loadout-outcome-work-FcCzw1/sample-docs"
+      ]
+    }
+  }
+}

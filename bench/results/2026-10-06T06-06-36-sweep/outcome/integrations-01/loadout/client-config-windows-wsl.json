@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "internal-docs": {
+      "command": "C:\\Windows\\System32\\wsl.exe",
+      "args": [
+        "--exec",
+        "/usr/bin/node",
+        "/tmp/loadout-outcome-work-ljoqoh/dist/index.js",
+        "--docs-root",
+        "/tmp/loadout-outcome-work-ljoqoh/sample-docs"
+      ]
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "internal-docs": {
+      "command": "/usr/bin/node",
+      "args": ["/tmp/loadout-outcome-work-FcCzw1/dist/server.js"],
+      "env": {
+        "DOCS_ROOT": "/tmp/loadout-outcome-work-FcCzw1/sample-docs"
+      }
+    }
+  }
+}

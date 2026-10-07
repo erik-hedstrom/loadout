@@ -1,0 +1,7 @@
+Validation command: python3 (standard-library arithmetic and local-link checks via heredoc).
+PASS: 18 per-vendor amount/report checks across three quotes.
+PASS: bundle tax normalization, cost margins, two-filter-round sensitivity, and Cedar unknown installation marker.
+PASS: 8 local Markdown links resolve; all three source quotes labeled fictional.
+Result: all checks passed; exit code 0.
+Limit: arithmetic/file validation only; synthetic terms are not independent evidence of any real vendor.
+RTK unavailable in this environment; used raw python3.

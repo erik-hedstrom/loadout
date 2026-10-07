@@ -170,6 +170,23 @@ read its SKILL.md, or loaded it through `load_skill`, and the call succeeded.
   carries the load, and `find_skills` is the mid-session supplement, not a
   replacement.
 
+**The prompt hook closes most of that gap** (2026-10-07). Same 10 requests,
+Claude Code (Sonnet 5.5), nothing preloaded. As after `loadout setup
+claude-code`, the session has the loadout MCP server plus the `UserPromptSubmit`
+hook, which routes the prompt and adds the skills that fit as context:
+
+| Claude Code, same 10 requests | Opened a skill the judge rates useful |
+|---|---:|
+| Search tool only | 2 of 10 |
+| Search tool + prompt hook | **6 of 10** |
+
+In the 4 misses the hook did offer the right skill, and Claude still did not
+open it:
+- it answered the changelog and vendor-review requests in text, without
+  calling any tool;
+- on the MCP server and the threat model it used up its 8 turns or 4 minutes
+  first (shell commands are not approved in these runs).
+
 These are small samples (10 requests per cell, capped runs), not outcome
 measurements: they show whether the skill reaches the agent's context, not
 whether the result is better.
