@@ -23,11 +23,35 @@ export interface Capability {
 
 export interface McpServerConfig {
   command?: string;
+  cwd?: string;
   args?: string[];
   env?: Record<string, string>;
   url?: string;
   type?: string;
   headers?: Record<string, string>;
+}
+
+/** Reports omit server arguments and credential values. */
+export function reportJson(value: unknown): string {
+  return JSON.stringify(value, (key, v) => {
+    if (key !== 'server' || !v || typeof v !== 'object') return v;
+    const server = v as McpServerConfig;
+    let url: string | undefined;
+    if (server.url) {
+      try {
+        const parsed = new URL(server.url);
+        url = parsed.origin;
+      } catch { url = '[invalid URL]'; }
+    }
+    return {
+      type: server.type,
+      command: server.command,
+      cwd: server.cwd,
+      url,
+      env: Object.keys(server.env ?? {}),
+      headers: Object.keys(server.headers ?? {}),
+    };
+  }, 2);
 }
 
 export type Tier = 'small' | 'medium' | 'large';

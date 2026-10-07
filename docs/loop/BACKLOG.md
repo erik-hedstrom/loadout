@@ -361,8 +361,9 @@ Acceptance:
 |---|---|---|---|---|---|
 | E1 | P0 | GitHub Actions CI | Codex | cloud | review |
 | E2 | P0 | LICENSE, CONTRIBUTING, SECURITY.md, templates | Claude | cloud + erik | todo (license: confirm MIT) |
-| E7 | P0 | Bench judges and expander that run inside a cloud session | Claude | cloud | todo |
+| E7 | P0 | Vendor-independent bench judges and expander | Codex | cloud | review ([PR #5](https://github.com/erik-hedstrom/loadout/pull/5)) |
 | E8 | P0 | Repo-wide simplification pass | Claude (pr-reviewer finds, worker fixes) + Codex review | cloud | todo |
+| E9 | P0 | Security hardening from the read-only Sol review | Codex | cloud | review |
 | E3 | P1 | Split the test file per module | Codex | cloud | todo |
 | E5 | P1 | Changelog and release automation | Codex | cloud | todo (with A4) |
 | E6 | P2 | Architecture diagram in DESIGN.md | Claude | cloud | todo |
@@ -389,19 +390,31 @@ Acceptance:
 
 **E7. Bench judging in a cloud session.**
 
-Why: the $100 credit pays for cloud sessions only (not the API, not
-Routines), and C1/C3 need judging. `bench/lib.ts` judges through `claude -p`.
-
 Acceptance:
-- Check whether `claude -p` works inside a cloud session.
-- If it does not, add a file-based mode:
-  - `judge.ts` and `expand.ts` write batch prompts and read JSON answers;
-  - an Opus subagent of the session produces the answers, with the catalog
-    passed once per batch.
-- An Anthropic API backend (`ANTHROPIC_API_KEY`, prompt caching) stays
-  optional.
-- Re-judging 40 v4 requests reproduces their verdicts within noise, and the
-  cost is reported.
+- One `modelJson` seam for judge/expander: `--backend claude|codex|files`,
+  default Claude; shared schema validation, regular-file answers and resumable batches.
+- Sequential judges; escaped third-party catalog after the rubric in Claude's
+  cached system prefix, first in Codex's prompt. Dev/test/combined Wilson reports.
+- Exact, nonempty expansion coverage before append; reject duplicate request IDs.
+  Exact verdict ratings and catalog-only missed keys; retry once, exclude and count
+  unresolved disputes. Backend/model/effort provenance and resume checks; reject
+  Claude effort. Files producers unverified; warn on same-family/global context.
+- Codex read-only sandbox, credential env stripping, shell/unified-exec/view-image
+  disabling flags; offline preflight requires shell_tool and unified_exec false.
+  Offline adversarial tests, `npm test` and typecheck (E1 owns the Windows hook failure).
+
+Remaining (orchestrator): record the 0.160.1 negative result in RESULTS:
+unified_exec stays true, so preflight refuses Codex. No Codex kappa until preflight
+and a one-call hostile temporary AGENTS.md canary both pass (answer unchanged);
+verify installed-skill isolation without relocating CODEX_HOME. Check `claude -p`
+in cloud; re-judge 40 v4 requests with an Opus subagent via `files` and, when safe,
+`codex`. Preserve IDs/splits and raw results; report stored-verdict agreement,
+inter-judge Cohen's kappa, intervals and measured cost. The judge prompt changed
+(catalog escaping/framing, rubric line), as did logic (1 retry instead of 2;
+unresolved disputes excluded). Agreement measures prompt and logic changes plus
+the judge, and must be reported that way. Budget: 4–8 batches before retries;
+Claude CLI ~$1.20–$2.40 cached, ~$3.60–$7.20 uncached (files/Opus cloud overhead
+extra); Codex quota cost not exposed. No paid calls during implementation.
 
 **E8. Simplification pass.**
 
@@ -433,6 +446,23 @@ Starting points from Sol's review (2026-10-07):
 - Markdown, ≈ 100–150 lines: DESIGN's benchmark-arms section is stale; the
   usage sections repeat README; HANDOFF's tables repeat both; absolutes at
   DESIGN:5, 29 and HANDOFF:17 overstate what the benchmarks show.
+
+**E9. Security hardening.**
+
+Acceptance:
+- Reports allow only MCP type, command, cwd, URL origin and env/header keys.
+- Relayed MCP credentials stay in the library and server process, absent from
+  agent argv, environment and session files. Library keys are validated.
+- Public HTTP servers retain native Codex OAuth. Relays support credential-bearing
+  URLs, negotiated protocol versions and recoverable request errors. Diagnostics
+  contain controlled metadata only, never upstream error text. Windows shims and
+  server startup logs work.
+- MCP startup reads only its config; Claude MCP session files retain private modes.
+- Skill copies reject links and retain pinned confinement and size limits.
+- Third-party prompt data is escaped and framed; Jev errors contain only HTTP
+  status or fixed failure categories. `decide()` and `bench/judge.ts` are unchanged.
+- Adversarial tests for each path. Owed after merge: routing re-measured after the
+  Jev framing change (Jev-only agreement check, recorded in `bench/RESULTS.md`).
 
 **E3. Test split.**
 
