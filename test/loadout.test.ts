@@ -576,7 +576,7 @@ catch (err) { console.log(err.message); }
         expect(result.status, result.stderr).toBe(0);
         if (args[0] === 'route') expect(JSON.parse(result.stdout)).toMatchObject({ router: 'lexical', warning });
         else if (args[0] === 'codex') expect(result.stderr).toContain(warning);
-        else { expect(result.stdout).toBe(''); expect(result.stderr).toBe(`loadout: ${warning}\n`); }
+        else { expect(result.stdout).toBe(''); expect(result.stderr).toBe(`${JEV_FALLBACK_NOTE}\n`); }
         outputs.push(result.stdout, result.stderr);
       }
       for (const value of Object.values(forms)) expect(outputs.join('\n')).not.toContain(value);
