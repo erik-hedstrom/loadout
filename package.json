@@ -18,7 +18,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
-  "license": "MIT",
+  "license": "Apache-2.0",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",
     "yaml": "^2.9.1",

@@ -1,0 +1,7 @@
+loadout
+Copyright 2026 Erik Hedström
+
+Third-party benchmark material (skills, their names, descriptions and excerpts,
+downloaded by bench/data/library.sh or quoted in bench/data and bench/results)
+belongs to its authors under their own licenses and is not covered by loadout's
+Apache-2.0 license.
