@@ -112,8 +112,50 @@ function explain(decision: RouteDecision, model?: string): string {
   return lines.join('\n');
 }
 
+/** A prompt hook gives up after this long, adding nothing: the host waits for it before every prompt. */
+const HOOK_DEADLINE_MS = 20_000;
+
+/**
+ * `loadout hook claude|codex`. Everything, config loading included, is inside
+ * one boundary: any problem or the deadline means no output and exit 0.
+ */
+async function runHook(rest: string[]): Promise<number> {
+  const deadline = setTimeout(() => {
+    note('hook: deadline reached; added nothing');
+    process.exit(0);
+  }, HOOK_DEADLINE_MS);
+  try {
+    const { values, positionals } = parseArgs({ args: rest, allowPositionals: true, options: { 'windows-paths': { type: 'boolean' } } });
+    // Claude Code and Codex send the same fields (session_id, prompt, cwd) and read the same output.
+    if (positionals[0] !== 'claude' && positionals[0] !== 'codex') throw new Error('usage: loadout hook claude|codex');
+    const chunks: Buffer[] = [];
+    for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
+    const input = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}') as HookInput;
+    const config = loadConfig();
+    const apiKey = config.router === 'jev' ? resolveApiKey(config) : undefined;
+    // No retries and a short timeout: two Jev requests must fit well inside the deadline.
+    const client = apiKey ? jevClient({ apiKey, baseUrl: config.jev.baseUrl, model: config.jev.model, timeoutMs: 8_000, retries: 0 }) : undefined;
+    const context = await promptContext(input, {
+      library: scanLibrary(paths.library()),
+      config,
+      client,
+      embeddings: client && config.embeddings ? await cachedEmbeddings(paths.embeddings()) : undefined,
+      repo: repoSignals(input.cwd && existsSync(input.cwd) ? input.cwd : process.cwd()),
+      stateDir: join(paths.sessions(), 'hook'),
+      ...(values['windows-paths'] ? { toPath: (p: string) => execFileSync('wslpath', ['-w', p], { encoding: 'utf8' }).trim() } : {}),
+    });
+    if (context) console.log(hookOutput(context));
+  } catch (err) {
+    note(`hook: ${err instanceof Error ? err.message : err}`);
+  } finally {
+    clearTimeout(deadline);
+  }
+  return 0;
+}
+
 async function main(): Promise<number> {
   const [command, ...rest] = process.argv.slice(2);
+  if (command === 'hook') return runHook(rest);
   const config = loadConfig();
 
   switch (command) {
@@ -249,32 +291,6 @@ async function main(): Promise<number> {
         embeddings: client ? embeddingsFor(library, config) : undefined,
         ...(toPath ? { toPath } : {}),
       });
-      return 0;
-    }
-
-    case 'hook': {
-      // Never block or break a prompt: any problem means no output and exit 0.
-      try {
-        const { values, positionals } = parseArgs({ args: rest, allowPositionals: true, options: { 'windows-paths': { type: 'boolean' } } });
-        // Claude Code and Codex send the same fields (session_id, prompt, cwd) and read the same output.
-        if (positionals[0] !== 'claude' && positionals[0] !== 'codex') fail('usage: loadout hook claude|codex');
-        const chunks: Buffer[] = [];
-        for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
-        const input = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}') as HookInput;
-        const client = router(config, false);
-        const context = await promptContext(input, {
-          library: scanLibrary(paths.library()),
-          config,
-          client,
-          embeddings: client && config.embeddings ? await cachedEmbeddings(paths.embeddings()) : undefined,
-          repo: repoSignals(input.cwd && existsSync(input.cwd) ? input.cwd : process.cwd()),
-          stateDir: join(paths.sessions(), 'hook'),
-          ...(values['windows-paths'] ? { toPath: (p: string) => execFileSync('wslpath', ['-w', p], { encoding: 'utf8' }).trim() } : {}),
-        });
-        if (context) console.log(hookOutput(context));
-      } catch (err) {
-        note(`hook: ${err instanceof Error ? err.message : err}`);
-      }
       return 0;
     }
 

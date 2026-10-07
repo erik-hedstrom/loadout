@@ -81,7 +81,8 @@ export function hookCommand(agent: Agent, windowsAgent: boolean): string {
   // Claude Code on Windows runs hooks through Git Bash, which rewrites arguments that start with "/"
   // into Windows paths before they reach wsl.exe. A leading "//" is passed on as "/" by Git Bash, and
   // is still the same path to Linux if another shell leaves it as is.
-  const arg = (a: string) => (windowsAgent && /^\/[^/]/.test(a) ? `/${a}` : a);
+  // Also `KEY=/path` and `--flag=/path`, which Git Bash rewrites too (verified with Git for Windows).
+  const arg = (a: string) => (windowsAgent ? a.replace(/^((?:--)?[A-Za-z_][\w-]*=)?\/(?!\/)/, '$1//') : a);
   return `${env}${[h.command!, ...(h.args ?? []).map(arg)].map(quote).join(' ')}`;
 }
 
@@ -221,9 +222,10 @@ export function relevanceNote(
   const hint = search ? SEARCH_HINT : undefined;
   if (decision.router !== 'jev') return hint ? `<skill_relevance>\n${hint}\n</skill_relevance>` : undefined;
   const parts: string[] = [];
-  if (primary.length) parts.push(`Most relevant to the current request: ${primary.join(', ')}.`);
-  if (optional.length) parts.push(`${primary.length ? 'Also available if needed' : 'Possibly relevant to the current request'}: ${optional.join(', ')}.`);
-  if (mcp.length) parts.push(`Tools loaded for this request from MCP servers: ${mcp.join(', ')}.`);
+  const names = (xs: string[]) => xs.map(escapeSkillTags).join(', ');
+  if (primary.length) parts.push(`Most relevant to the current request: ${names(primary)}.`);
+  if (optional.length) parts.push(`${primary.length ? 'Also available if needed' : 'Possibly relevant to the current request'}: ${names(optional)}.`);
+  if (mcp.length) parts.push(`Tools loaded for this request from MCP servers: ${names(mcp)}.`);
   const body = parts.length
     ? `${parts.join(' ')} Ignore this if it does not fit what the user actually asked for.`
     : 'No skill in the library appears relevant to this request.';
@@ -372,7 +374,9 @@ function codexServer(c: Capability, toPath: (p: string) => string): Record<strin
 export function codexPrompt(session: Session, task: string): string {
   const injected = session.injected.length ? ['', TRUST_NOTE, '', ...session.injected] : [];
   if (session.skills.length === 0) return [task, ...(session.relevance ? ['', session.relevance] : []), ...injected].join('\n');
-  const line = (s: Capability) => `- ${s.name} (${session.toPath(join(session.pluginDir!, 'skills', basename(s.source), 'SKILL.md'))}): ${s.description}`;
+  // Names and descriptions are third-party text: they cannot open or close loadout's tags.
+  const line = (s: Capability) =>
+    `- ${escapeSkillTags(s.name)} (${session.toPath(join(session.pluginDir!, 'skills', basename(s.source), 'SKILL.md'))}): ${escapeSkillTags(s.description)}`;
   const optional = session.skills.filter((s) => !session.primary.includes(s));
   return [
     task,

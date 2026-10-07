@@ -56,6 +56,7 @@ const LIST_MAX_FILES = 60;
 const MAX_TOOL_PAGES = 20;
 const SCHEMA_MAX_CHARS = 3000;
 const EMBEDDINGS_WAIT_MS = 3000;
+const MAX_HTTP_IN_FLIGHT = 4;
 const delay = (ms: number) => sleep(ms, undefined, { ref: false });
 
 
@@ -89,7 +90,7 @@ export async function findSkills(deps: SearchDeps, goal: string, keywords: strin
   const lines = matches.map((s) => {
     const c = s.capability;
     const tags = [lexical ? 'keyword match' : `fit ${s.p.toFixed(2)}`, ...(best.has(c) && !lexical ? ['best match'] : []), ...(c.kind === 'mcp' ? ['MCP server'] : [])];
-    return `- ${capabilityKey(c)} (${tags.join(', ')}): ${oneLine(c.description, DESCRIPTION_CHARS)}`;
+    return `- ${escapeSkillTags(capabilityKey(c))} (${tags.join(', ')}): ${escapeSkillTags(oneLine(c.description, DESCRIPTION_CHARS))}`;
   });
   const first = matches.find((s) => s.capability.kind === 'skill');
   const how = [
@@ -344,7 +345,12 @@ export interface HttpOptions {
 export async function serveHttp(deps: SearchDeps, opts: HttpOptions): Promise<{ url: string; close: () => Promise<void> }> {
   const { createServer: createHttpServer } = await import('node:http');
   const { StreamableHTTPServerTransport } = await import('@modelcontextprotocol/sdk/server/streamableHttp.js');
+  const loopback = ['127.0.0.1', 'localhost', '::1'].includes(opts.host);
+  // Reachable beyond this machine (another interface, or a tunnel's domain allowed): anyone who can reach it
+  // could read the library and spend Jev credit, so a token is required.
+  if ((!loopback || opts.allowedHosts?.length) && !opts.token) throw new Error('serving beyond localhost (a non-loopback --host or an --allowed-host) needs --token-file');
   const remote: SearchDeps = { ...deps, library: deps.library.filter((c) => c.kind === 'skill') };
+  let inFlight = 0;
   const expected = opts.token ? Buffer.from(`Bearer ${opts.token}`) : undefined;
   const authorized = (header: string | undefined) => {
     if (!expected) return true;
@@ -356,6 +362,10 @@ export async function serveHttp(deps: SearchDeps, opts: HttpOptions): Promise<{ 
     try {
       if (new URL(req.url ?? '/', 'http://localhost').pathname !== '/mcp') return void res.writeHead(404).end();
       if (!authorized(req.headers.authorization)) return void res.writeHead(401, { 'WWW-Authenticate': 'Bearer' }).end();
+      // Each search costs a Jev call and keeps running if the client goes away: cap how many run at once.
+      if (inFlight >= MAX_HTTP_IN_FLIGHT) return void res.writeHead(429, { 'Retry-After': '2' }).end();
+      inFlight++;
+      res.on('close', () => inFlight--);
       const { server } = createServer(remote);
       const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true, enableDnsRebindingProtection: true, allowedHosts });
       res.on('close', () => {

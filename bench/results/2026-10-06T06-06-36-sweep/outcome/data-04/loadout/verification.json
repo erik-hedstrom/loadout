@@ -1,0 +1,41 @@
+{
+  "python": "3.14.4 (main, Aug 20 2026, 10:41:58) [GCC 15.2.0]",
+  "status": "passed",
+  "checks": [
+    "z-test agrees with Pearson chi-square",
+    "CI sign symmetry",
+    "equal rates p=1",
+    "required sample is minimum integer meeting approximate power",
+    "MDE reaches 80%",
+    "duplicates/crossover/missing/immature/third-variant inputs rejected",
+    "simulation checks Type I error and target power",
+    "input SHA256 unchanged"
+  ],
+  "simulations": [
+    {
+      "baseline": 0.1,
+      "treatment": 0.1,
+      "repetitions": 20000,
+      "seed_stream": 9317,
+      "rejection_rate": 0.04985,
+      "monte_carlo_95_ci": [
+        0.04683373328795347,
+        0.05286626671204653
+      ],
+      "expected_approximation": 0.05
+    },
+    {
+      "baseline": 0.1,
+      "treatment": 0.12,
+      "repetitions": 20000,
+      "seed_stream": 9317,
+      "rejection_rate": 0.7948,
+      "monte_carlo_95_ci": [
+        0.7892029565164455,
+        0.8003970434835544
+      ],
+      "expected_approximation": 0.8000165286163741
+    }
+  ],
+  "input_sha256": "cbcf962a5036977d3cfe29dce4ba7dacbb507f3092ac8aee06236aa6071a8286"
+}

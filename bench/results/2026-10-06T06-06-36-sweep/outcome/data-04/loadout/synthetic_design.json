@@ -1,0 +1,19 @@
+{
+  "synthetic": true,
+  "seed": 20261007,
+  "unit": "independent user",
+  "primary_metric": "conversion within 24 hours of assignment",
+  "expected_allocation": {
+    "A": 0.5,
+    "B": 0.5
+  },
+  "alpha": 0.05,
+  "target_power": 0.8,
+  "planning_baseline": 0.1,
+  "minimum_effect_absolute": 0.02,
+  "outcome_window_hours": 24,
+  "enrollment_start": "2026-09-14T00:00:00+00:00",
+  "enrollment_end_exclusive": "2026-09-28T00:00:00+00:00",
+  "export_cutoff": "2026-09-29T00:00:00+00:00",
+  "stopping_rule": "illustrative fixed export; real stopping history unknown"
+}

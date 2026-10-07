@@ -3,7 +3,13 @@
  * request, the agent runs twice in fresh folders: once bare, once with the
  * sweep's selection (skills listed or injected, as `loadout codex` would). A
  * frontier judge then compares the two sets of output files blind, twice with
- * the order swapped, so position bias cancels out.
+ * the order swapped. A preference that holds in both orders counts; a split
+ * verdict is reported as such.
+ *
+ * Limits: each arm makes up its own sample inputs (the requests mention files
+ * that do not exist), and both run with the user's own Codex configuration.
+ * Outputs can still reveal the treatment, e.g. when a skill's own template
+ * shows in the deliverable.
  *
  *   npx tsx bench/outcome.ts <sweep dir> --ids a,b,c [--agent codex] [--timeout-s 360] [--judge opus]
  *
@@ -11,7 +17,7 @@
  * name but not compared. Runs use real subscriptions and take minutes each.
  */
 import { spawn } from 'node:child_process';
-import { appendFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { appendFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -84,21 +90,27 @@ function run(bin: string, args: string[], cwd: string, timeoutMs: number): Promi
   });
 }
 
-/** The run's deliverables: text files only, skipping dependencies and VCS folders, within a budget. */
+/** Lockfiles and other generated metadata: never shown, they would only eat the judge's budget. */
+const GENERATED = /(^|[/\\])(package-lock\.json|yarn\.lock|pnpm-lock\.yaml|bun\.lockb?|poetry\.lock|uv\.lock|Cargo\.lock|Gemfile\.lock|composer\.lock|go\.sum)$/;
+/** What the user asked for comes first: documents, then source, then data and configuration. */
+const rank = (f: string) => (/\.(md|markdown|txt|rst|adoc)$/i.test(f) ? 0 : /\.(ts|tsx|js|mjs|py|go|rs|java|rb|sh|sql|html|css|ipynb)$/i.test(f) ? 1 : 2);
+
+/** The run's deliverables: text files only, skipping dependencies, VCS folders, dotfiles and lockfiles, within a budget. */
 function deliverables(root: string, maxChars = 60_000): string {
   const files: string[] = [];
   const walk = (d: string) => {
     for (const e of readdirSync(d, { withFileTypes: true })) {
-      if (['node_modules', '.git', '.venv', 'venv', '__pycache__', 'dist', 'build', '.codex'].includes(e.name)) continue;
+      if (e.name.startsWith('.') || ['node_modules', 'venv', '__pycache__', 'dist', 'build'].includes(e.name)) continue;
       const p = join(d, e.name);
       if (e.isDirectory()) walk(p);
-      else if (e.isFile()) files.push(p);
+      else if (e.isFile() && !GENERATED.test(p)) files.push(p);
     }
   };
   if (existsSync(root)) walk(root);
   let budget = maxChars;
+  let total = 0;
   const parts: string[] = [];
-  for (const f of files.sort()) {
+  for (const f of files.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))) {
     const rel = relative(root, f);
     const buf = readFileSync(f);
     if (buf.includes(0) || statSync(f).size > 200_000) {
@@ -108,8 +120,10 @@ function deliverables(root: string, maxChars = 60_000): string {
     const text = buf.toString('utf8');
     const shown = text.slice(0, Math.max(0, budget));
     budget -= shown.length;
+    total += text.length;
     parts.push(`--- ${rel}\n${shown}${shown.length < text.length ? '\n[truncated]' : ''}`);
   }
+  if (total > maxChars) parts.push(`[shown ${maxChars} of ${total} characters]`);
   return parts.join('\n') || '(no files produced)';
 }
 
@@ -123,7 +137,9 @@ if (!values['judge-only']) {
     const row = rows.get(id);
     if (!row) throw new Error(`no sweep row ${id}`);
     const target = join(out, id, arm);
-    if (existsSync(join(target, '.done'))) return;
+    // Run metadata lives next to the outputs, never among them: the judge must not see which arm is which.
+    const meta = join(out, id, `${arm}.json`);
+    if (existsSync(meta)) return;
     const session = materialize(decisionFor(row, arm), 'codex', config, sessions);
     const cwd = mkdtempSync(join(tmpdir(), 'loadout-outcome-work-'));
     const started = Date.now();
@@ -131,7 +147,7 @@ if (!values['judge-only']) {
     rmSync(target, { recursive: true, force: true });
     mkdirSync(target, { recursive: true });
     cpSync(cwd, target, { recursive: true, filter: (src) => !/[/\\](node_modules|\.git|\.venv|venv|__pycache__)([/\\]|$)/.test(src) });
-    appendFileSync(join(target, '.done'), JSON.stringify({ arm, model: session.model, skills: session.skills.map((c) => capabilityKey(c)), injected: session.injected.length, ...res, ms: Date.now() - started }));
+    writeFileSync(meta, JSON.stringify({ arm, model: session.model, skills: session.skills.map((c) => capabilityKey(c)), injected: session.injected.length, ...res, ms: Date.now() - started }));
     rmSync(cwd, { recursive: true, force: true });
     console.log(`${id} ${arm}: ${res.timedOut ? 'timed out' : `exit ${res.code}`} in ${((Date.now() - started) / 1000).toFixed(0)} s`);
   });
@@ -153,7 +169,7 @@ const SYSTEM = `You compare two AI agents' work on the same request. Judge only 
 const verdictFile = join(out, 'verdicts.jsonl');
 const judged = new Set(existsSync(verdictFile) ? readJsonl<{ id: string }>(verdictFile).map((v) => v.id) : []);
 let cost = 0;
-await pool(ids.filter((id) => !judged.has(id) && existsSync(join(out, id, 'bare', '.done')) && existsSync(join(out, id, 'loadout', '.done'))), 2, async (id) => {
+await pool(ids.filter((id) => !judged.has(id) && existsSync(join(out, id, 'bare.json')) && existsSync(join(out, id, 'loadout.json'))), 2, async (id) => {
   const row = rows.get(id)!;
   const files = { bare: deliverables(join(out, id, 'bare')), loadout: deliverables(join(out, id, 'loadout')) };
   const ask = async (first: Arm, second: Arm) => {
@@ -165,13 +181,13 @@ await pool(ids.filter((id) => !judged.has(id) && existsSync(join(out, id, 'bare'
   };
   const a = await ask('bare', 'loadout');
   const b = await ask('loadout', 'bare');
-  // Agreement across both orders counts; a split verdict is a tie.
-  const winner = a.winner === b.winner ? a.winner : 'tie';
-  const meta = (arm: Arm) => JSON.parse(readFileSync(join(out, id, arm, '.done'), 'utf8'));
+  // Only a preference that holds in both orders counts; otherwise the verdict is split (often position bias).
+  const winner = a.winner === b.winner ? a.winner : 'split';
+  const meta = (arm: Arm) => JSON.parse(readFileSync(join(out, id, `${arm}.json`), 'utf8'));
   appendFileSync(verdictFile, JSON.stringify({ id, winner, orders: [a, b], bare: meta('bare'), loadout: meta('loadout') }) + '\n');
   console.log(`${id}: ${winner} (${a.winner} / ${b.winner})`);
 });
 
 const verdicts = existsSync(verdictFile) ? readJsonl<{ id: string; winner: string }>(verdictFile).filter((v) => ids.includes(v.id)) : [];
 const count = (w: string) => verdicts.filter((v) => v.winner === w).length;
-console.log(`\nloadout better ${count('loadout')}, bare better ${count('bare')}, tie ${count('tie')} (of ${verdicts.length}); judge $${cost.toFixed(2)}`);
+console.log(`\nloadout better ${count('loadout')}, bare better ${count('bare')}, tie ${count('tie')}, split ${count('split')} (of ${verdicts.length}); judge $${cost.toFixed(2)}`);

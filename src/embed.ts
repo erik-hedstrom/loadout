@@ -13,6 +13,7 @@ const DIM = 384;
 const CACHE_FILE = 'embeddings.bin';
 /** bge models expect this prefix on queries, not on documents. */
 const QUERY_PREFIX = 'Represent this sentence for searching relevant passages: ';
+const MAX_CACHED_QUERIES = 1000;
 
 type Extractor = (texts: string[], opts: { pooling: 'cls'; normalize: true }) => Promise<{ data: Float32Array }>;
 
@@ -40,6 +41,8 @@ const hash = (text: string) => createHash('sha1').update(`${EMBED_MODEL}\n${text
 
 export class EmbeddingStore {
   private readonly vectors = new Map<string, Float32Array>();
+  /** Query vectors cached in this process, oldest first, so a long-running server stays bounded. */
+  private readonly queryKeys: string[] = [];
   private dirty = false;
 
   /**
@@ -99,6 +102,8 @@ export class EmbeddingStore {
     const { data } = await fe([QUERY_PREFIX + text], { pooling: 'cls', normalize: true });
     const vector = data.slice(0, DIM);
     this.vectors.set(key, vector);
+    this.queryKeys.push(key);
+    if (this.queryKeys.length > MAX_CACHED_QUERIES) this.vectors.delete(this.queryKeys.shift()!);
     this.dirty = true;
     return vector;
   }

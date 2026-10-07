@@ -167,9 +167,17 @@ ChatGPT only connects to remote HTTPS MCP servers. `loadout mcp --http`
 serves the same search on `http://127.0.0.1:8787/mcp`:
 - it serves skills only, never the MCP gateway, so a remote client cannot
   start or call your local servers;
-- `--token-file` requires a bearer token on every request;
+- `--token-file` requires a bearer token on every request. It is mandatory as
+  soon as the server is reachable from elsewhere (a non-loopback `--host`, or
+  any `--allowed-host`);
 - requests whose Host header is not localhost or an `--allowed-host` are
-  refused.
+  refused;
+- at most 4 searches run at once.
+
+```bash
+openssl rand -hex 32 > ~/.loadout/mcp-token
+loadout mcp --http --token-file ~/.loadout/mcp-token --allowed-host <your-tunnel-domain>
+```
 
 Put OpenAI's Secure MCP Tunnel, or another HTTPS tunnel, in front of it.
 Pass the tunnel's domain as `--allowed-host`, then add the tunnel URL as a
@@ -182,6 +190,12 @@ skills without relying on the agent to search. In tests it raised Claude
 Code's skill use from 2 to 6 of 10 sessions. Each skill is offered once per
 session, and short follow-ups ("yes", "go on") are not routed. Codex runs a
 new hook only after you trust it with `/hooks`.
+
+Privacy: with the hook installed, every routed prompt goes to TypeSafe's Jev
+API, together with the repository's top-level file names and dependencies.
+That happens in every project, because the hook is user-scoped. The launchers
+send the first prompt only. To keep prompts local, leave the hook out, or set
+`"router": "lexical"` (the hook then adds nothing).
 
 Under WSL, Windows apps reach the server through `wsl.exe` and get Windows
 paths. Keep the TypeSafe key in the config's `apiKeyFile` (environment
