@@ -69,7 +69,7 @@ Isolation needs per-CLI support that is not uniform yet (Claude Code has
 |---|---|---|---|
 | **Launcher** (v0.1) | once per session | `--model`, `--plugin-dir`, `--mcp-config` | `-m`, `-c` overrides |
 | **Search server** (`loadout mcp`) | mid-session, on demand | `find_skills`, `load_skill`, gateway to library MCP servers; attached by the launcher | same — Codex speaks MCP |
-| **Prompt hook** (`loadout hook claude`) | every prompt | `UserPromptSubmit` adds the skills that fit as context (cache-safe: appended to the user turn), once per skill per session | if/when hooks support it |
+| **Prompt hook** (`loadout hook claude\|codex`) | every prompt | `UserPromptSubmit` adds the skills that fit as context (cache-safe: appended to the user turn), once per skill per session | same contract; runs once trusted with `/hooks` |
 | **HTTP** (`loadout mcp --http`) | remote hosts | — | ChatGPT chat, behind an HTTPS tunnel; skills only, optional bearer token |
 
 The launcher fixes the session's tool set up front, which also keeps the prompt
@@ -229,6 +229,26 @@ Approvals: the launcher pre-approves only `find_skills` and `load_skill`
 (Claude `--allowedTools`, Codex `tools.<tool>.approval_mode = "approve"`).
 They only read the user's own library. `call_server_tool` keeps the host's
 prompt, which shows the server, tool and arguments.
+
+### Prompt hook
+
+Measured on the realistic sweep: agents open what is preloaded (9 of 10, 11 of
+11), but rarely search on their own. The hook removes the dependence on the
+agent's initiative:
+- each substantive prompt (not "yes" or "go on") is routed with the same two
+  Jev requests;
+- the skills that fit are listed once per session, as third-party metadata,
+  with how to load them;
+- a clear winner or a named skill is injected once.
+
+It runs before the host sends the prompt, so it has a hard budget. It gives
+up after 20 s with no output, never retries Jev, and only uses the cached
+embedding index. Any error adds nothing.
+
+Privacy: the hook sends every routed prompt, with the repository's top-level
+file names and dependencies, to the Jev API, in every project once installed.
+That is the price of routing per prompt; the launchers send only the first
+prompt.
 
 ### Router backends
 
