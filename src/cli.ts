@@ -29,8 +29,9 @@ Usage:
   loadout mcp --http [--port 8787] [--host 127.0.0.1] [--token-file f] [--allowed-host h]
                                           The same over Streamable HTTP (skills only), for remote hosts
                                           such as ChatGPT behind a tunnel
-  loadout hook claude [--windows-paths]   Claude Code UserPromptSubmit hook: routes each prompt and adds
-                                          the skills that fit as context (reads the hook JSON on stdin)
+  loadout hook claude|codex [--windows-paths]
+                                          UserPromptSubmit hook: routes each prompt and adds the skills
+                                          that fit as context (reads the hook JSON on stdin)
   loadout setup <host> [--windows]        Print the config that attaches \`loadout mcp\` to a host:
                                           ${HOSTS.join(', ')}
 
@@ -255,7 +256,8 @@ async function main(): Promise<number> {
       // Never block or break a prompt: any problem means no output and exit 0.
       try {
         const { values, positionals } = parseArgs({ args: rest, allowPositionals: true, options: { 'windows-paths': { type: 'boolean' } } });
-        if (positionals[0] !== 'claude') fail('usage: loadout hook claude');
+        // Claude Code and Codex send the same fields (session_id, prompt, cwd) and read the same output.
+        if (positionals[0] !== 'claude' && positionals[0] !== 'codex') fail('usage: loadout hook claude|codex');
         const chunks: Buffer[] = [];
         for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
         const input = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}') as HookInput;

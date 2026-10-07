@@ -1,0 +1,131 @@
+{
+  "input": "synthetic_ab_test.csv",
+  "sha256": "6547a659769aa835335a7c272bf5068d6c6dd27f4663376654c2b83c6ef8727e",
+  "primary_metric": "user-level binary conversion rate",
+  "variants": {
+    "A": {
+      "n": 2000,
+      "conversions": 200,
+      "rate": 0.1
+    },
+    "B": {
+      "n": 2000,
+      "conversions": 230,
+      "rate": 0.115
+    }
+  },
+  "first_exposure_utc": "2026-09-14T00:00:00+00:00",
+  "last_exposure_utc": "2026-09-27T23:54:57+00:00",
+  "elapsed_days": 13.996493055555556,
+  "calendar_days_with_exposures": 14,
+  "daily_counts": {
+    "2026-09-14": {
+      "B": 140,
+      "A": 146
+    },
+    "2026-09-15": {
+      "B": 139,
+      "A": 147
+    },
+    "2026-09-16": {
+      "A": 154,
+      "B": 132
+    },
+    "2026-09-17": {
+      "A": 132,
+      "B": 153
+    },
+    "2026-09-18": {
+      "A": 148,
+      "B": 138
+    },
+    "2026-09-19": {
+      "A": 140,
+      "B": 146
+    },
+    "2026-09-20": {
+      "A": 133,
+      "B": 152
+    },
+    "2026-09-21": {
+      "A": 155,
+      "B": 131
+    },
+    "2026-09-22": {
+      "A": 146,
+      "B": 140
+    },
+    "2026-09-23": {
+      "A": 147,
+      "B": 139
+    },
+    "2026-09-24": {
+      "A": 133,
+      "B": 152
+    },
+    "2026-09-25": {
+      "B": 150,
+      "A": 136
+    },
+    "2026-09-26": {
+      "A": 136,
+      "B": 150
+    },
+    "2026-09-27": {
+      "A": 147,
+      "B": 138
+    }
+  },
+  "weekly_descriptive": [
+    {
+      "A": {
+        "n": 1000,
+        "conversions": 100
+      },
+      "B": {
+        "n": 1000,
+        "conversions": 125
+      }
+    },
+    {
+      "A": {
+        "n": 1000,
+        "conversions": 100
+      },
+      "B": {
+        "n": 1000,
+        "conversions": 105
+      }
+    }
+  ],
+  "duplicate_users": 0,
+  "cross_variant_users": 0,
+  "srm_assumed_allocation": "50:50",
+  "srm_chi2": 0.0,
+  "srm_p_value": 1.0,
+  "test": "two-sided pooled two-proportion z-test",
+  "ci_method": "Newcombe-Wilson",
+  "alpha": 0.05,
+  "difference": 0.015,
+  "relative_lift": 0.15,
+  "z": 1.5313798014046314,
+  "p_value": 0.12567555314877363,
+  "ci95_difference": [
+    -0.004220790703502803,
+    0.03424514701432904
+  ],
+  "power": {
+    "baseline": 0.1,
+    "absolute_effect": 0.01,
+    "target": 0.8,
+    "current": 0.17795274062243938,
+    "current_mde": 0.028156208597714175,
+    "required_per_arm": 14751,
+    "additional_per_arm": {
+      "A": 12751,
+      "B": 12751
+    },
+    "additional_total": 25502
+  },
+  "synthetic": true
+}

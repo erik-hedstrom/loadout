@@ -175,11 +175,13 @@ Put OpenAI's Secure MCP Tunnel, or another HTTPS tunnel, in front of it.
 Pass the tunnel's domain as `--allowed-host`, then add the tunnel URL as a
 connector in ChatGPT's developer mode.
 
-**Claude Code hook.** `loadout setup claude-code` also prints a
-`UserPromptSubmit` hook. It routes every prompt and adds the skills that fit
-as context, so sessions started without the launcher get the right skills
-without relying on the agent to search. Each skill is offered once per
-session, and short follow-ups ("yes", "go on") are not routed.
+**Prompt hook.** `loadout setup claude-code` and `loadout setup codex` also
+print a `UserPromptSubmit` hook. It routes every prompt and adds the skills
+that fit as context, so sessions started without the launcher get the right
+skills without relying on the agent to search. In tests it raised Claude
+Code's skill use from 2 to 6 of 10 sessions. Each skill is offered once per
+session, and short follow-ups ("yes", "go on") are not routed. Codex runs a
+new hook only after you trust it with `/hooks`.
 
 Under WSL, Windows apps reach the server through `wsl.exe` and get Windows
 paths. Keep the TypeSafe key in the config's `apiKeyFile` (environment

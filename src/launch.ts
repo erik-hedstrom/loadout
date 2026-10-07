@@ -74,16 +74,20 @@ export function loaderArgs(execArgv: string[]): string[] {
   return out;
 }
 
-/** A Claude Code settings.json block that runs `loadout hook claude` on every prompt. */
-export function claudeHookSettings(windowsAgent: boolean): object {
-  const h = loadoutCommand(['hook', 'claude'], windowsAgent);
+/** The shell command a host runs for `loadout hook <agent>`. */
+export function hookCommand(agent: Agent, windowsAgent: boolean): string {
+  const h = loadoutCommand(['hook', agent], windowsAgent);
   const env = Object.entries(h.env ?? {}).map(([k, v]) => `${k}=${quote(v)} `).join('');
   // Claude Code on Windows runs hooks through Git Bash, which rewrites arguments that start with "/"
   // into Windows paths before they reach wsl.exe. A leading "//" is passed on as "/" by Git Bash, and
   // is still the same path to Linux if another shell leaves it as is.
   const arg = (a: string) => (windowsAgent && /^\/[^/]/.test(a) ? `/${a}` : a);
-  const command = `${env}${[h.command!, ...(h.args ?? []).map(arg)].map(quote).join(' ')}`;
-  return { hooks: { UserPromptSubmit: [{ hooks: [{ type: 'command', command, timeout: 30 }] }] } };
+  return `${env}${[h.command!, ...(h.args ?? []).map(arg)].map(quote).join(' ')}`;
+}
+
+/** A Claude Code settings.json block that runs `loadout hook claude` on every prompt. */
+export function claudeHookSettings(windowsAgent: boolean): object {
+  return { hooks: { UserPromptSubmit: [{ hooks: [{ type: 'command', command: hookCommand('claude', windowsAgent), timeout: 30 }] }] } };
 }
 
 const PLUGIN_NAME = 'loadout';
@@ -253,7 +257,7 @@ export function hostSetup(host: Host, windows: boolean): { where: string; snippe
       };
     case 'codex':
       return {
-        where: '~/.codex/config.toml (also used by the Codex tab of the ChatGPT desktop app and by T3 Code)',
+        where: '~/.codex/config.toml (also used by the Codex tab of the ChatGPT desktop app and by T3 Code); after adding the hook, run /hooks in Codex once to trust it',
         snippet: [
           `[mcp_servers.loadout]`,
           `command = ${toToml(s.command)}`,
@@ -261,6 +265,13 @@ export function hostSetup(host: Host, windows: boolean): { where: string; snippe
           ...(s.env ? [`env = ${toToml(s.env)}`] : []),
           `env_vars = ["TYPESAFE_API_KEY"]`,
           ...SEARCH_TOOLS.flatMap((t) => ['', `[mcp_servers.loadout.tools.${t}]`, `approval_mode = "approve"`]),
+          '',
+          '# Route every prompt (optional). Codex runs a new or changed hook only after you trust it with /hooks.',
+          '[[hooks.UserPromptSubmit]]',
+          '[[hooks.UserPromptSubmit.hooks]]',
+          'type = "command"',
+          `command = ${toToml(hookCommand('codex', windows))}`,
+          'timeout = 30',
         ].join('\n'),
       };
     case 'claude-desktop':

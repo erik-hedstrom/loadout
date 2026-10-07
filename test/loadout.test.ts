@@ -326,6 +326,7 @@ describe('launch', () => {
     expect(codex).toMatch(/^\[mcp_servers\.loadout\]\ncommand = ".+"\nargs = \[.*"mcp"\]\nenv_vars = \["TYPESAFE_API_KEY"\]/);
     expect(codex).toContain('[mcp_servers.loadout.tools.find_skills]\napproval_mode = "approve"');
     expect(codex).not.toContain('call_server_tool');
+    expect(codex).toMatch(/\[\[hooks\.UserPromptSubmit\]\]\n\[\[hooks\.UserPromptSubmit\.hooks\]\]\ntype = "command"\ncommand = ".* hook codex"\ntimeout = 30$/);
     expect(JSON.parse(hostSetup('opencode', false).snippet).mcp.loadout).toMatchObject({ type: 'local', enabled: true });
     expect(JSON.parse(hostSetup('claude-desktop', true).snippet).mcpServers.loadout.command).toBe('wsl.exe');
     const claudeCode = hostSetup('claude-code', false).snippet.split('\n\n');
