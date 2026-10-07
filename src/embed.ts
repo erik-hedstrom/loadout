@@ -14,21 +14,27 @@ const CACHE_FILE = 'embeddings.bin';
 /** bge models expect this prefix on queries, not on documents. */
 const QUERY_PREFIX = 'Represent this sentence for searching relevant passages: ';
 const MAX_CACHED_QUERIES = 1000;
+const TRANSFORMERS_MODULE = '@huggingface/transformers';
 
 type Extractor = (texts: string[], opts: { pooling: 'cls'; normalize: true }) => Promise<{ data: Float32Array }>;
+type Transformers = {
+  env: { cacheDir: string };
+  pipeline: (task: 'feature-extraction', model: string, opts: { dtype: 'q8' }) => Promise<Extractor>;
+};
 
 let extractor: Promise<Extractor> | undefined;
 
 async function getExtractor(modelDir: string): Promise<Extractor> {
   extractor ??= (async () => {
-    let transformers: typeof import('@huggingface/transformers');
+    let transformers: Transformers;
     try {
-      transformers = await import('@huggingface/transformers');
+      // A variable specifier prevents tsc from resolving types for this optional dependency.
+      transformers = await import(TRANSFORMERS_MODULE);
     } catch {
       throw new Error('embeddings need the optional dependency @huggingface/transformers (npm install @huggingface/transformers)');
     }
     transformers.env.cacheDir = modelDir;
-    return (await transformers.pipeline('feature-extraction', EMBED_MODEL, { dtype: 'q8' })) as unknown as Extractor;
+    return await transformers.pipeline('feature-extraction', EMBED_MODEL, { dtype: 'q8' });
   })();
   return extractor;
 }
@@ -134,7 +140,7 @@ export class EmbeddingStore {
  */
 export async function libraryEmbeddings(library: Capability[], dir: string, log: (message: string) => void = () => {}): Promise<EmbeddingStore | undefined> {
   try {
-    await import('@huggingface/transformers');
+    await import(TRANSFORMERS_MODULE);
   } catch {
     return undefined;
   }
@@ -158,7 +164,7 @@ export async function libraryEmbeddings(library: Capability[], dir: string, log:
  */
 export async function cachedEmbeddings(dir: string): Promise<EmbeddingStore | undefined> {
   try {
-    await import('@huggingface/transformers');
+    await import(TRANSFORMERS_MODULE);
   } catch {
     return undefined;
   }
