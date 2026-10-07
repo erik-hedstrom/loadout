@@ -135,14 +135,16 @@ setup, the iteration protocol, the context discipline and the prompts.
    and not adopted.
 6. **Launch channels and timing.** Show HN, Reddit, X, LinkedIn, awesome
    lists. Agents draft; Erik posts.
-7. **Hook default.** The hook sends every routed prompt to TypeSafe. Should
-   `setup` install it by default, or only on request?
+7. **Hook default.** Decided by Erik, 2026-10-07: loadout runs automatically
+   inside Claude Code, in the CLI and the desktop app, through a plugin the
+   user installs (D10). The install text says that routed prompts go to
+   TypeSafe. The launcher stays for power users and benchmarks.
 
 ## Setting up on the new Linux machine
 
 ```bash
 git clone https://github.com/erik-hedstrom/loadout && cd loadout
-npm install && npm run build && npm link          # Node ≥ 22 (developed on 24)
+npm install && npm run build && npm link          # Node ≥ 22.12 (developed on 24)
 loadout init --key-file ~/keys/typesafe.txt       # the key file is NOT in git; keep it safe
 sh bench/data/library.sh                          # rebuild the 1,262-skill library the results used (~10 min)
 npm test && npm run typecheck

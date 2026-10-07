@@ -18,6 +18,10 @@ The orchestrator keeps this file current. Statuses: `todo`, `in progress (PR #)`
 
 New router tuning only happens on new held-out requests (C1).
 
+In-host first (Erik, 2026-10-07): loadout works inside Claude Code, in the
+CLI and the desktop app, through a plugin and its prompt hook (D10). The
+launcher is for power users and benchmarks.
+
 ## A. Adoption and ease of use
 
 | ID | P | Task | Agent | Lane | Status |
@@ -58,8 +62,9 @@ Acceptance:
 - Above the fold:
   - the problem, with one measured number from B1;
   - what loadout does in one sentence;
-  - a three-command quickstart (`npm i -g …`, `loadout init`, `loadout audit`
-    or `loadout claude "…"`);
+  - a three-command quickstart (`npm i -g …`, `loadout init`, then the
+    plugin install from D10), with `loadout audit` as the way to see the
+    problem first;
   - a GIF.
 - Everything else moves to `docs/` (hosts, MCP server, hook, security model,
   benchmarks).
@@ -248,7 +253,9 @@ Acceptance:
   including no gain.
 - Overhead: tokens per request with the pack installed natively vs in
   loadout's library, on a fixed request mix, with B1's method, for Claude
-  Code and Codex.
+  Code and Codex. B1 measured Impeccable's listing at +216 tokens per
+  request, so any saving must come from what loads when it is used, not from
+  the listing.
 - Quality: fixed frontend fixtures (C2's harness). Arms: host defaults,
   host + pack native, host + loadout with the pack in the library. Blind
   pairwise judging in both orders, by the other family (Sol judges Claude
@@ -260,6 +267,7 @@ Acceptance:
 
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
+| D10 | P0 | In-host first: loadout as a Claude Code plugin (hook), CLI then desktop app | Codex | cloud + local + erik | in progress |
 | D1 | P0 | Validate on the new native Linux machine | Claude | local | todo (machine pending) |
 | D7 | P1 | `loadout doctor` | Codex | cloud | todo |
 | D2 | P1 | Live Codex hook test | Claude | local + erik | todo |
@@ -269,6 +277,30 @@ Acceptance:
 | D6 | P2 | HTTP: cancellation reaches Jev | Codex | cloud | todo |
 | D8 | P1 | Host capability matrix (verified vs generated) | Codex | cloud | todo |
 | D9 | P1 | Codex parity: neutral session skill dir, tier presets | Codex | cloud | todo (after E9) |
+
+**D10. In-host first: loadout as a Claude Code plugin.**
+
+Why (Erik, 2026-10-07): users stay in Claude Code, in the CLI or the desktop
+app, and loadout adds its value there. Competing to be the gateway is the
+harder position. The desktop app's Code tab loads the same `~/.claude` hooks
+and plugins as the CLI. B1: the hook has no fixed token cost, while the MCP
+tools add 546 tokens to every request.
+
+Acceptance:
+- The repo is a plugin marketplace (`.claude-plugin/marketplace.json`) with
+  one plugin, `plugins/loadout`, which runs the prompt hook. It has no MCP
+  server and no `bin/`. The user installs it, and nothing edits `~/.claude`
+  (rule 3). `claude plugin validate` passes.
+- `loadout setup claude-code` prints the install commands. The settings
+  snippet stays only for loadout in WSL behind a Windows Claude Code.
+- The install text says that routed prompts go to TypeSafe (decision 7).
+- CLI: `claude -p --plugin-dir plugins/loadout` on the 10 hook requests from
+  `bench/invoke.ts` shows the context arriving (compare 6/10 in RESULTS).
+- Latency: `bench/hook-latency.ts` reports p50 and p95 per step, with real
+  Jev on a native install. The hook deadline is then chosen from those
+  numbers.
+- Desktop app: Erik installs the plugin, and one Code-tab session shows the
+  hook context. Record what differs from the CLI.
 
 **D1. Native Linux validation.**
 
@@ -362,11 +394,27 @@ Acceptance:
 | E1 | P0 | GitHub Actions CI | Codex | cloud | done ([PR #2](https://github.com/erik-hedstrom/loadout/pull/2)) |
 | E2 | P0 | LICENSE, CONTRIBUTING, SECURITY.md, templates | Claude | cloud + erik | done ([PR #1](https://github.com/erik-hedstrom/loadout/pull/1)) |
 | E7 | P0 | Vendor-independent bench judges and expander | Codex | cloud | done ([PR #5](https://github.com/erik-hedstrom/loadout/pull/5)) |
-| E8 | P0 | Repo-wide simplification pass | Claude (pr-reviewer finds, worker fixes) + Codex review | cloud | todo |
+| E8 | P0 | Repo-wide simplification pass | Claude (pr-reviewer finds, worker fixes) + Codex review | cloud | todo (include A2's toolTokens tautology test and E7's cosmetic items) |
 | E9 | P0 | Security hardening from the read-only Sol review | Codex | cloud | done ([PR #4](https://github.com/erik-hedstrom/loadout/pull/4), re-measure [PR #7](https://github.com/erik-hedstrom/loadout/pull/7)) |
 | E3 | P1 | Split the test file per module | Codex | cloud | todo |
 | E5 | P1 | Changelog and release automation | Codex | cloud | todo (with A4) |
 | E6 | P2 | Architecture diagram in DESIGN.md | Claude | cloud | todo |
+| E10 | P1 | Build without optional dependencies | Codex | cloud | todo |
+| E11 | P1 | Fixed-text diagnostics in the gateway and relay | Codex | cloud | todo |
+
+**E10. Build without optional dependencies.** src/embed.ts:24 types
+`@huggingface/transformers` with `typeof import(...)`. So `tsc` fails when npm
+skips the optional install, which happened once on Ubuntu with Node 24 in CI.
+Acceptance: `npm ci --omit=optional && npm run build` passes, checked in CI.
+
+**E11. Fixed-text diagnostics in the gateway and relay.** These come from the
+E9 round-8 reviews:
+- the gateway's `failure()` (src/mcp.ts) returns raw SDK or upstream error
+  text to the agent;
+- the relay folds loadout's own config errors into "transport failed";
+- Jev schema errors could keep loadout's own question id.
+
+Acceptance: the same fixed-text rule and adversarial tests as E9.
 
 **E1. CI.**
 
@@ -491,3 +539,4 @@ integration layers, readable in both light and dark themes.
 | 2026-10-07 | Handoff written (HANDOFF, AGENTS with Code Review Rules, ORCHESTRATOR, BACKLOG, `.claude/agents/{worker,pr-reviewer}.md`, auto-compact 500k) | — | — | License, public timing, npm name, budget caps, hook default; cloud setup (ORCHESTRATOR.md §One-time setup) |
 | 2026-10-07 (iter 1) | None: GitHub outage (Git, PRs, Actions) from 15:16 UTC; no CI run yet | E1 #2 (pr-reviewer APPROVE, Sol clean; waits for CI); E2 #1 (draft until E9); E9 (both reviews blocked it: server env reaches the agent process [High], credentials in args/URLs [High], conditional Jev framing [Med]; Sol on round 2); A2 #3 (draft; reviews running); E7 (Sol building judge backends) | Jev $0 / Claude: orchestrator + pr-reviewer runs (main usage) / Codex: 1 repo review, 5 builds, 3 reviews (ChatGPT plan) | Decided by Erik: Apache-2.0; full CI matrix on every PR; Node ≥ 22; Sol builds, Claude reviews. Open: enable private vulnerability reporting; hook default; npm name; going public |
 | 2026-10-07 (iter 1, later) | None: no Actions run has ever been created for #2 (workflow present, Actions enabled); Erik asked to check billing or allow merging E1 on reviews + local green | #1 E2 draft (SECURITY.md to add: server-echoed credentials out of scope); #2 E1 approved by both, no CI; #3 A2 round 4 (pr-reviewer APPROVE r3, Sol found 3 Medium); #4 E9 round 4 (relay design accepted by both; declined Sol's payload-redaction High: relay stays transparent); #5 E7 round 3 (codex judge refuses on 0.160.1: unified_exec cannot be disabled; record as negative result); #6 B1 round 2 (nested-subset cap detection, `codex debug prompt-input` preflight) | Jev $0 / Claude: pr-reviewer rounds (main usage) / Codex: ~20 builds and reviews | Positioning: hosts cap listings (Claude Code 1% of context, names always listed; Codex 2% or 8,000 chars), so the headline becomes visibility + bounded cost, measured by B1. Owed after E9 merges: Jev-only agreement check of the framing change (≈ $0.5) |
+| 2026-10-07 (iter 2) | E1 #2 (merged without PR CI at Erik's direction; the first main run was green on all 6 jobs), E7 #5, E9 #4, A2 #3, B1 #6, E2 #1, E9 re-measure #7 | D10 (Sol building the plugin and the hook-latency bench) | Jev $0.77 (two sweeps) / Claude: 16 haiku calls with rows plus ≤4 probes (B1), and pr-reviewer rounds (subscription) / Codex: about 12 builds and reviews (ChatGPT plan) | Decided by Erik: in-host first (D10), with the hook automatic through the plugin he installs. Findings: the Claude listing grows about 10 tokens per skill, so the 140k estimate is withdrawn; loadout's MCP tools cost more than 50 native skills; Jev is not deterministic (about 1 request in 13); decisions probably shifted across E9 (cause unidentified). Open: a security contact; B1 raw-row names before going public; a Windows-side `loadout init` or the Linux machine for D10's CLI check |

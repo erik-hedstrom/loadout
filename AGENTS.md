@@ -8,7 +8,7 @@ Codex reads this file directly; Claude Code reads it through CLAUDE.md. Read
 
 loadout picks the skills, MCP servers and model tier for each coding-agent
 session or prompt, out of a library of any size, using a very cheap System One
-model (TypeSafe's Jev). TypeScript, Node ≥ 22, ESM, strict.
+model (TypeSafe's Jev). TypeScript, Node ≥ 22.12, ESM, strict.
 
 ```bash
 npm ci && npm run build      # dist/
