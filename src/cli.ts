@@ -20,6 +20,7 @@ Usage:
   loadout init [--key-file <path>]        Write ~/.loadout/config.json
   loadout add <dir|github-url>...         Copy skills into the library (searches recursively)
   loadout list [--json] [--sources]       Show the library (--sources: the add commands that rebuild it)
+  loadout audit [--json] [--adopt]        Estimate installed listings; optionally copy skills to ~/.loadout
   loadout route [--json] [--lexical] <task>
                                           Show what would be selected, without launching
   loadout claude [--dry-run] [--headless] <task> [-- <claude args>]
@@ -157,6 +158,13 @@ async function runHook(rest: string[]): Promise<number> {
 async function main(): Promise<number> {
   const [command, ...rest] = process.argv.slice(2);
   if (command === 'hook') return runHook(rest);
+  if (command === 'audit') {
+    const { values } = parseArgs({ args: rest, options: { json: { type: 'boolean' }, adopt: { type: 'boolean' } } });
+    const { audit, formatAudit } = await import('./audit.js');
+    const report = await audit(process.cwd(), Boolean(values.adopt));
+    console.log(values.json ? JSON.stringify(report, null, 2) : formatAudit(report));
+    return 0;
+  }
   if (command === 'mcp-launch') {
     await launchMcp(rest[0] ?? '', paths.library());
     return 0;

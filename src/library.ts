@@ -128,24 +128,27 @@ function readSource(dir: string): SkillSource | undefined {
   }
 }
 
-export function parseSkill(dir: string): Capability | undefined {
+export function parseFrontmatter(text: string): Record<string, unknown> {
+  const match = FRONTMATTER.exec(text);
+  if (!match?.[1]) return {};
+  try {
+    const meta: unknown = parseYaml(match[1], { logLevel: 'error' });
+    return meta !== null && typeof meta === 'object' && !Array.isArray(meta) ? meta as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
+}
+
+export function parseSkill(dir: string): (Capability & { disableModelInvocation?: boolean }) | undefined {
   // Never follow a symlinked manifest, and never read an outsized one whole.
   const text = readManifest(dir);
   if (text === undefined) return undefined;
-  const match = FRONTMATTER.exec(text);
-  let meta: Record<string, unknown> = {};
-  if (match?.[1]) {
-    try {
-      meta = (parseYaml(match[1]) as Record<string, unknown>) ?? {};
-    } catch {
-      // Malformed frontmatter: fall back to the directory name.
-    }
-  }
+  const meta = parseFrontmatter(text);
   const name = typeof meta.name === 'string' && meta.name.trim() ? meta.name.trim() : basename(dir);
   const description = typeof meta.description === 'string' ? meta.description.trim() : '';
   const origin = readSource(dir)?.origin;
   // The id is the library folder, which is unique; the name is what the skill calls itself.
-  return { id: `skill:${basename(dir)}`, kind: 'skill', name, description, source: dir, ...(origin ? { origin } : {}) };
+  return { id: `skill:${basename(dir)}`, kind: 'skill', name, description, source: dir, ...(origin ? { origin } : {}), ...(meta['disable-model-invocation'] === true ? { disableModelInvocation: true } : {}) };
 }
 
 function subdirs(dir: string): string[] {
@@ -216,20 +219,26 @@ const isInside = (parent: string, child: string) => {
 };
 
 /** Skill folders under `root` at any depth. A skill's own subfolders are its resources, not more skills. */
-export function findSkillDirs(root: string, maxDepth = 8): string[] {
+export function findSkillDirs(root: string, maxDepth = 8, followLinks = false): string[] {
   const found: string[] = [];
-  if (!existsSync(root) || lstatSync(root).isSymbolicLink()) return found;
+  if (!existsSync(root) || (!followLinks && lstatSync(root).isSymbolicLink())) return found;
+  const visited = new Set<string>();
   let entries = 0;
   const walk = (dir: string, depth: number) => {
+    if (!existsSync(dir)) return;
+    if (followLinks) {
+      dir = realpathSync(dir);
+      if (visited.has(dir) || !lstatSync(dir).isDirectory()) return;
+      visited.add(dir);
+    }
     if (existsSync(join(dir, 'SKILL.md'))) {
       found.push(dir);
       return;
     }
     if (depth >= maxDepth) return;
-    // Dirent.isDirectory() is false for symlinks, so links are never followed.
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       if (++entries > LIMITS.discoveryEntries) throw new Error(`more than ${LIMITS.discoveryEntries} entries to search; point at a subfolder`);
-      if (entry.isDirectory() && !SKIP_DIRS.has(entry.name)) walk(join(dir, entry.name), depth + 1);
+      if ((entry.isDirectory() || (followLinks && entry.isSymbolicLink())) && !SKIP_DIRS.has(entry.name)) walk(join(dir, entry.name), depth + 1);
     }
   };
   walk(root, 0);
