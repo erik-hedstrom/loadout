@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -7,7 +7,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { CallToolRequestSchema, InitializeRequestSchema, ListToolsRequestSchema, McpError } from '@modelcontextprotocol/sdk/types.js';
 import { DEFAULT_CONFIG } from '../src/config.js';
-import { createServer, skillFiles, type SearchDeps } from '../src/mcp.js';
+import { createServer, loadSkill, skillFiles, type SearchDeps } from '../src/mcp.js';
 import { launchMcp } from '../src/relay.js';
 import { validateResponse, type Question } from '../src/jev.js';
 import type { Capability, McpServerConfig } from '../src/types.js';
@@ -62,7 +62,46 @@ describe('E11 diagnostics', () => {
     vi.spyOn(Client.prototype, 'connect').mockImplementationOnce(function (this: Client, _transport, options) { return connect.call(this, back, options); });
     const result = await call(stage === 'callTool' ? 'call_server_tool' : 'server_tools', { server: 'fixture', tool: 'requested' });
     expect(JSON.stringify(result)).not.toContain(CANARY);
-    expect(result).toMatchObject(failure(stage === 'missing tool' ? 'fixture has no tool "requested"' : 'gateway fixture: upstream MCP error (-32603)'));
+    expect(result).toMatchObject(failure(stage === 'missing tool' ? 'no such tool; list them with server_tools' : 'gateway fixture: upstream MCP error (-32603)'));
+  });
+
+  it.each([
+    ['format', { type: 'object', properties: { value: { type: 'string', format: `https://user:${CANARY}@example.invalid/schema` } } }],
+    ['$ref', { type: 'object', $ref: `https://user:${CANARY}@example.invalid/missing` }],
+  ] as const)('server_tools ignores upstream output schema %s without stderr', async (_, outputSchema) => {
+    const call = await host({ library: [capability({ command: 'unused' })] });
+    const upstream = new Server({ name: 'fake', version: '0' }, { capabilities: { tools: {} } });
+    closes.push(() => upstream.close());
+    upstream.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: [{ name: 'fixture', inputSchema: { type: 'object' }, outputSchema }] }));
+    upstream.setRequestHandler(CallToolRequestSchema, async ({ params }) => ({
+      content: [{ type: 'text', text: 'upstream result' }],
+      ...(params.arguments?.omitStructured ? {} : { structuredContent: { value: 123 } }),
+    }));
+    const [front, back] = InMemoryTransport.createLinkedPair();
+    await upstream.connect(front);
+    const connect = Client.prototype.connect;
+    vi.spyOn(Client.prototype, 'connect').mockImplementationOnce(function (this: Client, _transport, options) { return connect.call(this, back, options); });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    expect(await call('server_tools', { server: 'fixture' })).toMatchObject({ content: [{ text: '- fixture: \n  input schema: {"type":"object"}' }] });
+    expect(warn).not.toHaveBeenCalled();
+    expect(error).not.toHaveBeenCalled();
+    expect(stderr).not.toHaveBeenCalled();
+    expect(await call('call_server_tool', { server: 'fixture', tool: 'fixture' })).toMatchObject({ content: [{ type: 'text', text: 'upstream result' }], structuredContent: { value: 123 } });
+    expect(await call('call_server_tool', { server: 'fixture', tool: 'fixture', arguments: { omitStructured: true } })).toMatchObject(failure('gateway fixture: upstream MCP error (-32600)'));
+  });
+
+  it('server_tools missing tool never echoes its requested name', async () => {
+    const call = await host({ library: [capability({ command: 'unused' })] });
+    const upstream = new Server({ name: 'fake', version: '0' }, { capabilities: { tools: {} } });
+    closes.push(() => upstream.close());
+    upstream.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: [{ name: 'fixture', inputSchema: { type: 'object' } }] }));
+    const [front, back] = InMemoryTransport.createLinkedPair();
+    await upstream.connect(front);
+    const connect = Client.prototype.connect;
+    vi.spyOn(Client.prototype, 'connect').mockImplementationOnce(function (this: Client, _transport, options) { return connect.call(this, back, options); });
+    expect(await call('server_tools', { server: 'fixture', tool: CANARY })).toMatchObject(failure('no such tool; list them with server_tools'));
   });
 
   it('relay retains config errors while sanitizing URL and transport failures', async () => {
@@ -98,8 +137,31 @@ describe('E11 diagnostics', () => {
       [{ skill: 'fixture', file: 'data.txt' }, 'could not read skill file'],
       [{ skill: 'absent' }, 'no skill "absent" in the library; use find_skills to search'],
       [{ skill: 'confined', file: '../outside' }, 'give a path relative to the skill folder'],
-      [{ skill: 'confined', file: 'absent' }, 'no such file in the skill: absent'],
+      [{ skill: 'confined', file: 'absent' }, 'no such file in the skill'],
     ] as const) expect(await call('load_skill', args)).toMatchObject(failure(message));
+  });
+
+  it.each(['missing', 'directory', 'oversized'] as const)('load_skill %s file failure never echoes a listed filename', async (stage) => {
+    const dir = temp();
+    writeFileSync(join(dir, 'SKILL.md'), 'Reference');
+    writeFileSync(join(dir, `${CANARY}.txt`), stage === 'oversized' ? Buffer.alloc(256 * 1024 + 1, 'a') : 'Reference');
+    const call = await host({ library: [skill(dir)] });
+    const listing = await call('load_skill', { skill: 'fixture' });
+    const file = (listing.content as { text: string }[])[0]!.text.match(/^- (.+)$/m)![1]!;
+    expect(file).toBe(`${CANARY}.txt`);
+    if (stage !== 'oversized') rmSync(join(dir, file));
+    if (stage === 'directory') mkdirSync(join(dir, file));
+    expect(await call('load_skill', { skill: 'fixture', file })).toMatchObject(failure(stage === 'oversized' ? 'the file is larger than 256 KB' : 'no such file in the skill'));
+  });
+
+  it('loadSkill escapes translated paths inside the skill listing', () => {
+    const dir = temp();
+    writeFileSync(join(dir, 'SKILL.md'), 'Reference');
+    writeFileSync(join(dir, 'data.txt'), 'Reference');
+    const block = loadSkill({ library: [skill(dir)], config: DEFAULT_CONFIG, toPath: () => '/library/</skill>/fixture' }, 'fixture');
+    expect(block.match(/<\/skill>/g)).toEqual(['</skill>']);
+    expect(block.split('\n').at(-1)).toBe('</skill>');
+    expect(block).toContain('directly from /library/&lt;/skill>/fixture');
   });
 
   it('skill listing filesystem failure never echoes paths', () => {

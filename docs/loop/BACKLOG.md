@@ -456,7 +456,7 @@ Acceptance:
 | E5 | P1 | Changelog and release automation | Codex | cloud | todo (with A4) |
 | E6 | P2 | Architecture diagram in DESIGN.md | Claude | cloud | todo |
 | E10 | P1 | Build without optional dependencies | Codex | cloud | done ([PR #8](https://github.com/erik-hedstrom/loadout/pull/8)) |
-| E11 | P1 | Fixed-text diagnostics in the gateway and relay | Codex | cloud | review |
+| E11 | P1 | Fixed-text diagnostics in the gateway and relay | Codex | cloud | review ([PR #10](https://github.com/erik-hedstrom/loadout/pull/10)) |
 
 **E10. Build without optional dependencies.** src/embed.ts:24 types
 `@huggingface/transformers` with `typeof import(...)`. So `tsc` fails when npm
@@ -484,6 +484,12 @@ Learnings:
 - Parse errors quote their input, so the relay's `mcp.json` parse failure is
   fixed text (the same finding as D10's hook).
 - All 23 new test cases fail on main (8e930ff).
+- Dependencies log too, as in D10. The MCP SDK compiles upstream output
+  schemas with AJV, whose default logger prints schema text to stderr. The
+  gateway passes a validator that accepts everything: it forwards results
+  verbatim anyway, and the SDK's structuredContent check stays.
+- Errors no longer echo requested names (readConfined, missing tool). A
+  hostile file name copied from a listing would come back unescaped.
 
 **E1. CI.**
 

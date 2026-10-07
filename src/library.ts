@@ -53,21 +53,21 @@ export function readConfined(root: string, rel: string, maxBytes: number, realRo
   try {
     fd = openSync(join(root, rel), constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
   } catch {
-    throw new Error(`no such file in the skill: ${rel}`);
+    throw new Error('no such file in the skill');
   }
   try {
     const st = fstatSync(fd);
-    if (!st.isFile()) throw new Error(`no such file in the skill: ${rel}`);
+    if (!st.isFile()) throw new Error('no such file in the skill');
     let opened: string;
     if (process.platform === 'linux') {
       opened = readlinkSync(`/proc/self/fd/${fd}`);
     } else {
       opened = realpathSync(join(root, rel));
       const now = statSync(opened);
-      if (now.ino !== st.ino || now.dev !== st.dev) throw new Error(`${rel} changed while it was opened`);
+      if (now.ino !== st.ino || now.dev !== st.dev) throw new Error('the file changed while it was opened');
     }
     if (!isInside(realRoot, opened)) throw new Error('path leaves the skill folder');
-    if (st.size > maxBytes) throw new Error(`${rel} is larger than ${Math.round(maxBytes / 1024)} KB`);
+    if (st.size > maxBytes) throw new Error(`the file is larger than ${Math.round(maxBytes / 1024)} KB`);
     const buf = Buffer.alloc(st.size);
     return buf.subarray(0, readSync(fd, buf, 0, st.size, 0));
   } finally {

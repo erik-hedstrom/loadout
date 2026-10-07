@@ -18,6 +18,7 @@ import { join, relative, sep } from 'node:path';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import type { JsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/types.js';
 import { getDefaultEnvironment, StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
@@ -166,12 +167,16 @@ export function loadSkill(deps: SearchDeps, skill: string, file?: string): strin
   const files = skillFiles(c.source);
   if (!files.length) return block;
   // File names come from the skill too, so they stay inside its third-party block.
-  const listing = `Files in this skill (read one with load_skill and \`file\`, or directly from ${toPath(c.source)}):\n${files
+  const listing = `Files in this skill (read one with load_skill and \`file\`, or directly from ${escapeSkillTags(toPath(c.source))}):\n${files
     .map((f) => `- ${escapeSkillTags(f)}`)
     .join('\n')}${files.length >= LIST_MAX_FILES ? '\n- …' : ''}`;
   // A callback, so `$&` and friends in file names stay literal.
   return block.replace(/\n<\/skill>$/, () => `\n\n${listing}\n</skill>`);
 }
+
+const gatewayFailure = (name: string, origin: string | undefined) => (err: unknown): never => {
+  throw new Error(diagnostic(`gateway ${name}`, origin, err));
+};
 
 /** Connections to the library's MCP servers, opened on first use and kept for the session. */
 export class Gateway {
@@ -201,8 +206,16 @@ export class Gateway {
     } catch (err) {
       return Promise.reject(new Error(diagnostic(`gateway ${c.name}`, origin, err)));
     }
-    const client = new Client({ name: 'loadout', version: '0.1.0' });
-    const ready = client.connect(transport).then(() => ({ client, origin })).catch((err: unknown) => { throw new Error(diagnostic(`gateway ${c.name}`, origin, err)); });
+    // The gateway forwards results verbatim; compiling upstream output schemas can log secrets.
+    // The SDK still requires structuredContent when a tool declares an output schema.
+    const client = new Client({ name: 'loadout', version: '0.1.0' }, {
+      jsonSchemaValidator: {
+        getValidator<T>(): JsonSchemaValidator<T> {
+          return (input) => ({ valid: true, data: input as T, errorMessage: undefined });
+        },
+      },
+    });
+    const ready = client.connect(transport).then(() => ({ client, origin })).catch(gatewayFailure(c.name, origin));
     // A server that fails to start, or exits later, is reconnected on the next use.
     const forget = () => {
       if (this.clients.get(name) === ready) this.clients.delete(name);
@@ -222,7 +235,7 @@ export class Gateway {
     const tools: Awaited<ReturnType<Client['listTools']>>['tools'] = [];
     let cursor: string | undefined;
     for (let page = 0; page < MAX_TOOL_PAGES; page++) {
-      const res = await client.listTools(cursor ? { cursor } : {}).catch((err: unknown) => { throw new Error(diagnostic(`gateway ${name}`, origin, err)); });
+      const res = await client.listTools(cursor ? { cursor } : {}).catch(gatewayFailure(name, origin));
       tools.push(...res.tools);
       cursor = res.nextCursor;
       if (!cursor) break;
@@ -230,7 +243,7 @@ export class Gateway {
     if (tools.length === 0) return `${name} has no tools.`;
     if (tool) {
       const t = tools.find((x) => x.name === tool);
-      if (!t) throw new Error(`${name} has no tool "${tool}"`);
+      if (!t) throw new Error('no such tool; list them with server_tools');
       return `${t.name}: ${t.description ?? ''}\ninput schema: ${JSON.stringify(t.inputSchema)}`;
     }
     // Schemas verbatim ($defs, oneOf, enums untouched); one too long for the listing is fetched on its own.
@@ -245,7 +258,7 @@ export class Gateway {
 
   async call(name: string, tool: string, args: Record<string, unknown>) {
     const { client, origin } = await this.connect(name);
-    return client.callTool({ name: tool, arguments: args }).catch((err: unknown) => { throw new Error(diagnostic(`gateway ${name}`, origin, err)); });
+    return client.callTool({ name: tool, arguments: args }).catch(gatewayFailure(name, origin));
   }
 
   async close(): Promise<void> {
