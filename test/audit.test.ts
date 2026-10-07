@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -23,7 +23,8 @@ function run(...args: string[]) {
   return spawnSync(process.execPath, ['--import', import.meta.resolve('tsx'), cli, 'audit', ...args], { cwd: project, env: process.env, encoding: 'utf8' });
 }
 beforeEach(() => {
-  home = mkdtempSync(join(tmpdir(), 'loadout-audit-'));
+  // Real path: macOS's tmpdir() is under the /var -> /private/var link, and audit reports real paths.
+  home = realpathSync(mkdtempSync(join(tmpdir(), 'loadout-audit-')));
   project = join(home, 'repo');
   mkdirSync(join(project, '.git'), { recursive: true });
   vi.stubEnv('HOME', home);
