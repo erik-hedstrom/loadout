@@ -62,6 +62,7 @@ function fakeStudy(plan: Plan) {
     events[0].skills = ['ambient', ...Array.from({ length: call.copiedSkills }, (_, i) => `b1:folder-${i}`)];
     events[0].slash_commands = ['ambient-command'];
     events[0].mcp_servers = call.configuration === 'loadout' ? [{ name: 'loadout', status: 'connected' }] : [];
+    events[2].usage.input_tokens += call.copiedSkills * 10;
     return jsonl(...events);
   };
   const inspect = async (command: Command) => {
@@ -107,8 +108,9 @@ describe('round 2 validity', () => {
   it('sanitizes visible context, resolves roots, and detects AGENTS text without retaining it', () => {
     const cwd = temp();
     const context = `<skills_instructions>\n### Skill roots\n- \`r0\` = \`${cwd}/.agents/skills\`\n### Available skills\n- different-frontmatter-name: SECRET DESCRIPTION (file: r0/b1-0000/SKILL.md)\n</skills_instructions>\n# AGENTS.md instructions for ${cwd}\nSECRET AGENTS`;
-    const visible = parsePromptInput(JSON.stringify([{ type: 'message', role: 'developer', content: [{ type: 'input_text', text: context }] }]), cwd);
-    expect(visible).toMatchObject({ visibleSkills: 1, visiblePackSkills: 1, agentsPresent: true });
+    const extra = 'SECRET SECOND BLOCK';
+    const visible = parsePromptInput(JSON.stringify([{ type: 'message', role: 'developer', content: [{ type: 'input_text', text: context }, { type: 'input_text', text: extra }] }]), cwd);
+    expect(visible).toMatchObject({ visibleSkills: 1, visiblePackSkills: 1, agentsPresent: true, renderedCharacters: context.length + 1 + extra.length });
     expect(visible.contextHash).toMatch(/^[a-f0-9]{64}$/);
     expect(JSON.stringify(visible)).not.toContain('SECRET');
     expect(() => parsePromptInput('{}', cwd)).toThrow();
@@ -141,15 +143,20 @@ describe('round 2 validity', () => {
     }
     expect(plan.calls.length).toBeLessThanOrEqual(36);
   });
-  it('preflight catches managed feature overrides, missing MCP tools and failed discovery with zero paid calls', async () => {
+  it('saves offline Codex rows before paid calls despite refusal, without blocking Claude', async () => {
     const plan = buildPlan(fixture(), temp());
     const good = fakeStudy(plan);
     for (const failure of ['feature', 'tools', 'discovery', 'startup']) {
-      let paid = 0;
+      const paid: string[] = [];
+      const out = temp();
       const deps = {
         run: async (command: Command, host: 'claude' | 'codex') => {
-          if (command.args.includes('-p') || command.args.includes('exec')) paid++;
-          return failure === 'feature' && command.args.includes('features') ? 'hooks stable true' : good.run(command, host);
+          if (command.args.includes('-p') || command.args.includes('exec')) {
+            paid.push(host);
+            expect(readFileSync(join(out, 'preflight.jsonl'), 'utf8').trim().split('\n')).toHaveLength(8);
+          }
+          const output = await good.run(command, host);
+          return failure === 'feature' && command.args.includes('features') ? output.replace('unified_exec stable false', 'unified_exec stable true') : output;
         },
         inspect: async (command: Command) => {
           if (failure === 'startup') throw new Error('startup failed');
@@ -157,16 +164,24 @@ describe('round 2 validity', () => {
           return failure === 'tools' ? { ...result, tools: [] } : failure === 'discovery' ? { ...result, discoveredPackSkills: 0 } : result;
         },
       };
-      const out = temp();
-      await expect(runStudy(plan, out, deps)).rejects.toThrow();
-      expect(paid).toBe(0);
-      expect(existsSync(join(out, 'rows.jsonl'))).toBe(false);
+      const { rows, offline } = await runStudy(plan, out, deps);
+      expect(paid).toEqual(Array(14).fill('claude'));
+      expect(rows).toHaveLength(14);
+      expect(offline.size).toBe(8);
+      const saved = readFileSync(join(out, 'preflight.jsonl'), 'utf8');
+      const free = saved.trim().split('\n').map((line) => JSON.parse(line));
+      expect(free.every((r) => r.renderedCharacters > 0 && r.contextHash)).toBe(true);
+      expect(free.some((r) => r.refusals.length > 0)).toBe(true);
+      if (failure === 'feature') expect(free.every((r) => r.discoveredSkills > 0 && r.refusals.join(' ').includes('unified_exec'))).toBe(true);
+      expect(saved).not.toContain('SECRET');
+      expect(summarize(rows, offline)).toContain('Codex paid calls deferred');
     }
   });
   it('requires positive Codex visibility and input deltas', async () => {
     const plan = buildPlan(fixture(), temp());
     const good = fakeStudy(plan);
-    await expect(preflight(plan, { ...good, run: (command, host) => command.cwd.endsWith('superpowers') && command.args.includes('prompt-input') ? good.run({ ...command, cwd: plan.calls.find((c) => c.host === 'codex' && c.configuration === 'baseline')!.command.cwd }, host) : good.run(command, host) })).rejects.toThrow('visibility');
+    const offline = await preflight(plan, { ...good, run: (command, host) => command.cwd.endsWith('superpowers') && command.args.includes('prompt-input') ? good.run({ ...command, cwd: plan.calls.find((c) => c.host === 'codex' && c.configuration === 'baseline')!.command.cwd }, host) : good.run(command, host) });
+    expect(offline.get('superpowers')!.refusals.join(' ')).toContain('visibility');
     await expect(runStudy(plan, temp(), { ...good, run: (command, host) => command.args.includes('exec') ? Promise.resolve(codex) : good.run(command, host) })).rejects.toThrow('input delta');
   });
   it('rejects Claude ambient plugin drift and labels omissions without claiming truncation', async () => {
@@ -176,15 +191,42 @@ describe('round 2 validity', () => {
       const output = await good.run(command, host);
       return host === 'claude' && command.cwd.endsWith('superpowers') ? output.replace('"name":"b1"', '"name":"unexpected"') : output;
     } })).rejects.toThrow('plugin drift');
-    const rows = await runStudy(plan, temp(), { ...good, run: async (command, host) => {
+    const { rows } = await runStudy(plan, temp(), { ...good, run: async (command, host) => {
       const output = await good.run(command, host);
       if (host !== 'claude') return output;
       const events = output.split('\n').map((s) => JSON.parse(s));
-      events[0].skills = ['ambient'];
+      if (command.cwd.endsWith('library')) events[0].skills = ['ambient', 'b1:one'];
       return jsonl(...events);
     } });
     expect(summarize(rows)).toContain('omitted, cause unverified');
     expect(summarize(rows)).not.toContain('Claude truncation');
+  });
+  it('runs the smallest Claude pack first and rejects zero discovery or either nonpositive paired delta before other packs', async () => {
+    const library = fixture();
+    const extra = join(library, 'skills', 'super-extra');
+    mkdirSync(extra);
+    writeFileSync(join(extra, 'SKILL.md'), '---\nname: extra\ndescription: Extra\n---\nBody');
+    writeFileSync(join(extra, '.loadout-source.json'), JSON.stringify({ origin: 'obra/superpowers' }));
+    const plan = buildPlan(library, temp());
+    const good = fakeStudy(plan);
+    for (const failure of ['discovery', 'first-delta', 'second-delta', 'later-discovery']) {
+      const paid: string[] = [];
+      const out = temp();
+      await expect(runStudy(plan, out, { ...good, run: async (command, host) => {
+        const output = await good.run(command, host);
+        if (host !== 'claude') return output;
+        const arm = plan.calls.find((c) => c.command.cwd === command.cwd)!;
+        paid.push(arm.configuration);
+        const events = output.split('\n').map((s) => JSON.parse(s));
+        if ((failure === 'discovery' && arm.configuration === 'anthropics') || (failure === 'later-discovery' && arm.configuration === 'superpowers')) events[0].skills = ['ambient'];
+        if (arm.configuration === 'anthropics' && ((failure === 'first-delta' && paid.length === 3) || (failure === 'second-delta' && paid.length === 4))) events[2].usage.input_tokens = 10;
+        return jsonl(...events);
+      } })).rejects.toThrow(failure.endsWith('discovery') ? 'discovery' : 'input delta');
+      expect(paid.slice(0, 3)).toEqual(['baseline', 'baseline', 'anthropics']);
+      if (failure !== 'later-discovery') expect(paid).not.toContain('superpowers');
+      const rows = readFileSync(join(out, 'rows.jsonl'), 'utf8').trim().split('\n').map((s) => JSON.parse(s));
+      expect(rows).toHaveLength(paid.length - 1);
+    }
   });
   it('a required Codex MCP startup failure cannot produce a loadout row', async () => {
     const plan = buildPlan(fixture(), temp());
@@ -239,12 +281,15 @@ describe('text-only configurations', () => {
     const codexCall = plan.calls.find((c) => c.host === 'codex')!;
     for (const command of [codexCall.command, ...Object.values(codexCall.free!)]) {
       expect(command.args).toContain('hooks');
+      expect(command.args).not.toContain('plugin_hooks');
+      expect(command.args).not.toContain('js_repl');
       expect(command.args.filter((a) => a.startsWith('mcp_servers=') || a.startsWith('model=') || a.startsWith('sandbox_mode='))).toEqual(codexCall.command.args.filter((a) => a.startsWith('mcp_servers=') || a.startsWith('model=') || a.startsWith('sandbox_mode=')));
     }
     expect(plan.calls.find((c) => c.host === 'codex' && c.configuration === 'loadout')!.command.args.join(' ')).toContain('"required" = true');
     expect(plan.calls.find((c) => c.host === 'claude')!.command.args).toContain('--strict-mcp-config');
     expect(plan.calls.find((c) => c.host === 'claude')!.command.args).toContain('Skill');
     expect(plan.calls.find((c) => c.host === 'claude')!.command.args).toContain('--restricted');
+    expect(plan.calls.find((c) => c.host === 'claude')!.command.args).not.toContain('--setting-sources');
     expect(existsSync(join(root, 'auth.json'))).toBe(false);
     expect(plan.calls.find((c) => c.configuration === 'top50')!.copiedSkills).toBe(50);
     expect(() => buildPlan(fixture(), join(homedir(), '.codex', 'overhead'))).toThrow('temporary');
@@ -301,7 +346,7 @@ describe('text-only configurations', () => {
       await client.close();
     }
   });
-  it('--plan prints 30 exact commands and makes no host call', async () => {
+  it('--plan distinguishes 14 Claude calls from 16 gated Codex calls and makes no host call', async () => {
     const printed: string[] = [];
     let calls = 0;
     await main(['--plan', '--library', fixture()], { print: (s) => printed.push(s), run: async () => { calls++; throw new Error('called'); } });
@@ -309,7 +354,8 @@ describe('text-only configurations', () => {
     const output = printed.join('\n');
     const plannedRoot = printed.find((s) => s.startsWith('temp root: '))!.slice('temp root: '.length);
     temps.push(plannedRoot);
-    expect(output).toContain('30 paid calls');
+    expect(output).toContain('Claude: 14 paid calls; Codex: 0 while deferred');
+    expect(output).toContain('16 conditional Codex calls');
     expect(output).toContain('cwd=');
     expect(output).toContain('stream-json');
     expect(output).toContain('Cost computed in analysis');
@@ -318,14 +364,14 @@ describe('text-only configurations', () => {
   it('writes only raw metrics, keeps observed cache counts, and labels baseline uncertainty', async () => {
     const plan = buildPlan(fixture(), temp());
     const out = temp();
-    const rows = await runStudy(plan, out, fakeStudy(plan));
+    const { rows, offline } = await runStudy(plan, out, fakeStudy(plan));
     const raw = readFileSync(join(out, 'rows.jsonl'), 'utf8');
     expect(raw).not.toContain('TRANSCRIPT');
     expect(raw).not.toContain('thread_id');
     expect(rows).toHaveLength(30);
     expect(rows[1]!.cacheRead).toBe(200);
     expect(summarize(rows)).toContain("user's ambient setup");
-    expect(summarize(rows)).toContain('nested');
+    expect(summarize(rows, offline)).toContain('nested');
     expect(rows.find((r) => r.host === 'claude' && r.configuration === 'superpowers')!.discoveredPackSkills).toBe(1);
     const free = readFileSync(join(out, 'preflight.jsonl'), 'utf8');
     expect(raw + free).not.toContain('SECRET');

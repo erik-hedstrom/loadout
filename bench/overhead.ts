@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { appendFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
-import { delimiter, isAbsolute, join, relative, resolve } from 'node:path';
+import { basename, delimiter, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { createInterface } from 'node:readline';
@@ -17,7 +17,7 @@ type Host = 'claude' | 'codex';
 type Configuration = typeof CONFIGURATIONS[number] | `cap-${number}`;
 // Existing small-tier targets, not a claim that these are currently cheapest or available to this account.
 const MODELS: Record<Host, string> = { claude: 'haiku', codex: 'gpt-5.6-luna' };
-export const DISABLED_FEATURES = ['hooks', 'shell_tool', 'unified_exec', 'js_repl', 'code_mode_host', 'plugin_hooks', 'plugins', 'skill_mcp_dependency_install'];
+export const DISABLED_FEATURES = ['hooks', 'shell_tool', 'unified_exec', 'code_mode_host', 'plugins', 'skill_mcp_dependency_install'];
 const PACK_ORIGINS = { superpowers: 'obra/superpowers', anthropics: 'anthropics/skills', impeccable: 'pbakaus/impeccable' };
 const MAX_TEXT_BYTES = 256 * 1024;
 const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
@@ -36,9 +36,11 @@ interface Usage {
   model: string | null; inventory: Inventory | null;
   modelUsage?: Record<string, Record<string, number>>;
 }
-export interface Visibility { visibleSkills: number; visiblePackSkills: number; contextHash: string; agentsPresent: boolean }
+export interface Visibility { visibleSkills: number; visiblePackSkills: number; renderedCharacters: number; contextHash: string; agentsPresent: boolean }
 export interface Discovery { discoveredSkills: number; discoveredPackSkills: number; tools: string[] }
-interface Preflight extends Visibility, Discovery { features: Record<string, false> }
+interface Preflight extends Partial<Visibility>, Partial<Discovery> {
+  copiedSkills: number; rejectedSkills: number; features: Record<string, false> | null; refusals: string[];
+}
 interface Row extends Usage {
   host: Host; configuration: Configuration; requestedModel: string; repeat: Call['repeat'];
   copiedSkills: number; rejectedSkills: number; listingCharacters: number; manifestHash: string;
@@ -84,7 +86,7 @@ function framed(body: string) {
   }
   return `${listingHeader}\n${THIRD_PARTY}\n\n<skill third-party="true">\n${safe.slice(header.length)}\n</skill>\n`;
 }
-function regular(path: string) { return existsSync(path) && lstatSync(path).isFile() && !lstatSync(path).isSymbolicLink(); }
+function regular(path: string) { return lstatSync(path, { throwIfNoEntry: false })?.isFile() ?? false; }
 function directories(root: string) {
   if (!existsSync(root) || lstatSync(root).isSymbolicLink()) return [];
   return readdirSync(root, { withFileTypes: true }).filter((e) => e.isDirectory() && !e.isSymbolicLink()).map((e) => join(root, e.name)).sort();
@@ -112,7 +114,8 @@ export function copyPack(sources: string[], destination: string, host: Host) {
     const m = metadata(original);
     if (!m) { rejected++; continue; }
     const body = framed(original);
-    const { name, description } = metadata(body)!;
+    const name = escapeSkillTags(m.name);
+    const description = escapeSkillTags(m.description);
     const dir = join(skillsRoot, `b1-${names.length.toString().padStart(4, '0')}`);
     assertTemporary(join(dir, 'SKILL.md'));
     mkdirSync(dir, { recursive: true });
@@ -159,7 +162,7 @@ export function buildPlan(library: string, root: string): Plan {
   const snapshot = regular(join(library, 'popular.jsonl')) ? join(library, 'popular.jsonl') : fileURLToPath(new URL('./data/popular.jsonl', import.meta.url));
   if (!regular(snapshot)) blockers.push('top50: missing offline skills.sh snapshot (library/popular.jsonl or bench/data/popular.jsonl)');
   else {
-    const rows = text(resolve(snapshot, '..'), snapshot.slice(resolve(snapshot, '..').length + 1)).trim().split(/\r?\n/).map((line) => JSON.parse(line) as { name: string; repo: string; popularity: number });
+    const rows = text(dirname(snapshot), basename(snapshot)).trim().split(/\r?\n/).map((line) => JSON.parse(line) as { name: string; repo: string; popularity: number });
     const first = rows.filter((row) => Number.isInteger(row.popularity) && row.popularity > 0).sort((a, b) => a.popularity - b.popularity).slice(0, 50);
     if (first.length !== 50 || new Set(first.map((r) => r.popularity)).size !== 50) blockers.push('top50: snapshot needs 50 distinct ranked rows');
     for (const row of first) {
@@ -199,13 +202,17 @@ export function buildPlan(library: string, root: string): Plan {
       const settings = [...DISABLED_FEATURES.flatMap((feature) => ['--disable', feature]), '-c', `model=${toToml(MODELS.codex)}`, '-c', 'sandbox_mode="read-only"', '-c', `mcp_servers=${toToml(configuration === 'loadout' ? { loadout: { ...server, required: true } } : {})}`];
       const command = (args: string[]): Command => ({ bin: binary.bin, args: [...binary.prefix, ...args], cwd });
       const base = host === 'claude'
-        ? ['-p', '--output-format', 'stream-json', '--verbose', '--no-session-persistence', '--restricted', '--setting-sources', '', '--settings', '{"disableAllHooks":true}', '--strict-mcp-config', '--mcp-config', JSON.stringify({ mcpServers: mcp }), '--tools', 'Skill', '--model', MODELS.claude, ...(copied.skills > 0 ? ['--plugin-dir', plugin] : [])]
+        ? ['-p', '--output-format', 'stream-json', '--verbose', '--no-session-persistence', '--restricted', '--settings', '{"disableAllHooks":true}', '--strict-mcp-config', '--mcp-config', JSON.stringify({ mcpServers: mcp }), '--tools', 'Skill', '--model', MODELS.claude, ...(copied.skills > 0 ? ['--plugin-dir', plugin] : [])]
         : ['exec', '--json', '--ephemeral', '--skip-git-repo-check', ...settings];
       const common = { host, configuration, copiedSkills: copied.skills, rejectedSkills: copied.rejected, listingCharacters: copied.characters, manifestHash: copied.hash,
         ...(host === 'codex' ? { free: { features: command(['features', 'list', ...settings]), prompt: command(['debug', 'prompt-input', ...settings, PROMPT]), inventory: command(['app-server', ...settings]) } } : {}) };
       for (const repeat of [1, 2] as const) calls.push({ ...common, model: MODELS[host], repeat, command: command([...base, PROMPT]) });
     }
   }
+  // Paired baseline then the smallest text treatment establish discovery/input before larger paid arms.
+  const control = calls.filter((c) => c.host === 'claude' && c.copiedSkills > 0).sort((a, b) => a.copiedSkills - b.copiedSkills)[0]?.configuration;
+  const priority = (c: Call) => c.host === 'codex' ? 3 : c.configuration === 'baseline' ? 0 : c.configuration === control ? 1 : 2;
+  calls.sort((a, b) => priority(a) - priority(b));
   return { calls, blockers, root };
 }
 
@@ -300,7 +307,7 @@ export function parsePromptInput(stdout: string, cwd: string): Visibility {
     return roots.has(alias) ? resolve(roots.get(alias)!, ...rest) : resolve(m[1]!);
   });
   return { visibleSkills: paths.length, visiblePackSkills: paths.filter((path) => inside(join(cwd, '.agents', 'skills'), path)).length,
-    contextHash: createHash('sha256').update(JSON.stringify(input)).digest('hex'), agentsPresent: blocks.some((s) => /^# AGENTS\.md instructions for /m.test(s)) };
+    renderedCharacters: context.length, contextHash: createHash('sha256').update(JSON.stringify(input)).digest('hex'), agentsPresent: blocks.some((s) => /^# AGENTS\.md instructions for /m.test(s)) };
 }
 
 /** Only initialize, skills/list and MCP inventory: never create a thread or submit a turn. */
@@ -344,48 +351,64 @@ export async function inspectCodex(command: Command): Promise<Discovery> {
 }
 type Runner = (command: Command, host: Host) => Promise<string>;
 interface StudyDeps { run?: Runner; inspect?: typeof inspectCodex }
-export async function preflight(plan: Plan, deps: StudyDeps = {}): Promise<Map<Configuration, Preflight>> {
+export async function preflight(plan: Plan, deps: StudyDeps = {}, save?: (configuration: Configuration, result: Preflight) => void): Promise<Map<Configuration, Preflight>> {
   if (plan.blockers.length) throw new Error(`preflight blocked: ${plan.blockers.join('; ')}`);
   const results = new Map<Configuration, Preflight>();
   for (const call of plan.calls.filter((c) => c.host === 'codex' && c.repeat === 1)) {
     const run = deps.run ?? execute;
-    const features = validateFeatures(await run(call.free!.features, 'codex'));
-    const discovery = await (deps.inspect ?? inspectCodex)(call.free!.inventory);
-    if (discovery.discoveredPackSkills !== call.copiedSkills) throw new Error(`preflight: ${call.configuration} discovery differs from copied count`);
-    if (call.configuration === 'loadout' && !['find_skills', 'load_skill'].every((t) => discovery.tools.includes(t))) throw new Error('preflight: loadout MCP expected tools absent');
-    const visible = parsePromptInput(await run(call.free!.prompt, 'codex'), call.command.cwd);
-    results.set(call.configuration, { ...visible, ...discovery, features });
+    const result: Preflight = { copiedSkills: call.copiedSkills, rejectedSkills: call.rejectedSkills, features: null, refusals: [] };
+    // Offline evidence survives feature refusal or failure of another independent offline query.
+    try { Object.assign(result, parsePromptInput(await run(call.free!.prompt, 'codex'), call.command.cwd)); }
+    catch { result.refusals.push('prompt-input collection failed (details suppressed)'); }
+    try {
+      const discovery = await (deps.inspect ?? inspectCodex)(call.free!.inventory);
+      Object.assign(result, discovery);
+      if (discovery.discoveredPackSkills !== call.copiedSkills) result.refusals.push('discovery differs from copied count');
+      if (call.configuration === 'loadout' && !['find_skills', 'load_skill'].every((t) => discovery.tools.includes(t))) result.refusals.push('loadout MCP expected tools absent');
+    } catch { result.refusals.push('inventory collection failed (details suppressed)'); }
+    let featureOutput: string | undefined;
+    try { featureOutput = await run(call.free!.features, 'codex'); }
+    catch { result.refusals.push('feature collection failed (details suppressed)'); }
+    if (featureOutput !== undefined) {
+      try { result.features = validateFeatures(featureOutput); }
+      catch (error) { result.refusals.push((error as Error).message); }
+    }
+    if (call.configuration === 'superpowers' && !(result.visibleSkills! > results.get('baseline')!.visibleSkills! && result.visiblePackSkills! > 0)) result.refusals.push('superpowers has no positive visibility delta');
+    results.set(call.configuration, result);
+    save?.(call.configuration, result);
   }
-  const baseline = results.get('baseline')!;
-  if (results.get('superpowers')!.visibleSkills <= baseline.visibleSkills || results.get('superpowers')!.visiblePackSkills === 0) throw new Error('preflight: superpowers has no positive visibility delta');
   return results;
 }
-export async function runStudy(plan: Plan, out: string, deps: StudyDeps = {}): Promise<Row[]> {
-  const checked = await preflight(plan, deps);
+export async function runStudy(plan: Plan, out: string, deps: StudyDeps = {}) {
   mkdirSync(out, { recursive: true });
-  writeFileSync(join(out, 'preflight.jsonl'), [...checked].map(([configuration, result]) => JSON.stringify({ configuration, ...result })).join('\n') + '\n');
+  const checked = await preflight(plan, deps, (configuration, result) => appendFileSync(join(out, 'preflight.jsonl'), JSON.stringify({ host: 'codex', configuration, ...result }) + '\n'));
+  const codexReady = [...checked.values()].every((r) => r.refusals.length === 0);
+  const control = plan.calls.find((c) => c.host === 'claude' && c.copiedSkills > 0)!.configuration;
   const rows: Row[] = [];
   for (const call of plan.calls) {
+    if (call.host === 'codex' && !codexReady) continue;
     const usage = (call.host === 'claude' ? parseClaude : parseCodex)(await (deps.run ?? execute)(call.command, call.host));
     const baselineInventory = rows.find((r) => r.host === 'claude' && r.configuration === 'baseline')?.inventory ?? usage.inventory;
     if (usage.inventory && usage.inventory.plugins.some((name) => !baselineInventory!.plugins.includes(name) && name !== 'b1')) throw new Error('Claude ambient plugin drift; measurement invalid');
     const listedPackSkills = usage.inventory?.skills.filter((s) => s.startsWith('b1:')).length ?? 0;
     if (call.copiedSkills > 0 && call.host === 'claude' && !usage.inventory!.plugins.includes('b1')) throw new Error('Claude did not load the text plugin; measurement invalid');
+    if (call.host === 'claude' && call.copiedSkills > 0 && listedPackSkills === 0) throw new Error('Claude pack has zero discovery; measurement invalid');
+    if (call.host === 'claude' && call.configuration === control && usage.input <= rows.find((r) => r.host === 'claude' && r.configuration === 'baseline' && r.repeat === call.repeat)!.input) throw new Error('Claude positive control has no positive paired input delta; measurement invalid');
     if (call.configuration === 'loadout' && usage.inventory && !usage.inventory.mcp.some((m) => m.name === 'loadout' && m.status === 'connected')) throw new Error('loadout MCP did not connect; measurement invalid');
     if (call.host === 'codex' && call.configuration === 'superpowers' && usage.input <= rows.find((r) => r.host === 'codex' && r.configuration === 'baseline' && r.repeat === call.repeat)!.input) throw new Error('Codex superpowers has no positive input delta; measurement invalid');
     const free = checked.get(call.configuration);
     const row: Row = { ...usage, host: call.host, configuration: call.configuration, requestedModel: call.model, repeat: call.repeat,
       copiedSkills: call.copiedSkills, rejectedSkills: call.rejectedSkills, listingCharacters: call.listingCharacters, manifestHash: call.manifestHash,
-      discoveredSkills: usage.inventory?.skills.length ?? free!.discoveredSkills, discoveredPackSkills: usage.inventory ? listedPackSkills : free!.discoveredPackSkills,
-      visibleSkills: call.host === 'codex' ? free!.visibleSkills : null, visiblePackSkills: call.host === 'codex' ? free!.visiblePackSkills : null,
-      contextHash: call.host === 'codex' ? free!.contextHash : null, agentsPresent: call.host === 'codex' ? free!.agentsPresent : null, tools: call.host === 'codex' ? free!.tools : [] };
+      discoveredSkills: usage.inventory?.skills.length ?? free!.discoveredSkills!, discoveredPackSkills: usage.inventory ? listedPackSkills : free!.discoveredPackSkills!,
+      visibleSkills: call.host === 'codex' ? free!.visibleSkills! : null, visiblePackSkills: call.host === 'codex' ? free!.visiblePackSkills! : null,
+      contextHash: call.host === 'codex' ? free!.contextHash! : null, agentsPresent: call.host === 'codex' ? free!.agentsPresent! : null, tools: call.host === 'codex' ? free!.tools! : [] };
     rows.push(row);
     appendFileSync(join(out, 'rows.jsonl'), JSON.stringify(row) + '\n');
   }
-  return rows;
+  return { rows, offline: checked };
 }
 
-export function summarize(rows: Row[]) {
+export function summarize(rows: Row[], offline: Map<Configuration, Preflight> = new Map()) {
   const lines = ["B1 deltas over the user's ambient setup; costs are computed in analysis.",
     '| Host | Configuration | Call | Input | Delta | Uncached | Cache creation | Cache read | Copied | Discovered pack | Visible pack | Rejected |',
     '| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | ---: |'];
@@ -395,8 +418,12 @@ export function summarize(rows: Row[]) {
   }
   lines.push(`Claude baseline init names: ${JSON.stringify(rows.find((r) => r.host === 'claude' && r.configuration === 'baseline')?.inventory ?? null)}.`);
   for (const row of rows.filter((r) => r.host === 'claude' && r.discoveredPackSkills < r.copiedSkills)) lines.push(`Claude ${row.configuration}/${row.repeat}: omitted, cause unverified (${row.discoveredPackSkills}/${row.copiedSkills}).`);
-  const nested = rows.filter((r) => r.host === 'codex' && r.repeat === 1 && (r.configuration.startsWith('cap-') || r.configuration === 'library')).sort((a, b) => a.copiedSkills - b.copiedSkills);
-  for (const row of nested) lines.push(`Codex nested ${row.copiedSkills}: discovered ${row.discoveredPackSkills}, visible ${row.visiblePackSkills}; ${row.discoveredPackSkills > row.visiblePackSkills! ? 'visible listing truncated' : 'truncation not shown'}.`);
+  for (const [configuration, r] of offline) {
+    lines.push(`Codex offline ${configuration}: rendered ${r.renderedCharacters ?? 'unavailable'} characters; copied ${r.copiedSkills}, discovered ${r.discoveredPackSkills ?? 'unavailable'}, visible ${r.visiblePackSkills ?? 'unavailable'}.`);
+    if (r.refusals.length) lines.push(`Codex paid calls deferred (${configuration}): ${r.refusals.join('; ')}.`);
+  }
+  const nested = [...offline].filter(([c]) => c.startsWith('cap-') || c === 'library').sort(([, a], [, b]) => a.copiedSkills - b.copiedSkills);
+  for (const [, r] of nested) lines.push(`Codex nested ${r.copiedSkills}: ${r.discoveredPackSkills === r.copiedSkills && r.visiblePackSkills !== undefined && r.discoveredPackSkills > r.visiblePackSkills ? 'visible listing truncated' : 'truncation not shown'}.`);
   lines.push('Codex cap evidence uses nested prefixes of one validated corpus, not unrelated named packs. Reported budget: 2% of context or fallback 8,000 characters (https://developers.openai.com/codex/skills; not reverified offline). A token plateau alone establishes no cause.');
   lines.push('Calls 1 and 2 are first/second fresh sessions, not guaranteed cold/warm: use the observed counters. No cache flushing or session resumes. Different arms can share cached prefixes.');
   lines.push('Not measured: hooks, scripts, references, commands/agents, pack MCP/LSP servers (starting them executes downloaded code), router calls and output quality. Claude visibility is not exposed by init.');
@@ -409,20 +436,22 @@ export async function main(args: string[], deps: StudyDeps & { print?: (s: strin
   const root = mkdtempSync(join(tmpdir(), 'loadout-overhead-'));
   try {
     const plan = buildPlan(resolve(values.library ?? join(homedir(), '.loadout', 'library')), root);
-    print(`${plan.calls.length} paid calls (maximum 36): paired named arms plus Codex nested subsets; no default confirmations or Jev calls. Cost computed in analysis.`);
+    const claudeCalls = plan.calls.filter((c) => c.host === 'claude').length;
+    const codexCalls = plan.calls.length - claudeCalls;
+    print(`Claude: ${claudeCalls} paid calls; Codex: 0 while deferred on 0.160.1 (unified_exec remains enabled). ${codexCalls} conditional Codex calls only if all preflights pass; maximum ${plan.calls.length} total. No default confirmations or Jev calls. Cost computed in analysis.`);
     if (values.plan) {
       print('Each line contains literal argv as JSON (no shell escaping required). Temporary files are retained so these commands remain executable; remove this dedicated temp root after measurement.');
       for (const call of plan.calls) {
         if (call.free && call.repeat === 1) for (const [kind, command] of Object.entries(call.free)) print(`FREE ${call.configuration}/${kind}: cwd=${JSON.stringify(command.cwd)} argv=${JSON.stringify([command.bin, ...command.args])}`);
-        print(`PAID ${call.host}/${call.configuration}/${call.repeat}: cwd=${JSON.stringify(call.command.cwd)} argv=${JSON.stringify([call.command.bin, ...call.command.args])}`);
+        print(`${call.host === 'codex' ? 'CONDITIONAL PAID' : 'PAID'} ${call.host}/${call.configuration}/${call.repeat}: cwd=${JSON.stringify(call.command.cwd)} argv=${JSON.stringify([call.command.bin, ...call.command.args])}`);
       }
       print(`temp root: ${root}`);
       for (const blocker of plan.blockers) print(`BLOCKED: ${blocker}`);
       return;
     }
     const out = fileURLToPath(new URL(`./results/${new Date().toISOString().replace(/[:.]/g, '-')}-overhead/`, import.meta.url));
-    const rows = await runStudy(plan, out, deps);
-    const summary = summarize(rows);
+    const { rows, offline } = await runStudy(plan, out, deps);
+    const summary = summarize(rows, offline);
     writeFileSync(join(out, 'summary.md'), summary + '\n');
     print(summary);
     print(`Raw metrics: ${out}`);

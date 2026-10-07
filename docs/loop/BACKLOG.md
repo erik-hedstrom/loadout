@@ -107,7 +107,7 @@ Acceptance:
 
 Why: the headline must be measured, not estimated.
 
-Learnings: [PR #6](https://github.com/erik-hedstrom/loadout/pull/6) round 2 adds free feature/discovery/context gates and nested cap arms (36 paid calls for 1,262 valid skills); ambient setup and host discovery must be separated from model visibility. No paid calls or results yet.
+Learnings: [PR #6](https://github.com/erik-hedstrom/loadout/pull/6) round 3 saves offline Codex characters/visibility despite feature refusal and gates Claude on a paired smallest-pack positive control (14 Claude calls; paid Codex deferred). No paid calls or results yet.
 
 Acceptance:
 - A script in `bench/` installs well-known packs (Superpowers, anthropics/skills,

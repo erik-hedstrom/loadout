@@ -8,36 +8,36 @@ task.
 
 ## B1 method (preregistered)
 
-Revised 2026-10-07 after PR #6 review; **no paid measurements or results yet**.
+Revised 2026-10-07 after PR #6 round 3; **no paid measurements or results yet**.
 
 - Prompt: `Reply with exactly OK. Do not use tools, skills, commands, agents, or external services.`
 - Named arms: baseline, obra/superpowers, anthropics/skills, skills.sh snapshot, pbakaus/impeccable, whole library, loadout MCP.
   “top50” means the first 50 saved rows by rank, including gaps, each matched to local provenance.
 - Cap arms: Codex prefixes of one sorted, validated corpus at 16, 64, 256, 1024,
   omit sizes >= corpus size; full library is the final superset. Named packs supply deltas, not cap evidence.
-- Two fresh sessions per arm, haiku / gpt-5.6-luna: **36 paid CLI calls** with 1,262 valid
-  manifests (14 Claude, 22 Codex), maximum 36; fewer for smaller corpora. No default confirmations.
+- Two fresh Claude sessions per named arm, haiku: **14 paid CLI calls**. Codex paid
+  runs are deferred on codex-cli 0.160.1 until unified_exec can be disabled.
+  If all Codex gates pass, up to 22 additional gpt-5.6-luna calls (36 total); no default confirmations.
 - `node --import tsx bench/overhead.ts --plan --library <dir>` prints argv/cwd, free/paid counts without running processes; retains temp files.
-- Codex commands share model/sandbox/MCP/features; exec-only --ignore-user-config
-  is removed because the free commands reject it.
-  Lifecycle/plugin hooks and code-running features must each read false in features list.
-- Before paid calls, every Codex arm gets offline skills/list and prompt-input checks:
-  copied/rejected, discovered and visible counts, context SHA-256, AGENTS-presence boolean.
-  Never retain context text/errors. Superpowers must increase visible count before calls and input vs baseline after calls.
+- Codex 0.160.1 measures **offline rendered-prompt characters and visible skill counts**, not tokens while paid runs are deferred.
+  Characters are joined input_text blocks (UTF-16 length).
+  Each arm saves copied/rejected, discovered/visible counts, context SHA-256 and AGENTS flag.
+  Never retain context text/errors. Save offline rows despite refusal; disabled features must all read false for paid Codex. Claude runs independently.
+  Shared model/sandbox/MCP/features apply to exec, prompt-input and model-free skills/list.
 - Loadout MCP is required=true; Codex must expose find_skills/load_skill. Failed startup/discovery
   prevents a valid row. Free app-server queries create no threads/turns.
 - Claude uses --restricted, --tools Skill, disabled hooks and session-only text plugins.
   Baseline is **the user's ambient setup**: retain init names; reject plugins outside baseline plus b1; count by b1: prefix.
-  No init-only offline CLI is documented; safe-mode pack compatibility is unverified.
+  Baseline pair then smallest copied pack pair: both need discovered b1: skills and positive paired input deltas before other Claude arms.
+  Reject zero-discovery treatments. No init-only offline CLI is documented; safe-mode pack compatibility is unverified.
   Claude missing entries are **omitted, cause unverified**; init does not prove visibility.
-- Codex caps require nested discovery success and fewer visible than discovered; a token
+- Codex caps require nested discovery success and fewer visible than discovered; a character/token
   plateau alone proves nothing. Reported 2% context / 8,000-character fallback budget:
   https://developers.openai.com/codex/skills (not reverified offline).
-- Claude total input sums uncached/cache creation/cache read; retain numeric modelUsage
+- Codex superpowers must increase visible count, and input if paid. Claude input sums uncached/cache creation/cache read; retain numeric modelUsage
   per model. Codex total includes cached input. Preserve first/second counters. Costs in analysis; no population claim/intervals from pairs.
 - Confined manifests need name/description; reject invalid files, escape/frame text, strip hooks.
-  Exclude links, scripts, references, commands/agents and pack MCP/LSP servers: starting
-  those would execute downloaded code (AGENTS rule 5).
+  Exclude links, scripts, references, commands/agents and pack MCP/LSP servers: starting those executes downloaded code (AGENTS rule 5).
   Loadout uses repo code, a temp text library, lexical routing, no embeddings or Jev calls.
 - Store sanitized rows/preflights under bench/results/<timestamp>-overhead, never transcripts/env.
   No config edits or credential copying. Host-owned state: Claude adds temp-cwd entries to
