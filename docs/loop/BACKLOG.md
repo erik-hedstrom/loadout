@@ -387,34 +387,29 @@ Acceptance:
 
 Acceptance:
 - One `modelJson` seam for judge/expander: `--backend claude|codex|files`,
-  default Claude; shared schema validation and numbered, resumable files.
-- Judge concurrency defaults to 1. Escape and delimit third-party catalog
-  data after the rubric: Claude system-prompt file; Codex prompt prefix.
-- Verdicts rate each loaded key exactly once, with no unexpected keys;
-  `missed_better` is null or a catalog key. Retry once; exclude unresolved
-  disputed rows from scores and report their count.
-- Record backend, model and effort; reject resume mismatches and Claude
-  `--effort`. Files producers remain unverified: family separation is not
-  established. Report request families and known same-family judging.
-- Codex uses read-only sandbox and disabled shell/unified-exec/view-image
-  flags; strip credential environment variables without relocating auth.
-  No global AGENTS.md/skills isolation control was verified offline; summary
-  warns that judge context includes the user's global AGENTS.md.
-- Regular-file answers only; offline adversarial tests; dev/test/combined
-  reports with shared Wilson intervals. No tuning or new empirical claims.
+  default Claude; shared schema validation, regular-file answers and resumable batches.
+- Sequential judges; escaped third-party catalog after the rubric in Claude's
+  cached system prefix, first in Codex's prompt. Dev/test/combined Wilson reports.
+- Exact, nonempty expansion coverage before append; reject duplicate request IDs.
+  Exact verdict ratings and catalog-only missed keys; retry once, exclude and count
+  unresolved disputes. Backend/model/effort provenance and resume checks; reject
+  Claude effort. Files producers unverified; warn on same-family/global context.
+- Codex read-only sandbox, credential env stripping, shell/unified-exec/view-image
+  disabling flags; offline preflight requires shell_tool and unified_exec false.
+  Offline adversarial tests, `npm test` and typecheck (E1 owns the Windows hook failure).
 
-Remaining (orchestrator): check `claude -p` in cloud, and run a one-call Codex
-canary with a hostile line in a temporary AGENTS.md: it must not change the
-expected answer. Verify installed-skill/tool isolation too; keep CODEX_HOME
-unchanged. Then re-judge the same 40 v4 requests via an Opus subagent (`files`)
-and `codex`, preserving IDs/splits and recording provenance. The judge prompt
-changed: agreement with stored verdicts measures prompt change plus judge,
-not judge family alone. Commit raw answers and report agreement, Cohen's kappa,
-intervals, negative results and measured cost in RESULTS; obtain both reviews.
-Budget before retries: 4–8 batches; estimated Claude CLI $1.20–$2.40 allowing
-a $0.90 cold prefix per phase and $0.10 warm batches, or $3.60–$7.20 without caching
-(including files/Opus if uncached). Cloud-session overhead is extra; Codex USD
-cost is not exposed, quota is consumed. No paid calls in this implementation.
+Remaining (orchestrator): record the 0.160.1 negative result in RESULTS:
+unified_exec stays true, so preflight refuses Codex. No Codex kappa until preflight
+and a one-call hostile temporary AGENTS.md canary both pass (answer unchanged);
+verify installed-skill isolation without relocating CODEX_HOME. Check `claude -p`
+in cloud; re-judge 40 v4 requests with an Opus subagent via `files` and, when safe,
+`codex`. Preserve IDs/splits and raw results; report stored-verdict agreement,
+inter-judge Cohen's kappa, intervals and measured cost. The judge prompt changed
+(catalog escaping/framing, rubric line), as did logic (1 retry instead of 2;
+unresolved disputes excluded). Agreement measures prompt and logic changes plus
+the judge, and must be reported that way. Budget: 4–8 batches before retries;
+Claude CLI ~$1.20–$2.40 cached, ~$3.60–$7.20 uncached (files/Opus cloud overhead
+extra); Codex quota cost not exposed. No paid calls during implementation.
 
 **E8. Simplification pass.**
 

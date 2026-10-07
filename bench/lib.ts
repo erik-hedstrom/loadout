@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -129,23 +129,24 @@ export const wilson = (k: number, n: number): string => {
   return `${(100 * Math.max(0, c - h)).toFixed(0)}–${(100 * Math.min(1, c + h)).toFixed(0)}%`;
 };
 
+let codexToolsChecked = false;
+
 export async function modelJson<T>(prompt: string, schema: z.ZodType<T>, opts: {
   backend: string; model: string; system: string; out: string; effort?: string;
-}): Promise<(Omit<ClaudeResult<T>, 'costUsd'> & { costUsd: number | null }) | null> {
+}): Promise<{ output: T; costUsd: number | null } | null> {
   backendOf(opts.backend, opts.effort);
   const jsonSchema = z.toJSONSchema(schema, { target: 'draft-07' });
   if (opts.backend === 'claude') {
     const res = await claudeJson<unknown>(prompt, jsonSchema, opts);
-    return { ...res, output: schema.parse(res.output) };
+    return { output: schema.parse(res.output), costUsd: res.costUsd };
   }
-  const content = `Backend: ${opts.backend}\nModel: ${opts.model}\nEffort: ${opts.effort ?? 'default'}\n\n## System\n\n${opts.system}\n\n## User\n\n${prompt}\n\n## JSON output schema\n\n${JSON.stringify(jsonSchema, null, 2)}\n`;
   if (opts.backend === 'files') {
+    const content = `Backend: ${opts.backend}\nModel: ${opts.model}\n\n## System\n\n${opts.system}\n\n## User\n\n${prompt}\n\n## JSON output schema\n\n${JSON.stringify(jsonSchema, null, 2)}\n`;
     const dir = join(opts.out, 'batches');
     mkdirSync(dir, { recursive: true });
     const prompts = readdirSync(dir).filter((f) => /^\d+\.prompt\.md$/.test(f)).sort();
     // Match by content so completed rows and retries cannot shift answers onto another batch.
-    const existing = prompts.find((f) => readFileSync(join(dir, f), 'utf8').replace(/^Effort: .*\n/m, '') === content.replace(/^Effort: .*\n/m, ''));
-    if (existing && readFileSync(join(dir, existing), 'utf8') !== content) throw new Error(`effort differs in ${existing}; use a fresh output directory`);
+    const existing = prompts.find((f) => readFileSync(join(dir, f), 'utf8') === content);
     const number = Math.max(0, ...prompts.map((f) => Number(f.split('.')[0]))) + 1;
     const file = existing ?? `${String(number).padStart(3, '0')}.prompt.md`;
     if (!existing) writeFileSync(join(dir, file), content, { flag: 'wx' });
@@ -156,29 +157,41 @@ export async function modelJson<T>(prompt: string, schema: z.ZodType<T>, opts: {
       return null;
     }
     if (!stat.isFile()) throw new Error(`answer must be a regular file: ${answer}`);
-    return { output: schema.parse(JSON.parse(readFileSync(answer, 'utf8'))), costUsd: null, inputTokens: approxTokens(content), ms: 0 };
+    return { output: schema.parse(JSON.parse(readFileSync(answer, 'utf8'))), costUsd: null };
   }
+  const content = `${prompt}\n\n## System\n\n${opts.system}\n\nUse only the supplied data; do not use tools. Return JSON matching this schema:\n${JSON.stringify(jsonSchema)}`;
   const dir = mkdtempSync(join(tmpdir(), 'loadout-bench-codex-'));
   try {
     const schemaFile = join(dir, 'schema.json');
     const answerFile = join(dir, 'answer.json');
     writeFileSync(schemaFile, JSON.stringify(jsonSchema));
-    const args = [
-      'exec', '--ignore-user-config', '--ignore-rules', '--ephemeral', '--skip-git-repo-check',
-      '--sandbox', 'read-only', '--model', opts.model,
+    const config = [
       '-c', 'features.shell_tool=false', '-c', 'features.unified_exec=false', '-c', 'features.view_image=false',
       ...(opts.effort ? ['-c', `model_reasoning_effort=${JSON.stringify(opts.effort)}`] : []),
-      '--output-schema', schemaFile, '--output-last-message', answerFile, '-',
     ];
+    const prefix: string[] = [];
     let bin = 'codex';
     if (process.platform === 'win32') {
       const shim = which('codex') ?? which('codex.cmd');
       const entry = shim && join(dirname(shim), 'node_modules', '@openai', 'codex', 'bin', 'codex.js');
-      if (entry && existsSync(entry)) { bin = process.execPath; args.unshift(entry); }
+      if (entry && existsSync(entry)) { bin = process.execPath; prefix.push(entry); }
     }
-    const start = Date.now();
+    const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/_(?:KEY|TOKEN|SECRET)$/i.test(key)));
+    if (!codexToolsChecked) {
+      const features = execFileSync(bin, [...prefix, ...config, 'features', 'list'], { cwd: dir, env, encoding: 'utf8', timeout: 15_000, stdio: ['ignore', 'pipe', 'ignore'] });
+      if (!['shell_tool', 'unified_exec'].every((feature) => new RegExp(`^${feature}[\\t ]+\\S+[\\t ]+false[\\t ]*\\r?$`, 'm').test(features))) {
+        throw new Error('Codex judging refused: features list must report shell_tool=false and unified_exec=false; read-only sandboxes permit credential file reads. Use --backend files or --backend claude.');
+      }
+      codexToolsChecked = true;
+    }
+    const args = [
+      ...prefix,
+      'exec', '--ignore-user-config', '--ignore-rules', '--ephemeral', '--skip-git-repo-check',
+      '--sandbox', 'read-only', '--model', opts.model,
+      ...config,
+      '--output-schema', schemaFile, '--output-last-message', answerFile, '-',
+    ];
     await new Promise<void>((resolve, reject) => {
-      const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/_(?:KEY|TOKEN|SECRET)$/i.test(key)));
       const child = spawn(bin, args, { cwd: dir, env, stdio: ['pipe', 'ignore', 'ignore'] });
       const timer = setTimeout(() => child.kill(), 300_000);
       child.on('error', (err) => { clearTimeout(timer); reject(err); });
@@ -188,9 +201,9 @@ export async function modelJson<T>(prompt: string, schema: z.ZodType<T>, opts: {
         else reject(new Error(`codex exited ${code}`));
       });
       child.stdin.on('error', reject);
-      child.stdin.end(`${prompt}\n\n## System\n\n${opts.system}\n\nUse only the supplied data; do not use tools. Return JSON matching this schema:\n${JSON.stringify(jsonSchema)}`);
+      child.stdin.end(content);
     });
-    return { output: schema.parse(JSON.parse(readFileSync(answerFile, 'utf8'))), costUsd: null, inputTokens: approxTokens(content), ms: Date.now() - start };
+    return { output: schema.parse(JSON.parse(readFileSync(answerFile, 'utf8'))), costUsd: null };
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

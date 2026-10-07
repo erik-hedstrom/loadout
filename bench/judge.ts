@@ -50,6 +50,11 @@ const model = values.model ?? (values.backend === 'codex' ? 'gpt-6.1-sol' : 'opu
 const judge = { backend, model, effort: values.effort ?? null, ...(backend === 'files' ? { producer: 'unverified' } : {}) };
 const options = { backend, model, effort: values.effort, out: dir };
 const rows = readJsonl<SweepRow>(join(dir, 'decisions.jsonl'));
+const requestIds = new Set<string>();
+for (const row of rows) {
+  if (requestIds.has(row.id)) throw new Error(`duplicate request ID: ${row.id}`);
+  requestIds.add(row.id);
+}
 const library = scanLibrary(paths.library());
 const known = new Set(library.map(keyOf));
 const describe = new Map(library.map((c) => [keyOf(c), c.description.replace(/\s+/g, ' ')]));
@@ -229,9 +234,9 @@ const summarize = (set: Scored[]) => {
 const all = summarize(scored);
 const dev = summarize(scored.filter((s) => splitOf(s.row.id) === 'dev'));
 const test = summarize(scored.filter((s) => splitOf(s.row.id) === 'test'));
-const requests = existsSync(values.requests!) ? readJsonl<{ id: string; request: string; seed?: string; generatedBy?: { model?: string; family?: string }; expandedBy?: { model?: string; family?: string } }>(values.requests!) : [];
+const requests = existsSync(values.requests!) ? readJsonl<{ id: string; request: string; seed?: string; generatedBy?: { model?: string; family?: string; producer?: string }; expandedBy?: { model?: string; family?: string; producer?: string } }>(values.requests!) : [];
 const provenance = [...new Set(requests.filter((r) => rows.some((row) => row.id === r.id && (row.request === r.request || row.request === r.seed))).flatMap((r) =>
-  [r.generatedBy, r.expandedBy].flatMap((p) => p ? [`${p.model ?? 'unspecified'} (${p.family === 'unverified' ? 'unverified' : modelFamily(p.family ?? p.model ?? '')})`] : []),
+  [r.generatedBy, r.expandedBy].flatMap((p) => p ? [`${p.model ?? 'unspecified'} (${p.producer === 'unverified' || p.family === 'unverified' ? 'unverified' : modelFamily(p.family ?? p.model ?? '')})`] : []),
 ))];
 const blindJudges = readJsonl<{ judge?: typeof judge }>(blindFile).map((b) => b.judge);
 const verdictJudges = readJsonl<{ judge?: typeof judge }>(verdictFile).map((v) => v.judge);
@@ -246,9 +251,7 @@ const lines = [
   `${scored.length} requests, ${library.length} skills in the library, judge ${backend} / ${model}, effort ${judge.effort ?? 'default'}.`,
   `Request generation/expansion: ${provenance.join(', ') || 'not recorded'}.`,
   ...(sameFamily ? ['**Warning:** judge and request generator/expander are the same family.'] : []),
-  ...(judges.some((j) => j?.backend === 'files') || provenance.some((p) => p.endsWith('(unverified)')) ? ['**Warning:** files producer is unverified; family separation is not established.'] : []),
-  ...(judges.some((j) => j?.backend === 'codex') ? ["**Warning:** judge context includes the user's global AGENTS.md; installed skills are not isolated."] : []),
-  `Stored blind/verdict provenance: ${[...new Set([...blindJudges, ...verdictJudges].map((j) => j ? `${j.backend} / ${j.model}, effort ${j.effort ?? 'default'}${j.backend === 'files' ? ', producer unverified' : ''}` : 'not recorded (legacy)'))].join(', ') || 'no answers'}.`,
+  `Stored provenance: ${[...new Set([...blindJudges, ...verdictJudges].map((j) => j ? `${j.backend} / ${j.model}, effort ${j.effort ?? 'default'}` : 'not recorded (legacy)'))].join(', ') || 'no answers'}.${judges.some((j) => j?.backend === 'files') || provenance.some((p) => p.endsWith('(unverified)')) ? ' Warning: files producer is unverified; family separation is not established.' : ''}${judges.some((j) => j?.backend === 'codex') ? " Warning: judge context includes the user's global AGENTS.md; installed skills are not isolated." : ''}`,
   ...(values['blind-from'] ? [`Blind answers reused from ${blindFile}.`] : []),
   `Routing cost $${rows.reduce((a, r) => a + r.costUsd, 0).toFixed(4)}; mean ${(rows.reduce((a, r) => a + r.ms, 0) / rows.length / 1000).toFixed(2)} s per decision.`,
   ...(unjudged.length || unadjudicated.length

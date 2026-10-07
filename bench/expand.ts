@@ -30,7 +30,7 @@ const seedsFile = positionals[0];
 if (!seedsFile) throw new Error('usage: expand.ts <seeds.jsonl>');
 const backend = backendOf(values.backend!, values.effort);
 const model = values.model ?? (values.backend === 'codex' ? 'gpt-6.1-sol' : 'claude-sonnet-5-5');
-const expandedBy = { backend, model, effort: values.effort ?? null, family: backend === 'files' ? 'unverified' : modelFamily(model), ...(backend === 'files' ? { producer: 'unverified' } : {}) };
+const expandedBy = { backend, model, effort: values.effort ?? null, ...(backend === 'files' ? { producer: 'unverified' } : { family: modelFamily(model) }) };
 
 const counters = new Map<string, number>();
 const seeds = readJsonl<{ category: string; request: string; generatedBy?: { model: string; family?: string } }>(seedsFile).map((s) => {
@@ -64,9 +64,23 @@ await pool(batches, Number(values.concurrency), async (batch) => {
   const res = await modelJson(prompt, schema, { backend: values.backend!, model, effort: values.effort, system: SYSTEM, out: dirname(values.out!) });
   if (!res) { pending = true; return; }
   cost += res.costUsd ?? 0;
+  const expected = new Set(batch.map((s) => s.id));
+  const received = new Set<string>();
   for (const r of res.output.results) {
-    const seed = batch.find((s) => s.id === r.id);
-    if (seed) appendFileSync(values.out!, JSON.stringify({ id: seed.id, category: seed.category, seed: seed.request, request: r.prompt.trim(), generatedBy: seed.generatedBy, expandedBy }) + '\n');
+    if (!expected.has(r.id)) throw new Error(`unexpected expansion ID: ${r.id}`);
+    if (received.has(r.id)) throw new Error(`duplicate expansion ID: ${r.id}`);
+    if (!r.prompt.trim()) throw new Error(`empty expansion: ${r.id}`);
+    received.add(r.id);
+  }
+  const missing = [...expected].filter((id) => !received.has(id));
+  if (missing.length) {
+    pending = true;
+    console.error(`incomplete: missing expansions for ${missing.join(', ')}`);
+    return;
+  }
+  for (const r of res.output.results) {
+    const seed = batch.find((s) => s.id === r.id)!;
+    appendFileSync(values.out!, JSON.stringify({ id: seed.id, category: seed.category, seed: seed.request, request: r.prompt.trim(), generatedBy: seed.generatedBy, expandedBy }) + '\n');
   }
   console.log(`expanded ${batch[0]!.id}…  ${costLabel(backend, cost)}`);
 });
