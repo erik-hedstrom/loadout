@@ -84,7 +84,7 @@ paid runs deferred, see the method): the whole rendered prompt stops growing
 at about 15.7k characters over baseline by 50–64 skills (top50 +15,669,
 cap-64 +15,725, cap-256 +15,766). All 256 skills in cap-256 stay visible. At 1,024
 and 1,262 skills only **424 are visible** (the library arm adds +15,126).
-Codex bounds the cost and drops skills instead. The loadout arm's MCP tool
+Codex bounds the rendered listing and drops skills instead. The loadout arm's MCP tool
 definitions are not part of the rendered text, so its Codex cost is not
 shown.
 
