@@ -1,9 +1,10 @@
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { pathTranslator, which } from '../src/launch.js';
+import { z } from 'zod';
 import type { Capability, RawRouting, RepoSignals } from '../src/types.js';
 
 export const BENCH = import.meta.dirname;
@@ -104,6 +105,74 @@ export interface ClaudeResult<T> {
   costUsd: number;
   inputTokens: number;
   ms: number;
+}
+
+export const modelFamily = (model: string): string => {
+  if (/anthropic|claude|opus|sonnet|haiku/i.test(model)) return 'anthropic';
+  if (/openai|gpt|codex|^o[134](?:-|$)/i.test(model)) return 'openai';
+  return 'unknown';
+};
+
+export async function modelJson<T>(prompt: string, schema: z.ZodType<T>, opts: {
+  backend: string; model: string; system: string; out: string; effort?: string;
+}): Promise<(Omit<ClaudeResult<T>, 'costUsd'> & { costUsd: number | null }) | null> {
+  const jsonSchema = z.toJSONSchema(schema, { target: 'draft-07' });
+  if (opts.backend === 'claude') {
+    const res = await claudeJson<unknown>(prompt, jsonSchema, opts);
+    return { ...res, output: schema.parse(res.output) };
+  }
+  const content = `Backend: ${opts.backend}\nModel: ${opts.model}\n\n## System\n\n${opts.system}\n\n## User\n\n${prompt}\n\n## JSON output schema\n\n${JSON.stringify(jsonSchema, null, 2)}\n`;
+  if (opts.backend === 'files') {
+    const dir = join(opts.out, 'batches');
+    mkdirSync(dir, { recursive: true });
+    const prompts = readdirSync(dir).filter((f) => /^\d+\.prompt\.md$/.test(f)).sort();
+    // Match by content so completed rows and retries cannot shift answers onto another batch.
+    const existing = prompts.find((f) => readFileSync(join(dir, f), 'utf8') === content);
+    const number = Math.max(0, ...prompts.map((f) => Number(f.split('.')[0]))) + 1;
+    const file = existing ?? `${String(number).padStart(3, '0')}.prompt.md`;
+    if (!existing) writeFileSync(join(dir, file), content, { flag: 'wx' });
+    const answer = join(dir, file.replace('.prompt.md', '.answer.json'));
+    if (!existsSync(answer)) {
+      console.log(`pending batch ${file.replace('.prompt.md', '')}: ${answer}`);
+      return null;
+    }
+    return { output: schema.parse(JSON.parse(readFileSync(answer, 'utf8'))), costUsd: null, inputTokens: approxTokens(content), ms: 0 };
+  }
+  if (opts.backend !== 'codex') throw new Error('--backend must be claude, codex or files');
+  const dir = mkdtempSync(join(tmpdir(), 'loadout-bench-codex-'));
+  try {
+    const schemaFile = join(dir, 'schema.json');
+    const answerFile = join(dir, 'answer.json');
+    writeFileSync(schemaFile, JSON.stringify(jsonSchema));
+    const args = [
+      'exec', '--ignore-user-config', '--ignore-rules', '--ephemeral', '--skip-git-repo-check',
+      '--sandbox', 'read-only', '--model', opts.model,
+      ...(opts.effort ? ['-c', `model_reasoning_effort=${JSON.stringify(opts.effort)}`] : []),
+      '--output-schema', schemaFile, '--output-last-message', answerFile, '-',
+    ];
+    let bin = 'codex';
+    if (process.platform === 'win32') {
+      const shim = which('codex') ?? which('codex.cmd');
+      const entry = shim && join(dirname(shim), 'node_modules', '@openai', 'codex', 'bin', 'codex.js');
+      if (entry && existsSync(entry)) { bin = process.execPath; args.unshift(entry); }
+    }
+    const start = Date.now();
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn(bin, args, { cwd: dir, stdio: ['pipe', 'ignore', 'ignore'] });
+      const timer = setTimeout(() => child.kill(), 300_000);
+      child.on('error', (err) => { clearTimeout(timer); reject(err); });
+      child.on('close', (code) => {
+        clearTimeout(timer);
+        if (code === 0) resolve();
+        else reject(new Error(`codex exited ${code}`));
+      });
+      child.stdin.on('error', reject);
+      child.stdin.end(`Use only the supplied data; do not use tools. Return JSON matching the schema.\n\n${content}`);
+    });
+    return { output: schema.parse(JSON.parse(readFileSync(answerFile, 'utf8'))), costUsd: null, inputTokens: approxTokens(content), ms: Date.now() - start };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 /**

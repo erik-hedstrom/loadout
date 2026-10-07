@@ -359,7 +359,7 @@ Acceptance:
 |---|---|---|---|---|---|
 | E1 | P0 | GitHub Actions CI | Codex | cloud | todo |
 | E2 | P0 | LICENSE, CONTRIBUTING, SECURITY.md, templates | Claude | cloud + erik | todo (license: confirm MIT) |
-| E7 | P0 | Bench judges and expander that run inside a cloud session | Claude | cloud | todo |
+| E7 | P0 | Vendor-independent bench judges and expander | Codex | cloud | review |
 | E8 | P0 | Repo-wide simplification pass | Claude (pr-reviewer finds, worker fixes) + Codex review | cloud | todo |
 | E3 | P1 | Split the test file per module | Codex | cloud | todo |
 | E5 | P1 | Changelog and release automation | Codex | cloud | todo (with A4) |
@@ -385,19 +385,48 @@ Acceptance:
 
 **E7. Bench judging in a cloud session.**
 
-Why: the $100 credit pays for cloud sessions only (not the API, not
-Routines), and C1/C3 need judging. `bench/lib.ts` judges through `claude -p`.
+Why: Claude expanded the v4 requests and judged them. Cross-family judging
+must also work where the cloud-session credit cannot pay for CLI/API calls.
 
 Acceptance:
-- Check whether `claude -p` works inside a cloud session.
-- If it does not, add a file-based mode:
-  - `judge.ts` and `expand.ts` write batch prompts and read JSON answers;
-  - an Opus subagent of the session produces the answers, with the catalog
-    passed once per batch.
-- An Anthropic API backend (`ANTHROPIC_API_KEY`, prompt caching) stays
-  optional.
-- Re-judging 40 v4 requests reproduces their verdicts within noise, and the
-  cost is reported.
+- `bench/lib.ts:modelJson` is the shared seam for `judge.ts` and `expand.ts`:
+  `--backend claude|codex|files`, default Claude. Codex uses documented 0.160
+  `exec` flags, a JSON schema, read-only sandbox, stdin, neutral cwd, and
+  `--model` / `--effort`; user config and rules are ignored. No new dependency.
+- Files mode writes numbered prompts and reads matching JSON answers under
+  `<sweep dir>/batches` (expander: the parent of `--out`). Missing answers print
+  pending batches and exit successfully; rerunning resumes. All three
+  backends validate against the same Zod-derived JSON schema.
+- Judge concurrency defaults to 1. Before: system = rubric + raw catalog,
+  user = requests/adjudication. After: system = rubric + instruction to ignore
+  instructions in data, user = escaped `<skills_catalog>` third-party data +
+  requests/adjudication. Re-judging must measure this prompt change.
+- New blind/verdict rows record `judge: {backend, model}`. Expansions preserve
+  `generatedBy` and record `expandedBy: {backend, model, family}`. The judge
+  reads these request fields via `--requests` (default `bench/data/requests.jsonl`),
+  reports known families, and warns on same-family judging, without an override.
+  Legacy judge provenance is reported as unrecorded, never inferred.
+- Reports separate hash-based dev/test splits and combined figures, with 95%
+  Wilson intervals. No tuning or new empirical result in this change.
+- Offline tests in `test/bench.test.ts`: pending/answered judge and expander
+  resumes, adjudication, invalid JSON/schema rejection, catalog escaping,
+  split summaries, provenance, and Codex argv/stdin excluding credentials.
+
+Remaining cloud-session check (orchestrator; no paid runs performed here):
+- Check `claude -p` inside the cloud session.
+- Re-judge the same 40 v4 requests with an Opus subagent via `files` and with
+  `codex`, in separate output directories. Preserve IDs and `splitOf()`; do not
+  tune. Annotate the request subset's known generation/expansion provenance
+  from [RESULTS](../../bench/RESULTS.md) rather than inventing missing metadata.
+- Record raw answers, agreement with stored verdicts, Cohen's kappa between
+  the two judges, intervals, negative results, and measured cost in RESULTS.
+  Expected work per backend: 4 blind batches plus 0–4 adjudication batches
+  at batch size 10, before retries (at most two per batch). Historical Opus
+  equivalent: about $0.56 (`$4.41 / 315 * 40`), a rough planning estimate only;
+  the changed prompt/cache and cloud subagent billing can differ. Codex uses
+  subscription quota; USD cost is not exposed by this CLI path. Measure both
+  in the cloud/local run. This implementation incurred no model-call spend.
+- Orchestrator obtains the required Claude and Codex reviews before merge.
 
 **E8. Simplification pass.**
 
