@@ -1,1 +1,0 @@
-{"id":"integrations-01","agent":"claude","mode":"hook","model":"sonnet","loaded":[],"injected":[],"offered":[],"invoked":[],"searches":[],"tools":["Skill","Read (failed)","Bash (failed)","Read (failed)","Bash (failed)","PowerShell","PowerShell (failed)","PowerShell (failed)"],"exit":1,"timedOut":false,"stderr":"","costUsd":0.2396352,"ms":54128}

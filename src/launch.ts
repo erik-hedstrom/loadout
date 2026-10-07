@@ -56,18 +56,33 @@ export function searchServer(windowsAgent: boolean): McpServerConfig {
  */
 export function loadoutCommand(sub: string[], windowsAgent: boolean): McpServerConfig {
   const entry = fileURLToPath(new URL(import.meta.url.endsWith('.ts') ? './cli.ts' : './cli.js', import.meta.url));
-  const cli = [...process.execArgv, entry, ...sub];
+  const cli = [...loaderArgs(process.execArgv), entry, ...sub];
   if (!windowsAgent) return { command: process.execPath, args: cli, ...(process.env.LOADOUT_HOME ? { env: { LOADOUT_HOME: process.env.LOADOUT_HOME } } : {}) };
   const home = process.env.LOADOUT_HOME ? ['/usr/bin/env', `LOADOUT_HOME=${process.env.LOADOUT_HOME}`] : [];
   const distro = process.env.WSL_DISTRO_NAME ? ['-d', process.env.WSL_DISTRO_NAME] : [];
   return { command: 'wsl.exe', args: [...distro, '--exec', ...home, process.execPath, ...cli, '--windows-paths'] };
 }
 
+/** Only the module-loader flags of Node's own arguments (tsx's --require/--import), not e.g. `-e <script>`. */
+export function loaderArgs(execArgv: string[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < execArgv.length; i++) {
+    const a = execArgv[i]!;
+    if (['--require', '-r', '--import', '--loader'].includes(a) && execArgv[i + 1] !== undefined) out.push(a, execArgv[++i]!);
+    else if (/^--(require|import|loader)=/.test(a)) out.push(a);
+  }
+  return out;
+}
+
 /** A Claude Code settings.json block that runs `loadout hook claude` on every prompt. */
 export function claudeHookSettings(windowsAgent: boolean): object {
   const h = loadoutCommand(['hook', 'claude'], windowsAgent);
   const env = Object.entries(h.env ?? {}).map(([k, v]) => `${k}=${quote(v)} `).join('');
-  const command = `${env}${[h.command!, ...(h.args ?? [])].map(quote).join(' ')}`;
+  // Claude Code on Windows runs hooks through Git Bash, which rewrites arguments that start with "/"
+  // into Windows paths before they reach wsl.exe. A leading "//" is passed on as "/" by Git Bash, and
+  // is still the same path to Linux if another shell leaves it as is.
+  const arg = (a: string) => (windowsAgent && /^\/[^/]/.test(a) ? `/${a}` : a);
+  const command = `${env}${[h.command!, ...(h.args ?? []).map(arg)].map(quote).join(' ')}`;
   return { hooks: { UserPromptSubmit: [{ hooks: [{ type: 'command', command, timeout: 30 }] }] } };
 }
 

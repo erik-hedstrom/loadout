@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { DEFAULT_CONFIG, type Config } from '../src/config.js';
 import { JevError, validateResponse, type Question, type SystemOneClient } from '../src/jev.js';
-import { claudeArgs, codexArgs, hostSetup, materialize, searchServer, toToml } from '../src/launch.js';
+import { claudeArgs, claudeHookSettings, codexArgs, hostSetup, loaderArgs, materialize, searchServer, toToml } from '../src/launch.js';
 import { hookOutput, isFollowUp, promptContext } from '../src/hook.js';
 import { createServer, readSkillFile } from '../src/mcp.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -329,6 +329,10 @@ describe('launch', () => {
     const claudeCode = hostSetup('claude-code', false).snippet.split('\n\n');
     expect(claudeCode[0]).toMatch(/^claude mcp add --scope user loadout -- \S+ .* mcp$/);
     expect(JSON.parse(claudeCode[1]!).hooks.UserPromptSubmit[0].hooks[0].command).toMatch(/ hook claude$/);
+    // Windows: absolute Linux paths are protected from Git Bash's path rewriting.
+    const winHook = (claudeHookSettings(true) as { hooks: { UserPromptSubmit: { hooks: { command: string }[] }[] } }).hooks.UserPromptSubmit[0]!.hooks[0]!.command;
+    expect(winHook).toMatch(/^wsl\.exe .*--exec \/\/\S+ .* hook claude --windows-paths$/);
+    expect(loaderArgs(['-e', 'x', '--require', 'a.cjs', '--import=file:///b.mjs', '--max-old-space-size=99'])).toEqual(['--require', 'a.cjs', '--import=file:///b.mjs']);
   });
 });
 
