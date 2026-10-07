@@ -399,7 +399,7 @@ Acceptance:
 | E3 | P1 | Split the test file per module | Codex | cloud | todo |
 | E5 | P1 | Changelog and release automation | Codex | cloud | todo (with A4) |
 | E6 | P2 | Architecture diagram in DESIGN.md | Claude | cloud | todo |
-| E10 | P1 | Build without optional dependencies | Codex | cloud | todo |
+| E10 | P1 | Build without optional dependencies | Codex | cloud | done ([PR #8](https://github.com/erik-hedstrom/loadout/pull/8)) |
 | E11 | P1 | Fixed-text diagnostics in the gateway and relay | Codex | cloud | todo |
 
 **E10. Build without optional dependencies.** src/embed.ts:24 types
