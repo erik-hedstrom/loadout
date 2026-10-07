@@ -443,8 +443,8 @@ Acceptance:
   server startup logs work.
 - MCP startup reads only its config; Claude MCP session files retain private modes.
 - Skill copies reject links and retain pinned confinement and size limits.
-- Third-party prompt data is escaped and framed; Jev error details redact
-  the resolved key and stay bounded. `decide()` and `bench/judge.ts` are unchanged.
+- Third-party prompt data is escaped and framed; Jev errors contain only HTTP
+  status or fixed failure categories. `decide()` and `bench/judge.ts` are unchanged.
 - Adversarial tests for each path; routing re-measured after the Jev framing change.
 
 **E3. Test split.**
