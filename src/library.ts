@@ -104,19 +104,22 @@ function readSource(dir: string): SkillSource | undefined {
   }
 }
 
+export function parseFrontmatter(text: string): Record<string, unknown> {
+  const match = FRONTMATTER.exec(text);
+  if (!match?.[1]) return {};
+  try {
+    const meta: unknown = parseYaml(match[1]);
+    return meta !== null && typeof meta === 'object' && !Array.isArray(meta) ? meta as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
+}
+
 export function parseSkill(dir: string): Capability | undefined {
   // Never follow a symlinked manifest, and never read an outsized one whole.
   const text = readManifest(dir);
   if (text === undefined) return undefined;
-  const match = FRONTMATTER.exec(text);
-  let meta: Record<string, unknown> = {};
-  if (match?.[1]) {
-    try {
-      meta = (parseYaml(match[1]) as Record<string, unknown>) ?? {};
-    } catch {
-      // Malformed frontmatter: fall back to the directory name.
-    }
-  }
+  const meta = parseFrontmatter(text);
   const name = typeof meta.name === 'string' && meta.name.trim() ? meta.name.trim() : basename(dir);
   const description = typeof meta.description === 'string' ? meta.description.trim() : '';
   const origin = readSource(dir)?.origin;

@@ -50,7 +50,7 @@ Acceptance:
 - Tests use fake home directories.
 - It never writes outside `~/.loadout`.
 
-A2 learnings: installed listings are estimates, not measured overhead; MCP connection configs do not supply offline schemas, and project config discovery must work from subdirectories.
+A2 learnings: inventory is not request overhead; listing caps and local disables matter, claude.ai synced plugins need discovery, and structured TOML keeps config strings out of MCP server names (PR #3).
 
 **A1. README rewrite.**
 

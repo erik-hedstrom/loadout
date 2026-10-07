@@ -1,11 +1,11 @@
 import { existsSync, lstatSync, readdirSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
-import { parse as parseYaml } from 'yaml';
+import { parse as parseToml } from 'smol-toml';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { DEFAULT_CONFIG, paths } from './config.js';
-import { addSkills, findSkillDirs, parseSkill, readConfined, scanLibrary } from './library.js';
+import { addSkills, findSkillDirs, parseFrontmatter, parseSkill, readConfined, scanLibrary } from './library.js';
 import { createServer } from './mcp.js';
 import type { Capability } from './types.js';
 
@@ -20,18 +20,21 @@ const object = (value: unknown): Record<string, unknown> => value !== null && ty
 interface Listing {
   name: string;
   description: string;
+  characters: number;
+  listingCharacters: number;
   tokens: number;
 }
 interface FoundSkill {
   capability: Capability;
-  listings: Set<string>;
+  listings: Map<string, Listing>;
 }
 interface HostAudit {
   host: string;
   skills: Listing[];
   listings: Listing[];
-  rules: { name: string; tokens: number | null }[];
-  servers: { name: string; schemaTokens: null }[];
+  servers: { name: string }[];
+  descriptionCharacters: number;
+  budget: { characters: number | null; fullSkills: number | null; source: string | null; note: string };
   estimatedTokens: number;
   warnings: string[];
 }
@@ -68,8 +71,9 @@ function readJson(file: string, host: HostAudit, label: string): Record<string, 
   }
 }
 
-function listing(name: string, description: string): Listing {
-  return { name: clean(name), description: clean(description), tokens: tokens(`${name}: ${description}`) };
+function listing(name: string, description: string, source = ''): Listing {
+  const characters = `${name}: ${description}`.length;
+  return { name: clean(name), description: clean(description), characters, listingCharacters: characters + (source ? ` (file: ${join(source, 'SKILL.md')})\n`.length : 0), tokens: Math.ceil(characters / 4) };
 }
 
 function projectDirs(cwd: string): string[] {
@@ -82,19 +86,20 @@ function projectDirs(cwd: string): string[] {
 
 function addSkillRoot(root: string, host: HostAudit, found: Map<string, FoundSkill>, prefix = '') {
   try {
-    for (const dir of findSkillDirs(root)) {
+    for (const dir of host.host === 'Codex' ? codexSkillDirs(root) : findSkillDirs(root)) {
       const skill = parseSkill(dir);
       if (!skill) {
         host.warnings.push('A skill manifest was skipped (linked, unreadable or oversized).');
         continue;
       }
+      if (host.host === 'Claude Code' && parseFrontmatter(readConfined(dir, 'SKILL.md', MAX_MANIFEST_BYTES).toString('utf8'))['disable-model-invocation'] === true) continue;
       const key = realpathSync(dir);
-      const discovered = found.get(key) ?? { capability: skill, listings: new Set<string>() };
+      const discovered = found.get(key) ?? { capability: skill, listings: new Map<string, Listing>() };
       found.set(key, discovered);
       const identity = `${host.host}:${prefix}`;
       if (discovered.listings.has(identity)) continue;
-      discovered.listings.add(identity);
-      const entry = listing(prefix + skill.name, skill.description);
+      const entry = listing(prefix + skill.name, skill.description, dir);
+      discovered.listings.set(identity, entry);
       host.skills.push(entry);
     }
   } catch {
@@ -102,13 +107,7 @@ function addSkillRoot(root: string, host: HostAudit, found: Map<string, FoundSki
   }
 }
 
-function metadata(text: string): { meta: Record<string, unknown>; body: string } {
-  const match = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(text);
-  if (!match) return { meta: {}, body: text };
-  return { meta: object(parseYaml(match[1]!)), body: text.slice(match[0].length) };
-}
-
-function addMarkdown(root: string, host: HostAudit, seen: Set<string>, kind: 'commands' | 'agents' | 'rules', prefix = '') {
+function addMarkdown(root: string, host: HostAudit, seen: Set<string>, kind: 'commands' | 'agents', prefix = '') {
   if (!existsSync(root) || lstatSync(root).isSymbolicLink()) return;
   const confinement = lstatSync(root).isFile() ? dirname(root) : root;
   let entries = 0;
@@ -118,16 +117,16 @@ function addMarkdown(root: string, host: HostAudit, seen: Set<string>, kind: 'co
     if (++entries > MAX_DESCRIPTION_ENTRIES || depth > MAX_DESCRIPTION_DEPTH) throw new Error('description scan budget exceeded');
     if (st.isDirectory()) {
       for (const entry of readdirSync(path)) walk(join(path, entry), depth + 1);
-    } else if (st.isFile() && path.endsWith(kind === 'rules' ? '.mdc' : '.md')) {
+    } else if (st.isFile() && path.endsWith('.md')) {
       try {
-        const { meta, body } = metadata(readConfined(confinement, relative(confinement, path), MAX_MANIFEST_BYTES).toString('utf8'));
+        const meta = parseFrontmatter(readConfined(confinement, relative(confinement, path), MAX_MANIFEST_BYTES).toString('utf8'));
         const identity = JSON.stringify([host.host, kind, prefix, realpathSync(path)]);
         if (seen.has(identity)) return;
         seen.add(identity);
-        const name = prefix + (typeof meta.name === 'string' ? meta.name : basename(path, kind === 'rules' ? '.mdc' : '.md'));
+        if (kind === 'commands' && meta['disable-model-invocation'] === true) return;
+        const name = prefix + (typeof meta.name === 'string' ? meta.name : basename(path, '.md'));
         const description = typeof meta.description === 'string' ? meta.description : '';
-        if (kind === 'rules') host.rules.push({ name: clean(name), tokens: meta.alwaysApply === true ? tokens(body) : description ? listing(name, description).tokens : null });
-        else if (description) host.listings.push(listing(name, description));
+        if (description) host.listings.push(listing(name, description));
         else host.warnings.push(`A plugin ${kind} description is missing; its listing is not counted.`);
       } catch {
         host.warnings.push(`A ${kind} file could not be counted.`);
@@ -137,29 +136,44 @@ function addMarkdown(root: string, host: HostAudit, seen: Set<string>, kind: 'co
   try { walk(root, 0); } catch { host.warnings.push(`A ${kind} directory could not be fully scanned.`); }
 }
 
-function addRule(file: string, host: HostAudit, name = basename(file)) {
-  const text = readText(file, host, 'instruction file');
-  if (text !== undefined) host.rules.push({ name: clean(name), tokens: tokens(text) });
-}
-
 function addServers(config: unknown, servers: Map<string, unknown>, prefix = '') {
   for (const [name, value] of Object.entries(object(config))) servers.set(prefix + name, { ...object(servers.get(prefix + name)), ...object(value) });
 }
 
 function claudePlugins(home: string, dirs: string[], host: HostAudit, found: Map<string, FoundSkill>, seen: Set<string>, servers: Map<string, unknown>, settings: Record<string, unknown>) {
   const installed = object(readJson(join(home, 'plugins', 'installed_plugins.json'), host, 'plugin registry').plugins);
+  const disabled = new Set(Object.entries(settings).filter(([, enabled]) => enabled === false).map(([id]) => id.split('@')[0]!));
+  const plugins = new Map<string, string>();
   for (const [id, enabled] of Object.entries(settings)) {
-    if (enabled !== true) continue;
+    const name = id.split('@')[0]!;
+    if (enabled !== true || disabled.has(name)) continue;
     const installs = installed[id];
-    if (!Array.isArray(installs)) {
-      host.warnings.push('An enabled plugin has no readable installation; its entries are not counted.');
-      continue;
-    }
+    if (!Array.isArray(installs)) continue;
     const applicable = installs.map(object).reverse();
     const install = applicable.find((p) => typeof p.projectPath === 'string' && dirs.includes(resolve(p.projectPath))) ?? applicable.find((p) => p.scope === 'user');
-    if (!install || typeof install.installPath !== 'string') continue;
-    const dir = install.installPath;
+    if (typeof install?.installPath === 'string' && existsSync(install.installPath)) plugins.set(name, install.installPath);
+  }
+  const synced = join(home, 'plugins', 'synced');
+  if (existsSync(synced)) try {
+    for (const bucket of readdirSync(synced, { withFileTypes: true }).filter((e) => e.isDirectory())) {
+      const dir = join(synced, bucket.name);
+      const manifest = readJson(join(dir, 'manifest.json'), host, 'synced plugin manifest');
+      if (!Array.isArray(manifest.plugins)) continue;
+      for (const plugin of manifest.plugins.map(object)) {
+        const name = plugin.name;
+        if (typeof name !== 'string' || !name || /[\\/]|^\.{1,2}$/.test(name)) continue;
+        if ((plugin.installationPreference ?? manifest.installationPreference) !== 'available' || disabled.has(name) || plugins.has(name)) continue;
+        const folder = [join(dir, name), join(dir, `${name}~g2`)].find(existsSync);
+        if (folder) plugins.set(name, folder);
+        else host.warnings.push('An available synced plugin has no readable folder; its entries are not counted.');
+      }
+    }
+  } catch { host.warnings.push('Synced plugins could not be fully scanned.'); }
+  for (const [id, enabled] of Object.entries(settings)) {
     const name = id.split('@')[0]!;
+    if (enabled === true && !disabled.has(name) && !plugins.has(name)) host.warnings.push('An enabled plugin has no readable installation; its entries are not counted.');
+  }
+  for (const [name, dir] of plugins) {
     addSkillRoot(join(dir, 'skills'), host, found, `${name}:`);
     addMarkdown(join(dir, 'commands'), host, seen, 'commands', `${name}:`);
     addMarkdown(join(dir, 'agents'), host, seen, 'agents', `${name}:`);
@@ -193,50 +207,71 @@ function claudePlugins(home: string, dirs: string[], host: HostAudit, found: Map
   }
 }
 
-function tomlServers(text: string, host: HostAudit): Map<string, unknown> {
-  const servers = new Map<string, unknown>();
-  let multiline = '';
-  let current: string | undefined;
-  for (const raw of text.split(/\r?\n/)) {
-    let line = '';
-    let quote = '';
-    for (let i = 0; i < raw.length; i++) {
-      const char = raw[i]!;
-      if (multiline) {
-        if (raw.slice(i, i + 3) === multiline && (multiline === "'''" || raw[i - 1] !== '\\')) { multiline = ''; i += 2; }
-        continue;
-      }
-      if (quote) {
-        line += char;
-        if (char === '\\' && quote === '"') line += raw[++i] ?? '';
-        else if (char === quote) quote = '';
-      } else if (char === '#') break;
-      else if (raw.slice(i, i + 3) === '"""' || raw.slice(i, i + 3) === "'''") { multiline = raw.slice(i, i + 3); i += 2; }
-      else { line += char; if (char === '"' || char === "'") quote = char; }
+function canonicalSkillPath(path: string): string {
+  const folder = basename(path).toUpperCase() === 'SKILL.MD' ? dirname(path) : path;
+  const resolved = existsSync(folder) ? realpathSync(folder) : resolve(folder);
+  return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+}
+
+function codexConfig(file: string, host: HostAudit, servers: Map<string, unknown>, disabled: Map<string, boolean>) {
+  const text = readText(file, host, 'config.toml');
+  if (text === undefined) return;
+  try {
+    const config = parseToml(text);
+    for (const [name, value] of Object.entries(object(config.mcp_servers))) {
+      const enabled = object(value).enabled;
+      servers.set(name, { ...object(servers.get(name)), ...(typeof enabled === 'boolean' ? { enabled } : {}) });
     }
-    const header = /^\s*\[([^\[\]]+)\]\s*$/.exec(line);
-    if (header) {
-      current = undefined;
-      const parts: string[] = [];
-      let rest = header[1]!.trim();
-      while (rest) {
-        const key = /^(?:([\w-]+)|"((?:\\.|[^"\\])*)"|'([^']*)')\s*(\.|$)/.exec(rest);
-        if (!key) break;
-        try { parts.push(key[1] ?? key[3] ?? JSON.parse(`"${key[2]}"`) as string); } catch { break; }
-        rest = rest.slice(key[0].length).trimStart();
-      }
-      if (!rest && parts[0] === 'mcp_servers' && parts[1]) {
-        const name = parts[1];
-        if (!servers.has(name)) servers.set(name, {});
-        if (parts.length === 2) current = name;
-      }
-    } else {
-      const enabled = /^\s*(?:enabled|"enabled"|'enabled')\s*=\s*(true|false)\s*$/.exec(line);
-      if (current && enabled) servers.set(current, { enabled: enabled[1] === 'true' });
-      else if (/^\s*mcp_servers\s*=/.test(line)) host.warnings.push('Inline TOML MCP tables are not counted; named [mcp_servers.*] tables are supported.');
+    const skills = object(config.skills).config;
+    if (Array.isArray(skills)) for (const entry of skills) {
+      const { path, enabled } = object(entry);
+      if (typeof path === 'string' && typeof enabled === 'boolean') disabled.set(canonicalSkillPath(resolve(dirname(file), path)), !enabled);
     }
+  } catch {
+    host.warnings.push('config.toml: not parsed');
   }
-  return servers;
+}
+
+function codexSkillDirs(root: string): string[] {
+  const found: string[] = [];
+  const visited = new Set<string>();
+  let entries = 0;
+  const walk = (dir: string, depth: number) => {
+    if (!existsSync(dir)) return;
+    const real = realpathSync(dir);
+    if (visited.has(real) || !lstatSync(real).isDirectory()) return;
+    visited.add(real);
+    if (++entries > MAX_DESCRIPTION_ENTRIES) throw new Error('skill discovery budget exceeded');
+    if (existsSync(join(real, 'SKILL.md'))) { found.push(real); return; }
+    if (depth >= MAX_DESCRIPTION_DEPTH) return;
+    for (const entry of readdirSync(real, { withFileTypes: true })) if (entry.isDirectory() || entry.isSymbolicLink()) walk(join(real, entry.name), depth + 1);
+  };
+  walk(root, 0);
+  return found;
+}
+
+function listingBudget(host: HostAudit): HostAudit['budget'] {
+  let characters: number | null = null;
+  let source: string | null = null;
+  let note = 'budget not documented; B1 measures it';
+  if (host.host === 'Codex') {
+    characters = 8_000;
+    source = 'https://developers.openai.com/codex/skills';
+    note = '2% of model context; unknown-context fallback of 8,000 characters used here';
+  } else if (host.host === 'Claude Code') {
+    const override = Number(process.env.SLASH_COMMAND_TOOL_CHAR_BUDGET);
+    characters = Number.isSafeInteger(override) && override > 0 ? override : 16_000;
+    source = 'https://code.claude.com/docs/en/skills#troubleshooting';
+    note = characters === 16_000 ? '2% of model context; unknown-context fallback of 16,000 characters used here' : 'SLASH_COMMAND_TOOL_CHAR_BUDGET override';
+  }
+  let remaining = characters ?? 0;
+  let fullSkills = 0;
+  for (const size of host.skills.map((s) => host.host === 'Codex' ? s.listingCharacters : s.characters).sort((a, b) => a - b)) {
+    if (size > remaining) break;
+    remaining -= size;
+    fullSkills++;
+  }
+  return { characters, fullSkills: characters === null ? null : fullSkills, source, note };
 }
 
 function checkAdoptTarget(library: string) {
@@ -272,7 +307,10 @@ export async function audit(cwd = process.cwd(), adopt = false): Promise<AuditRe
   const dirs = projectDirs(cwd);
   const found = new Map<string, FoundSkill>();
   const seenDescriptions = new Set<string>();
-  const hosts = ['Claude Code', 'Codex', 'OpenCode', 'Cursor'].map((host): HostAudit => ({ host, skills: [], listings: [], rules: [], servers: [], estimatedTokens: 0, warnings: [] }));
+  const hosts = ['Claude Code', 'Codex', 'OpenCode', 'Cursor'].map((host): HostAudit => ({ host, skills: [], listings: [], servers: [], descriptionCharacters: 0, budget: { characters: null, fullSkills: null, source: null, note: '' }, estimatedTokens: 0, warnings: [] }));
+  const disabledSkills = new Map<string, boolean>();
+  const permissions = new Map<string, string>();
+  let complexPermissions = false;
   const [claude, codex, open, cursor] = hosts as [HostAudit, HostAudit, HostAudit, HostAudit];
   const serverMaps = hosts.map(() => new Map<string, unknown>());
   const [claudeServers, codexServers, openServers, cursorServers] = serverMaps as [Map<string, unknown>, Map<string, unknown>, Map<string, unknown>, Map<string, unknown>];
@@ -282,14 +320,13 @@ export async function audit(cwd = process.cwd(), adopt = false): Promise<AuditRe
   addSkillRoot(join(codexHome, 'skills'), codex, found);
   addSkillRoot(join(home, '.agents', 'skills'), codex, found);
   if (existsSync(join(codexHome, 'plugins'))) codex.warnings.push('Plugin cache skills are not counted: this audit cannot establish which cached plugins are enabled.');
-  for (const root of [join(openHome, 'skills'), join(openHome, 'skill'), join(home, '.claude', 'skills'), join(home, '.agents', 'skills')]) addSkillRoot(root, open, found);
-  for (const root of [join(home, '.cursor', 'skills'), join(home, '.claude', 'skills'), join(home, '.codex', 'skills')]) addSkillRoot(root, cursor, found);
+  for (const root of [join(home, '.claude', 'skills'), join(home, '.agents', 'skills'), join(openHome, 'skill'), join(openHome, 'skills')]) addSkillRoot(root, open, found);
+  for (const root of [join(home, '.cursor', 'skills'), join(home, '.claude', 'skills'), join(home, '.codex', 'skills'), join(home, '.agents', 'skills')]) addSkillRoot(root, cursor, found);
   const claudeSettings = object(readJson(join(claudeHome, 'settings.json'), claude, 'user settings').enabledPlugins);
-  const claudeConfig = readJson(join(home, '.claude.json'), claude, 'user MCP config');
+  const claudeConfig = readJson(join(process.env.CLAUDE_CONFIG_DIR || home, '.claude.json'), claude, 'user MCP config');
   addServers(claudeConfig.mcpServers, claudeServers);
   for (const dir of dirs) addServers(object(object(claudeConfig.projects)[dir]).mcpServers, claudeServers);
-  const toml = readText(join(codexHome, 'config.toml'), codex, 'MCP config');
-  if (toml !== undefined) addServers(Object.fromEntries(tomlServers(toml, codex)), codexServers);
+  codexConfig(join(codexHome, 'config.toml'), codex, codexServers, disabledSkills);
   addServers(readJson(join(home, '.cursor', 'mcp.json'), cursor, 'user MCP config').mcpServers, cursorServers);
   const openConfigs = [join(openHome, 'opencode.json'), join(openHome, 'opencode.jsonc')];
   for (const dir of dirs) {
@@ -298,62 +335,65 @@ export async function audit(cwd = process.cwd(), adopt = false): Promise<AuditRe
     addMarkdown(join(dir, '.claude', 'agents'), claude, seenDescriptions, 'agents');
     for (const settings of ['settings.json', 'settings.local.json']) Object.assign(claudeSettings, object(readJson(join(dir, '.claude', settings), claude, 'project settings').enabledPlugins));
     addSkillRoot(join(dir, '.agents', 'skills'), codex, found);
-    const projectToml = readText(join(dir, '.codex', 'config.toml'), codex, 'project MCP config');
-    if (projectToml !== undefined) addServers(Object.fromEntries(tomlServers(projectToml, codex)), codexServers);
+    codexConfig(join(dir, '.codex', 'config.toml'), codex, codexServers, disabledSkills);
     for (const root of [join(dir, '.claude', 'skills'), join(dir, '.agents', 'skills'), join(dir, '.opencode', 'skills'), join(dir, '.opencode', 'skill')]) addSkillRoot(root, open, found);
-    for (const root of [join(dir, '.cursor', 'skills'), join(dir, '.claude', 'skills'), join(dir, '.codex', 'skills')]) addSkillRoot(root, cursor, found);
+    for (const root of [join(dir, '.cursor', 'skills'), join(dir, '.claude', 'skills'), join(dir, '.codex', 'skills'), join(dir, '.agents', 'skills')]) addSkillRoot(root, cursor, found);
     addServers(readJson(join(dir, '.mcp.json'), claude, 'project MCP config').mcpServers, claudeServers);
     addServers(readJson(join(dir, '.cursor', 'mcp.json'), cursor, 'project MCP config').mcpServers, cursorServers);
-    addRule(join(dir, '.cursorrules'), cursor);
-    addRule(join(dir, 'AGENTS.md'), cursor);
-    addMarkdown(join(dir, '.cursor', 'rules'), cursor, seenDescriptions, 'rules');
     openConfigs.push(join(dir, 'opencode.json'), join(dir, 'opencode.jsonc'), join(dir, '.opencode', 'opencode.json'), join(dir, '.opencode', 'opencode.jsonc'));
   }
   claudePlugins(claudeHome, dirs, claude, found, seenDescriptions, claudeServers, claudeSettings);
-  if (process.env.OPENCODE_CONFIG) openConfigs.push(resolve(process.env.OPENCODE_CONFIG));
-  if (process.env.OPENCODE_CONFIG_DIR) {
-    const dir = resolve(process.env.OPENCODE_CONFIG_DIR);
-    openConfigs.push(join(dir, 'opencode.json'), join(dir, 'opencode.jsonc'));
-    addSkillRoot(join(dir, 'skills'), open, found);
-    addSkillRoot(join(dir, 'skill'), open, found);
-  }
   for (const configFile of [...new Set(openConfigs)]) {
-    const config = readJson(configFile, open, 'MCP/instruction config');
+    const config = readJson(configFile, open, 'MCP/skill permission config');
     addServers(config.mcp, openServers);
-    if (Array.isArray(config.instructions)) for (const instruction of config.instructions) {
-      if (typeof instruction !== 'string') continue;
-      if (/[*?\[\]]|^https?:\/\//.test(instruction)) open.warnings.push('A glob or remote instruction source is not counted.');
-      else addRule(resolve(cwd, instruction), open, 'configured instruction');
+    const skillPermission = object(config.permission).skill;
+    if (typeof skillPermission === 'string' && ['allow', 'ask', 'deny'].includes(skillPermission)) { permissions.clear(); permissions.set('*', skillPermission); }
+    else if (skillPermission !== undefined && (typeof skillPermission !== 'object' || skillPermission === null || Array.isArray(skillPermission))) complexPermissions = true;
+    else for (const [name, value] of Object.entries(object(skillPermission))) {
+      if ((name === '*' || !/[*?\[\]{}]/.test(name)) && typeof value === 'string' && ['allow', 'ask', 'deny'].includes(value)) { permissions.delete(name); permissions.set(name, value); }
+      else complexPermissions = true;
     }
   }
-  if (process.env.OPENCODE_CONFIG_CONTENT) open.warnings.push('OPENCODE_CONFIG_CONTENT is not inspected; counts may be incomplete.');
-  addRule(join(openHome, 'AGENTS.md'), open);
-  if (!existsSync(join(openHome, 'AGENTS.md'))) addRule(join(home, '.claude', 'CLAUDE.md'), open);
-  const projectInstructions = [...dirs].reverse().find((dir) => existsSync(join(dir, 'AGENTS.md')) || existsSync(join(dir, 'CLAUDE.md')));
-  if (projectInstructions) addRule(join(projectInstructions, existsSync(join(projectInstructions, 'AGENTS.md')) ? 'AGENTS.md' : 'CLAUDE.md'), open);
+  for (const { capability, listings } of found.values()) if (disabledSkills.get(canonicalSkillPath(capability.source))) {
+    const entry = listings.get('Codex:');
+    codex.skills = codex.skills.filter((s) => s !== entry);
+  }
+  const openNames = new Map<Listing, string>();
+  for (const skill of found.values()) {
+    const entry = skill.listings.get('OpenCode:');
+    if (entry) openNames.set(entry, skill.capability.name);
+  }
+  open.skills = [...new Map(open.skills.map((s) => [openNames.get(s)!, s]))].filter(([skillName]) => {
+    let permission = 'allow';
+    for (const [name, value] of permissions) if (name === '*' || name === skillName) permission = value;
+    return permission !== 'deny';
+  }).map(([, entry]) => entry);
+  const active = new Set(hosts.flatMap((h) => h.skills));
+  for (const [path, skill] of found) if (![...skill.listings.values()].some((s) => active.has(s))) found.delete(path);
   for (let i = 0; i < hosts.length; i++) {
     const host = hosts[i]!;
-    host.servers = [...serverMaps[i]!].filter(([, c]) => object(c).enabled !== false && object(c).disabled !== true).map(([name]) => ({ name: clean(name), schemaTokens: null }));
-    host.estimatedTokens = [...host.skills, ...host.listings].reduce((sum, s) => sum + s.tokens, 0) + host.rules.reduce((sum, r) => sum + (r.tokens ?? 0), 0);
+    host.servers = [...serverMaps[i]!].filter(([, c]) => object(c).enabled !== false && object(c).disabled !== true).map(([name]) => ({ name: clean(name) }));
+    host.descriptionCharacters = host.skills.reduce((sum, s) => sum + s.characters, 0);
+    host.estimatedTokens = Math.ceil(host.descriptionCharacters / 4);
+    host.budget = listingBudget(host);
   }
   let library: Capability[];
   try { library = scanLibrary(paths.library()); } catch { throw new Error('Could not read the loadout library; the comparison is unavailable.'); }
   const descriptions = new Map([...found].map(([path, skill]) => [path, skill.capability]));
   for (const c of library) if (c.kind === 'skill') descriptions.set(realpathSync(c.source), c);
-  const picks = [...descriptions.values()].map((s) => listing(s.name, s.description).tokens).sort((a, b) => b - a).slice(0, DEFAULT_CONFIG.maxSkills);
+  const picks = [...descriptions.values()].map((s) => listing(s.name, s.description).tokens).sort((a, b) => b - a).slice(0, Math.min(3, DEFAULT_CONFIG.maxSkills));
   const toolBudget = await toolTokens(library);
   const skillBudget = picks.reduce((a, b) => a + b, 0);
   const report: AuditReport = {
-    method: 'Estimate: 4 characters per token; skill/command/agent listings use "name: description", always-on rules use their body, loadout tools use serialized definitions.',
+    method: 'Inventory estimate: "name: description" at 4 characters per token. Budget fit uses complete descriptions, smallest first; Codex includes manifest paths. Hosts can shorten descriptions or omit entries.',
     hosts,
     loadout: { toolTokens: toolBudget, pickedSkills: picks.length, skillTokens: skillBudget, estimatedTokens: toolBudget + skillBudget },
     summary: '',
     caveats: [
-      'These are installed listing/rule estimates per request, not measured input tokens. Hosts may cap, truncate, disable, shadow or defer listings; project configs may require trust. B1 measures actual overhead.',
-      'MCP schemas are not counted: these host configs contain connection settings, not offline tool definitions. No servers are started or contacted.',
-      'loadout comparison uses its real MCP tools plus up to 3 largest found skill descriptions, an upper bound for those descriptions; it excludes loaded bodies, optional suggestions, server instructions and selected native MCP schemas.',
-      'Cursor UI user rules and managed/remote host settings are not inspected. Conditional rule bodies are not counted.',
-      'Codex/Cursor plugin registries are not verified by this scanner; cached plugin skills outside the listed native skill directories are not counted.',
+      'Inventory is not request overhead: hosts cap/truncate listings; B1 measures actual overhead. Locally disabled skills are excluded; project configs may require trust.',
+      'MCP schemas and claude.ai connectors are not counted; no servers were started or contacted. Codex/Cursor plugin caches are not inspected.',
+      'loadout comparison covers real tool definitions plus up to 3 largest descriptions; bodies, suggestions and instructions are excluded.',
+      ...(complexPermissions ? ['OpenCode: permissions not applied for complex rules; inventory may include denied skills.'] : []),
     ],
   };
   if (adopt) {
@@ -369,23 +409,23 @@ export async function audit(cwd = process.cwd(), adopt = false): Promise<AuditRe
       report.adopted.skipped += result.skipped.length;
     }
     report.disable = [
-      'Claude Code: move adopted user/project skill folders out of skills directories; disable their plugins in /plugin or enabledPlugins settings. Plugin commands/agents and MCP need separate disabling.',
-      'Codex: move adopted folders out of CODEX_HOME/skills, ~/.agents/skills and project .agents/skills; set enabled = false in the relevant [mcp_servers.*] table if you also retire a server.',
-      'OpenCode: move adopted folders out of .opencode/skills, ~/.config/opencode/skills and compatible .claude/.agents skill directories (including config overrides); set enabled: false for MCP entries you retire.',
-      'Cursor: move adopted folders out of user/project .cursor/skills and compatible .claude/.codex directories; disable retired MCP servers in Cursor settings. Rules remain separate.',
-      'Copies keep provenance and resources; no host configuration was changed. Only skills were adopted, not rules, commands, agents or MCP servers.',
+      'Claude Code: move adopted skill folders out of discovery directories; disable their plugins in /plugin or enabledPlugins.',
+      'Codex: disable adopted skills with [[skills.config]] path and enabled=false entries.',
+      'OpenCode: deny adopted skill names under permission.skill, or move their folders out of discovery directories.',
+      'Cursor: move adopted folders out of .cursor/.claude/.codex/.agents skill directories at user and project scope.',
     ];
   }
-  report.summary = `Listing/rule estimates per request: ${hosts.map((h) => `${h.host}: ${h.skills.length} skills, ${h.servers.length} MCP, ~${h.estimatedTokens} tokens`).join('; ')}; loadout: ~${report.loadout.estimatedTokens} tokens (tools + up to 3 descriptions; MCP schemas uncounted).`;
+  report.summary = `Local skill inventory: ${hosts.map((h) => `${h.host}: ${h.skills.length} skills, ${h.servers.length} MCP, ${h.descriptionCharacters} description chars, ~${h.estimatedTokens} tokens`).join('; ')}. Hosts cap/truncate listings; these totals are not request overhead. MCP schemas/connectors not counted.`;
   return report;
 }
 
 export function formatAudit(report: AuditReport): string {
-  const lines = [report.summary, report.method];
+  const lines = [report.summary, `loadout comparison: ~${report.loadout.estimatedTokens} tokens (${report.loadout.toolTokens} tokens for real tool definitions + ${report.loadout.skillTokens} for up to ${report.loadout.pickedSkills} descriptions).`, report.method];
   for (const host of report.hosts) {
-    lines.push(`\n${host.host}: ${host.skills.length} skills, ${host.listings.length} command/agent descriptions, ${host.rules.length} rules, ${host.servers.length} MCP servers; ~${host.estimatedTokens} counted tokens/request`);
+    lines.push(`\n${host.host}: ${host.skills.length} skills, ${host.descriptionCharacters} description characters, ~${host.estimatedTokens} inventory tokens; ${host.servers.length} MCP servers`);
+    lines.push(host.budget.characters === null ? `  ${host.budget.note}` : `  Listing budget: ${host.budget.characters} characters; at most ~${host.budget.fullSkills} full skills fit (${host.host === 'Codex' ? 'paths included' : 'name/description estimate'}). ${host.budget.note}. Source: ${host.budget.source}`);
+    if (host.listings.length) lines.push(`  Separate command/agent inventory: ${host.listings.length} descriptions, ${host.listings.reduce((sum, s) => sum + s.characters, 0)} characters.`);
     for (const entry of [...host.skills, ...host.listings]) lines.push(`  ${entry.name}: ${entry.description} (~${entry.tokens} tokens)`);
-    for (const rule of host.rules) lines.push(`  rule ${rule.name}: ${rule.tokens === null ? 'not counted (conditional body)' : `~${rule.tokens} tokens`}`);
     for (const server of host.servers) lines.push(`  MCP ${server.name}: not counted (schemas unavailable offline)`);
     for (const warning of host.warnings) lines.push(`  warning: ${warning}`);
   }

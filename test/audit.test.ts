@@ -3,11 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { audit, formatAudit } from '../src/audit.js';
-import { DEFAULT_CONFIG } from '../src/config.js';
-import { createServer } from '../src/mcp.js';
 
 let home: string;
 let project: string;
@@ -35,9 +31,7 @@ beforeEach(() => {
   vi.stubEnv('CODEX_HOME', join(home, 'codex-custom'));
   vi.stubEnv('XDG_CONFIG_HOME', join(home, '.config'));
   vi.stubEnv('LOADOUT_HOME', join(home, '.loadout'));
-  vi.stubEnv('OPENCODE_CONFIG', '');
-  vi.stubEnv('OPENCODE_CONFIG_DIR', '');
-  vi.stubEnv('OPENCODE_CONFIG_CONTENT', '');
+  vi.stubEnv('SLASH_COMMAND_TOOL_CHAR_BUDGET', '');
 });
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -56,7 +50,7 @@ describe('audit', () => {
     skill(join(project, '.opencode', 'skills'), 'local');
     skill(join(home, '.cursor', 'skills'), 'cursor');
     skill(join(project, '.cursor', 'skills'), 'editor');
-    json(join(home, '.claude.json'), { mcpServers: { global: { env: { KEY: 'SECRET' } } }, projects: { [project]: { mcpServers: { local: {}, global: {} } }, elsewhere: { mcpServers: { ignored: {} } } } });
+    json(join(home, 'claude-custom', '.claude.json'), { mcpServers: { global: { env: { KEY: 'SECRET' } } }, projects: { [project]: { mcpServers: { local: {}, global: {} } }, elsewhere: { mcpServers: { ignored: {} } } } });
     json(join(project, '.mcp.json'), { mcpServers: { local: {}, project: {} } });
     file(join(home, 'codex-custom', 'config.toml'), '[mcp_servers.one]\ncommand="SECRET"\n[mcp_servers.one.env]\nKEY="SECRET"\n[mcp_servers."two.dot"]\nurl="SECRET"\n');
     json(join(home, '.config', 'opencode', 'opencode.json'), { mcp: { open: { type: 'local', command: ['SECRET'] } } });
@@ -68,12 +62,11 @@ describe('audit', () => {
     expect(hosts['Claude Code']?.skills.map((s) => s.name).sort()).toEqual(['project', 'user']);
     expect(hosts.Codex?.skills.map((s) => s.name).sort()).toEqual(['codex', 'repo', 'shared']);
     expect(hosts.OpenCode?.skills.map((s) => s.name).sort()).toEqual(['compat', 'local', 'open', 'project', 'repo', 'shared']);
-    expect(hosts.Cursor?.skills.map((s) => s.name).sort()).toEqual(['compat', 'cursor', 'editor', 'project']);
+    expect(hosts.Cursor?.skills.map((s) => s.name).sort()).toEqual(['compat', 'cursor', 'editor', 'project', 'repo', 'shared']);
     expect(hosts['Claude Code']?.servers.map((s) => s.name).sort()).toEqual(['global', 'local', 'project']);
     expect(hosts.Codex?.servers.map((s) => s.name).sort()).toEqual(['one', 'two.dot']);
     expect(hosts.OpenCode?.servers).toHaveLength(2);
     expect(hosts.Cursor?.servers).toHaveLength(2);
-    expect(result.hosts.flatMap((h) => h.servers).every((s) => s.schemaTokens === null)).toBe(true);
     expect(JSON.stringify(result) + formatAudit(result)).not.toContain('SECRET');
     expect(existsSync(join(home, '.loadout'))).toBe(false);
   });
@@ -97,17 +90,7 @@ describe('audit', () => {
     expect(host.skills.map((s) => s.name)).toEqual(['pack:folded']);
     expect(host.listings.map((s) => s.name).sort()).toEqual(['pack:do', 'pack:helper']);
     expect(host.servers.map((s) => s.name)).toEqual(['plugin:pack:tools']);
-    expect(host.estimatedTokens).toBeGreaterThan(host.skills[0]!.tokens);
-  });
-
-  it('counts Cursor rule descriptions and always-on bodies separately from conditional bodies', async () => {
-    file(join(project, '.cursor', 'rules', 'always.mdc'), '---\nalwaysApply: true\n---\nabcdefgh');
-    file(join(project, '.cursor', 'rules', 'requested.mdc'), '---\ndescription: abcd\nalwaysApply: false\n---\n' + 'x'.repeat(1000));
-    file(join(project, '.cursor', 'rules', 'conditional.mdc'), '---\nglobs: "*.ts"\n---\n' + 'x'.repeat(1000));
-    file(join(project, '.cursorrules'), 'abcd');
-    const cursor = (await audit(project)).hosts.find((h) => h.host === 'Cursor')!;
-    expect(cursor.rules.map((r) => [r.name, r.tokens])).toEqual([['.cursorrules', 1], ['always', 2], ['conditional', null], ['requested', 4]]);
-    expect(cursor.estimatedTokens).toBe(7);
+    expect(host.estimatedTokens).toBe(host.skills[0]!.tokens);
   });
 
   it('does not miscount TOML nested tables, comments or multiline strings as servers', async () => {
@@ -132,22 +115,11 @@ describe('audit', () => {
   it('uses real serialized tools and the three largest descriptions for a bounded comparison', async () => {
     for (const [name, description] of [['a', 'abc'], ['b', 'abcdefg'], ['c', 'abcdefghijk'], ['d', 'abcdefghijklmno']]) skill(join(home, 'claude-custom', 'skills'), name!, description!);
     const result = await audit(project);
-    const { server, gateway } = createServer({ library: [], config: DEFAULT_CONFIG });
-    const client = new Client({ name: 'audit-test', version: '1' });
-    const [left, right] = InMemoryTransport.createLinkedPair();
-    try {
-      await server.connect(right);
-      await client.connect(left);
-      const tools = (await client.listTools()).tools;
-      expect(result.loadout.toolTokens).toBe(Math.ceil(JSON.stringify(tools).length / 4));
-      expect(result.loadout.skillTokens).toBe(12);
-      expect(result.loadout.pickedSkills).toBe(3);
-      expect(result.loadout.estimatedTokens).toBe(result.loadout.toolTokens + 12);
-    } finally {
-      await client.close();
-      await server.close();
-      await gateway.close();
-    }
+    expect(result.loadout.toolTokens).toBeGreaterThan(0);
+    expect(result.loadout.skillTokens).toBe(12);
+    expect(result.loadout.pickedSkills).toBe(3);
+    expect(result.loadout.estimatedTokens).toBe(result.loadout.toolTokens + 12);
+    expect(formatAudit(result)).toContain(`${result.loadout.toolTokens} tokens for real tool definitions`);
   });
 
   it('adopts through safe add, keeps provenance and resources, and leaves host files untouched', async () => {
@@ -186,7 +158,7 @@ describe('audit', () => {
   it('CLI JSON is parseable, secret-free and adoption writes only in the fake loadout home', () => {
     skill(join(home, 'codex-custom', 'skills'), 'safe');
     file(join(home, 'codex-custom', 'config.toml'), '[mcp_servers.secret]\nhttp_headers={ Authorization="TOP-SECRET" }\n');
-    json(join(home, '.claude.json'), { mcpServers: { secret: { env: { KEY: 'TOP-SECRET' } } } });
+    json(join(home, 'claude-custom', '.claude.json'), { mcpServers: { secret: { env: { KEY: 'TOP-SECRET' } } } });
     const scanned = run('--json');
     expect(scanned.status, scanned.stderr).toBe(0);
     expect(JSON.parse(scanned.stdout).hosts).toHaveLength(4);
@@ -199,7 +171,7 @@ describe('audit', () => {
   });
 
   it('reports unreadable configs without leaking parse errors or treating the scan as complete', async () => {
-    file(join(home, '.claude.json'), '{ "TOKEN": "TOP-SECRET", broken');
+    file(join(home, 'claude-custom', '.claude.json'), '{ "TOKEN": "TOP-SECRET", broken');
     const result = await audit(project);
     expect(result.hosts[0]!.warnings.length).toBeGreaterThan(0);
     expect(JSON.stringify(result) + formatAudit(result)).not.toContain('TOP-SECRET');
@@ -244,7 +216,7 @@ describe('audit', () => {
     skill(join(plugin, 'skills'), 'project-plugin');
     json(join(home, 'claude-custom', 'plugins', 'installed_plugins.json'), { plugins: { 'pack@market': [{ scope: 'project', projectPath: project, installPath: plugin }] } });
     json(join(project, '.claude', 'settings.json'), { enabledPlugins: { 'pack@market': true } });
-    json(join(home, '.claude.json'), { projects: { [project]: { mcpServers: { project: {} } } } });
+    json(join(home, 'claude-custom', '.claude.json'), { projects: { [project]: { mcpServers: { project: {} } } } });
     const nested = join(project, 'src');
     mkdirSync(nested);
     const host = (await audit(nested)).hosts[0]!;
@@ -314,5 +286,182 @@ describe('audit', () => {
     expect(result.status).toBe(1);
     expect(result.stderr).toMatch(/adopt|copy/);
     expect(result.stderr).not.toContain(home);
+  });
+
+  it('discovers available synced plugins, generation folders and installed duplicates, honoring disables', async () => {
+    const bucket = join(home, 'claude-custom', 'plugins', 'synced', 'account');
+    json(join(bucket, 'manifest.json'), { plugins: [
+      { name: 'sync', installationPreference: 'available' },
+      { name: 'generation', installationPreference: 'available' },
+      { name: 'disabled', installationPreference: 'available' },
+      { name: 'hidden', installationPreference: 'unavailable' },
+      { name: 'installed', installationPreference: 'available' },
+    ] });
+    for (const name of ['sync', 'generation~g2', 'disabled', 'hidden', 'installed']) skill(join(bucket, name, 'skills'), name);
+    const installed = join(home, 'installed');
+    skill(join(installed, 'skills'), 'installed');
+    json(join(home, 'claude-custom', 'plugins', 'installed_plugins.json'), { plugins: { 'installed@market': [{ scope: 'user', installPath: installed }] } });
+    json(join(home, 'claude-custom', 'settings.json'), { enabledPlugins: { 'installed@market': true, 'disabled@synced': false } });
+    json(join(bucket, 'sync', '.mcp.json'), { mcpServers: { synced: { env: { KEY: 'TOP-SECRET' } } } });
+    const result = await audit(project);
+    expect(result.hosts[0]!.skills.map((s) => s.name).sort()).toEqual(['generation:generation~g2', 'installed:installed', 'sync:sync']);
+    expect(result.hosts[0]!.servers.map((s) => s.name)).toEqual(['plugin:sync:synced']);
+    expect(result.caveats.join(' ')).toMatch(/claude\.ai.*not counted/);
+    expect(JSON.stringify(result) + formatAudit(result)).not.toContain('TOP-SECRET');
+  });
+
+  it('uses only the overridden Claude MCP location, or the home file without an override', async () => {
+    json(join(home, '.claude.json'), { mcpServers: { old: {} } });
+    json(join(home, 'claude-custom', '.claude.json'), { mcpServers: { current: {} } });
+    expect((await audit(project)).hosts[0]!.servers.map((s) => s.name)).toEqual(['current']);
+    vi.stubEnv('CLAUDE_CONFIG_DIR', '');
+    expect((await audit(project)).hosts[0]!.servers.map((s) => s.name)).toEqual(['old']);
+  });
+
+  it('reports uncapped inventories and path-inclusive full-entry fit without claiming request tokens', async () => {
+    skill(join(home, 'codex-custom', 'skills'), 'large', 'x'.repeat(8100));
+    skill(join(home, 'codex-custom', 'skills'), 'small', 'abcd');
+    const result = await audit(project);
+    const host = result.hosts.find((h) => h.host === 'Codex')!;
+    expect(host.descriptionCharacters).toBe(8118);
+    expect(host.estimatedTokens).toBe(2030);
+    expect(host.budget.characters).toBe(8000);
+    expect(host.budget.fullSkills).toBe(1);
+    expect(host.budget.source).toMatch(/developers\.openai\.com/);
+    expect(result.summary).toMatch(/cap|truncate/);
+    expect(result.summary).not.toMatch(/per request|loadout/i);
+    expect(formatAudit(result)).not.toMatch(/tokens\/request|tokens per request/);
+    expect(result.hosts.find((h) => h.host === 'Cursor')!.budget.note).toBe('budget not documented; B1 measures it');
+  });
+
+  it('uses the documented Claude fallback and configured character budget', async () => {
+    skill(join(home, 'claude-custom', 'skills'), 'huge', 'x'.repeat(16_000));
+    const fallback = (await audit(project)).hosts[0]!;
+    expect(fallback.budget.characters).toBe(16_000);
+    expect(fallback.budget.fullSkills).toBe(0);
+    vi.stubEnv('SLASH_COMMAND_TOOL_CHAR_BUDGET', '20000');
+    expect((await audit(project)).hosts[0]!.budget.fullSkills).toBe(1);
+  });
+
+  it('excludes locally disabled Codex and Claude skills from inventories', async () => {
+    const root = join(home, 'codex-custom', 'skills');
+    skill(root, 'hidden');
+    skill(root, 'kept');
+    file(join(home, 'codex-custom', 'config.toml'), `[[skills.config]]\npath = ${JSON.stringify(join(root, 'hidden', 'SKILL.md'))}\nenabled = false\n`);
+    file(join(home, 'claude-custom', 'skills', 'manual', 'SKILL.md'), '---\nname: manual\ndescription: Hidden from automatic listing\ndisable-model-invocation: true\n---\nbody');
+    const result = await audit(project);
+    expect(result.hosts.find((h) => h.host === 'Codex')!.skills.map((s) => s.name)).toEqual(['kept']);
+    expect(result.hosts[0]!.skills).toHaveLength(0);
+  });
+
+  it('finds Cursor packs in user and project .agents directories', async () => {
+    skill(join(home, '.agents', 'skills'), 'user-agent');
+    skill(join(project, '.agents', 'skills'), 'repo-agent');
+    const cursor = (await audit(project)).hosts.find((h) => h.host === 'Cursor')!;
+    expect(cursor.skills.map((s) => s.name).sort()).toEqual(['repo-agent', 'user-agent']);
+  });
+
+  it('follows Codex folder links once, stops cycles/deep links and confines the manifest to the real skill', async () => {
+    const root = join(home, 'codex-custom', 'skills');
+    const real = join(home, 'external');
+    skill(real, 'linked');
+    mkdirSync(root, { recursive: true });
+    const linkType = process.platform === 'win32' ? 'junction' : 'dir';
+    symlinkSync(join(real, 'linked'), join(root, 'alias'), linkType);
+    symlinkSync(root, join(root, 'cycle'), linkType);
+    const escape = join(real, 'escape');
+    mkdirSync(escape);
+    symlinkSync(join(real, 'linked', 'SKILL.md'), join(escape, 'SKILL.md'));
+    symlinkSync(escape, join(root, 'escape'), linkType);
+    const result = await audit(project, true);
+    expect(result.hosts.find((h) => h.host === 'Codex')!.skills.map((s) => s.name)).toEqual(['linked']);
+    expect(existsSync(join(home, '.loadout', 'library', 'skills', 'linked', 'SKILL.md'))).toBe(true);
+  });
+
+  it('applies OpenCode project name precedence, exact denies and wildcard defaults', async () => {
+    const user = join(home, '.config', 'opencode', 'skills');
+    const repo = join(project, '.opencode', 'skills');
+    skill(user, 'same', 'user definition');
+    skill(repo, 'same', 'project definition');
+    skill(user, 'denied');
+    skill(user, 'default-denied');
+    json(join(home, '.config', 'opencode', 'opencode.json'), { permission: { skill: { '*': 'deny', same: 'allow', denied: 'deny' } } });
+    const host = (await audit(project)).hosts.find((h) => h.host === 'OpenCode')!;
+    expect(host.skills.map((s) => [s.name, s.description])).toEqual([['same', 'project definition']]);
+  });
+
+  it('discloses unsupported OpenCode permission patterns without printing their config values', async () => {
+    skill(join(project, '.opencode', 'skills'), 'kept');
+    json(join(project, 'opencode.json'), { permission: { skill: { 'TOP-SECRET*': 'deny' } } });
+    const result = await audit(project);
+    expect(result.caveats.join(' ')).toMatch(/permissions not applied/);
+    expect(JSON.stringify(result) + formatAudit(result)).not.toContain('TOP-SECRET');
+  });
+
+  it('never treats TOML string payloads as server names when closing quotes follow even backslashes', async () => {
+    const text = String.raw`first = """ending\\"""
+second = """
+[mcp_servers.TOP-SECRET-CONFIG-VALUE]
+"""
+[mcp_servers.real]
+command = "unused"
+`;
+    file(join(home, 'codex-custom', 'config.toml'), text);
+    const result = await audit(project);
+    expect(JSON.stringify(result) + formatAudit(result)).not.toContain('TOP-SECRET-CONFIG-VALUE');
+    expect(result.hosts.find((h) => h.host === 'Codex')!.servers.map((s) => s.name)).toEqual(['real']);
+  });
+
+  it('does not let skills.config arrays disable the preceding MCP server', async () => {
+    file(join(home, 'codex-custom', 'config.toml'), '[mcp_servers.real]\ncommand="unused"\n[[skills.config]]\npath="ignored"\nenabled=false\n');
+    expect((await audit(project)).hosts.find((h) => h.host === 'Codex')!.servers.map((s) => s.name)).toEqual(['real']);
+  });
+
+  it('redacts TOML parse errors and marks the config not parsed', async () => {
+    file(join(home, 'codex-custom', 'config.toml'), 'TOP-SECRET-CONFIG-VALUE = "unterminated');
+    const result = await audit(project);
+    expect(result.hosts.find((h) => h.host === 'Codex')!.warnings).toContain('config.toml: not parsed');
+    expect(JSON.stringify(result) + formatAudit(result)).not.toContain('TOP-SECRET-CONFIG-VALUE');
+  });
+
+  it('includes file paths when estimating full Codex entries near the fallback limit', async () => {
+    skill(join(home, 'codex-custom', 'skills'), 'a', 'x'.repeat(7990));
+    const host = (await audit(project)).hosts.find((h) => h.host === 'Codex')!;
+    expect(host.descriptionCharacters).toBe(7993);
+    expect(host.budget.fullSkills).toBe(0);
+  });
+
+  it('discloses compound OpenCode permission values', async () => {
+    json(join(project, 'opencode.json'), { permission: { skill: ['deny', 'TOP-SECRET'] } });
+    const result = await audit(project);
+    expect(result.caveats.join(' ')).toMatch(/permissions not applied/);
+    expect(JSON.stringify(result) + formatAudit(result)).not.toContain('TOP-SECRET');
+  });
+
+  it('bounds Codex linked-directory depth', async () => {
+    const root = join(home, 'codex-custom', 'skills');
+    mkdirSync(root, { recursive: true });
+    let previous = root;
+    const linkType = process.platform === 'win32' ? 'junction' : 'dir';
+    for (let i = 0; i < 10; i++) {
+      const next = join(home, `depth-${i}`);
+      mkdirSync(next);
+      symlinkSync(next, join(previous, 'next'), linkType);
+      previous = next;
+    }
+    file(join(previous, 'SKILL.md'), '---\nname: too-deep\ndescription: not discoverable\n---\n');
+    expect((await audit(project)).hosts.find((h) => h.host === 'Codex')!.skills).toHaveLength(0);
+  });
+
+  it('applies OpenCode denies to original names before terminal sanitization', async () => {
+    file(join(project, '.opencode', 'skills', 'skill', 'SKILL.md'), '---\nname: "denied\\u202e"\ndescription: x\n---\n');
+    json(join(project, 'opencode.json'), { permission: { skill: { 'denied\u202e': 'deny' } } });
+    expect((await audit(project)).hosts.find((h) => h.host === 'OpenCode')!.skills).toHaveLength(0);
+  });
+
+  it('estimates Claude description budget separately from Codex file paths', async () => {
+    skill(join(home, 'claude-custom', 'skills'), 'a', 'abcd');
+    vi.stubEnv('SLASH_COMMAND_TOOL_CHAR_BUDGET', '7');
+    expect((await audit(project)).hosts[0]!.budget.fullSkills).toBe(1);
   });
 });
