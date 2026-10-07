@@ -434,8 +434,8 @@ Starting points from Sol's review (2026-10-07):
 **E9. Security hardening.**
 
 Acceptance:
-- Reports allow only MCP type, command, cwd, URL origin/path and env/header keys.
-- Codex MCP credentials stay in the library and server process, absent from
+- Reports allow only MCP type, command, cwd, URL origin and env/header keys.
+- Relayed MCP credentials stay in the library and server process, absent from
   agent argv, environment and session files. Library keys are validated.
 - Public HTTP servers retain native Codex OAuth. Relays support credential-bearing
   URLs, negotiated protocol versions and recoverable request errors with bounded,

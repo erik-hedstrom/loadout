@@ -40,7 +40,7 @@ export function reportJson(value: unknown): string {
     if (server.url) {
       try {
         const parsed = new URL(server.url);
-        url = parsed.origin + parsed.pathname;
+        url = parsed.origin;
       } catch { url = '[invalid URL]'; }
     }
     return {

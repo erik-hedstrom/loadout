@@ -26,7 +26,7 @@ export function relay(front: Transport, back: Transport, secrets: string[] = [])
     back.onclose = () => finish(new Error('MCP server closed the connection'));
     const forward = (source: Transport, target: Transport, message: JSONRPCMessage) => {
       void target.send(message).catch((error: unknown) => {
-        if ('id' in message) void source.send({ jsonrpc: '2.0', id: message.id, error: { code: -32603, message: detail(error) } }).catch(report);
+        if ('method' in message && 'id' in message) void source.send({ jsonrpc: '2.0', id: message.id, error: { code: -32603, message: detail(error) } }).catch(report);
         else report(error);
       });
     };
@@ -51,23 +51,35 @@ export async function launchMcp(key: string, libraryDir: string): Promise<void> 
   const name = key.slice(4);
   if (!Object.hasOwn(servers, name)) throw new Error('mcp-launch requires a library MCP server key');
   const { description, autoApprove, gateway, ...server } = servers[name]!;
-  const secrets = [...Object.values(server.env ?? {})];
+  const secrets = [
+    ...Object.values(server.env ?? {}),
+    ...Object.values(server.headers ?? {}).flatMap((value) => [value, ...value.split(/\s+/).filter((part) => part.length >= 8)]),
+    ...(server.url ? [server.url] : []),
+  ];
   let back: Transport;
   if (server.url) {
     let url: URL;
     try { url = new URL(server.url); }
-    catch { throw new Error('invalid MCP HTTP URL; put credentials in headers'); }
+    catch { throw new Error('invalid MCP HTTP URL'); }
     if (server.type === 'sse') throw new Error('mcp-launch requires Streamable HTTP, not SSE');
-    const headers = new Headers(server.headers);
-    secrets.push(server.url, ...url.searchParams.values());
+    const headers = new Headers();
+    for (const [name, value] of Object.entries(server.headers ?? {})) {
+      try { headers.set(name, value); }
+      catch { throw new Error(`invalid header value for ${name}`); }
+    }
+    secrets.push(...[...url.searchParams.values()].filter((value) => value.length >= 8));
     if (url.username || url.password) {
       const user = decodeURIComponent(url.username);
       const password = decodeURIComponent(url.password);
       secrets.push(user, password);
-      if (!headers.has('Authorization')) headers.set('Authorization', `Basic ${Buffer.from(`${user}:${password}`).toString('base64')}`);
+      if (!headers.has('Authorization')) {
+        const credential = Buffer.from(`${user}:${password}`).toString('base64');
+        const value = `Basic ${credential}`;
+        secrets.push(value, ...(credential.length >= 8 ? [credential] : []));
+        headers.set('Authorization', value);
+      }
       url.username = url.password = '';
     }
-    for (const value of headers.values()) secrets.push(value, ...value.split(/\s+/).filter((part) => part.length >= 8));
     back = new StreamableHTTPClientTransport(url, { requestInit: { headers } });
   } else {
     if (!server.command) throw new Error('library MCP server has no command');

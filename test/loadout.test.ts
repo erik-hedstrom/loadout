@@ -14,6 +14,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { createServer as createHttpServer, request } from 'node:http';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { EmptyResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { addSkills, parseGitHub, parseSkill as parseSkillDir, scanLibrary } from '../src/library.js';
 import { bm25, prefilter } from '../src/prefilter.js';
 import { mentionedSkills, NONE, optionKeys, route } from '../src/route.js';
@@ -166,6 +167,57 @@ describe('E9 security', () => {
     } finally { await Promise.all([host.close(), server.close()]); }
   });
 
+  it('does not send an error back to the host when forwarding its response fails', async () => {
+    const { client: fake } = fakeClient({});
+    const { server } = createServer({ library: [], config, client: fake });
+    const [hostTransport, front] = InMemoryTransport.createLinkedPair();
+    const [back, serverTransport] = InMemoryTransport.createLinkedPair();
+    const host = new Client({ name: 'response-test', version: '0.0.1' });
+    await server.connect(serverTransport);
+    const completed = relay(front, back);
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      await host.connect(hostTransport);
+      const received: unknown[] = [];
+      const onmessage = hostTransport.onmessage!;
+      hostTransport.onmessage = (message, extra) => { received.push(message); onmessage(message, extra); };
+      const send = back.send.bind(back);
+      vi.spyOn(back, 'send').mockImplementation((message, options) => 'method' in message ? send(message, options) : Promise.reject(new Error('response forward failed')));
+      await expect(server.server.request({ method: 'ping' }, EmptyResultSchema, { timeout: 100 })).rejects.toThrow('Request timed out');
+      expect(received).toContainEqual(expect.objectContaining({ method: 'ping' }));
+      expect(received).not.toContainEqual(expect.objectContaining({ error: expect.anything() }));
+      expect(log).toHaveBeenCalledWith('loadout: response forward failed');
+    } finally {
+      vi.restoreAllMocks();
+      await host.close();
+      await completed;
+      await server.close();
+    }
+  });
+
+  it.each(['\n', '\r', '\0'])('reports invalid Authorization values without leaking any credential component (%j)', async (separator) => {
+    const home = tempDir('loadout-e9-invalid-header-');
+    mkdirSync(join(home, 'library'));
+    writeFileSync(join(home, 'library/mcp.json'), JSON.stringify({ mcpServers: { invalid: { url: 'https://example.invalid/mcp', headers: { Authorization: `Bearer e9-first-canary${separator}e9-second-canary` }, description: 'Playwright' } } }));
+    await runRoute(scanLibrary(join(home, 'library')));
+    const result = spawnSync(process.execPath, ['--import', 'tsx', join(import.meta.dirname, '../src/cli.ts'), 'mcp-launch', 'mcp:invalid'], { encoding: 'utf8', env: { ...process.env, LOADOUT_HOME: home } });
+    expect(result.status).toBe(1);
+    expect(result.stdout).toBe('');
+    expect(result.stdout + result.stderr).not.toMatch(/Bearer|e9-first-canary|e9-second-canary/);
+    expect(result.stderr.trim()).toBe('loadout: invalid header value for Authorization');
+  });
+
+  it('reports invalid HTTP URLs without header guidance or credentials', async () => {
+    const home = tempDir('loadout-e9-invalid-url-');
+    mkdirSync(join(home, 'library'));
+    writeFileSync(join(home, 'library/mcp.json'), JSON.stringify({ mcpServers: { invalid: { url: 'https://[e9-url-canary', description: 'Playwright' } } }));
+    await runRoute(scanLibrary(join(home, 'library')));
+    const result = spawnSync(process.execPath, ['--import', 'tsx', join(import.meta.dirname, '../src/cli.ts'), 'mcp-launch', 'mcp:invalid'], { encoding: 'utf8', env: { ...process.env, LOADOUT_HOME: home } });
+    expect(result.status).toBe(1);
+    expect(result.stdout).toBe('');
+    expect(result.stderr.trim()).toBe('loadout: invalid MCP HTTP URL');
+  });
+
   it.each(['headers', 'query', 'userinfo'])('sends HTTP %s credentials only from the relay to the local MCP server', async (mode) => {
     const home = tempDir('loadout-e9-http-');
     const secret = 'e9-http-header-secret';
@@ -249,7 +301,7 @@ describe('E9 security', () => {
       if (message.method === 'notifications/initialized') { res.writeHead(202).end(); return; }
       if (message.method === 'tools/call' && !failed) {
         failed = true;
-        res.writeHead(status).end(`upstream rejected ${status === 401 ? secret : JSON.stringify(secret)} -y mcp`);
+        res.writeHead(status).end(`upstream rejected ${status === 401 ? secret : JSON.stringify(secret)} -y mcp json 1 e9-query-secret`);
         return;
       }
       const result = message.method === 'initialize'
@@ -262,7 +314,7 @@ describe('E9 security', () => {
     await new Promise<void>((resolve) => { http.listen(0, '127.0.0.1', resolve); });
     const port = (http.address() as { port: number }).port;
     mkdirSync(join(home, 'library'));
-    writeFileSync(join(home, 'library/mcp.json'), JSON.stringify({ mcpServers: { http: { url: `http://127.0.0.1:${port}/mcp`, headers: { Authorization: `Bearer ${secret}` }, description: 'Playwright' } } }));
+    writeFileSync(join(home, 'library/mcp.json'), JSON.stringify({ mcpServers: { http: { url: `http://127.0.0.1:${port}/mcp?format=json&page=1&api_key=e9-query-secret`, headers: { Authorization: `Bearer ${secret}` }, description: 'Playwright' } } }));
     await runRoute(scanLibrary(join(home, 'library')));
     const transport = new StdioClientTransport({ command: process.execPath, args: ['--import', 'tsx', join(import.meta.dirname, '../src/cli.ts'), 'mcp-launch', 'mcp:http'], env: { LOADOUT_HOME: home }, stderr: 'pipe' });
     const client = new Client({ name: 'strict-host', version: '0.0.1' });
@@ -275,6 +327,8 @@ describe('E9 security', () => {
       expect(failure).toContain('upstream rejected');
       expect(failure).toContain('[REDACTED]');
       expect(failure).toContain('-y mcp');
+      expect(failure).toContain('json 1 [REDACTED]');
+      expect(failure).not.toContain('e9-query-secret');
       expect(failure).not.toContain(secret);
       expect(failure).not.toContain(JSON.stringify(secret).slice(1, -1));
       expect(await client.callTool({ name: 'canary', arguments: {} })).toMatchObject({ content: [{ text: secret }] });
@@ -338,7 +392,7 @@ describe('E9 security', () => {
     } finally { child.kill(); }
   });
 
-  it.each(['https://user:e9-url-secret@example.invalid/mcp?api_key=e9-query-secret', 'https://example.invalid/mcp?api_key=e9-query-secret'])('reports only origin and path and relays credential-bearing HTTP URL %s', async (url) => {
+  it.each(['https://user:e9-url-secret@example.invalid/mcp?api_key=e9-query-secret', 'https://example.invalid/mcp?api_key=e9-query-secret', 'https://example.invalid/mcp/e9-path-secret/sse'])('reports only origin for HTTP URL %s', async (url) => {
     const home = tempDir('loadout-e9-url-');
     mkdirSync(join(home, 'library'));
     writeFileSync(join(home, 'library', 'mcp.json'), JSON.stringify({ mcpServers: { canary: { url, description: 'Playwright' } } }));
@@ -346,14 +400,15 @@ describe('E9 security', () => {
     const session = materialize(decision, 'codex', config, tempDir('loadout-s-'));
     for (const argv of [['list', '--json'], ['route', '--json', '--lexical', TASK]]) {
       const report = execFileSync(process.execPath, ['--import', 'tsx', join(import.meta.dirname, '../src/cli.ts'), ...argv], { encoding: 'utf8', env: { ...process.env, LOADOUT_HOME: home } });
-      expect(report).not.toMatch(/e9-(url|query|fragment)-secret/);
-      expect(report).toContain('https://example.invalid/mcp');
+      expect(report).not.toMatch(/e9-(url|query|path)-secret/);
+      expect(report).toContain('"url": "https://example.invalid"');
     }
-    expect(readFileSync(join(session.dir, 'decision.json'), 'utf8')).not.toMatch(/e9-(url|query|fragment)-secret/);
+    expect(readFileSync(join(session.dir, 'decision.json'), 'utf8')).not.toMatch(/e9-(url|query|path)-secret/);
     expect(codexArgs(session, TASK, []).join(' ')).not.toMatch(/e9-(url|query|fragment)-secret/);
     const dryRun = spawnSync(process.execPath, ['--import', 'tsx', join(import.meta.dirname, '../src/cli.ts'), 'codex', '--dry-run', '--lexical', TASK], { encoding: 'utf8', env: { ...process.env, LOADOUT_HOME: home } });
     expect(dryRun.status).toBe(0);
     expect(dryRun.stdout + dryRun.stderr).not.toMatch(/e9-(url|query|fragment)-secret/);
+    if (url.includes('e9-path-secret')) expect(dryRun.stdout).toContain(url);
   });
 
   it('keeps search-server and stdio-wrapper WSL arguments in their native form', async () => {
