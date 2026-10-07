@@ -22,7 +22,7 @@ New router tuning only happens on new held-out requests (C1).
 
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
-| A2 | P0 | `loadout audit`: what your installed skills cost you | Claude | cloud | todo |
+| A2 | P0 | `loadout audit`: what your installed skills cost you | Claude | cloud | review |
 | A1 | P1 | README rewrite around the problem, 3-command quickstart, GIF | Claude | cloud | todo (after A2, B1) |
 | A3 | P1 | `loadout init` wizard + starter packs | Codex | cloud | todo |
 | A4 | P1 | npm package under an available name + release workflow | Codex | cloud + erik | blocked: npm name decision |
@@ -49,6 +49,8 @@ Acceptance:
   edits host configs (AGENTS.md rule 3).
 - Tests use fake home directories.
 - It never writes outside `~/.loadout`.
+
+A2 learnings: inventory is not request overhead; overrides are host-specific, MCP counts describe configuration, and adoption must exclude real library locations discovered through host links (PR #3).
 
 **A1. README rewrite.**
 
@@ -361,6 +363,7 @@ Acceptance:
 | E2 | P0 | LICENSE, CONTRIBUTING, SECURITY.md, templates | Claude | cloud + erik | todo (license: confirm MIT) |
 | E7 | P0 | Vendor-independent bench judges and expander | Codex | cloud | review ([PR #5](https://github.com/erik-hedstrom/loadout/pull/5)) |
 | E8 | P0 | Repo-wide simplification pass | Claude (pr-reviewer finds, worker fixes) + Codex review | cloud | todo |
+| E9 | P0 | Security hardening from the read-only Sol review | Codex | cloud | review |
 | E3 | P1 | Split the test file per module | Codex | cloud | todo |
 | E5 | P1 | Changelog and release automation | Codex | cloud | todo (with A4) |
 | E6 | P2 | Architecture diagram in DESIGN.md | Claude | cloud | todo |
@@ -443,6 +446,23 @@ Starting points from Sol's review (2026-10-07):
 - Markdown, ≈ 100–150 lines: DESIGN's benchmark-arms section is stale; the
   usage sections repeat README; HANDOFF's tables repeat both; absolutes at
   DESIGN:5, 29 and HANDOFF:17 overstate what the benchmarks show.
+
+**E9. Security hardening.**
+
+Acceptance:
+- Reports allow only MCP type, command, cwd, URL origin and env/header keys.
+- Relayed MCP credentials stay in the library and server process, absent from
+  agent argv, environment and session files. Library keys are validated.
+- Public HTTP servers retain native Codex OAuth. Relays support credential-bearing
+  URLs, negotiated protocol versions and recoverable request errors. Diagnostics
+  contain controlled metadata only, never upstream error text. Windows shims and
+  server startup logs work.
+- MCP startup reads only its config; Claude MCP session files retain private modes.
+- Skill copies reject links and retain pinned confinement and size limits.
+- Third-party prompt data is escaped and framed; Jev errors contain only HTTP
+  status or fixed failure categories. `decide()` and `bench/judge.ts` are unchanged.
+- Adversarial tests for each path. Owed after merge: routing re-measured after the
+  Jev framing change (Jev-only agreement check, recorded in `bench/RESULTS.md`).
 
 **E3. Test split.**
 

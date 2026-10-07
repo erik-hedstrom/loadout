@@ -2,7 +2,6 @@
  * Minimal client for TypeSafe's System One API (POST /v1/systemone).
  * Uses fetch directly so the router has no SDK dependency.
  */
-
 /** Instructions and criteria accept plain text or JSON structure (labelled fields, lists). */
 export type Text = string | string[] | Record<string, unknown>;
 
@@ -46,31 +45,31 @@ const SUM_TOLERANCE = 0.05;
  * over the options or levels that were asked, summing to ~1.
  */
 export function validateResponse(body: unknown, questions: Record<string, Question>): SystemOneResponse {
-  const fail = (why: string): never => {
-    throw new JevError(`malformed TypeSafe response: ${why}`, undefined, false);
+  const fail = (): never => {
+    throw new JevError('Jev response did not match the schema', undefined, false);
   };
-  if (!body || typeof body !== 'object') fail('not an object');
+  if (!body || typeof body !== 'object') fail();
   const { answers, usage, model } = body as Partial<SystemOneResponse>;
-  if (!answers || typeof answers !== 'object') fail('no answers');
+  if (!answers || typeof answers !== 'object') fail();
   const isProb = (x: unknown) => typeof x === 'number' && Number.isFinite(x) && x >= 0 && x <= 1;
   for (const [id, q] of Object.entries(questions)) {
     const a = (answers as Record<string, Answer | undefined>)[id];
-    if (!a || a.type !== q.type) fail(`missing or mistyped answer "${id}"`);
+    if (!a || a.type !== q.type) fail();
     if (a!.type === 'noul') {
-      if (!isProb(a!.noul)) fail(`bad probability in "${id}"`);
+      if (!isProb(a!.noul)) fail();
       continue;
     }
     const dist = a!.probabilities;
-    if (!dist || typeof dist !== 'object' || Array.isArray(dist)) fail(`no distribution in "${id}"`);
+    if (!dist || typeof dist !== 'object' || Array.isArray(dist)) fail();
     const allowed = new Set(q.type === 'choice' ? Object.keys(q.criteria) : (q as { criteria: unknown[] }).criteria.map((_, i) => String(i)));
     const entries = Object.entries(dist);
-    if (!entries.length) fail(`empty distribution in "${id}"`);
+    if (!entries.length) fail();
     for (const [k, v] of entries) {
-      if (!allowed.has(k)) fail(`unknown option "${k}" in "${id}"`);
-      if (!isProb(v)) fail(`bad probability for "${k}" in "${id}"`);
+      if (!allowed.has(k)) fail();
+      if (!isProb(v)) fail();
     }
     const sum = entries.reduce((t, [, v]) => t + v, 0);
-    if (Math.abs(sum - 1) > SUM_TOLERANCE) fail(`distribution in "${id}" sums to ${sum.toFixed(3)}`);
+    if (Math.abs(sum - 1) > SUM_TOLERANCE) fail();
   }
   const finite = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) && x >= 0 ? x : 0);
   return {
@@ -88,11 +87,8 @@ export function jevClient(opts: { apiKey: string; baseUrl: string; model: string
       body: JSON.stringify({ model: opts.model, state, questions }),
       signal: AbortSignal.timeout(opts.timeoutMs ?? 12_000),
     });
-    const body = (await res.json().catch(() => ({}))) as Record<string, unknown> & { detail?: unknown; message?: string };
-    if (!res.ok) {
-      const detail = typeof body.detail === 'string' ? body.detail : (body.message ?? JSON.stringify(body.detail ?? body));
-      throw new JevError(`TypeSafe API ${res.status}: ${detail}`, res.status);
-    }
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new JevError(`Jev request failed: HTTP ${res.status}`, res.status);
     return validateResponse(body, questions);
   };
   return {
@@ -101,6 +97,7 @@ export function jevClient(opts: { apiKey: string; baseUrl: string; model: string
         try {
           return await once(state, questions);
         } catch (err) {
+          if (!(err instanceof JevError)) err = new Error(err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError') ? 'Jev request timed out' : 'Jev request failed: network error');
           // Network errors and timeouts are not JevErrors and are worth one more try.
           const retryable = err instanceof JevError ? err.retryable : true;
           if (!retryable || attempt >= (opts.retries ?? 1)) throw err;
