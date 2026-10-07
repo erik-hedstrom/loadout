@@ -1,3 +1,4 @@
+[![CI](https://github.com/erik-hedstrom/loadout/actions/workflows/ci.yml/badge.svg)](https://github.com/erik-hedstrom/loadout/actions/workflows/ci.yml)
 # loadout
 
 Pick the model, skills and MCP servers for each coding-agent session from a

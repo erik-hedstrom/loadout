@@ -881,16 +881,24 @@ describe('launch', () => {
     const claudeCode = hostSetup('claude-code', false).snippet.split('\n\n');
     expect(claudeCode[0]).toMatch(/^claude mcp add --scope user loadout -- \S+ .* mcp$/);
     expect(JSON.parse(claudeCode[1]!).hooks.UserPromptSubmit[0].hooks[0].command).toMatch(/ hook claude$/);
-    // Windows: absolute Linux paths are protected from Git Bash's path rewriting.
-    const winHook = (claudeHookSettings(true) as { hooks: { UserPromptSubmit: { hooks: { command: string }[] }[] } }).hooks.UserPromptSubmit[0]!.hooks[0]!.command;
-    expect(winHook).toMatch(/^wsl\.exe .*--exec \/\/\S+ .* hook claude --windows-paths$/);
     expect(loaderArgs(['-e', 'x', '--require', 'a.cjs', '--import=file:///b.mjs', '--max-old-space-size=99'])).toEqual(['--require', 'a.cjs', '--import=file:///b.mjs']);
-    // KEY=/path forms are protected too; file:// URLs are left alone.
-    process.env.LOADOUT_HOME = '/tmp/loadout-home';
+  });
+
+  it('protects WSL hook paths from Git Bash rewriting', () => {
+    vi.stubGlobal('process', {
+      ...process,
+      execPath: '/usr/bin/node',
+      execArgv: ['--require', '/home/erik/tsx.cjs', '--import=file:///home/erik/tsx.mjs'],
+      env: { ...process.env, WSL_DISTRO_NAME: 'Ubuntu', LOADOUT_HOME: '/tmp/loadout-home' },
+    });
     try {
+      const winHook = (claudeHookSettings(true) as { hooks: { UserPromptSubmit: { hooks: { command: string }[] }[] } }).hooks.UserPromptSubmit[0]!.hooks[0]!.command;
+      expect(winHook).toMatch(/^wsl\.exe -d Ubuntu --exec \/\/usr\/bin\/env LOADOUT_HOME=\/\/tmp\/loadout-home \/\/usr\/bin\/node /);
+      expect(winHook).toContain(' --require //home/erik/tsx.cjs --import=file:///home/erik/tsx.mjs ');
+      expect(winHook).toMatch(/ hook claude --windows-paths$/);
       expect(hookCommand('claude', true)).toContain(' LOADOUT_HOME=//tmp/loadout-home ');
     } finally {
-      delete process.env.LOADOUT_HOME;
+      vi.unstubAllGlobals();
     }
   });
 });
