@@ -1,108 +1,47 @@
 # Routing benchmark — results
 
-## B1 method (preregistered)
-
-Preregistered 2026-10-07, before any host measurement. **No B1 results yet.**
-This study measures initial text listings and visibility, not task outcomes.
-It does not reuse or tune on the routing requests or their dev/test split.
-
-- **Fixed prompt:** `Reply with exactly OK. Do not use tools, skills, commands, agents, or external services.`
-- **Configurations:** baseline, + obra/superpowers, + anthropics/skills,
-  + the skills.sh ranks 1–50, + pbakaus/impeccable, + the entire library
-  (expected 1,262 skills; record the actual count), and + loadout MCP instead.
-  Each pack is added independently to the same baseline, not cumulatively.
-  Select packs by `.loadout-source.json` provenance in `<library>/skills`.
-  Use the saved ranking in `<library>/popular.jsonl` or
-  `bench/data/popular.jsonl` (schema from `scripts/build_corpus.py`); require
-  ranks 1–50 and an exact local name/repository match for each. Missing sources
-  block all paid calls. No downloads or substituted ranking.
-- **Execution:** `node --import tsx bench/overhead.ts --plan --library <dir>`
-  materializes temp text and prints exact literal argv/cwd and **30 calls**,
-  without invoking a host or MCP process. It retains the dedicated temp root
-  so the printed commands remain usable. Omit `--plan` to measure sequentially.
-  Run under WSL with Linux CLIs for the WSL library, or provide a readable
-  library directory to native Node; no implicit WSL migration or auth copying.
-  Fresh empty temp working directory per host/configuration; the Codex pack
-  arm contains only project `.agents/skills` text. Each arm gets two consecutive
-  fresh sessions in the same cwd. The first and second calls are reported
-  separately; cache hits are observed, never assumed. Existing shared cache
-  prefixes may make even the first call cached. One additional full-library
-  default-model confirmation per host follows its pair.
-- **CLI contract:** help checked offline on Claude Code 2.1.281 and
-  codex-cli 0.160.1. Claude uses `-p --output-format stream-json --verbose`,
-  `--no-session-persistence`, `--setting-sources ""`, `--settings`,
-  `--strict-mcp-config --mcp-config`, `--restricted --tools Read,Skill`,
-  `--model`, and session-only `--plugin-dir`. Settings disable hooks; only
-  read/skill built-ins remain equally in every arm, preserving the skill
-  listing tool while preventing code execution. Codex uses
-  `exec --json --ephemeral --ignore-user-config
-  --ignore-rules --skip-git-repo-check --sandbox read-only`, `--model`,
-  `--disable`, and `-c` for loadout. Code-running features and plugin hooks
-  are disabled (feature names checked in the installed binary). Help offers
-  Claude `--safe-mode`, but it disables customizations including plugins;
-  it is not used for incomparable pack deltas. Neither host is presumed bare:
-  global skills, built-ins and managed customizations can remain. Claude is
-  labeled bare only if all reported init inventory categories are empty;
-  absent agent inventory leaves bare unverified. Otherwise all deltas are
-  over the surviving current setup. Codex has no CLI init skill inventory,
-  so its baseline is explicitly not verified bare. The benchmark writes no
-  user agent config and copies no credentials; auth remains with the host.
-- **Models and spending:** existing small-tier targets `haiku` and
-  `gpt-5.6-luna`; the latter is present in the local Codex model cache.
-  Cheapest status, actual account availability, and exact expected tokens
-  are unverified offline. Default confirmations omit `--model`; model/system
-  differences confound their absolute token difference. No Jev calls: the
-  loadout arm runs this repo's `loadout mcp --lexical` with a temp text-only
-  library, no embeddings and no library MCP configs. This measures its two
-  search tool definitions, not routing. Erik/orchestrator sees the plan and
-  approves the spending before real measurement. No host calls were made
-  during implementation.
-- **Text boundary:** only confined, regular `SKILL.md` files, with tag escaping
-  and third-party framing preserving YAML frontmatter. Claude command/agent
-  markdown is included if local originals are available at
-  `<library>/packs/<configuration>/{commands,agents}`. Their absence is recorded
-  as **not measured**, not zero overhead. Codex equivalents are not verified
-  and are not measured. Never copy hooks, scripts, MCP/LSP configs, symlinks,
-  junctions or reference files; remove executable `hooks` from YAML frontmatter
-  with the YAML parser; never execute downloaded code. Hook-injected
-  text (including SessionStart), pack runtime behavior and output quality
-  are **not measured**. Framing slightly changes the text-only pack.
-- **Metrics:** Claude result `input_tokens + cache_creation_input_tokens +
-  cache_read_input_tokens` is total input; retain each component. Record init
-  skill/plugin/slash-command/MCP names and MCP connection status, plus agent
-  names if supplied. Codex `turn.completed.usage.input_tokens` includes
-  `cached_input_tokens`; retain cached and uncached components separately.
-  Require one successful turn and reject tool use. Record output-token count
-  for spending visibility, but costs here cover input only. Store sanitized
-  metric rows, actual installed counts, listing-character estimates, manifest
-  hashes and omissions under `bench/results/<timestamp>-overhead/`; never
-  transcripts, arbitrary error details, env, auth or extra prompts.
-- **Truncation:** Claude: fewer namespaced pack skills in init than installed
-  is observed host-list truncation; equal counts do not prove descriptions
-  reached the model; duplicate names can also explain omissions. Codex:
-  indirect saturation candidate if estimated listing
-  characters at least double between adjacent size-sorted arms while first-call
-  total input changes by at most `max(100 tokens, 1% of prior total input)`.
-  Compare with the reported initial-list budget of 2% of context, or fallback
-  8,000 characters ([Codex skills](https://developers.openai.com/codex/skills),
-  not reverified offline). Exact rendering and visible count are not observable
-  in turn JSON. Different pack contents/order and unknown model context are
-  confounders; saturation is evidence to investigate, not proof or a value of k.
-- **Prices:** the script's small table records official source URLs, an offline
-  check date (2026-10-07), and an absent access date/rates. No current rate could
-  be verified without the network. Print **price unverified**, not guessed
-  dollars. When verified rates are supplied to that table, input costs per
-  1,000 requests use total × input/read rate ÷ 1,000; observed costs include
-  uncached, cache creation and cache read at their respective rates. Default
-  model pricing remains unverified. No confidence intervals from two repeated
-  deterministic prompts; no population-level claim. A chart and measured
-  README claim await raw host measurements and review.
-
 199 generated tasks (169 with a gold skill, 30 needing none) against libraries
 of 1,000 to 20,000 real skills from GitSkills. Method and caveats:
 [README.md](README.md). **All of these are routing results on synthetic tasks**:
 they measure what reaches the agent, not whether the agent then finishes the
 task.
+
+## B1 method (preregistered)
+
+Revised 2026-10-07 after PR #6 review; **no paid measurements or results yet**.
+
+- Prompt: `Reply with exactly OK. Do not use tools, skills, commands, agents, or external services.`
+- Named arms: baseline, obra/superpowers, anthropics/skills, skills.sh snapshot, pbakaus/impeccable, whole library, loadout MCP.
+  “top50” means the first 50 saved rows by rank, including gaps, each matched to local provenance.
+- Cap arms: Codex prefixes of one sorted, validated corpus at 16, 64, 256, 1024,
+  omit sizes >= corpus size; full library is the final superset. Named packs supply deltas, not cap evidence.
+- Two fresh sessions per arm, haiku / gpt-5.6-luna: **36 paid CLI calls** with 1,262 valid
+  manifests (14 Claude, 22 Codex), maximum 36; fewer for smaller corpora. No default confirmations.
+- `node --import tsx bench/overhead.ts --plan --library <dir>` prints argv/cwd, free/paid counts without running processes; retains temp files.
+- Codex commands share model/sandbox/MCP/features; exec-only --ignore-user-config
+  is removed because the free commands reject it.
+  Lifecycle/plugin hooks and code-running features must each read false in features list.
+- Before paid calls, every Codex arm gets offline skills/list and prompt-input checks:
+  copied/rejected, discovered and visible counts, context SHA-256, AGENTS-presence boolean.
+  Never retain context text/errors. Superpowers must increase visible count before calls and input vs baseline after calls.
+- Loadout MCP is required=true; Codex must expose find_skills/load_skill. Failed startup/discovery
+  prevents a valid row. Free app-server queries create no threads/turns.
+- Claude uses --restricted, --tools Skill, disabled hooks and session-only text plugins.
+  Baseline is **the user's ambient setup**: retain init names; reject plugins outside baseline plus b1; count by b1: prefix.
+  No init-only offline CLI is documented; safe-mode pack compatibility is unverified.
+  Claude missing entries are **omitted, cause unverified**; init does not prove visibility.
+- Codex caps require nested discovery success and fewer visible than discovered; a token
+  plateau alone proves nothing. Reported 2% context / 8,000-character fallback budget:
+  https://developers.openai.com/codex/skills (not reverified offline).
+- Claude total input sums uncached/cache creation/cache read; retain numeric modelUsage
+  per model. Codex total includes cached input. Preserve first/second counters. Costs in analysis; no population claim/intervals from pairs.
+- Confined manifests need name/description; reject invalid files, escape/frame text, strip hooks.
+  Exclude links, scripts, references, commands/agents and pack MCP/LSP servers: starting
+  those would execute downloaded code (AGENTS rule 5).
+  Loadout uses repo code, a temp text library, lexical routing, no embeddings or Jev calls.
+- Store sanitized rows/preflights under bench/results/<timestamp>-overhead, never transcripts/env.
+  No config edits or credential copying. Host-owned state: Claude adds temp-cwd entries to
+  ~/.claude.json; Codex writes logs. Outcome quality is not measured.
 
 ## v4 (2026-10-06): realistic requests on the real library, judged
 

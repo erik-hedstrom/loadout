@@ -96,7 +96,7 @@ Acceptance:
 
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
-| B1 | P0 | Token-waste study: measured per-request overhead of popular skill packs | Claude | local (measure) + cloud (analysis) | review (harness; local measurements pending) |
+| B1 | P0 | Token-waste study: measured per-request overhead of popular skill packs | Claude | local (measure) + cloud (analysis) | review ([PR #6](https://github.com/erik-hedstrom/loadout/pull/6); local measurements pending) |
 | B3 | P1 | Fact-checked comparison with alternatives | Codex | cloud | todo |
 | B2 | P1 | Launch kit drafts | Claude | cloud | todo (after A1, B1) |
 | B4 | P1 | Repo polish: description, topics, social preview, badges | Claude | cloud + erik | todo |
@@ -107,7 +107,7 @@ Acceptance:
 
 Why: the headline must be measured, not estimated.
 
-Learnings: `bench/overhead.ts --plan` preregisters 30 host calls; listing caps can limit visibility, so installed count alone cannot establish per-request token waste. No model calls or results yet; offline pack/ranking sources and prices must be checked by the orchestrator (no PR created).
+Learnings: [PR #6](https://github.com/erik-hedstrom/loadout/pull/6) round 2 adds free feature/discovery/context gates and nested cap arms (36 paid calls for 1,262 valid skills); ambient setup and host discovery must be separated from model visibility. No paid calls or results yet.
 
 Acceptance:
 - A script in `bench/` installs well-known packs (Superpowers, anthropics/skills,
