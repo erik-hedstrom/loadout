@@ -576,7 +576,7 @@ catch (err) { console.log(err.message); }
         expect(result.status, result.stderr).toBe(0);
         if (args[0] === 'route') expect(JSON.parse(result.stdout)).toMatchObject({ router: 'lexical', warning });
         else if (args[0] === 'codex') expect(result.stderr).toContain(warning);
-        else { expect(result.stdout).toBe(''); expect(result.stderr).toBe(''); }
+        else { expect(result.stdout).toBe(''); expect(result.stderr).toBe(`loadout: ${warning}\n`); }
         outputs.push(result.stdout, result.stderr);
       }
       for (const value of Object.values(forms)) expect(outputs.join('\n')).not.toContain(value);
@@ -880,7 +880,7 @@ describe('launch', () => {
     expect(JSON.parse(hostSetup('opencode', false).snippet).mcp.loadout).toMatchObject({ type: 'local', enabled: true });
     expect(JSON.parse(hostSetup('claude-desktop', true).snippet).mcpServers.loadout.command).toBe('wsl.exe');
     const claudeCode = hostSetup('claude-code', false).snippet;
-    expect(claudeCode).toMatch(/^claude plugin marketplace add erik-hedstrom\/loadout\nclaude plugin install loadout@loadout/);
+    expect(claudeCode).toContain('claude plugin marketplace add erik-hedstrom/loadout\nclaude plugin install loadout@loadout');
     expect(claudeCode).toContain('+546 input tokens/request');
     expect(claudeCode).toContain('https://github.com/erik-hedstrom/loadout/blob/main/bench/RESULTS.md');
     expect(claudeCode).toMatch(/claude mcp add --scope user loadout -- \S+ .* mcp$/);
@@ -888,10 +888,20 @@ describe('launch', () => {
     const wsl = hostSetup('claude-code', true);
     expect(wsl.where).toContain('WSL');
     expect(wsl.snippet).not.toContain('claude plugin install');
-    const settings = JSON.parse(wsl.snippet.split('\n\n')[0]!);
+    const settings = JSON.parse(wsl.snippet.slice(wsl.snippet.indexOf('{')).split('\n\n')[0]!);
     expect(settings).toEqual(claudeHookSettings(true));
     expect(settings.hooks.UserPromptSubmit[0].hooks[0].command).toMatch(/^wsl\.exe .* hook claude --windows-paths$/);
     expect(loaderArgs(['-e', 'x', '--require', 'a.cjs', '--import=file:///b.mjs', '--max-old-space-size=99'])).toEqual(['--require', 'a.cjs', '--import=file:///b.mjs']);
+  });
+
+  it.each([false, true])('prints privacy before Claude Code installation or WSL settings (WSL=%s)', (windows) => {
+    const { where, snippet } = hostSetup('claude-code', windows);
+    const notice = snippet.split('\n')[0]!;
+    expect(notice).toContain('every project (user scope)');
+    expect(notice).toContain("each routed prompt, with the repository's top-level file names and dependency names, to TypeSafe's Jev API");
+    expect(notice).toContain('"router": "lexical" in loadout\'s config keeps prompts local');
+    expect(snippet.indexOf(windows ? '{' : 'claude plugin marketplace add')).toBeGreaterThan(notice.length);
+    expect(where).toContain('desktop app Code tab: not yet tested');
   });
 
   it('protects WSL hook paths from Git Bash rewriting', () => {
@@ -1055,6 +1065,44 @@ describe('mcp server', () => {
 
 describe('claude hook', () => {
   const library = scanLibrary(LIBRARY);
+
+  it.each([
+    {
+      name: 'reports Jev outages on stderr without blocking the prompt',
+      preload: "globalThis.fetch = async () => { throw new Error('upstream credential canary\\nsecond line'); };",
+      stderr: 'loadout: Jev unavailable (Jev request failed: network error); used keyword ranking\n',
+    },
+    {
+      name: 'stays silent when Jev selects no skill',
+      preload: `globalThis.fetch = async (_url, init) => {
+        const { questions } = JSON.parse(init.body);
+        const answers = Object.fromEntries(Object.entries(questions).map(([id, q]) => {
+          if (q.type === 'noul') return [id, { type: 'noul', noul: id === 'general_enough' ? 1 : 0 }];
+          if (q.type === 'score') return [id, { type: 'score', score: 0, confidence: 1, probabilities: { '0': 1 } }];
+          const choice = id === 'model_tier' ? 'medium' : 'no_skill_needed';
+          return [id, { type: 'choice', choice, confidence: 1, probabilities: { [choice]: 1 } }];
+        }));
+        return Response.json({ model: 'jev-test', answers, usage: { input_tokens: 0, output_tokens: 0 } });
+      };`,
+      stderr: '',
+    },
+  ])('$name', ({ preload, stderr }) => {
+    const home = tempDir('loadout-hook-cli-');
+    writeFileSync(join(home, 'config.json'), JSON.stringify({ ...DEFAULT_CONFIG, embeddings: false }));
+    mkdirSync(join(home, 'library/skills/canary'), { recursive: true });
+    writeFileSync(join(home, 'library/skills/canary/SKILL.md'), '---\nname: canary\ndescription: Playwright tests\n---\nTesting instructions.');
+    const file = join(home, 'preload.mjs');
+    writeFileSync(file, preload);
+    const result = spawnSync(process.execPath, ['--import', 'tsx', '--import', pathToFileURL(file).href, join(import.meta.dirname, '../src/cli.ts'), 'hook', 'claude'], {
+      encoding: 'utf8', timeout: 10_000,
+      env: { ...process.env, LOADOUT_HOME: home, TYPESAFE_API_KEY: 'hook-test-fake' },
+      input: JSON.stringify({ prompt: TASK, cwd: home }),
+    });
+    expect(result.error).toBeUndefined();
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toBe(stderr);
+  });
 
   it('routes each prompt once per session and injects a clear winner', async () => {
     const stateDir = tempDir('loadout-hook-');

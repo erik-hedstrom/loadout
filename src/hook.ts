@@ -110,6 +110,7 @@ export async function promptContext(input: HookInput, deps: HookDeps): Promise<s
     excerpt: skillExcerpt,
     embeddings: deps.embeddings,
   });
+  if (d.router !== 'jev' && d.warning) console.error(`loadout: ${d.warning.replace(/\s+/g, ' ')}`);
   // Keyword-only routing (no key, Jev down) is too noisy to push into every prompt.
   if (d.router !== 'jev' && !d.selected.some((s) => s.inject === 'mentioned')) return undefined;
 

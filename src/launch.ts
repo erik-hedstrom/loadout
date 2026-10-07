@@ -261,9 +261,10 @@ export function hostSetup(host: Host, windows: boolean): { where: string; snippe
     case 'claude-code':
       return {
         where: windows
-          ? 'WSL loadout behind Windows Claude Code: merge this hook into ~/.claude/settings.json instead of installing the plugin'
-          : 'Claude Code CLI / desktop Code tab: run once; requires loadout on PATH and Node 22.12+',
+          ? 'WSL loadout behind Windows Claude Code: merge this hook into ~/.claude/settings.json instead of installing the plugin; desktop app Code tab: not yet tested'
+          : 'Claude Code CLI: run once; requires loadout on PATH and Node 22.12+; desktop app Code tab: not yet tested',
         snippet: [
+          '# Privacy: the hook runs in every project (user scope). It sends each routed prompt, with the repository\'s top-level file names and dependency names, to TypeSafe\'s Jev API. Setting "router": "lexical" in loadout\'s config keeps prompts local.',
           ...(windows ? [json(claudeHookSettings(true))] : [
             'claude plugin marketplace add erik-hedstrom/loadout',
             'claude plugin install loadout@loadout',

@@ -72,11 +72,7 @@ if (import.meta.main) {
 
   const root = join(import.meta.dirname, '..');
   const cli = join(root, 'dist', 'cli.js');
-  if (!existsSync(cli)) {
-    // Invoke the installed compiler directly: no package download or shell quoting.
-    const build = spawnSync(process.execPath, [join(root, 'node_modules/typescript/bin/tsc'), '-p', 'tsconfig.build.json'], { cwd: root, stdio: 'inherit' });
-    if (build.error || build.status !== 0) throw new Error('build failed');
-  }
+  if (!existsSync(cli)) throw new Error('run npm run build first');
 
   const steps = ['config load', 'scanLibrary', 'cachedEmbeddings', 'Jev wide', 'Jev close', 'promptContext total', 'CLI wall clock'] as const;
   type Step = typeof steps[number];

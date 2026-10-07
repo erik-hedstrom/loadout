@@ -126,6 +126,7 @@ describe('round 2 validity', () => {
       }
     }
   });
+  // buildPlan copies the corpus into every arm.
   it('uses nested supersets of the validated corpus for cap arms', () => {
     const library = fixture();
     for (let i = 0; i < 20; i++) {
@@ -142,7 +143,7 @@ describe('round 2 validity', () => {
       for (const name of readdirSync(a)) expect(readFileSync(join(a, name, 'SKILL.md'), 'utf8')).toBe(readFileSync(join(b, name, 'SKILL.md'), 'utf8'));
     }
     expect(plan.calls.length).toBeLessThanOrEqual(36);
-  });
+  }, 60_000);
   it('saves offline Codex rows before paid calls despite refusal, without blocking Claude', async () => {
     const plan = buildPlan(fixture(), temp());
     const good = fakeStudy(plan);

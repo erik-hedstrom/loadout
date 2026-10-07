@@ -34,7 +34,7 @@ Usage:
   loadout hook claude|codex [--windows-paths]
                                           UserPromptSubmit hook: routes each prompt and adds the skills
                                           that fit as context (reads the hook JSON on stdin)
-  loadout setup <host> [--windows]        Print the config that attaches \`loadout mcp\` to a host:
+  loadout setup <host> [--windows]        Print plugin, hook and MCP setup instructions for a host:
                                           ${HOSTS.join(', ')}
 
 The library lives in ~/.loadout/library (override with LOADOUT_HOME):
