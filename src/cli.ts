@@ -158,7 +158,7 @@ async function main(): Promise<number> {
   const [command, ...rest] = process.argv.slice(2);
   if (command === 'hook') return runHook(rest);
   if (command === 'mcp-launch') {
-    await launchMcp(rest[0] ?? '', scanLibrary(paths.library()));
+    await launchMcp(rest[0] ?? '', paths.library());
     return 0;
   }
   const config = loadConfig();

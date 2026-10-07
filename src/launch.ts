@@ -146,7 +146,7 @@ export function materialize(
 ): Session {
   const id = `${new Date().toISOString().replace(/[:.]/g, '-')}-${Math.random().toString(36).slice(2, 6)}`;
   const dir = join(sessionsDir, id);
-  mkdirSync(dir, { recursive: true });
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
   writeFileSync(join(dir, 'decision.json'), reportJson(decision));
 
   const primary = decision.selected.filter((s) => s.capability.kind === 'skill').map((s) => s.capability);
@@ -202,7 +202,7 @@ export function materialize(
       // Already in the agent's form: searchServer() handles the WSL → Windows hop itself.
       ...(search ? [[SEARCH_SERVER, search]] : []),
     ]);
-    writeFileSync(session.mcpConfig, JSON.stringify({ mcpServers }, null, 2));
+    writeFileSync(session.mcpConfig, JSON.stringify({ mcpServers }, null, 2), { mode: 0o600 });
   }
 
   return session;
@@ -402,8 +402,12 @@ export function codexArgs(session: Session, task: string, extra: string[], opts:
     let key = stem;
     for (let i = 2; used.has(key); i++) key = `${stem}_${i}`;
     used.add(key);
+    let url: URL | undefined;
+    try { url = c.server?.url ? new URL(c.server.url) : undefined; }
+    catch { throw new Error('invalid MCP HTTP URL'); }
+    const native = url && !url.username && !url.password && !url.search && !url.hash && !Object.keys(c.server?.headers ?? {}).length;
     const server = {
-      ...loadoutCommand(['mcp-launch', capabilityKey(c)], session.toPath('/') !== '/'),
+      ...(native ? { url: c.server!.url } : loadoutCommand(['mcp-launch', capabilityKey(c)], session.toPath('/') !== '/')),
       default_tools_approval_mode: c.autoApprove ? 'approve' : undefined,
     };
     args.push('-c', `mcp_servers.${key}=${toToml(server)}`);

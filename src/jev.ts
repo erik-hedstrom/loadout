@@ -2,6 +2,7 @@
  * Minimal client for TypeSafe's System One API (POST /v1/systemone).
  * Uses fetch directly so the router has no SDK dependency.
  */
+import { safeDetail } from './errors.js';
 
 /** Instructions and criteria accept plain text or JSON structure (labelled fields, lists). */
 export type Text = string | string[] | Record<string, unknown>;
@@ -39,7 +40,6 @@ export class JevError extends Error {
 
 /** Probabilities over a distribution may be rounded by the API; anything further off is malformed. */
 const SUM_TOLERANCE = 0.05;
-const ERROR_DETAIL_CHARS = 512;
 
 /**
  * Check that every question came back with an answer of the right shape: a
@@ -82,13 +82,6 @@ export function validateResponse(body: unknown, questions: Record<string, Questi
 }
 
 export function jevClient(opts: { apiKey: string; baseUrl: string; model: string; timeoutMs?: number; retries?: number }): SystemOneClient {
-  const safeDetail = (text: string): string => {
-    let redacted = text;
-    if (opts.apiKey) {
-      for (const key of new Set([opts.apiKey, JSON.stringify(opts.apiKey).slice(1, -1)])) redacted = redacted.split(key).join('[REDACTED]');
-    }
-    return redacted.length > ERROR_DETAIL_CHARS ? `${redacted.slice(0, ERROR_DETAIL_CHARS)}…` : redacted;
-  };
   const once = async (state: unknown, questions: Record<string, Question>) => {
     const res = await fetch(`${opts.baseUrl.replace(/\/$/, '')}/v1/systemone`, {
       method: 'POST',
@@ -111,7 +104,7 @@ export function jevClient(opts: { apiKey: string; baseUrl: string; model: string
         } catch (err) {
           if (err instanceof Error) {
             // Validation and transport errors can also contain upstream text.
-            const message = safeDetail(err.message);
+            const message = safeDetail(err.message, [opts.apiKey]);
             err = err instanceof JevError ? new JevError(message, err.status, err.retryable) : new Error(message);
           }
           // Network errors and timeouts are not JevErrors and are worth one more try.

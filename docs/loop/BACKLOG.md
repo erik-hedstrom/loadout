@@ -434,11 +434,13 @@ Starting points from Sol's review (2026-10-07):
 **E9. Security hardening.**
 
 Acceptance:
-- Reports omit MCP arguments and credential values; URLs show origin/path.
+- Reports allow only MCP type, command, cwd, URL origin/path and env/header keys.
 - Codex MCP credentials stay in the library and server process, absent from
   agent argv, environment and session files. Library keys are validated.
-- MCP stdio/HTTP relays preserve JSON-RPC and propagate closure and failures;
-  Windows shims work. Credential-bearing URLs are rejected with a header hint.
+- Public HTTP servers retain native Codex OAuth. Relays support credential-bearing
+  URLs, negotiated protocol versions and recoverable request errors with bounded,
+  redacted diagnostics. Windows shims and server startup logs work.
+- MCP startup reads only its config; Claude MCP session files retain private modes.
 - Skill copies reject links and retain pinned confinement and size limits.
 - Third-party prompt data is escaped and framed; Jev error details redact
   the resolved key and stay bounded. `decide()` and `bench/judge.ts` are unchanged.

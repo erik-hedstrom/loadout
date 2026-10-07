@@ -160,6 +160,11 @@ interface McpFile {
   mcpServers?: Record<string, McpServerConfig & { description?: string; autoApprove?: boolean; gateway?: boolean }>;
 }
 
+export function readMcpServers(libraryDir: string): NonNullable<McpFile['mcpServers']> {
+  const file = join(libraryDir, 'mcp.json');
+  return existsSync(file) ? (JSON.parse(readFileSync(file, 'utf8')) as McpFile).mcpServers ?? {} : {};
+}
+
 export function scanLibrary(libraryDir: string): Capability[] {
   const capabilities: Capability[] = [];
   for (const dir of subdirs(join(libraryDir, 'skills'))) {
@@ -168,11 +173,8 @@ export function scanLibrary(libraryDir: string): Capability[] {
   }
 
   const mcpFile = join(libraryDir, 'mcp.json');
-  if (existsSync(mcpFile)) {
-    const { mcpServers = {} } = JSON.parse(readFileSync(mcpFile, 'utf8')) as McpFile;
-    for (const [name, { description = '', autoApprove, gateway, ...server }] of Object.entries(mcpServers)) {
-      capabilities.push({ id: `mcp:${name}`, kind: 'mcp', name, description, source: mcpFile, server, autoApprove: autoApprove === true, gateway: gateway === true });
-    }
+  for (const [name, { description = '', autoApprove, gateway, ...server }] of Object.entries(readMcpServers(libraryDir))) {
+    capabilities.push({ id: `mcp:${name}`, kind: 'mcp', name, description, source: mcpFile, server, autoApprove: autoApprove === true, gateway: gateway === true });
   }
 
   return capabilities;

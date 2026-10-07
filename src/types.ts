@@ -23,6 +23,7 @@ export interface Capability {
 
 export interface McpServerConfig {
   command?: string;
+  cwd?: string;
   args?: string[];
   env?: Record<string, string>;
   url?: string;
@@ -43,8 +44,9 @@ export function reportJson(value: unknown): string {
       } catch { url = '[invalid URL]'; }
     }
     return {
-      ...server,
-      args: undefined,
+      type: server.type,
+      command: server.command,
+      cwd: server.cwd,
       url,
       env: Object.keys(server.env ?? {}),
       headers: Object.keys(server.headers ?? {}),

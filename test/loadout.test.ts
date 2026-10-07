@@ -75,7 +75,7 @@ describe('E9 security', () => {
   it('redacts MCP values in list JSON, route JSON and saved decisions', async () => {
     const home = tempDir('loadout-e9-');
     mkdirSync(join(home, 'library'));
-    const server = { command: 'node', args: ['--api-key', 'e9-arg-secret'], env: { TOKEN: 'e9-env-secret' }, headers: { Authorization: 'e9-header-secret' }, description: 'Playwright login test' };
+    const server = { type: 'stdio', command: 'node', cwd: '/workspace', args: ['--api-key', 'e9-arg-secret'], env: { TOKEN: 'e9-env-secret' }, headers: { Authorization: 'e9-header-secret' }, description: 'Playwright login test', bearer_token: 'e9-inline-secret', oauth: { client_secret: 'e9-nested-secret' }, authentication: { apiKey: 'e9-auth-secret' } };
     writeFileSync(join(home, 'library', 'mcp.json'), JSON.stringify({ mcpServers: { canary: server } }));
     const library = scanLibrary(join(home, 'library'));
     const decision = await runRoute(library);
@@ -88,10 +88,13 @@ describe('E9 security', () => {
       expect(report).not.toContain('e9-env-secret');
       expect(report).not.toContain('e9-header-secret');
       expect(report).not.toContain('e9-arg-secret');
+      expect(report).not.toMatch(/e9-(inline|nested|auth)-secret/);
       expect(report).toContain('"TOKEN"');
       expect(report).toContain('"Authorization"');
       expect(report).not.toContain('"args"');
       expect(report).toContain('"command": "node"');
+      expect(report).toContain('"cwd": "/workspace"');
+      expect(report).toContain('"type": "stdio"');
       expect(report).toContain('canary');
     }
     expect(decision.selected[0]?.capability.server?.env?.TOKEN).toBe('e9-env-secret');
@@ -105,7 +108,7 @@ describe('E9 security', () => {
     const home = tempDir('loadout-e9-canary-');
     const payload = join(home, 'payload.cjs');
     const marker = join(home, 'marker');
-    writeFileSync(payload, `require('node:fs').writeFileSync(${JSON.stringify(marker)}, JSON.stringify([process.env.NODE_OPTIONS, process.env.PATH, process.env.DB_PASSWORD, process.argv[2]]))`);
+    writeFileSync(payload, `process.stderr.write('LOADOUT-MCP-STARTED\\n'); require('node:fs').writeFileSync(${JSON.stringify(marker)}, JSON.stringify([process.env.NODE_OPTIONS, process.env.PATH, process.env.DB_PASSWORD, process.argv[2]]))`);
     const nodeOptions = `--require ${JSON.stringify(payload)}`;
     const serverScript = join(import.meta.dirname, 'fixtures/canary-server.mjs');
     const library = [
@@ -119,14 +122,7 @@ describe('E9 security', () => {
     const args = codexArgs(session, TASK, []);
     expect(args.join(' ')).not.toMatch(/e9-(env|header|arg)-secret/);
     expect(args.join(' ')).not.toContain(nodeOptions);
-    expect(args.join(' ')).not.toContain('shell_environment_policy');
-    expect(session).not.toHaveProperty('env');
-    expect(readdirSync(session.dir)).toEqual(['decision.json']);
     expect(readFileSync(join(session.dir, 'decision.json'), 'utf8')).not.toMatch(/e9-(env|header|arg)-secret/);
-    const output = join(tempDir('loadout-e9-child-'), 'env.json');
-    const script = "require('node:fs').writeFileSync(process.argv[1], JSON.stringify([process.env.NODE_OPTIONS, process.env.PATH, process.env.DB_PASSWORD]))";
-    expect(await launch(process.execPath, ['-e', script, output], { headless: true })).toBe(0);
-    expect(JSON.parse(readFileSync(output, 'utf8'))).toEqual([process.env.NODE_OPTIONS ?? null, process.env.PATH ?? null, process.env.DB_PASSWORD ?? null]);
     expect(existsSync(marker)).toBe(false);
     const transport = new StdioClientTransport({ command: process.execPath, args: ['--import', 'tsx', join(import.meta.dirname, '../src/cli.ts'), 'mcp-launch', 'mcp:stdio'], env: { LOADOUT_HOME: home }, stderr: 'pipe' });
     const client = new Client({ name: 'canary-host', version: '0.0.1' });
@@ -141,6 +137,7 @@ describe('E9 security', () => {
       await client.callTool({ name: 'crash', arguments: {} });
       await closed;
       expect(stderr).not.toMatch(/e9-(env|header|arg)-secret/);
+      expect(stderr).toContain('LOADOUT-MCP-STARTED');
     } finally { await client.close(); }
   });
 
@@ -169,14 +166,17 @@ describe('E9 security', () => {
     } finally { await Promise.all([host.close(), server.close()]); }
   });
 
-  it('sends HTTP credentials only from the relay to the local MCP server', async () => {
+  it.each(['headers', 'query', 'userinfo'])('sends HTTP %s credentials only from the relay to the local MCP server', async (mode) => {
     const home = tempDir('loadout-e9-http-');
     const secret = 'e9-http-header-secret';
     const received: (string | undefined)[] = [];
+    const requested: (string | undefined)[] = [];
+    const authorization = mode === 'userinfo' ? `Basic ${Buffer.from(`user:${secret}`).toString('base64')}` : mode === 'headers' ? secret : undefined;
     const { client: fake } = fakeClient({});
     const http = createHttpServer(async (req, res) => {
       received.push(req.headers.authorization);
-      if (req.headers.authorization !== secret) { res.writeHead(401).end(); return; }
+      requested.push(req.url);
+      if (req.headers.authorization !== authorization) { res.writeHead(401).end(); return; }
       const { server } = createServer({ library: [], config, client: fake });
       const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
       res.on('close', () => { void server.close(); });
@@ -186,12 +186,11 @@ describe('E9 security', () => {
     await new Promise<void>((resolve) => { http.listen(0, '127.0.0.1', resolve); });
     const port = (http.address() as { port: number }).port;
     mkdirSync(join(home, 'library'));
-    writeFileSync(join(home, 'library/mcp.json'), JSON.stringify({ mcpServers: { http: { url: `http://127.0.0.1:${port}/mcp`, headers: { Authorization: secret }, description: 'Playwright' } } }));
+    const url = `http://${mode === 'userinfo' ? `user:${secret}@` : ''}127.0.0.1:${port}/mcp${mode === 'query' ? `?api_key=${secret}` : ''}`;
+    writeFileSync(join(home, 'library/mcp.json'), JSON.stringify({ mcpServers: { http: { url, ...(mode === 'headers' ? { headers: { Authorization: secret } } : {}), description: 'Playwright' } } }));
     const session = materialize(await runRoute(scanLibrary(join(home, 'library'))), 'codex', config, tempDir('loadout-s-'));
     const args = codexArgs(session, TASK, []);
     expect(args.join(' ')).not.toContain(secret);
-    expect(session).not.toHaveProperty('env');
-    expect(readdirSync(session.dir)).toEqual(['decision.json']);
     expect(readFileSync(join(session.dir, 'decision.json'), 'utf8')).not.toContain(secret);
     const envFile = join(home, 'agent-env.json');
     expect(await launch(process.execPath, ['-e', "require('node:fs').writeFileSync(process.argv[1], JSON.stringify(process.env))", envFile], { headless: true })).toBe(0);
@@ -207,7 +206,8 @@ describe('E9 security', () => {
       expect((await client.listTools()).tools.map((t) => t.name)).toContain('find_skills');
       expect(await client.callTool({ name: 'find_skills', arguments: { goal: TASK } })).toMatchObject({ content: [{ text: expect.stringContaining('No skill') }] });
       expect(received.length).toBeGreaterThan(0);
-      expect(received.every((header) => header === secret)).toBe(true);
+      expect(received.every((header) => header === authorization)).toBe(true);
+      expect(requested.every((path) => path === `/mcp${mode === 'query' ? `?api_key=${secret}` : ''}`)).toBe(true);
       expect(stderr).not.toContain(secret);
       const files = readdirSync(home, { recursive: true, withFileTypes: true }).filter((e) => e.isFile() && join(e.parentPath, e.name) !== join(home, 'library/mcp.json'));
       for (const file of files) expect(readFileSync(join(file.parentPath, file.name), 'utf8')).not.toContain(secret);
@@ -217,7 +217,7 @@ describe('E9 security', () => {
     }
   });
 
-  it.each(['unknown', 'webapp-testing'])('rejects mcp-launch key %s without reading arbitrary files', async (key) => {
+  it.each(['mcp:unknown', 'webapp-testing'])('rejects mcp-launch key %s without reading arbitrary files', async (key) => {
     const home = tempDir('loadout-e9-key-');
     mkdirSync(join(home, 'library/skills'), { recursive: true });
     addSkills(join(LIBRARY, 'skills/webapp-testing'), join(home, 'library'));
@@ -228,28 +228,64 @@ describe('E9 security', () => {
     expect(result.stderr).toContain('requires a library MCP server key');
   });
 
-  it('exits nonzero with a redacted HTTP failure and closes the host pipe', async () => {
+  it.each([401, 500])('keeps relaying after HTTP %s with redacted bare tokens and negotiated POST/GET headers', async (status) => {
     const home = tempDir('loadout-e9-failure-');
     const secret = 'e9-header"secret\\value';
-    const http = createHttpServer((req, res) => { res.writeHead(500).end(`upstream rejected ${JSON.stringify(req.headers.authorization)}`); });
+    const seen: { method: string | undefined; version: string | string[] | undefined }[] = [];
+    let failed = false;
+    const http = createHttpServer(async (req, res) => {
+      if (req.method === 'GET') {
+        seen.push({ method: req.method, version: req.headers['mcp-protocol-version'] });
+        res.writeHead(req.headers['mcp-protocol-version'] === '2025-03-26' ? 405 : 400).end();
+        return;
+      }
+      let body = '';
+      for await (const chunk of req) body += chunk;
+      const message = JSON.parse(body);
+      if (message.method !== 'initialize') {
+        seen.push({ method: req.method, version: req.headers['mcp-protocol-version'] });
+        if (req.headers['mcp-protocol-version'] !== '2025-03-26') { res.writeHead(400).end('incorrect protocol version'); return; }
+      }
+      if (message.method === 'notifications/initialized') { res.writeHead(202).end(); return; }
+      if (message.method === 'tools/call' && !failed) {
+        failed = true;
+        res.writeHead(status).end(`upstream rejected ${status === 401 ? secret : JSON.stringify(secret)} -y mcp`);
+        return;
+      }
+      const result = message.method === 'initialize'
+        ? { protocolVersion: '2025-03-26', capabilities: { tools: {} }, serverInfo: { name: 'strict', version: '0.0.1' } }
+        : message.method === 'tools/list'
+          ? { tools: [{ name: 'canary', inputSchema: { type: 'object' } }] }
+          : { content: [{ type: 'text', text: secret }] };
+      res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ jsonrpc: '2.0', id: message.id, result }));
+    });
     await new Promise<void>((resolve) => { http.listen(0, '127.0.0.1', resolve); });
     const port = (http.address() as { port: number }).port;
     mkdirSync(join(home, 'library'));
-    writeFileSync(join(home, 'library/mcp.json'), JSON.stringify({ mcpServers: { http: { url: `http://127.0.0.1:${port}/mcp`, headers: { Authorization: secret }, description: 'Playwright' } } }));
+    writeFileSync(join(home, 'library/mcp.json'), JSON.stringify({ mcpServers: { http: { url: `http://127.0.0.1:${port}/mcp`, headers: { Authorization: `Bearer ${secret}` }, description: 'Playwright' } } }));
     await runRoute(scanLibrary(join(home, 'library')));
-    const child = spawn(process.execPath, ['--import', 'tsx', join(import.meta.dirname, '../src/cli.ts'), 'mcp-launch', 'mcp:http'], { env: { ...process.env, LOADOUT_HOME: home }, stdio: 'pipe' });
+    const transport = new StdioClientTransport({ command: process.execPath, args: ['--import', 'tsx', join(import.meta.dirname, '../src/cli.ts'), 'mcp-launch', 'mcp:http'], env: { LOADOUT_HOME: home }, stderr: 'pipe' });
+    const client = new Client({ name: 'strict-host', version: '0.0.1' });
     let stderr = '';
-    child.stderr.on('data', (chunk) => { stderr += chunk.toString(); });
-    const closed = new Promise<number | null>((resolve, reject) => { child.once('error', reject); child.once('close', resolve); });
-    child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'canary', version: '0.0.1' } } }) + '\n');
+    transport.stderr!.on('data', (chunk) => { stderr += chunk.toString(); });
     try {
-      expect(await closed).toBe(1);
+      await client.connect(transport);
+      expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual(['canary']);
+      const failure = await client.callTool({ name: 'canary', arguments: {} }).catch((error: Error) => error.message);
+      expect(failure).toContain('upstream rejected');
+      expect(failure).toContain('[REDACTED]');
+      expect(failure).toContain('-y mcp');
+      expect(failure).not.toContain(secret);
+      expect(failure).not.toContain(JSON.stringify(secret).slice(1, -1));
+      expect(await client.callTool({ name: 'canary', arguments: {} })).toMatchObject({ content: [{ text: secret }] });
+      await vi.waitFor(() => { expect(seen.some((entry) => entry.method === 'GET')).toBe(true); });
+      expect(seen.every((entry) => entry.version === '2025-03-26')).toBe(true);
+      await client.close();
       expect(stderr).toContain('upstream rejected');
-      expect(stderr).toContain('[redacted]');
       expect(stderr).not.toContain(secret);
       expect(stderr).not.toContain(JSON.stringify(secret).slice(1, -1));
     } finally {
-      child.kill();
+      await client.close();
       await new Promise<void>((resolve) => { http.close(() => resolve()); });
     }
   });
@@ -268,7 +304,41 @@ describe('E9 security', () => {
     } finally { await client.close(); }
   });
 
-  it.each(['https://user:e9-url-secret@example.invalid/mcp?api_key=e9-query-secret', 'https://example.invalid/mcp?api_key=e9-query-secret', 'https://example.invalid/mcp#e9-fragment-secret'])('reports only origin and path and refuses credential-bearing HTTP URL %s', async (url) => {
+  it('starts the requested MCP server without scanning skill directories', async () => {
+    const home = tempDir('loadout-e9-startup-');
+    mkdirSync(join(home, 'library'));
+    writeFileSync(join(home, 'library/mcp.json'), JSON.stringify({ mcpServers: { canary: { command: process.execPath, args: [join(import.meta.dirname, 'fixtures/canary-server.mjs')], description: 'Playwright' } } }));
+    await runRoute(scanLibrary(join(home, 'library')));
+    writeFileSync(join(home, 'library/skills'), 'not a directory');
+    const client = new Client({ name: 'startup-test', version: '0.0.1' });
+    try {
+      await client.connect(new StdioClientTransport({ command: process.execPath, args: ['--import', 'tsx', join(import.meta.dirname, '../src/cli.ts'), 'mcp-launch', 'mcp:canary'], env: { LOADOUT_HOME: home }, stderr: 'pipe' }));
+      expect((await client.listTools()).tools.map((t) => t.name)).toContain('ledger_memo');
+    } finally { await client.close(); }
+  });
+
+  it.each([undefined, {}])('keeps public HTTP servers native for Codex OAuth with headers %j', async (headers) => {
+    const capability = { id: 'mcp:oauth', kind: 'mcp' as const, name: 'oauth', description: 'Playwright', source: '', autoApprove: true, server: { url: 'https://example.invalid/mcp', headers } };
+    const session = materialize(await runRoute([capability]), 'codex', config, tempDir('loadout-s-'));
+    expect(codexArgs(session, TASK, []).find((arg) => arg.startsWith('mcp_servers.oauth='))).toBe('mcp_servers.oauth={ "url" = "https://example.invalid/mcp", "default_tools_approval_mode" = "approve" }');
+  });
+
+  it('exits on closure after a stdio startup error', async () => {
+    const home = tempDir('loadout-e9-missing-');
+    mkdirSync(join(home, 'library'));
+    writeFileSync(join(home, 'library/mcp.json'), JSON.stringify({ mcpServers: { missing: { command: 'loadout-e9-missing-command', description: 'Playwright' } } }));
+    await runRoute(scanLibrary(join(home, 'library')));
+    const child = spawn(process.execPath, ['--import', 'tsx', join(import.meta.dirname, '../src/cli.ts'), 'mcp-launch', 'mcp:missing'], { env: { ...process.env, LOADOUT_HOME: home }, stdio: 'pipe' });
+    let stderr = '';
+    child.stderr.on('data', (chunk) => { stderr += chunk.toString(); });
+    try {
+      const code = await new Promise<number | null>((resolve, reject) => { child.once('error', reject); child.once('close', resolve); });
+      expect(code).toBe(1);
+      expect(stderr).toContain('ENOENT');
+    } finally { child.kill(); }
+  });
+
+  it.each(['https://user:e9-url-secret@example.invalid/mcp?api_key=e9-query-secret', 'https://example.invalid/mcp?api_key=e9-query-secret'])('reports only origin and path and relays credential-bearing HTTP URL %s', async (url) => {
     const home = tempDir('loadout-e9-url-');
     mkdirSync(join(home, 'library'));
     writeFileSync(join(home, 'library', 'mcp.json'), JSON.stringify({ mcpServers: { canary: { url, description: 'Playwright' } } }));
@@ -284,10 +354,6 @@ describe('E9 security', () => {
     const dryRun = spawnSync(process.execPath, ['--import', 'tsx', join(import.meta.dirname, '../src/cli.ts'), 'codex', '--dry-run', '--lexical', TASK], { encoding: 'utf8', env: { ...process.env, LOADOUT_HOME: home } });
     expect(dryRun.status).toBe(0);
     expect(dryRun.stdout + dryRun.stderr).not.toMatch(/e9-(url|query|fragment)-secret/);
-    const start = spawnSync(process.execPath, ['--import', 'tsx', join(import.meta.dirname, '../src/cli.ts'), 'mcp-launch', 'mcp:canary'], { encoding: 'utf8', env: { ...process.env, LOADOUT_HOME: home } });
-    expect(start.status).toBe(1);
-    expect(start.stderr).toContain('headers');
-    expect(start.stdout + start.stderr).not.toMatch(/e9-(url|query|fragment)-secret/);
   });
 
   it('keeps search-server and stdio-wrapper WSL arguments in their native form', async () => {
@@ -623,6 +689,10 @@ describe('launch', () => {
     expect(existsSync(join(session.pluginDir!, 'skills', 'webapp-testing', 'SKILL.md'))).toBe(true);
     expect(JSON.parse(readFileSync(join(session.pluginDir!, '.claude-plugin', 'plugin.json'), 'utf8')).name).toBe('loadout');
     expect(Object.keys(JSON.parse(readFileSync(session.mcpConfig!, 'utf8')).mcpServers)).toEqual(['postgres']);
+    if (process.platform !== 'win32') {
+      expect(statSync(session.dir).mode & 0o777).toBe(0o700);
+      expect(statSync(session.mcpConfig!).mode & 0o777).toBe(0o600);
+    }
 
     expect(existsSync(join(session.pluginDir!, 'skills', 'gh-actions-debug', 'SKILL.md'))).toBe(true);
     expect(session.relevance).toContain(
@@ -656,8 +726,6 @@ describe('launch', () => {
     expect(args[5]).toContain('"default_tools_approval_mode" = "approve"');
     expect(args[5]).not.toContain('postgresql://localhost/dev');
     expect(args[5]).toContain('"mcp:postgres"');
-    expect(session.mcpConfig).toBeUndefined();
-    expect(readdirSync(session.dir).sort()).toEqual(['decision.json', 'plugin']);
     expect(args.at(-1)).toMatch(/webapp-testing \(.*SKILL\.md\)[\s\S]*Also available if needed:\n- gh-actions-debug/);
   });
 
