@@ -98,7 +98,7 @@ Acceptance:
 
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
-| B1 | P0 | Token-waste study: measured per-request overhead of popular skill packs | Claude | local (measure) + cloud (analysis) | todo |
+| B1 | P0 | Token-waste study: measured per-request overhead of popular skill packs | Claude | local (measure) + cloud (analysis) | review ([PR #6](https://github.com/erik-hedstrom/loadout/pull/6); local measurements pending) |
 | B3 | P1 | Fact-checked comparison with alternatives | Codex | cloud | todo |
 | B2 | P1 | Launch kit drafts | Claude | cloud | todo (after A1, B1) |
 | B4 | P1 | Repo polish: description, topics, social preview, badges | Claude | cloud + erik | todo |
@@ -108,6 +108,8 @@ Acceptance:
 **B1. Token-waste study.**
 
 Why: the headline must be measured, not estimated.
+
+Learnings: [PR #6](https://github.com/erik-hedstrom/loadout/pull/6) round 4 requires stable Claude ambient inventory beyond declared treatment additions and distinguishes its isolated baseline from Codex's ambient baseline (14 Claude calls; paid Codex deferred). Measured 2026-10-07: see "B1 results" in bench/RESULTS.md. The inventory guard stopped the first attempt when a synced plugin vanished between calls. Left: paid Codex (blocked on unified_exec); real skill names instead of generated ones; an arm between 50 and 1,232 skills; cost per 1,000 requests at list prices; cached multi-turn cost; the chart. Before the repo goes public, Erik decides whether the raw rows may keep his ambient plugin and skill names, or whether they get hashed. Pack MCP servers stay excluded: starting them runs downloaded code (AGENTS rule 5).
 
 Acceptance:
 - A script in `bench/` installs well-known packs (Superpowers, anthropics/skills,
@@ -119,8 +121,6 @@ Acceptance:
 - It reports tokens, the cost per 1,000 requests at list prices (cached and
   uncached), and whether the host truncates descriptions silently.
 - A chart and a RESULTS entry.
-- Starting point: 1,262 skills' descriptions are about 140k tokens; the top 50
-  about 6.8k (HANDOFF).
 
 **B2. Launch kit.**
 

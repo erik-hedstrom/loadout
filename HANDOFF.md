@@ -58,7 +58,7 @@ those, not this table.
 | Agents searching on their own (no preload) | Claude 2/10, Codex 5/10, but when they search, they find the right skill (7/7) |
 | Prompt hook (Claude Code, same 10 requests) | 6/10 open a useful skill (vs 2/10 with search alone) |
 | **Is the work better?** (Codex, 8 requests, blind pairwise) | **Not shown yet:** loadout 4, bare 3, split 1. Wins where skills encode conventions; two losses timed out while following the skill |
-| Token cost of the problem | Listing all 1,262 skills natively would add **~140k tokens** of descriptions to every request (the 50 most popular alone: ~6.8k). loadout adds ~400 tokens of tool definitions plus the few skills it picks |
+| Token cost of the problem (B1, measured) | Claude Code: 1,262 installed skills add **12.3k tokens** to every request (top 50: +477), about 10 per extra skill, not bounded by the listing cap. Codex bounds its listing (~15.7k characters) and shows 424 of 1,262. loadout's tool definitions add 546, more than the native listing at 50 skills; a straight line between the measured arms crosses near 57 skills (listing overhead only, generated skill names; router calls and loaded skills not measured). The earlier ~140k estimate is withdrawn |
 
 Negative results are recorded, as they should be. Three things did not work:
 a per-candidate yes/no router (v1), request-level "is it specialised?"
