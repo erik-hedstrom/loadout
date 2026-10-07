@@ -1,0 +1,17 @@
+{
+  "provenance": "SYNTHETIC TEST INPUTS created for this audit; not user measurements",
+  "wavelength": {"value": 532.0, "unit": "nm", "standard_uncertainty": 0.5, "distribution": "normal", "dof": "infinity", "basis": "vacuum"},
+  "reference_intensity": {"value": 100000.0, "unit": "count", "standard_uncertainty": 1000.0, "distribution": "normal", "dof": "infinity"},
+  "transmitted_intensity": {"value": 31622.7766016838, "unit": "count", "standard_uncertainty": 500.0, "distribution": "normal", "dof": "infinity"},
+  "intensity_correlation": 0.0,
+  "sample_absorbance": {"value": 0.500, "unit": "dimensionless", "independent_standard_uncertainty": 0.004, "distribution": "normal", "dof": "infinity"},
+  "blank_absorbance": {"value": 0.020, "unit": "dimensionless", "independent_standard_uncertainty": 0.002, "distribution": "normal", "dof": "infinity"},
+  "shared_absorbance_offset": {"value": 0.0, "unit": "dimensionless", "standard_uncertainty": 0.003, "distribution": "normal", "dof": "infinity", "coupling": "same additive offset in sample and blank"},
+  "molar_absorptivity": {"value": 16000.0, "unit": "L mol^-1 cm^-1", "standard_uncertainty": 160.0, "distribution": "normal", "dof": "infinity", "logarithm": "decadic", "basis": "independent synthetic reference value, not inferred from the calibration"},
+  "path_length": {"value": 10.000, "unit": "mm", "expanded_uncertainty": 0.020, "coverage_factor": 2.0, "standard_uncertainty": 0.010, "distribution": "normal", "dof": "infinity", "basis": "synthetic certificate"},
+  "final_volume": {"value": 100.0, "unit": "mL", "half_width": 0.08, "standard_uncertainty": 0.046188021535170064, "distribution": "rectangular", "dof": "infinity"},
+  "aliquot_volume": {"value": 10.0, "unit": "mL", "half_width": 0.02, "standard_uncertainty": 0.011547005383792516, "distribution": "rectangular", "dof": "infinity"},
+  "calibration_unknown": {"value": 0.500, "unit": "dimensionless", "standard_uncertainty": 0.004, "distribution": "normal", "dof": "infinity", "basis": "independent raw absorbance; fit intercept models baseline, do not subtract the separate blank"},
+  "repeatability_example": {"values": [0.498, 0.502, 0.500], "unit": "dimensionless", "distribution": "independent normal readings with unknown variance", "dof": 2, "basis": "separate Type A illustration; not an additional component in the main measurement"},
+  "independence": "All primitive inputs independent except the explicitly shared sample/blank offset. Calibration standard concentrations exact for this synthetic exercise; calibration observation noise independent normal with known sigma. Intensity example independent of the main absorbance example. Volume errors independent; no common volume calibration component assumed."
+}

@@ -1,0 +1,16 @@
+# TEST FIXTURE: intentionally vulnerable; never enable in a real repository.
+name: Integration Tests
+on:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  integration:
+    runs-on: [self-hosted, linux, x64, shared-ci]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - run: npm test

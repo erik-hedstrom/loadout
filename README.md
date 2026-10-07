@@ -59,7 +59,10 @@ other third):
 
 The agents use what they are given: in headless runs, Claude Code opened a
 loaded skill in 9 of 10 sessions, and Codex in 11 of 11. Without the launcher,
-the Claude Code prompt hook raised that from 2 to 6 of 10.
+the Claude Code prompt hook raised that from 2 to 6 of 10. Whether the work
+gets better is not settled yet. In an 8-request blind pilot with Codex,
+loadout's version won 4, lost 3 and split 1; the wins came where a skill
+encodes conventions, and two losses ran out of time following the skill.
 
 **Synthetic benchmark** (199 generated tasks, a library of 20,000 real skills
 from GitSkills; the rule was tuned on a dev split and reported on test):

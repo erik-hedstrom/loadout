@@ -1,0 +1,20 @@
+{
+  "synthetic": true,
+  "purpose": "Assumptions for an illustrative threat model, not deployment evidence",
+  "exposure": "Internet facing HTTPS application",
+  "uploaders": "Authenticated users; accounts may be attacker controlled",
+  "authorization_policy": "Private files visible only to their owner unless explicitly shared",
+  "sensitivity": "Potential personal data in images and attachments",
+  "storage": "Linux local filesystem shared by API, worker and static server",
+  "application_origin": "https://app.example.invalid",
+  "upload_origin": "https://app.example.invalid",
+  "session_transport": "Cookie; SameSite and CSRF middleware unknown",
+  "storage_paths": ["/srv/app/uploads", "/srv/app/thumbnails"],
+  "worker_network": "Egress policy and access to internal services unknown",
+  "worker_identity": "OS and storage permissions unknown",
+  "proxy_limits": "Request body, duration, concurrency and download limits unknown",
+  "cloud_bucket_cdn": "Not modeled as deployed; check separately if actual backend differs",
+  "dependency_versions": "No actual manifest or lockfile supplied",
+  "malware_scanner": "Absent from sample; actual deployment unknown",
+  "publication": "Original accessible immediately after filesystem write"
+}

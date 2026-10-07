@@ -1,0 +1,22 @@
+# TEST FIXTURE: intentionally vulnerable; never enable in a real repository.
+name: PR Comment
+on:
+  pull_request_target:
+    types: [opened, edited, reopened]
+permissions: write-all
+jobs:
+  comment:
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Prepare comment
+        run: |
+          echo "Reviewing: ${{ github.event.pull_request.title }}" > comment.txt
+          echo "Branch: ${{ github.event.pull_request.head.ref }}" >> comment.txt
+      - uses: peter-evans/create-or-update-comment@v4
+        with:
+          token: ${{ github.token }}
+          issue-number: ${{ github.event.pull_request.number }}
+          body-path: comment.txt

@@ -1,0 +1,24 @@
+# TEST FIXTURE: intentionally vulnerable; never enable in a real repository.
+name: Deploy
+on:
+  workflow_run:
+    workflows: [Build]
+    types: [completed]
+permissions:
+  actions: read
+  contents: write
+jobs:
+  deploy:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: site-output
+          path: incoming
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+      - run: bash incoming/deploy.sh incoming

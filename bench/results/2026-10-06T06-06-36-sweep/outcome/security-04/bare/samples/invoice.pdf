@@ -1,0 +1,5 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Upload type-confusion sample</title>
+<p>This is HTML renamed as a PDF. It contains only a local browser canary.</p>
+<script>document.title = "upload-xss-canary";</script>

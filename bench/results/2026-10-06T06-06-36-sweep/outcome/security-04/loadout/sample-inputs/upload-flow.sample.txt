@@ -1,0 +1,73 @@
+# SYNTHETIC INPUT: invented upload-flow pseudocode; NOT discovered application code.
+# Inert review fixture only. All helpers below describe semantics, not library APIs.
+# Symbols are deliberately framework-neutral; dependency versions are unknown.
+
+HELPER CONTRACTS
+  require_session(request): verifies a session cookie; returns trusted user.id.
+  multipart_file(request, "file"): exposes client filename, MIME, and byte stream.
+  read_all(stream): buffers all bytes without an application byte limit.
+  join_path(root, owner, filename): normal filesystem joining, allowing absolute
+    filenames and dot segments; no containment check or symlink protection.
+  write_bytes(path, bytes): creates or truncates a file at path, within OS privileges.
+  db.insert(record): persists a record with an increasing integer id.
+  db.get(id): returns a record by id without user scoping.
+  queue.push(job): queues an internal job; users cannot enqueue jobs directly.
+  serve_file(path, type, disposition): serves original bytes with stated headers.
+  decode_raster(path): decodes PNG/JPEG; no explicit pixel/frame/time limits.
+    Decoder implementation, defaults, native dependencies, and version unspecified.
+  render_svg(path): renders SVG; external references and XML settings unspecified.
+  save_thumbnail(image, id): writes a JPEG under THUMB_ROOT using server record id.
+  log(message): writes an unstructured server log.
+
+CONFIG
+  UPLOAD_ROOT = "/srv/app/uploads"
+  THUMB_ROOT = "/srv/app/thumbnails"
+  ALLOWED_MIME = {"image/png", "image/jpeg", "image/svg+xml",
+                  "application/pdf", "application/zip"}
+
+POST /api/uploads -> upload(request)
+  user = require_session(request)
+  file = multipart_file(request, "file")
+  if file.client_mime not in ALLOWED_MIME: reject(415)
+  payload = read_all(file.stream)
+  destination = join_path(UPLOAD_ROOT, user.id, file.client_filename)
+  write_bytes(destination, payload)
+  record = db.insert({owner_id: user.id, path: destination,
+                      filename: file.client_filename, mime: file.client_mime})
+  queue.push({record_id: record.id})
+  log("uploaded " + file.client_filename)
+  return {id: record.id, url: "/uploads/" + user.id + "/" + file.client_filename}
+
+GET /api/uploads/{id} -> download(request, id)
+  user = require_session(request)
+  record = db.get(id)
+  if record is missing: reject(404)
+  return serve_file(record.path, record.mime, "inline")
+
+GET /api/uploads/{id}/thumbnail -> thumbnail(request, id)
+  user = require_session(request)
+  record = db.get(id)
+  if record is missing: reject(404)
+  return serve_file(THUMB_ROOT + "/" + record.id + ".jpg", "image/jpeg", "inline")
+
+WORKER process(job)
+  record = db.get(job.record_id)
+  if record.mime in {"image/png", "image/jpeg"}:
+    image = decode_raster(record.path)
+    save_thumbnail(image, record.id)
+  if record.mime == "image/svg+xml":
+    image = render_svg(record.path)
+    save_thumbnail(image, record.id)
+  # PDF and ZIP originals are stored/served without parsing or extraction.
+  # Processing errors fail the job; originals remain immediately accessible.
+
+STATIC SERVER /uploads/{path} -> serve_upload(path)
+  # Files under UPLOAD_ROOT are publicly readable without session/owner checks.
+  # Static server confines lookup to UPLOAD_ROOT; directory listing is disabled.
+  # It guesses content type from extension and serves originals inline.
+  # No explicit Content-Security-Policy or X-Content-Type-Options is configured.
+
+COVERAGE LIMITS
+  # No scan/quarantine state, content inspection, extension check, delete route,
+  # CSRF check, application rate/quota check, or audit event appears in this sample.
+  # Reverse proxy limits and decoder defaults must be checked separately.

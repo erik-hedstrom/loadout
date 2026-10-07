@@ -191,6 +191,50 @@ These are small samples (10 requests per cell, capped runs), not outcome
 measurements: they show whether the skill reaches the agent's context, not
 whether the result is better.
 
+### Is the work better? (outcome pilot, 2026-10-07)
+
+[outcome.ts](outcome.ts) runs each request twice with Codex (gpt-6.1-sol) in
+fresh folders, capped at 6 minutes:
+- **bare:** nothing from loadout;
+- **loadout:** the sweep's selection, which here is the judge's top skill,
+  injected for 7 of the 8.
+
+Claude Opus then compares the two sets of deliverables blind, in both orders.
+A preference counts only if it holds both ways. Eight requests where a
+specific skill exists:
+
+| Request | Skill | Verdict | Notes |
+|---|---|---|---|
+| MCP server for a docs folder | `mcp-builder` | **loadout** | structured outputs, strict schemas, tool titles |
+| Queue-backlog runbook | `runbook` | **loadout** | placeholders throughout, never guesses production names |
+| GitHub Actions security review | `gha-security-review` | **loadout** | both timed out; low/medium confidence |
+| Merge two Obsidian notes | `obsidian-markdown` | **loadout** | |
+| Vendor quote comparison | `vendor-review` | split | loadout / tie |
+| A/B test analysis | `statistical-analysis` | bare | bare's script takes any CSV |
+| UV-Vis calculation review | `uncertainty-and-units` | bare | loadout timed out before writing the review document |
+| Threat model for uploads | `security-threat-model` | bare | loadout timed out; bare's sample code was more realistic |
+
+**Loadout better in 4, bare in 3, 1 split. No overall quality gain shows at
+this size.**
+- The verdicts are consistent: 7 of 8 held in both orders.
+- The wins are where a skill encodes conventions a strong agent would not
+  apply unprompted: MCP best practices, runbook safety, Obsidian specifics.
+- Two of the three losses are runs where following the skill took longer and
+  hit the time cap (loadout timed out 4 times, bare twice).
+- gpt-6.1-sol does these tasks well on its own.
+
+Limits:
+- 8 requests;
+- each arm made up its own sample inputs;
+- both arms ran with the user's Codex configuration;
+- a skill's template can show in its output, so the judge is not perfectly
+  blind.
+
+Next tests:
+- fixed input fixtures and longer caps;
+- the small tier (gpt-5.6-luna, Haiku), where loadout's cost argument says
+  skills should matter most.
+
 ## v3 (2026-10-06): specificity gate, injection, mentions
 
 Changes from v2, prompted by an adversarial review with Codex (gpt-6.1-sol,

@@ -1,0 +1,145 @@
+--- a/.github/workflows/build.yml
++++ b/.github/workflows/build.yml
+@@ -11,28 +11,19 @@
+     runs-on: ubuntu-latest
+     steps:
+       - uses: actions/checkout@v4
++        with:
++          persist-credentials: false
+       - uses: actions/setup-node@v4
+         with:
+           node-version: '22'
+-      - uses: actions/cache@v4
+-        with:
+-          path: ~/.npmrc
+-          key: npm-auth-${{ runner.os }}-v1
+-      - name: Configure registry on main
+-        if: github.event_name == 'push'
+-        env:
+-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+-        run: |
+-          printf '//registry.npmjs.org/:_authToken=%s\n' "$NPM_TOKEN" > "$HOME/.npmrc"
+       - run: npm ci
+       - run: npm test
+-      - name: Build site and bundle deploy helper
++      - name: Build site
+         run: |
+           mkdir -p dist
+           cp site/index.html dist/index.html
+-          cp .github/scripts/deploy.sh dist/deploy.sh
+       - uses: actions/upload-artifact@v4
+         with:
+           name: site-output
+-          path: dist/
++          path: dist/index.html
+           if-no-files-found: error
+--- a/.github/workflows/deploy.yml
++++ b/.github/workflows/deploy.yml
+@@ -6,19 +6,28 @@
+     types: [completed]
+ permissions:
+   actions: read
+-  contents: write
++  contents: read
+ jobs:
+   deploy:
+-    if: github.event.workflow_run.conclusion == 'success'
++    if: >-
++      github.event.workflow_run.conclusion == 'success' &&
++      github.event.workflow_run.event == 'push' &&
++      github.event.workflow_run.head_branch == 'main' &&
++      github.event.workflow_run.head_repository.full_name == github.repository
+     runs-on: ubuntu-latest
+-    env:
+-      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+-      GH_TOKEN: ${{ github.token }}
+     steps:
++      - uses: actions/checkout@v4
++        with:
++          ref: ${{ github.event.workflow_run.head_sha }}
++          persist-credentials: false
+       - uses: actions/download-artifact@v4
+         with:
+           name: site-output
+-          path: incoming
++          path: ${{ runner.temp }}/site-output
+           run-id: ${{ github.event.workflow_run.id }}
+           github-token: ${{ github.token }}
+-      - run: bash incoming/deploy.sh incoming
++      - name: Deploy with trusted helper
++        env:
++          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
++          ARTIFACT_DIR: ${{ runner.temp }}/site-output
++        run: bash .github/scripts/deploy.sh "$ARTIFACT_DIR"
+--- a/.github/workflows/pr-check.yml
++++ b/.github/workflows/pr-check.yml
+@@ -1,21 +1,17 @@
+ # TEST FIXTURE: intentionally vulnerable; never enable in a real repository.
+ name: PR Checks
+ on:
+-  pull_request_target:
++  pull_request:
+     types: [opened, synchronize, reopened]
+-permissions: write-all
++permissions:
++  contents: read
+ jobs:
+   test:
+     runs-on: ubuntu-latest
+-    env:
+-      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+-      GH_TOKEN: ${{ github.token }}
+     steps:
+       - uses: actions/checkout@v4
+         with:
+-          repository: ${{ github.event.pull_request.head.repo.full_name }}
+-          ref: ${{ github.event.pull_request.head.sha }}
+-          allow-unsafe-pr-checkout: true
++          persist-credentials: false
+       - uses: actions/setup-node@v4
+         with:
+           node-version: '22'
+--- a/.github/workflows/pr-comment.yml
++++ b/.github/workflows/pr-comment.yml
+@@ -3,19 +3,19 @@
+ on:
+   pull_request_target:
+     types: [opened, edited, reopened]
+-permissions: write-all
++permissions:
++  pull-requests: write
+ jobs:
+   comment:
+     runs-on: ubuntu-latest
+-    env:
+-      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+-      GH_TOKEN: ${{ github.token }}
+     steps:
+       - name: Prepare comment
++        env:
++          PR_TITLE: ${{ github.event.pull_request.title }}
++          PR_BRANCH: ${{ github.event.pull_request.head.ref }}
+         run: |
+-          echo "Reviewing: ${{ github.event.pull_request.title }}" > comment.txt
+-          echo "Branch: ${{ github.event.pull_request.head.ref }}" >> comment.txt
+-      - uses: peter-evans/create-or-update-comment@v4
++          printf 'Reviewing: %s\nBranch: %s\n' "$PR_TITLE" "$PR_BRANCH" > comment.txt
++      - uses: peter-evans/create-or-update-comment@71345be0265236311c031f5c7866368bd1eff043 # v4.0.0
+         with:
+           token: ${{ github.token }}
+           issue-number: ${{ github.event.pull_request.number }}
+--- a/.github/workflows/self-hosted.yml
++++ b/.github/workflows/self-hosted.yml
+@@ -6,9 +6,11 @@
+   contents: read
+ jobs:
+   integration:
+-    runs-on: [self-hosted, linux, x64, shared-ci]
++    runs-on: ubuntu-latest
+     steps:
+       - uses: actions/checkout@v4
++        with:
++          persist-credentials: false
+       - uses: actions/setup-node@v4
+         with:
+           node-version: '22'

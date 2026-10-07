@@ -1,0 +1,149 @@
+--- a/.github/workflows/pr-ci.yml
++++ b/.github/workflows/pr-ci.yml
+@@ -1,32 +1,28 @@
+-# Intentionally vulnerable audit fixture; do not enable in a repository.
++# Audit fixture proposal; review repository settings before enabling.
+ name: PR CI
+ on:
+-  pull_request_target:
++  pull_request:
+     types: [opened, synchronize, reopened, edited]
+-permissions: write-all
+-cache-mode: write
+-env:
+-  NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+-  GH_TOKEN: ${{ secrets.RELEASE_PAT }}
++permissions:
++  contents: read
++cache-mode: none
+ jobs:
+   test:
+-    runs-on: [self-hosted, linux, production]
++    runs-on: ubuntu-latest
+     steps:
+-      - uses: actions/checkout@v4.2.2
++      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+         with:
+-          repository: ${{ github.event.pull_request.head.repo.full_name }}
+-          ref: ${{ github.event.pull_request.head.sha }}
+-      - uses: actions/setup-node@v4.4.0
++          persist-credentials: false
++      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+         with:
+           node-version: '22'
++          package-manager-cache: false
+       - name: Describe PR
++        env:
++          PR_TITLE: ${{ github.event.pull_request.title }}
++          PR_BRANCH: ${{ github.head_ref }}
+         run: |
+-          echo "Title: ${{ github.event.pull_request.title }}"
+-          echo "Branch: ${{ github.head_ref }}"
+-      - uses: actions/cache@v4
+-        with:
+-          path: node_modules
+-          key: executable-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+-          restore-keys: executable-${{ runner.os }}-
++          printf 'Title: %s\n' "$PR_TITLE"
++          printf 'Branch: %s\n' "$PR_BRANCH"
+       - run: npm ci
+       - run: npm test
+--- a/.github/workflows/build.yml
++++ b/.github/workflows/build.yml
+@@ -1,4 +1,4 @@
+-# Intentionally vulnerable audit fixture; do not enable in a repository.
++# Audit fixture proposal; review repository settings before enabling.
+ name: Build
+ on:
+   pull_request:
+@@ -6,18 +6,22 @@
+     branches: [main]
+ permissions:
+   contents: read
++cache-mode: none
+ jobs:
+   build:
+     runs-on: ubuntu-latest
+     steps:
+-      - uses: actions/checkout@v4.2.2
+-      - uses: actions/setup-node@v4.4.0
++      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
++        with:
++          persist-credentials: false
++      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+         with:
+           node-version: '22'
++          package-manager-cache: false
+       - run: npm ci
+       - run: npm test
+       - run: npm run build
+-      - uses: actions/upload-artifact@v4.6.2
++      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+         with:
+           name: release-bundle
+           path: dist/
+--- a/.github/workflows/publish.yml
++++ b/.github/workflows/publish.yml
+@@ -1,37 +1,39 @@
+-# Intentionally vulnerable audit fixture; do not enable in a repository.
++# Audit fixture proposal; review repository settings before enabling.
+ name: Publish
+ on:
+   workflow_run:
+     workflows: [Build]
+     types: [completed]
+-permissions: write-all
+-cache-mode: write
+-env:
+-  NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+-  GH_TOKEN: ${{ secrets.RELEASE_PAT }}
++    branches: [main]
++permissions:
++  contents: read
++cache-mode: none
+ jobs:
+   publish:
+-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
++    # A successful PR build is still untrusted, including same-repository PRs.
++    if: >-
++      github.event.workflow_run.conclusion == 'success' &&
++      github.event.workflow_run.event == 'push' &&
++      github.event.workflow_run.head_branch == 'main' &&
++      github.event.workflow_run.head_repository.full_name == github.repository
+     runs-on: ubuntu-latest
++    environment: production
+     steps:
+-      - uses: actions/checkout@v4.2.2
++      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+         with:
+-          repository: ${{ github.event.workflow_run.head_repository.full_name }}
++          repository: ${{ github.repository }}
+           ref: ${{ github.event.workflow_run.head_sha }}
+-      - uses: actions/setup-node@v4.4.0
++          persist-credentials: false
++      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+         with:
+           node-version: '22'
+-      - uses: actions/cache@v4
+-        with:
+-          path: node_modules
+-          key: executable-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+-          restore-keys: executable-${{ runner.os }}-
++          package-manager-cache: false
++          registry-url: https://registry.npmjs.org
++      - run: npm ci
++      - run: npm test
+       - run: npm run build
+-      - uses: dawidd6/action-download-artifact@v6
+-        with:
+-          github_token: ${{ github.token }}
+-          run_id: ${{ github.event.workflow_run.id }}
+-          name: release-bundle
+-          path: dist
+-          allow_forks: true
+-      - run: bash dist/publish.sh
++      # Rebuild from the trusted push SHA; never execute a PR-produced artifact.
++      - name: Publish package
++        env:
++          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
++        run: npm publish --ignore-scripts

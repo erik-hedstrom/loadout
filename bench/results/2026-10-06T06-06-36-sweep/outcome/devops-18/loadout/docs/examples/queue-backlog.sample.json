@@ -1,0 +1,28 @@
+{
+  "sample_only": true,
+  "queue_system": "Amazon SQS standard (assumed, not detected)",
+  "region": "eu-north-1",
+  "queue_name": "example-jobs",
+  "queue_url": "https://sqs.eu-north-1.amazonaws.com/000000000000/example-jobs",
+  "dlq_name": "example-jobs-dlq",
+  "redrive_policy": {
+    "deadLetterTargetArn": "arn:aws:sqs:eu-north-1:000000000000:example-jobs-dlq",
+    "maxReceiveCount": 5
+  },
+  "visibility_timeout_seconds": 120,
+  "message_retention_seconds": 345600,
+  "workers": {
+    "platform": "Kubernetes (assumed)",
+    "namespace": "example-jobs",
+    "deployment": "example-worker",
+    "selector": "app=example-worker",
+    "replicas": 3,
+    "autoscaler": "none in sample; verify actual HPA/KEDA/GitOps ownership"
+  },
+  "proposed_alerts_not_deployed": {
+    "oldest_age_seconds": 300,
+    "visible_messages": 1000,
+    "sustained_minutes": 10,
+    "dlq_visible_messages": 1
+  }
+}

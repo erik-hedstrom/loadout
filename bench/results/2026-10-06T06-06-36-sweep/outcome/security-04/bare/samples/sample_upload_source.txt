@@ -1,0 +1,76 @@
+# SYNTHETIC REVIEW INPUT — not discovered application code; do not deploy.
+# Python-style Flask excerpt. Login, deployment, and dependency versions are unknown.
+import os
+from io import BytesIO
+from pathlib import Path
+from uuid import uuid4
+
+from flask import Flask, abort, jsonify, request, send_from_directory, session
+from PIL import Image
+from werkzeug.utils import secure_filename
+
+app = Flask(__name__)
+app.secret_key = os.environ["SESSION_SECRET"]
+UPLOAD_ROOT = Path("/srv/app-data/uploads")
+ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png", "pdf"}
+MAX_FILE_BYTES = 10 * 1024 * 1024
+records = {}  # Stand-in for an unspecified metadata database, not a persistence design.
+# No request-body ceiling, CSRF middleware, quota, or rate limit in this excerpt.
+
+
+@app.post("/api/uploads")
+def upload():
+    user_id = session.get("user_id")
+    if user_id is None:
+        abort(401)
+    file = request.files.get("file")
+    if file is None or not file.filename:
+        abort(400)
+    display_name = secure_filename(file.filename)
+    extension = Path(display_name).suffix.lower().lstrip(".")
+    if extension not in ALLOWED_EXTENSIONS:
+        abort(415)
+    payload = file.stream.read()
+    if len(payload) > MAX_FILE_BYTES:
+        abort(413)
+    file_id = uuid4().hex
+    storage_name = f"{file_id}.{extension}"
+    UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
+    with (UPLOAD_ROOT / storage_name).open("wb") as output:
+        output.write(payload)
+    records[file_id] = {
+        "owner_id": user_id,
+        "storage_name": storage_name,
+        "original_name": display_name,
+        "mime": file.mimetype,
+        "status": "ready",
+    }
+    if extension in {"jpg", "jpeg", "png"}:
+        with Image.open(BytesIO(payload)) as image:
+            image.thumbnail((256, 256))
+            image.convert("RGB").save(UPLOAD_ROOT / f"{file_id}.thumb.jpg")
+    return jsonify({"id": file_id, "url": f"/uploads/{file_id}"}), 201
+
+
+@app.get("/uploads/<file_id>")
+def download(file_id):
+    record = records.get(file_id)
+    if record is None:
+        abort(404)
+    return send_from_directory(
+        UPLOAD_ROOT,
+        record["storage_name"],
+        mimetype=record["mime"],
+        as_attachment=False,
+    )
+
+
+@app.get("/uploads/<file_id>/thumbnail")
+def thumbnail(file_id):
+    record = records.get(file_id)
+    if record is None or not record["storage_name"].endswith((".jpg", ".jpeg", ".png")):
+        abort(404)
+    return send_from_directory(UPLOAD_ROOT, f"{file_id}.thumb.jpg", mimetype="image/jpeg")
+
+# No antivirus, PDF parsing, XML parsing, archive extraction, remote fetch, or shell calls.
+# No object-storage configuration, web-server mapping, cache policy, or audit sink supplied.

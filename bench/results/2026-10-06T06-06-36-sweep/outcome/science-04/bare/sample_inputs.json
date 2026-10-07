@@ -1,0 +1,27 @@
+{
+  "provenance": "SYNTHETIC TEST INPUTS; not measurements supplied by the user",
+  "wavelength_nm": 500.0,
+  "u_wavelength_nm": 1.0,
+  "path_length_mm": 10.00,
+  "u_path_length_mm": 0.05,
+  "epsilon_L_mol_cm": 30000.0,
+  "u_epsilon_L_mol_cm": 600.0,
+  "absorbance_raw": 0.620,
+  "u_absorbance_raw": 0.005,
+  "absorbance_blank": 0.020,
+  "u_absorbance_blank": 0.003,
+  "transmission_example": {
+    "incident_counts": 100000.0,
+    "u_incident_counts": 1000.0,
+    "transmitted_counts": 25000.0,
+    "u_transmitted_counts": 300.0,
+    "correlation": 0.6,
+    "transmittance_percent": 25.0
+  },
+  "repeat_example": {
+    "raw_absorbances": [0.618, 0.622],
+    "u_each_raw_absorbance": 0.005,
+    "shared_blank": 0.020,
+    "u_shared_blank": 0.003
+  }
+}

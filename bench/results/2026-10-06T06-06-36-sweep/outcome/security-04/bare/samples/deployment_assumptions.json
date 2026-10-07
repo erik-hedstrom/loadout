@@ -1,0 +1,16 @@
+{
+  "evidence_kind": "synthetic_assumptions_not_observed_configuration",
+  "uploaders": "Signed-in users, including a potentially malicious self-registered user; registration policy unknown",
+  "privacy_requirement": "Files are private to an owner or an explicitly authorized recipient",
+  "session_authentication": "Signed cookie sessions; login correctness, secret handling, cookie attributes and CSRF protections unknown",
+  "application_origin": "https://app.example.test",
+  "download_origin": "Same application origin in the sample; actual CDN and cookie scope unknown",
+  "storage_backend": "Local Linux persistent volume at /srv/app-data/uploads; actual backend unknown",
+  "storage_mapping": "No direct web-server alias assumed; actual webroot, aliases, symlinks and permissions unknown",
+  "edge": "TLS proxy assumed; body limits, timeouts, upload buffering and rate limits unknown",
+  "processing": "JPEG/PNG thumbnailing in request process; PDF is stored without parsing",
+  "metadata": "Sample dictionary stands in for an unspecified durable database; real persistence, atomicity and worker topology unknown",
+  "dependencies": "Flask, Werkzeug and Pillow are illustrative choices only; no manifest, lockfile or deployed versions supplied",
+  "network": "Worker egress and access to cloud metadata endpoints unknown",
+  "storage_alternative": "If object storage is used, inspect bucket policies, ACLs, signed URLs, IAM, CDN caching and lifecycle rules"
+}

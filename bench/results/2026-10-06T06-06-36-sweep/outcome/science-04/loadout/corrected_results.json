@@ -1,0 +1,258 @@
+{
+  "provenance": "SYNTHETIC TEST INPUTS created for this audit; not user measurements",
+  "uncertainty_method": "first-order covariance propagation; all +/- values standard unless explicitly labeled otherwise",
+  "corrected": {
+    "E01": {
+      "value": 18796.992481203008,
+      "standard_uncertainty": 17.66634631692012,
+      "unit": "cm^-1"
+    },
+    "E02": {
+      "value": 563519657894736.8,
+      "standard_uncertainty": 529623738622.87286,
+      "unit": "Hz"
+    },
+    "E03": {
+      "value": 3.7339207841145267e-19,
+      "standard_uncertainty": 3.5093240452204196e-22,
+      "unit": "J/photon"
+    },
+    "E04": {
+      "value": 224.86196548627254,
+      "standard_uncertainty": 0.21133643372769975,
+      "unit": "kJ/mol"
+    },
+    "E05": {
+      "value": 17.66634631692012,
+      "unit": "cm^-1 standard uncertainty"
+    },
+    "E06": {
+      "value": 0.4999999999999999,
+      "standard_uncertainty": 0.008124905781242317,
+      "unit": "dimensionless"
+    },
+    "E07": {
+      "value": 0.008124905781242317,
+      "unit": "dimensionless standard uncertainty"
+    },
+    "E08": {
+      "value": 0.48,
+      "standard_uncertainty": 0.00447213595499958,
+      "unit": "dimensionless"
+    },
+    "E09": {
+      "value": 0.48,
+      "standard_uncertainty": 0.00447213595499958,
+      "unit": "dimensionless"
+    },
+    "E10": {
+      "value": 29.999999999999996,
+      "standard_uncertainty": 0.4111265012134343,
+      "unit": "umol/L"
+    },
+    "E11": {
+      "value": 0.01,
+      "unit": "mm standard uncertainty"
+    },
+    "E12": {
+      "value": 0.4111265012134343,
+      "unit": "umol/L standard uncertainty"
+    },
+    "E13": {
+      "value": 0.4111265012134343,
+      "unit": "umol/L standard uncertainty"
+    },
+    "E14": {
+      "value": 10.0,
+      "standard_uncertainty": 0.01243650540411842,
+      "unit": "dimensionless"
+    },
+    "E15": {
+      "slope": 0.016014285714285714,
+      "u_slope": 9.561828874675149e-05,
+      "slope_unit": "L/umol",
+      "intercept": 0.021809523809523834,
+      "u_intercept": 0.002894987457822984,
+      "intercept_unit": "dimensionless"
+    },
+    "E16": {
+      "value": 29.860243829913767,
+      "standard_uncertainty": 0.2713462176131464,
+      "unit": "umol/L"
+    },
+    "E17": {
+      "value": 29.860243829913767,
+      "standard_uncertainty": 0.2713462176131464,
+      "unit": "umol/L"
+    },
+    "E18": {
+      "value": 0.5,
+      "standard_uncertainty": 0.0011547005383792527,
+      "unit": "dimensionless",
+      "dof": 2
+    },
+    "E19": {
+      "value": 16000.0,
+      "unit": "L mol^-1 cm^-1",
+      "equivalent_value": 1600.0,
+      "equivalent_unit": "L mol^-1 mm^-1"
+    },
+    "E20": {
+      "value": 299.99999999999994,
+      "standard_uncertainty": 4.1281593961473915,
+      "unit": "umol/L",
+      "reported": "300.0 +/- 4.1 umol/L (combined standard uncertainty; no 95% coverage claim)"
+    }
+  },
+  "energy_eV": {
+    "value": 2.3305300457368467,
+    "standard_uncertainty": 0.0021903477873466606
+  },
+  "direct_concentration_budget": [
+    {
+      "input": "blank-corrected absorbance",
+      "sensitivity": 62.5,
+      "standard_uncertainty": 0.00447213595499958,
+      "signed_contribution_umol_per_L": 0.2795084971874737,
+      "variance_fraction": 0.4622097322881231
+    },
+    {
+      "input": "molar absorptivity",
+      "sensitivity": -0.0018749999999999997,
+      "standard_uncertainty": 160.0,
+      "signed_contribution_umol_per_L": -0.29999999999999993,
+      "variance_fraction": 0.5324656115959174
+    },
+    {
+      "input": "path length in cm",
+      "sensitivity": -29.999999999999996,
+      "standard_uncertainty": 0.001,
+      "signed_contribution_umol_per_L": -0.029999999999999995,
+      "variance_fraction": 0.005324656115959176
+    }
+  ],
+  "calibration": {
+    "parameter_order": [
+      "slope",
+      "intercept"
+    ],
+    "covariance": [
+      [
+        9.142857142857143e-09,
+        -2.2857142857142858e-07
+      ],
+      [
+        -2.2857142857142858e-07,
+        8.380952380952382e-06
+      ]
+    ],
+    "correlation": -0.8257228238447705,
+    "chi_squared": 1.9047619047619249,
+    "residual_dof": 4,
+    "reduced_chi_squared": 0.4761904761904812
+  },
+  "monte_carlo_diagnostics": [
+    {
+      "seed": 20261007,
+      "trials": 40000,
+      "stock": {
+        "mean": 300.04152202447824,
+        "standard_deviation": 4.116371256466416,
+        "equal_tail_95_percent_diagnostic": [
+          292.11127492212063,
+          308.14649204432146
+        ],
+        "unit": "umol/L"
+      },
+      "calibration": {
+        "mean": 29.862171390286804,
+        "standard_deviation": 0.2706590743801632,
+        "equal_tail_95_percent_diagnostic": [
+          29.33580137993898,
+          30.393355957115766
+        ],
+        "unit": "umol/L"
+      }
+    },
+    {
+      "seed": 20261008,
+      "trials": 40000,
+      "stock": {
+        "mean": 300.04115046367036,
+        "standard_deviation": 4.122263170108189,
+        "equal_tail_95_percent_diagnostic": [
+          292.0149488966576,
+          308.2030251164784
+        ],
+        "unit": "umol/L"
+      },
+      "calibration": {
+        "mean": 29.861056308955238,
+        "standard_deviation": 0.2709114477763607,
+        "equal_tail_95_percent_diagnostic": [
+          29.332575563857816,
+          30.396951143220075
+        ],
+        "unit": "umol/L"
+      }
+    },
+    {
+      "seed": 20261009,
+      "trials": 40000,
+      "stock": {
+        "mean": 300.015941592583,
+        "standard_deviation": 4.154901913621085,
+        "equal_tail_95_percent_diagnostic": [
+          291.88266626109225,
+          308.2409983764461
+        ],
+        "unit": "umol/L"
+      },
+      "calibration": {
+        "mean": 29.857990478462025,
+        "standard_deviation": 0.27161042793308143,
+        "equal_tail_95_percent_diagnostic": [
+          29.323972176124055,
+          30.386341971864503
+        ],
+        "unit": "umol/L"
+      }
+    }
+  ],
+  "verification": {
+    "passed": 30,
+    "checks": [
+      "532 nm wavelength round trip from wavenumber",
+      "frequency and wavelength round trip",
+      "energy agreement via wavelength and frequency",
+      "molar energy conversion round trip",
+      "Beer-Lambert forward recovery",
+      "mm and cm paths give same physical concentration",
+      "shared blank covariance equals independent-source cancellation",
+      "finite-difference direct sensitivity 0",
+      "finite-difference direct sensitivity 1",
+      "finite-difference direct sensitivity 2",
+      "finite-difference inverse-fit sensitivity 0",
+      "finite-difference inverse-fit sensitivity 1",
+      "finite-difference inverse-fit sensitivity 2",
+      "weighted fit agrees with independent library fit for constant sigma",
+      "fit covariance inverse-information identity 0,0",
+      "fit covariance inverse-information identity 0,1",
+      "fit covariance inverse-information identity 1,0",
+      "fit covariance inverse-information identity 1,1",
+      "Monte Carlo 20261007 stock SD within 2.5% of first order",
+      "Monte Carlo 20261007 stock mean within 0.02 u of nominal",
+      "Monte Carlo 20261007 calibration SD within 2.5% of first order",
+      "Monte Carlo 20261007 calibration mean within 0.02 u of nominal",
+      "Monte Carlo 20261008 stock SD within 2.5% of first order",
+      "Monte Carlo 20261008 stock mean within 0.02 u of nominal",
+      "Monte Carlo 20261008 calibration SD within 2.5% of first order",
+      "Monte Carlo 20261008 calibration mean within 0.02 u of nominal",
+      "Monte Carlo 20261009 stock SD within 2.5% of first order",
+      "Monte Carlo 20261009 stock mean within 0.02 u of nominal",
+      "Monte Carlo 20261009 calibration SD within 2.5% of first order",
+      "Monte Carlo 20261009 calibration mean within 0.02 u of nominal"
+    ]
+  },
+  "limitations": "Pint, uncertainties, NumPy and SciPy unavailable; package installation failed due to DNS/network restriction. Closed-form standard-library WLS used, not SciPy execution. Monte Carlo is a fixed-trial diagnostic, not interval validation or proof of input PDFs."
+}

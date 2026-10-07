@@ -1,0 +1,32 @@
+# Intentionally vulnerable audit fixture; do not enable in a repository.
+name: PR CI
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited]
+permissions: write-all
+cache-mode: write
+env:
+  NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+  GH_TOKEN: ${{ secrets.RELEASE_PAT }}
+jobs:
+  test:
+    runs-on: [self-hosted, linux, production]
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v4.4.0
+        with:
+          node-version: '22'
+      - name: Describe PR
+        run: |
+          echo "Title: ${{ github.event.pull_request.title }}"
+          echo "Branch: ${{ github.head_ref }}"
+      - uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: executable-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: executable-${{ runner.os }}-
+      - run: npm ci
+      - run: npm test

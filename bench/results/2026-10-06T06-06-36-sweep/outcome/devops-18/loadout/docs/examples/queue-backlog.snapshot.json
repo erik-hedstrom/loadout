@@ -1,0 +1,33 @@
+{
+  "sample_only": true,
+  "scenario": "traffic spike; healthy workers; arrival rate exceeds processing rate",
+  "interval_seconds": 300,
+  "snapshots": [
+    {
+      "timestamp": "2026-10-07T02:00:00Z",
+      "visible": 1200,
+      "in_flight": 30,
+      "delayed": 0,
+      "oldest_age_seconds": 310,
+      "ready_worker_pods": 3,
+      "messages_sent": 900,
+      "messages_deleted": 600,
+      "successful_jobs": 600,
+      "failed_attempts": 3,
+      "dlq_visible": 0
+    },
+    {
+      "timestamp": "2026-10-07T02:05:00Z",
+      "visible": 1500,
+      "in_flight": 30,
+      "delayed": 0,
+      "oldest_age_seconds": 390,
+      "ready_worker_pods": 3,
+      "messages_sent": 900,
+      "messages_deleted": 600,
+      "successful_jobs": 600,
+      "failed_attempts": 3,
+      "dlq_visible": 0
+    }
+  ]
+}

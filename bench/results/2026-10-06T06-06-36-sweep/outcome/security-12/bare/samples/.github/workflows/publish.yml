@@ -1,0 +1,37 @@
+# Intentionally vulnerable audit fixture; do not enable in a repository.
+name: Publish
+on:
+  workflow_run:
+    workflows: [Build]
+    types: [completed]
+permissions: write-all
+cache-mode: write
+env:
+  NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+  GH_TOKEN: ${{ secrets.RELEASE_PAT }}
+jobs:
+  publish:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          repository: ${{ github.event.workflow_run.head_repository.full_name }}
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - uses: actions/setup-node@v4.4.0
+        with:
+          node-version: '22'
+      - uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: executable-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: executable-${{ runner.os }}-
+      - run: npm run build
+      - uses: dawidd6/action-download-artifact@v6
+        with:
+          github_token: ${{ github.token }}
+          run_id: ${{ github.event.workflow_run.id }}
+          name: release-bundle
+          path: dist
+          allow_forks: true
+      - run: bash dist/publish.sh

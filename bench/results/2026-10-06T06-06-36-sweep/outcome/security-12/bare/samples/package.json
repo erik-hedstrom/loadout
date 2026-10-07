@@ -1,0 +1,12 @@
+{
+  "name": "actions-security-audit-fixture",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Local audit fixture; publication is deliberately disabled",
+  "type": "module",
+  "files": ["dist/index.js"],
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "build": "node scripts/build.js"
+  }
+}

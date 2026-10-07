@@ -1,0 +1,19 @@
+{
+  "sample_only": true,
+  "queue_system": "Amazon SQS Standard",
+  "worker_runtime": "Amazon ECS rolling deployment",
+  "region": "eu-north-1",
+  "queue_name": "orders-production",
+  "dlq_name": "orders-production-dlq",
+  "ecs_cluster": "production",
+  "ecs_service": "orders-worker",
+  "worker_log_group": "/ecs/orders-worker",
+  "visibility_timeout_seconds": 120,
+  "max_receive_count": 5,
+  "source_retention_seconds": 345600,
+  "dlq_retention_seconds": 1209600,
+  "normal_worker_count": 4,
+  "approved_worker_ceiling": "<FILL_FROM_CAPACITY_PLAN>",
+  "producer_pause_control": "<PRODUCER_FEATURE_FLAG_OR_DEPLOYMENT_RUNBOOK>",
+  "application_metrics_dashboard": "<WORKER_SUCCESS_ERROR_LATENCY_DASHBOARD_URL>"
+}

@@ -1,0 +1,38 @@
+# TEST FIXTURE: intentionally vulnerable; never enable in a real repository.
+name: Build
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/cache@v4
+        with:
+          path: ~/.npmrc
+          key: npm-auth-${{ runner.os }}-v1
+      - name: Configure registry on main
+        if: github.event_name == 'push'
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          printf '//registry.npmjs.org/:_authToken=%s\n' "$NPM_TOKEN" > "$HOME/.npmrc"
+      - run: npm ci
+      - run: npm test
+      - name: Build site and bundle deploy helper
+        run: |
+          mkdir -p dist
+          cp site/index.html dist/index.html
+          cp .github/scripts/deploy.sh dist/deploy.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: site-output
+          path: dist/
+          if-no-files-found: error

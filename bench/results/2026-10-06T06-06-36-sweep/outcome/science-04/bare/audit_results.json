@@ -1,0 +1,86 @@
+{
+  "provenance": "SYNTHETIC DATA ONLY; all uncertainties are standard uncertainties (k=1)",
+  "spectral": {
+    "wavelength_nm": 500.0,
+    "wavenumber_cm_inv": 19999.999999999996,
+    "u_wavenumber_cm_inv": 39.99999999999999,
+    "frequency_Hz": 599584915999999.9,
+    "u_frequency_Hz": 1199169831999.9998,
+    "energy_J": 3.9728917142978563e-19,
+    "u_energy_J": 7.945783428595713e-22,
+    "energy_eV": 2.4796839686640046,
+    "u_energy_eV": 0.00495936793732801,
+    "molar_energy_kJ_mol": 239.25313127739395,
+    "u_molar_energy_kJ_mol": 0.4785062625547879
+  },
+  "transmission": {
+    "transmittance": 0.25,
+    "u_transmittance": 0.0025,
+    "absorbance": 0.6020599913279624,
+    "u_absorbance": 0.004342944819032518,
+    "u_absorbance_if_independent": 0.006783896673065841
+  },
+  "beer_lambert": {
+    "net_absorbance": 0.6,
+    "u_net_absorbance": 0.0058309518948453,
+    "path_length_cm": 1.0,
+    "u_path_length_cm": 0.005,
+    "epsilon_m2_mol": 3000.0,
+    "concentration_M": 1.9999999999999998e-05,
+    "u_concentration_M": 4.558264777059114e-07,
+    "concentration_umol_L": 20.0,
+    "u_concentration_umol_L": 0.4558264777059114
+  },
+  "calibration": {
+    "n": 6,
+    "residual_degrees_of_freedom": 4,
+    "slope_per_umol_L": 0.03006285714285714,
+    "slope_L_mol": 30062.85714285714,
+    "intercept": 0.01971428571428574,
+    "residuals": [
+      0.0012857142857142616,
+      -0.002028571428571435,
+      0.001657142857142857,
+      -0.0026571428571428024,
+      0.0020285714285714906,
+      -0.00028571428571433355
+    ],
+    "residual_standard_deviation": 0.0022232537288526316,
+    "slope_variance": 1.1297959183673441e-08,
+    "intercept_variance": 2.5891156462584972e-06,
+    "slope_intercept_covariance": -1.4122448979591802e-07,
+    "concentration_umol_L": 19.967686751568145,
+    "u_concentration_umol_L": 0.1710859062810871,
+    "u_fit_component_umol_L": 0.04010793999656606,
+    "u_if_slope_intercept_covariance_omitted_umol_L": 0.1884428641514246
+  },
+  "shared_blank": {
+    "mean_net_absorbance": 0.6,
+    "u_mean_net_absorbance": 0.004636809247747852
+  },
+  "flawed_results": {
+    "wavenumber_cm_inv": 2000000.0,
+    "frequency_Hz": 599584.916,
+    "energy_eV": 3.9728917142978567e-19,
+    "molar_energy_kJ_mol": 239253.131277394,
+    "u_wavenumber_cm_inv": 0.002,
+    "transmittance": 0.25,
+    "absorbance_from_counts": 1.3862943611198906,
+    "absorbance_from_percent": -1.3979400086720377,
+    "u_transmittance": 0.01044030650891055,
+    "u_absorbance_from_counts": 0.0417612260356422,
+    "absorbance_net": 0.6,
+    "u_absorbance_net": 0.004,
+    "concentration_M": 2e-06,
+    "u_concentration_M": 6.333333333333333e-08,
+    "concentration_report": "0.000002000000 +/- 0.000000063333 mol/L",
+    "intercept": 0.01971428571428574,
+    "slope_report": "0.0300628571 L mol^-1",
+    "concentration_calibration_M": 19.967686751568145,
+    "concentration_double_blank_umol_L": 19.302413989735793,
+    "u_calibration_umol_L": 0.16631819045808782,
+    "mean_net_absorbance": 0.6,
+    "u_mean_net_absorbance": 0.00412310562561766
+  },
+  "verification": "PASS: 8 analytic/dimensional/covariance checks and 3 finite-difference sensitivity checks"
+}

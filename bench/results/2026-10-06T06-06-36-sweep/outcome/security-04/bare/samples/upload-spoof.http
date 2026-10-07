@@ -1,0 +1,12 @@
+# SYNTHETIC request. No request has been sent. Replace session only in isolated staging.
+POST /api/uploads HTTP/1.1
+Host: app.example.test
+Cookie: session=PLACEHOLDER_NOT_A_REAL_SESSION
+Content-Type: multipart/form-data; boundary=upload-review-boundary
+
+--upload-review-boundary
+Content-Disposition: form-data; name="file"; filename="invoice.pdf"
+Content-Type: text/html
+
+<!doctype html><title>Sample</title><script>document.title="upload-xss-canary";</script>
+--upload-review-boundary--

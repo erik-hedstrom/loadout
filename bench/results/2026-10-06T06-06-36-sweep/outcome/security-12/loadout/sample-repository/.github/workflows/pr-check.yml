@@ -1,0 +1,23 @@
+# TEST FIXTURE: intentionally vulnerable; never enable in a real repository.
+name: PR Checks
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+permissions: write-all
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          allow-unsafe-pr-checkout: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - run: npm test
