@@ -7,7 +7,7 @@ import { afterAll, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CONFIG, type Config } from '../src/config.js';
 import { jevClient, JevError, validateResponse, type Question, type SystemOneClient } from '../src/jev.js';
 import { claudeArgs, claudeHookSettings, codexArgs, hookCommand, hostSetup, launch, loaderArgs, materialize, searchServer, toToml } from '../src/launch.js';
-import { hookOutput, isFollowUp, promptContext } from '../src/hook.js';
+import { hookOutput, isFollowUp, JEV_FALLBACK_NOTE, promptContext } from '../src/hook.js';
 import { createServer, readSkillFile, serveHttp } from '../src/mcp.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
@@ -1066,11 +1066,15 @@ describe('mcp server', () => {
 describe('claude hook', () => {
   const library = scanLibrary(LIBRARY);
 
+  const outage = "globalThis.fetch = async () => { throw new Error('upstream credential canary\\nsecond line'); };";
   it.each([
+    { name: 'reports Jev outages on stderr in fixed text without blocking the prompt', preload: outage, stderr: `${JEV_FALLBACK_NOTE}\n` },
     {
-      name: 'reports Jev outages on stderr without blocking the prompt',
-      preload: "globalThis.fetch = async () => { throw new Error('upstream credential canary\\nsecond line'); };",
-      stderr: 'loadout: Jev unavailable (Jev request failed: network error); used keyword ranking\n',
+      // Four names against maxSkills 3: route's warning lists the dropped one; the note must not.
+      name: 'keeps skill names from the prompt out of the outage note',
+      preload: outage,
+      stderr: `${JEV_FALLBACK_NOTE}\n`,
+      named: ['prompt-canary-a', 'prompt-canary-b', 'prompt-canary-c', 'prompt-canary-d'],
     },
     {
       name: 'stays silent when Jev selects no skill',
@@ -1086,21 +1090,25 @@ describe('claude hook', () => {
       };`,
       stderr: '',
     },
-  ])('$name', ({ preload, stderr }) => {
+  ])('$name', ({ preload, stderr, named = [] }) => {
     const home = tempDir('loadout-hook-cli-');
     writeFileSync(join(home, 'config.json'), JSON.stringify({ ...DEFAULT_CONFIG, embeddings: false }));
-    mkdirSync(join(home, 'library/skills/canary'), { recursive: true });
-    writeFileSync(join(home, 'library/skills/canary/SKILL.md'), '---\nname: canary\ndescription: Playwright tests\n---\nTesting instructions.');
+    for (const skill of ['canary', ...named]) {
+      mkdirSync(join(home, 'library/skills', skill), { recursive: true });
+      writeFileSync(join(home, 'library/skills', skill, 'SKILL.md'), `---\nname: ${skill}\ndescription: Playwright tests\n---\nTesting instructions.`);
+    }
+    const prompt = named.length ? `${named.map((n) => `/${n}`).join(' ')} write the release notes` : TASK;
     const file = join(home, 'preload.mjs');
     writeFileSync(file, preload);
     const result = spawnSync(process.execPath, ['--import', 'tsx', '--import', pathToFileURL(file).href, join(import.meta.dirname, '../src/cli.ts'), 'hook', 'claude'], {
       encoding: 'utf8', timeout: 10_000,
       env: { ...process.env, LOADOUT_HOME: home, TYPESAFE_API_KEY: 'hook-test-fake' },
-      input: JSON.stringify({ prompt: TASK, cwd: home }),
+      input: JSON.stringify({ prompt, cwd: home }),
     });
     expect(result.error).toBeUndefined();
     expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toBe('');
+    // Named skills are still injected on fallback; without names the hook adds nothing.
+    if (!named.length) expect(result.stdout).toBe('');
     expect(result.stderr).toBe(stderr);
   });
 
