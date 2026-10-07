@@ -5,7 +5,7 @@
  * choice: agreement of the two after-runs (the floor) and of before with
  * each after-run, with 95% Wilson intervals, plus an exact McNemar test
  * pairing each before/after agreement with the floor on the same requests.
- * Two tests, uncorrected: read them as exploratory. Agreement is not quality;
+ * Many tests, uncorrected: read them as exploratory. Agreement is not quality;
  * changed rows still need judging.
  *
  *   npx tsx bench/agree.ts <before>/decisions.jsonl <after-1>/decisions.jsonl <after-2>/decisions.jsonl

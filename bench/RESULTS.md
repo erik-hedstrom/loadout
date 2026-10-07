@@ -106,7 +106,8 @@ moved the v4 decisions. Two sweeps of the same 315 requests were run on main
 at 662e0d5 (E9 merged), with the same library and embeddings. `bench/agree.ts`
 measures agreement on the 213 test-split requests. The McNemar column pairs
 each v4 comparison with the floor on the same requests, as an exact test
-reporting discordant counts and p. It is exploratory: two tests, uncorrected.
+reporting discordant counts and p. It is exploratory: four tests are reported
+(two on the test split, two on all 315), uncorrected.
 
 | Comparison | Same loaded skills | McNemar vs floor | Same load-vs-quiet |
 |---|---:|---:|---:|
