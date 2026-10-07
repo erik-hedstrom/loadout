@@ -599,7 +599,7 @@ catch (err) { console.log(err.message); }
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response(body));
     try {
       const client = jevClient({ apiKey: 'fake', baseUrl: 'https://example.invalid', model: 'fake', retries: 0 });
-      await expect(client.ask({}, { canary: { type: 'choice', instructions: 'Choose', criteria: { valid: 'Valid' } } })).rejects.toMatchObject({ message: 'Jev response did not match the schema', retryable: false });
+      await expect(client.ask({}, { canary: { type: 'choice', instructions: 'Choose', criteria: { valid: 'Valid' } } })).rejects.toMatchObject({ message: `Jev response did not match the schema${body.startsWith('{') ? ' (answer canary)' : ''}`, retryable: false });
     } finally { fetchMock.mockRestore(); }
   });
 });

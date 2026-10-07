@@ -1,23 +1,16 @@
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { StreamableHTTPClientTransport, StreamableHTTPError } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { JSONRPCMessage, RequestId } from '@modelcontextprotocol/sdk/types.js';
 import { readMcpServers } from './library.js';
-import { constants } from 'node:os';
-
-function diagnostic(key: string, origin: string | undefined, error: unknown): string {
-  const prefix = `mcp-launch ${key}:`;
-  if (origin && error instanceof StreamableHTTPError && error.code !== undefined && Number.isInteger(error.code) && error.code >= 100 && error.code <= 599) return `${prefix} upstream HTTP ${error.code} from ${origin}`;
-  if (!origin && error instanceof Error && 'code' in error && typeof error.code === 'string' && Object.hasOwn(constants.errno, error.code)) return `${prefix} stdio transport failed (${error.code})`;
-  return `${prefix} transport failed${origin ? ` from ${origin}` : ''}`;
-}
+import { diagnostic } from './diagnostic.js';
 
 export function relay(front: Transport, back: Transport, key: string, origin?: string): Promise<void> {
   return new Promise((resolve, reject) => {
     let closing = false;
     let initializeId: RequestId | undefined;
-    const detail = (error: unknown) => diagnostic(key, origin, error);
+    const detail = (error: unknown) => diagnostic(`mcp-launch ${key}`, origin, error);
     const report = (error: unknown) => { console.error(`loadout: ${detail(error)}`); };
     const finish = (error?: Error) => {
       if (closing) return;
@@ -54,17 +47,23 @@ export function relay(front: Transport, back: Transport, key: string, origin?: s
 }
 
 export async function launchMcp(key: string, libraryDir: string): Promise<void> {
-  const servers = key.startsWith('mcp:') ? readMcpServers(libraryDir) : {};
+  let servers: ReturnType<typeof readMcpServers>;
+  try {
+    servers = key.startsWith('mcp:') ? readMcpServers(libraryDir) : {};
+  } catch {
+    throw new Error('could not read library MCP config');
+  }
   const name = key.slice(4);
   if (!Object.hasOwn(servers, name)) throw new Error('mcp-launch requires a library MCP server key');
   const { description, autoApprove, gateway, ...server } = servers[name]!;
+  if (server.url && server.type === 'sse') throw new Error('mcp-launch requires Streamable HTTP, not SSE');
+  if (!server.url && !server.command) throw new Error('library MCP server has no command');
   let origin: string | undefined;
   let back: Transport;
   try {
     if (server.url) {
       const url = new URL(server.url);
       origin = url.origin;
-      if (server.type === 'sse') throw new Error('mcp-launch requires Streamable HTTP, not SSE');
       const headers = new Headers(server.headers);
       if (url.username || url.password) {
         const user = decodeURIComponent(url.username);
@@ -76,11 +75,10 @@ export async function launchMcp(key: string, libraryDir: string): Promise<void> 
       }
       back = new StreamableHTTPClientTransport(url, { requestInit: { headers } });
     } else {
-      if (!server.command) throw new Error('library MCP server has no command');
-      back = new StdioClientTransport({ ...server, command: server.command });
+      back = new StdioClientTransport({ ...server, command: server.command! });
     }
   } catch (error) {
-    throw new Error(diagnostic(key, origin, error));
+    throw new Error(diagnostic(`mcp-launch ${key}`, origin, error));
   }
   const front = new StdioServerTransport();
   const end = () => { front.onclose?.(); };
@@ -91,7 +89,7 @@ export async function launchMcp(key: string, libraryDir: string): Promise<void> 
   process.once('SIGTERM', interrupt);
   try {
     await relay(front, back, key, origin);
-    if (interrupted) throw new Error(diagnostic(key, origin, undefined));
+    if (interrupted) throw new Error(diagnostic(`mcp-launch ${key}`, origin, undefined));
   } finally {
     process.stdin.off('end', end);
     process.off('SIGINT', interrupt);
