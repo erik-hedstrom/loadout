@@ -13,7 +13,7 @@
  */
 import { readdirSync } from 'node:fs';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { basename, join, relative, sep } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -24,7 +24,9 @@ import { z } from 'zod';
 import type { Config } from './config.js';
 import type { EmbeddingStore } from './embed.js';
 import type { SystemOneClient } from './jev.js';
-import { readConfined, skillExcerpt } from './library.js';
+import { capabilityKey, readConfined, skillExcerpt } from './library.js';
+
+export { capabilityKey };
 import { attr, escapeSkillTags, injectionBlock } from './launch.js';
 import { route } from './route.js';
 import type { Capability, RepoSignals } from './types.js';
@@ -55,8 +57,6 @@ const SCHEMA_MAX_CHARS = 3000;
 const EMBEDDINGS_WAIT_MS = 3000;
 const delay = (ms: number) => sleep(ms, undefined, { ref: false });
 
-/** Unique key of a capability: the skill's folder (names repeat across sources) or `mcp:<server>`. */
-export const capabilityKey = (c: Capability) => (c.kind === 'skill' ? basename(c.source) : `mcp:${c.name}`);
 
 const oneLine = (s: string, n: number) => {
   const t = s.replace(/\s+/g, ' ').trim();

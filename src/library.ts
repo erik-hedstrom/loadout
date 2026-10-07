@@ -170,6 +170,9 @@ export function librarySources(libraryDir: string): { origin: string; skills: nu
     .sort((a, b) => b.skills - a.skills || a.origin.localeCompare(b.origin));
 }
 
+/** Unique key of a capability: the skill's folder (names repeat across sources) or `mcp:<server>`. */
+export const capabilityKey = (c: Capability) => (c.kind === 'skill' ? basename(c.source) : `mcp:${c.name}`);
+
 /** A folder name made only of lowercase letters, digits and hyphens. */
 export function slug(text: string): string {
   return (

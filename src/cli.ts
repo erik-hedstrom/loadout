@@ -8,7 +8,6 @@ import { jevClient } from './jev.js';
 import { claudeArgs, codexArgs, hostSetup, HOSTS, launch, materialize, pathTranslator, which, type Agent, type Host } from './launch.js';
 import { addFromGitHub, addSkills, librarySources, parseGitHub, scanLibrary, skillExcerpt, type AddResult } from './library.js';
 import { repoSignals } from './repo.js';
-import { serveStdio } from './mcp.js';
 import { route } from './route.js';
 import { cachedEmbeddings, libraryEmbeddings } from './embed.js';
 import { hookOutput, promptContext, type HookInput } from './hook.js';
@@ -214,6 +213,8 @@ async function main(): Promise<number> {
       const toPath = values['windows-paths'] ? (p: string) => execFileSync('wslpath', ['-w', p], { encoding: 'utf8' }).trim() : undefined;
       const library = scanLibrary(paths.library());
       const client = router(config, Boolean(values.lexical));
+      // Loaded on demand: the MCP SDK is the heaviest import, and only this command needs it.
+      const { serveStdio } = await import('./mcp.js');
       await serveStdio({
         library,
         config,

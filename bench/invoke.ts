@@ -7,6 +7,9 @@
  *           invoke a loaded skill (Claude's Skill tool / reading SKILL.md)?
  *   search  nothing preloaded, only the find_skills server attached: does the
  *           agent search on its own, and load something useful?
+ *   hook    (Claude) nothing preloaded; `loadout hook claude` routes the prompt
+ *           and the loadout MCP server is attached, as after `loadout setup
+ *           claude-code`: does the agent open what the hook suggests?
  *
  * Each run is capped (Claude --max-turns, a timeout), since only the agent's
  * first moves matter here. It starts in an empty folder where the agent may
@@ -23,7 +26,7 @@ import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { loadConfig, paths } from '../src/config.js';
-import { claudeArgs, codexArgs, materialize, pathTranslator, which, type Agent } from '../src/launch.js';
+import { claudeArgs, claudeHookSettings, codexArgs, materialize, pathTranslator, which, type Agent } from '../src/launch.js';
 import { scanLibrary } from '../src/library.js';
 import type { RouteDecision, ScoredCapability } from '../src/types.js';
 import { readJsonl } from './lib.js';
@@ -43,7 +46,8 @@ const { values, positionals } = parseArgs({
 const dir = positionals[0];
 if (!dir || !values.ids) throw new Error('usage: invoke.ts <sweep dir> --agent claude|codex --mode routed|search --ids a,b');
 const agent = values.agent as Agent;
-const mode = values.mode as 'routed' | 'search';
+const mode = values.mode as 'routed' | 'search' | 'hook';
+if (mode === 'hook' && agent !== 'claude') throw new Error('hook mode is Claude Code only');
 const rows = new Map(readJsonl<SweepRow>(join(dir, 'decisions.jsonl')).map((r) => [r.id, r]));
 const library = scanLibrary(paths.library());
 const byKey = new Map(library.map((c) => [keyOf(c), c]));
@@ -64,7 +68,7 @@ function decisionFor(row: SweepRow): RouteDecision {
       const capability = byKey.get(p.key);
       return capability ? [{ capability, p: p.fit, exact: p.exact, share: p.share, ...(p.inject ? { inject: p.inject as 'clear' | 'mentioned' } : {}) }] : [];
     });
-  const empty = mode === 'search';
+  const empty = mode !== 'routed';
   return {
     tier: row.tier as RouteDecision['tier'],
     selected: empty ? [] : scored(row.loaded),
@@ -142,11 +146,14 @@ for (const id of values.ids.split(',')) {
   const decision = decisionFor(row);
   const session = materialize(decision, agent, config, sessions, toPath);
   if (values.model) session.model = values.model;
+  // As installed by `loadout setup claude-code`: no launcher note, just the hook and the MCP server.
+  if (mode === 'hook') session.relevance = undefined;
+  const hookArgs = mode === 'hook' ? ['--settings', JSON.stringify(claudeHookSettings(toPath('/') !== '/'))] : [];
   const cwd = mkdtempSync(join(workRoot, 'loadout-work-'));
   const task = row.request + NOTE;
   const args =
     agent === 'claude'
-      ? claudeArgs(session, task, ['--output-format', 'stream-json', '--verbose', '--max-turns', values['max-turns']!, '--strict-mcp-config', '--permission-mode', 'acceptEdits'], { headless: true, toPath })
+      ? claudeArgs(session, task, ['--output-format', 'stream-json', '--verbose', '--max-turns', values['max-turns']!, '--strict-mcp-config', '--permission-mode', 'acceptEdits', ...hookArgs], { headless: true, toPath })
       : codexArgs(session, task, ['--json', '-s', 'workspace-write', '--skip-git-repo-check'], { headless: true });
   const started = Date.now();
   const proc = await run(bin, args, cwd, Number(values['timeout-s']) * 1000);
@@ -163,6 +170,8 @@ for (const id of values.ids.split(',')) {
       if (c) invoked.add(basename(c.source));
     }
     for (const f of folders) if (/SKILL\.md/.test(e.detail) && e.detail.includes(f)) invoked.add(f);
+    // Library skills read straight from the library (the hook and load_skill point there).
+    for (const m of e.detail.matchAll(/skills(?:\\\\|\\|\/)+([\w.-]+)(?:\\\\|\\|\/)+SKILL\.md/g)) if (byKey.has(m[1]!)) invoked.add(m[1]!);
     const loadedKey = e.tool.endsWith('__load_skill') ? JSON.parse(e.detail).skill : undefined;
     if (typeof loadedKey === 'string' && byKey.has(loadedKey)) invoked.add(loadedKey);
   }

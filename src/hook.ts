@@ -19,8 +19,7 @@ import type { Config } from './config.js';
 import type { EmbeddingStore } from './embed.js';
 import type { SystemOneClient } from './jev.js';
 import { injectionBlock } from './launch.js';
-import { skillExcerpt } from './library.js';
-import { capabilityKey } from './mcp.js';
+import { capabilityKey, skillExcerpt } from './library.js';
 import { route } from './route.js';
 import type { Capability, RepoSignals } from './types.js';
 
