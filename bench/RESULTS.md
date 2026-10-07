@@ -98,6 +98,38 @@ calls. The rerun passed every guard. Spend: 16 haiku calls with rows (about
 136k input tokens) plus up to 4 probes, on the subscription. No Jev or Codex
 spend.
 
+## E9 re-measure (2026-10-07): routing after the Jev framing change
+
+E9 changed what Jev sees: library names, descriptions and excerpts are now
+always escaped and framed as third-party data. This entry checks whether that
+moved the v4 decisions. Two sweeps of the same 315 requests were run on main
+at 662e0d5 (E9 merged), with the same library and embeddings. Agreement is
+measured with `bench/agree.ts`, on the 213 test-split requests:
+
+| Comparison | Same loaded skills | Same load-vs-quiet |
+|---|---:|---:|
+| Run 1 vs run 2, identical code (run-to-run floor) | 197 (92.5%, 88.1–95.3) | 206 (96.7%, 93.4–98.4) |
+| v4 vs post-E9 run 1 | 188 (88.3%, 83.2–91.9) | 199 (93.4%, 89.3–96.0) |
+| v4 vs post-E9 run 2 | 186 (87.3%, 82.2–91.1) | 200 (93.9%, 89.8–96.4) |
+
+(95% Wilson intervals.)
+- Jev is not deterministic. Identical code changes the loaded set for about
+  1 test request in 13 between runs.
+- Across E9 the loaded set changed for 25–27 test requests, against 16 between
+  identical runs. The intervals overlap, so an effect of the framing change is
+  **not shown** at this sample size. If there is one, it moves at most about 5
+  points of decisions. E9's escaping changes and any server-side drift since
+  v4 are mixed in with it.
+- Skills loaded per request: 0.75 (v4), 0.73 and 0.74 (post-E9). No request
+  fell back to keyword ranking.
+- The v4 quality numbers stand for unchanged rows. The changed rows are not
+  judged, so their quality is **not shown**. They will be judged with C1's new
+  held-out requests rather than re-tuning on these.
+
+Rows: `results/2026-10-07T21-34-39-sweep/` and
+`results/2026-10-07T21-40-26-sweep/`. Cost: $0.77 of Jev for two sweeps,
+with no judge calls.
+
 ## v4 (2026-10-06): realistic requests on the real library, judged
 
 The question here is different from v1–v3: on what people actually type, are

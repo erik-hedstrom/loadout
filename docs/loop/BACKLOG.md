@@ -363,7 +363,7 @@ Acceptance:
 | E2 | P0 | LICENSE, CONTRIBUTING, SECURITY.md, templates | Claude | cloud + erik | todo (license: confirm MIT) |
 | E7 | P0 | Vendor-independent bench judges and expander | Codex | cloud | review ([PR #5](https://github.com/erik-hedstrom/loadout/pull/5)) |
 | E8 | P0 | Repo-wide simplification pass | Claude (pr-reviewer finds, worker fixes) + Codex review | cloud | todo |
-| E9 | P0 | Security hardening from the read-only Sol review | Codex | cloud | review |
+| E9 | P0 | Security hardening from the read-only Sol review | Codex | cloud | done ([PR #4](https://github.com/erik-hedstrom/loadout/pull/4)) |
 | E3 | P1 | Split the test file per module | Codex | cloud | todo |
 | E5 | P1 | Changelog and release automation | Codex | cloud | todo (with A4) |
 | E6 | P2 | Architecture diagram in DESIGN.md | Claude | cloud | todo |
@@ -461,8 +461,9 @@ Acceptance:
 - Skill copies reject links and retain pinned confinement and size limits.
 - Third-party prompt data is escaped and framed; Jev errors contain only HTTP
   status or fixed failure categories. `decide()` and `bench/judge.ts` are unchanged.
-- Adversarial tests for each path. Owed after merge: routing re-measured after the
-  Jev framing change (Jev-only agreement check, recorded in `bench/RESULTS.md`).
+- Adversarial tests for each path. Routing re-measured after the Jev framing
+  change: an effect is not shown against the run-to-run floor ("E9
+  re-measure" in `bench/RESULTS.md`).
 
 **E3. Test split.**
 
