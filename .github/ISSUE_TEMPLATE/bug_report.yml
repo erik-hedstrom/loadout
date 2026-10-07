@@ -3,12 +3,12 @@ description: Report unexpected loadout behavior.
 body:
   - type: markdown
     attributes:
-      value: Do not paste keys or MCP configs. Remove credentials from commands and output. Report security vulnerabilities through private reporting linked in SECURITY.md.
+      value: Do not paste keys or MCP configs. Remove credentials from commands and output. Private vulnerability reporting opens when the repository becomes public. Until then, report to the maintainer directly.
   - type: textarea
     id: environment
     attributes:
       label: Version and environment
-      description: Include loadout --version output (including the error if unsupported), OS, and host agent or app with its version.
+      description: Include the commit SHA (git rev-parse --short HEAD) or package version, OS, and host agent or app with its version.
     validations:
       required: true
   - type: textarea

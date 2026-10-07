@@ -44,8 +44,8 @@ Hook state stores offered/injected skill IDs, not prompt text (`writeState`).
 `loadout mcp --http` defaults to `127.0.0.1:8787`. Loopback may run without a
 token; a non-loopback `--host` or any `--allowed-host` requires `--token-file`.
 When configured, `serveHttp` checks `Authorization: Bearer <token>` with
-`timingSafeEqual` and enables the SDK's Host check. It filters the library to
-skills, exposing only `find_skills` and `load_skill`, with no MCP gateway
+`timingSafeEqual`. The SDK's Host check is always enabled. It filters the
+library to skills, exposing only `find_skills` and `load_skill`, with no MCP gateway
 ([cli.ts](src/cli.ts), [mcp.ts](src/mcp.ts)). Authorized clients can read
 library skills and spend Jev credit through searches. The server uses plain
 HTTP; remote access needs a trusted HTTPS tunnel or TLS terminator.
@@ -66,10 +66,14 @@ reports list only type, command, cwd, URL origin and env/header key names
 HTTP servers without headers or URL credentials keep native Codex `url`
 entries for `codex mcp login` OAuth. Secrets in URL paths are not detected
 and stay in native config (`codexArgs`); userinfo and query strings use the relay.
-Relay transport and Jev diagnostics contain only fixed facts: capability key,
-URL origin, HTTP status, errno or a fixed category; never upstream or SDK text
+Loadout-generated relay transport and Jev diagnostics contain only fixed
+facts: capability key, URL origin, HTTP status, errno or a fixed category;
+never upstream or SDK text
 (`diagnostic`, `relay` in [relay.ts](src/relay.ts), `jevClient`, `validateResponse`
 in [jev.ts](src/jev.ts)).
+
+An MCP server's own stderr passes through unchanged, including any credentials
+it prints (`launchMcp` uses `StdioClientTransport` with inherited stderr).
 
 ## Out of scope
 
@@ -87,6 +91,7 @@ are inherited from the temp directory.
 
 ## Reporting
 
-Use [GitHub private vulnerability reporting](https://github.com/erik-hedstrom/loadout/security/advisories/new).
+[Private vulnerability reporting](https://github.com/erik-hedstrom/loadout/security/advisories/new)
+opens when the repository becomes public. Until then, report to the maintainer directly.
 Include the affected version, reproduction steps and impact, with credentials
 removed. Do not report vulnerabilities in public issues.
