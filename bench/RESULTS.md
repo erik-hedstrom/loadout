@@ -319,6 +319,43 @@ These are small samples (10 requests per cell, capped runs), not outcome
 measurements: they show whether the skill reaches the agent's context, not
 whether the result is better.
 
+### The hook plugin in the Claude Code CLI (2026-10-08)
+
+**The context arrives.** One `claude -p` run loaded the plugin with
+`--plugin-dir plugins/loadout` (Haiku, at most 2 turns, hook events on). A
+shim on PATH ran this branch's `loadout` in WSL, against the 1,262-skill
+library. loadout's `UserPromptSubmit` hook exited 0 with empty stderr. It
+added about 1.6k characters of `<skill_relevance>` context: `contract-review` as
+most relevant, plus three others. The reply named `contract-review`. One run
+shows the wiring works. It does not measure skill use: the hook-only plugin
+has not been compared with the 6 of 10 above.
+
+**Latency.** [hook-latency.ts](hook-latency.ts), 20 dev prompts, real Jev, WSL,
+Node 24.15, the same library:
+
+| Step (ms) | p50 | p95 | max |
+|---|---:|---:|---:|
+| scanLibrary | 164 | 202 | 1,004 |
+| Jev wide | 746 | 1,346 | 2,285 |
+| Jev close | 462 | 657 | 781 |
+| promptContext, in process | 1,356 | 1,977 | 3,262 |
+| `loadout hook claude`, new process | 2,608 | 3,137 | 3,332 |
+
+- Every routed prompt waits about 2.6 s (p50) before Claude starts. The new
+  process's median is 1.25 s above the in-process one. Each arm made its own
+  Jev requests, and the subprocess was not timed by step, so how much of
+  that is start-up, imports, the library scan or the model load is not shown.
+- The scanLibrary, Jev wide and promptContext maximums come from the first,
+  cold sample.
+- The deadline (20 s, with 8 s per Jev request) never bound: the slowest run
+  took 3.3 s. It stays as it is. A hung Jev costs a prompt one 8 s timeout,
+  plus start-up and any completed request, before the keyword fallback.
+- n = 20, from one machine on one evening. Latency from elsewhere: not shown.
+
+Raw: [results/2026-10-07T22-54-56-747Z-hook-latency/](results/2026-10-07T22-54-56-747Z-hook-latency/)
+and [results/2026-10-08-hook-plugin-probe/](results/2026-10-08-hook-plugin-probe/).
+Cost: about $0.05 of Jev; the Haiku run reported $0.06.
+
 ### Is the work better? (outcome pilot, 2026-10-07)
 
 [outcome.ts](outcome.ts) runs each request twice with Codex (gpt-6.1-sol) in

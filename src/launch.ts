@@ -86,9 +86,18 @@ export function hookCommand(agent: Agent, windowsAgent: boolean): string {
   return `${env}${[h.command!, ...(h.args ?? []).map(arg)].map(quote).join(' ')}`;
 }
 
-/** A Claude Code settings.json block that runs `loadout hook claude` on every prompt. */
+/**
+ * A Claude Code hooks block that runs `command` on every prompt. The plugin's
+ * plugins/loadout/hooks/hooks.json is this block with `loadout hook claude`
+ * (test/plugin.test.ts enforces it), so change both together.
+ */
+export function claudeHookBlock(command: string): object {
+  return { hooks: { UserPromptSubmit: [{ hooks: [{ type: 'command', command, timeout: 30 }] }] } };
+}
+
+/** The settings.json hook for this checkout's loadout (setup's WSL snippet, bench/invoke.ts). */
 export function claudeHookSettings(windowsAgent: boolean): object {
-  return { hooks: { UserPromptSubmit: [{ hooks: [{ type: 'command', command: hookCommand('claude', windowsAgent), timeout: 30 }] }] } };
+  return claudeHookBlock(hookCommand('claude', windowsAgent));
 }
 
 const PLUGIN_NAME = 'loadout';
@@ -240,7 +249,7 @@ export type Host = 'claude-code' | 'codex' | 'claude-desktop' | 'cursor' | 'open
 export const HOSTS: readonly Host[] = ['claude-code', 'codex', 'claude-desktop', 'cursor', 'opencode'];
 
 /**
- * The config that attaches `loadout mcp` to a host, for the user to paste.
+ * Setup instructions for the user to run or paste; never edits host config.
  * `windows`: the host is a Windows app and loadout runs in WSL.
  */
 export function hostSetup(host: Host, windows: boolean): { where: string; snippet: string } {
@@ -251,11 +260,18 @@ export function hostSetup(host: Host, windows: boolean): { where: string; snippe
   switch (host) {
     case 'claude-code':
       return {
-        where: 'run once (user scope: every project); then, to route every prompt, merge the hook into ~/.claude/settings.json',
+        where: windows
+          ? 'WSL loadout behind Windows Claude Code: merge this hook into ~/.claude/settings.json instead of installing the plugin; desktop app Code tab: not yet tested'
+          : 'Claude Code CLI: run once; requires loadout on PATH and Node 22.12+; desktop app Code tab: not yet tested',
         snippet: [
-          `claude mcp add --scope user${Object.entries(s.env ?? {}).map(([k, v]) => ` -e ${k}=${quote(v)}`).join('')} loadout -- ${cmd.map(quote).join(' ')}`,
+          '# Privacy: the hook runs in every project (user scope). It sends each routed prompt, with the repository\'s top-level file names and dependency names, to TypeSafe\'s Jev API. Setting "router": "lexical" in loadout\'s config keeps prompts local.',
+          ...(windows ? [json(claudeHookSettings(true))] : [
+            'claude plugin marketplace add erik-hedstrom/loadout',
+            'claude plugin install loadout@loadout',
+          ]),
           '',
-          json(claudeHookSettings(windows)),
+          '# Optional library search: +546 input tokens/request (https://github.com/erik-hedstrom/loadout/blob/main/bench/RESULTS.md).',
+          `claude mcp add --scope user${Object.entries(s.env ?? {}).map(([k, v]) => ` -e ${k}=${quote(v)}`).join('')} loadout -- ${cmd.map(quote).join(' ')}`,
         ].join('\n'),
       };
     case 'codex':
@@ -312,8 +328,11 @@ export function which(bin: string): string | undefined {
  */
 export function pathTranslator(binPath: string | undefined): (p: string) => string {
   if (process.platform !== 'linux' || !binPath || !/^\/mnt\/[a-z]\//.test(binPath)) return (p) => p;
-  return (p) => execFileSync('wslpath', ['-w', p], { encoding: 'utf8' }).trim();
+  return windowsPath;
 }
+
+/** `wslpath -w`. Its stderr is dropped, not forwarded: it can name library folders, and the hook reports failure in fixed text. */
+export const windowsPath = (p: string) => execFileSync('wslpath', ['-w', p], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
 
 export interface LaunchOptions {
   /** Run once and exit (`claude -p`, `codex exec`) instead of an interactive session. */

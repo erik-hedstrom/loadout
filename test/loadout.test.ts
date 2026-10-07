@@ -7,7 +7,7 @@ import { afterAll, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CONFIG, type Config } from '../src/config.js';
 import { jevClient, JevError, validateResponse, type Question, type SystemOneClient } from '../src/jev.js';
 import { claudeArgs, claudeHookSettings, codexArgs, hookCommand, hostSetup, launch, loaderArgs, materialize, searchServer, toToml } from '../src/launch.js';
-import { hookOutput, isFollowUp, promptContext } from '../src/hook.js';
+import { hookOutput, isFollowUp, HOOK_FAILURE_NOTE, JEV_FALLBACK_NOTE, promptContext } from '../src/hook.js';
 import { createServer, readSkillFile, serveHttp } from '../src/mcp.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
@@ -576,7 +576,7 @@ catch (err) { console.log(err.message); }
         expect(result.status, result.stderr).toBe(0);
         if (args[0] === 'route') expect(JSON.parse(result.stdout)).toMatchObject({ router: 'lexical', warning });
         else if (args[0] === 'codex') expect(result.stderr).toContain(warning);
-        else { expect(result.stdout).toBe(''); expect(result.stderr).toBe(''); }
+        else { expect(result.stdout).toBe(''); expect(result.stderr).toBe(`${JEV_FALLBACK_NOTE}\n`); }
         outputs.push(result.stdout, result.stderr);
       }
       for (const value of Object.values(forms)) expect(outputs.join('\n')).not.toContain(value);
@@ -879,10 +879,29 @@ describe('launch', () => {
     expect(codex).toMatch(/\[\[hooks\.UserPromptSubmit\]\]\n\[\[hooks\.UserPromptSubmit\.hooks\]\]\ntype = "command"\ncommand = ".* hook codex"\ntimeout = 30$/);
     expect(JSON.parse(hostSetup('opencode', false).snippet).mcp.loadout).toMatchObject({ type: 'local', enabled: true });
     expect(JSON.parse(hostSetup('claude-desktop', true).snippet).mcpServers.loadout.command).toBe('wsl.exe');
-    const claudeCode = hostSetup('claude-code', false).snippet.split('\n\n');
-    expect(claudeCode[0]).toMatch(/^claude mcp add --scope user loadout -- \S+ .* mcp$/);
-    expect(JSON.parse(claudeCode[1]!).hooks.UserPromptSubmit[0].hooks[0].command).toMatch(/ hook claude$/);
+    const claudeCode = hostSetup('claude-code', false).snippet;
+    expect(claudeCode).toContain('claude plugin marketplace add erik-hedstrom/loadout\nclaude plugin install loadout@loadout');
+    expect(claudeCode).toContain('+546 input tokens/request');
+    expect(claudeCode).toContain('https://github.com/erik-hedstrom/loadout/blob/main/bench/RESULTS.md');
+    expect(claudeCode).toMatch(/claude mcp add --scope user loadout -- \S+ .* mcp$/);
+    expect(claudeCode).not.toContain('UserPromptSubmit');
+    const wsl = hostSetup('claude-code', true);
+    expect(wsl.where).toContain('WSL');
+    expect(wsl.snippet).not.toContain('claude plugin install');
+    const settings = JSON.parse(wsl.snippet.slice(wsl.snippet.indexOf('{')).split('\n\n')[0]!);
+    expect(settings).toEqual(claudeHookSettings(true));
+    expect(settings.hooks.UserPromptSubmit[0].hooks[0].command).toMatch(/^wsl\.exe .* hook claude --windows-paths$/);
     expect(loaderArgs(['-e', 'x', '--require', 'a.cjs', '--import=file:///b.mjs', '--max-old-space-size=99'])).toEqual(['--require', 'a.cjs', '--import=file:///b.mjs']);
+  });
+
+  it.each([false, true])('prints privacy before Claude Code installation or WSL settings (WSL=%s)', (windows) => {
+    const { where, snippet } = hostSetup('claude-code', windows);
+    const notice = snippet.split('\n')[0]!;
+    expect(notice).toContain('every project (user scope)');
+    expect(notice).toContain("each routed prompt, with the repository's top-level file names and dependency names, to TypeSafe's Jev API");
+    expect(notice).toContain('"router": "lexical" in loadout\'s config keeps prompts local');
+    expect(snippet.indexOf(windows ? '{' : 'claude plugin marketplace add')).toBeGreaterThan(notice.length);
+    expect(where).toContain('desktop app Code tab: not yet tested');
   });
 
   it('protects WSL hook paths from Git Bash rewriting', () => {
@@ -1046,6 +1065,98 @@ describe('mcp server', () => {
 
 describe('claude hook', () => {
   const library = scanLibrary(LIBRARY);
+
+  const outage = "globalThis.fetch = async () => { throw new Error('upstream credential canary\\nsecond line'); };";
+  it.each([
+    { name: 'reports Jev outages on stderr in fixed text without blocking the prompt', preload: outage, stderr: `${JEV_FALLBACK_NOTE}\n` },
+    {
+      // Four names against maxSkills 3: route's warning lists the dropped one; the note must not.
+      name: 'keeps skill names from the prompt out of the outage note',
+      preload: outage,
+      stderr: `${JEV_FALLBACK_NOTE}\n`,
+      named: ['prompt-canary-a', 'prompt-canary-b', 'prompt-canary-c', 'prompt-canary-d'],
+    },
+    {
+      name: 'stays silent when Jev selects no skill',
+      preload: `globalThis.fetch = async (_url, init) => {
+        const { questions } = JSON.parse(init.body);
+        const answers = Object.fromEntries(Object.entries(questions).map(([id, q]) => {
+          if (q.type === 'noul') return [id, { type: 'noul', noul: id === 'general_enough' ? 1 : 0 }];
+          if (q.type === 'score') return [id, { type: 'score', score: 0, confidence: 1, probabilities: { '0': 1 } }];
+          const choice = id === 'model_tier' ? 'medium' : 'no_skill_needed';
+          return [id, { type: 'choice', choice, confidence: 1, probabilities: { [choice]: 1 } }];
+        }));
+        return Response.json({ model: 'jev-test', answers, usage: { input_tokens: 0, output_tokens: 0 } });
+      };`,
+      stderr: '',
+    },
+  ])('$name', ({ preload, stderr, named = [] }) => {
+    const home = tempDir('loadout-hook-cli-');
+    writeFileSync(join(home, 'config.json'), JSON.stringify({ ...DEFAULT_CONFIG, embeddings: false }));
+    for (const skill of ['canary', ...named]) {
+      mkdirSync(join(home, 'library/skills', skill), { recursive: true });
+      writeFileSync(join(home, 'library/skills', skill, 'SKILL.md'), `---\nname: ${skill}\ndescription: Playwright tests\n---\nTesting instructions.`);
+    }
+    const prompt = named.length ? `${named.map((n) => `/${n}`).join(' ')} write the release notes` : TASK;
+    const file = join(home, 'preload.mjs');
+    writeFileSync(file, preload);
+    const result = spawnSync(process.execPath, ['--import', 'tsx', '--import', pathToFileURL(file).href, join(import.meta.dirname, '../src/cli.ts'), 'hook', 'claude'], {
+      encoding: 'utf8', timeout: 10_000,
+      env: { ...process.env, LOADOUT_HOME: home, TYPESAFE_API_KEY: 'hook-test-fake' },
+      input: JSON.stringify({ prompt, cwd: home }),
+    });
+    expect(result.error).toBeUndefined();
+    expect(result.status, result.stderr).toBe(0);
+    // Named skills are still injected on fallback; without names the hook adds nothing.
+    if (!named.length) expect(result.stdout).toBe('');
+    expect(result.stderr).toBe(stderr);
+  });
+
+  // JSON parse errors quote their input; each fixture puts a canary where the parser stops.
+  it.each([
+    { name: 'hook input', input: 'CANARY-PROMPT is not json' },
+    { name: 'config.json', config: '{"router": "jev", "token": CANARY-CONFIG}' },
+    { name: 'library/mcp.json', mcp: '{"mcpServers": {"x": {"command": "x", "env": {"TOKEN": CANARY-MCP}}}}' },
+  ])('keeps a malformed $name out of its failure note', ({ input, config, mcp }) => {
+    const home = tempDir('loadout-hook-fail-');
+    writeFileSync(join(home, 'config.json'), config ?? JSON.stringify({ ...DEFAULT_CONFIG, embeddings: false }));
+    if (mcp) {
+      mkdirSync(join(home, 'library'), { recursive: true });
+      writeFileSync(join(home, 'library/mcp.json'), mcp);
+    }
+    // Jev is never reached; the outage preload keeps it that way if a fixture ever parses.
+    const file = join(home, 'preload.mjs');
+    writeFileSync(file, outage);
+    const result = spawnSync(process.execPath, ['--import', 'tsx', '--import', pathToFileURL(file).href, join(import.meta.dirname, '../src/cli.ts'), 'hook', 'claude'], {
+      encoding: 'utf8', timeout: 10_000,
+      env: { ...process.env, LOADOUT_HOME: home, TYPESAFE_API_KEY: 'hook-test-fake' },
+      input: input ?? JSON.stringify({ prompt: TASK, cwd: home }),
+    });
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toBe(`${HOOK_FAILURE_NOTE}\n`);
+  });
+
+  // Windows cannot run a script as `wslpath` without a shell; the path is WSL-only anyway.
+  it.skipIf(process.platform === 'win32')('keeps a failing wslpath diagnostic out of stderr', () => {
+    const home = tempDir('loadout-hook-wslpath-');
+    writeFileSync(join(home, 'config.json'), JSON.stringify({ ...DEFAULT_CONFIG, embeddings: false }));
+    mkdirSync(join(home, 'library/skills/canary'), { recursive: true });
+    writeFileSync(join(home, 'library/skills/canary/SKILL.md'), '---\nname: canary\ndescription: Playwright tests\n---\nTesting instructions.');
+    mkdirSync(join(home, 'bin'));
+    writeFileSync(join(home, 'bin/wslpath'), '#!/bin/sh\necho WSLPATH-CANARY >&2\nexit 1\n', { mode: 0o755 });
+    const file = join(home, 'preload.mjs');
+    writeFileSync(file, outage);
+    // A named skill is listed even on fallback, so its folder goes through wslpath.
+    const result = spawnSync(process.execPath, ['--import', 'tsx', '--import', pathToFileURL(file).href, join(import.meta.dirname, '../src/cli.ts'), 'hook', 'claude', '--windows-paths'], {
+      encoding: 'utf8', timeout: 10_000,
+      env: { ...process.env, PATH: `${join(home, 'bin')}:${process.env.PATH}`, LOADOUT_HOME: home, TYPESAFE_API_KEY: 'hook-test-fake' },
+      input: JSON.stringify({ prompt: '/canary write the release notes', cwd: home }),
+    });
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toBe(`${JEV_FALLBACK_NOTE}\n${HOOK_FAILURE_NOTE}\n`);
+  });
 
   it('routes each prompt once per session and injects a clear winner', async () => {
     const stateDir = tempDir('loadout-hook-');

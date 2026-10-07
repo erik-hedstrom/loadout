@@ -1,0 +1,8 @@
+{
+  "name": "loadout",
+  "description": "Per-prompt skill routing for Claude Code through the loadout hook.",
+  "owner": { "name": "Erik Hedström" },
+  "plugins": [
+    { "name": "loadout", "source": "./plugins/loadout" }
+  ]
+}

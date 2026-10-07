@@ -1,16 +1,15 @@
 #!/usr/bin/env node
-import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { loadConfig, paths, resolveApiKey, writeDefaultConfig, type Config } from './config.js';
 import { jevClient } from './jev.js';
-import { claudeArgs, codexArgs, hostSetup, HOSTS, launch, materialize, pathTranslator, which, type Agent, type Host } from './launch.js';
+import { claudeArgs, codexArgs, hostSetup, HOSTS, launch, materialize, pathTranslator, which, windowsPath, type Agent, type Host } from './launch.js';
 import { addFromGitHub, addSkills, librarySources, parseGitHub, scanLibrary, skillExcerpt, type AddResult } from './library.js';
 import { repoSignals } from './repo.js';
 import { route } from './route.js';
 import { cachedEmbeddings, libraryEmbeddings } from './embed.js';
-import { hookOutput, promptContext, type HookInput } from './hook.js';
+import { HOOK_FAILURE_NOTE, hookOutput, promptContext, type HookInput } from './hook.js';
 import { reportJson, type Capability, type RouteDecision } from './types.js';
 import { launchMcp } from './relay.js';
 
@@ -34,7 +33,7 @@ Usage:
   loadout hook claude|codex [--windows-paths]
                                           UserPromptSubmit hook: routes each prompt and adds the skills
                                           that fit as context (reads the hook JSON on stdin)
-  loadout setup <host> [--windows]        Print the config that attaches \`loadout mcp\` to a host:
+  loadout setup <host> [--windows]        Print plugin, hook and MCP setup instructions for a host:
                                           ${HOSTS.join(', ')}
 
 The library lives in ~/.loadout/library (override with LOADOUT_HOME):
@@ -129,7 +128,10 @@ async function runHook(rest: string[]): Promise<number> {
   try {
     const { values, positionals } = parseArgs({ args: rest, allowPositionals: true, options: { 'windows-paths': { type: 'boolean' } } });
     // Claude Code and Codex send the same fields (session_id, prompt, cwd) and read the same output.
-    if (positionals[0] !== 'claude' && positionals[0] !== 'codex') throw new Error('usage: loadout hook claude|codex');
+    if (positionals[0] !== 'claude' && positionals[0] !== 'codex') {
+      note('usage: loadout hook claude|codex');
+      return 0;
+    }
     const chunks: Buffer[] = [];
     for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
     const input = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}') as HookInput;
@@ -144,11 +146,11 @@ async function runHook(rest: string[]): Promise<number> {
       embeddings: client && config.embeddings ? await cachedEmbeddings(paths.embeddings()) : undefined,
       repo: repoSignals(input.cwd && existsSync(input.cwd) ? input.cwd : process.cwd()),
       stateDir: join(paths.sessions(), 'hook'),
-      ...(values['windows-paths'] ? { toPath: (p: string) => execFileSync('wslpath', ['-w', p], { encoding: 'utf8' }).trim() } : {}),
+      ...(values['windows-paths'] ? { toPath: windowsPath } : {}),
     });
     if (context) console.log(hookOutput(context));
-  } catch (err) {
-    note(`hook: ${err instanceof Error ? err.message : err}`);
+  } catch {
+    console.error(HOOK_FAILURE_NOTE);
   } finally {
     clearTimeout(deadline);
   }
@@ -280,7 +282,7 @@ async function main(): Promise<number> {
           'allowed-host': { type: 'string', multiple: true },
         },
       });
-      const toPath = values['windows-paths'] ? (p: string) => execFileSync('wslpath', ['-w', p], { encoding: 'utf8' }).trim() : undefined;
+      const toPath = values['windows-paths'] ? windowsPath : undefined;
       const library = scanLibrary(paths.library());
       const client = router(config, Boolean(values.lexical));
       // Loaded on demand: the MCP SDK is the heaviest import, and only this command needs it.
