@@ -6,7 +6,7 @@ import { parseArgs } from 'node:util';
 import { loadConfig, paths, resolveApiKey, writeDefaultConfig, type Config } from './config.js';
 import { jevClient } from './jev.js';
 import { claudeArgs, codexArgs, hostSetup, HOSTS, launch, materialize, pathTranslator, which, type Agent, type Host } from './launch.js';
-import { addFromGitHub, addSkills, parseGitHub, scanLibrary, skillExcerpt, type AddResult } from './library.js';
+import { addFromGitHub, addSkills, librarySources, parseGitHub, scanLibrary, skillExcerpt, type AddResult } from './library.js';
 import { repoSignals } from './repo.js';
 import { serveStdio } from './mcp.js';
 import { route } from './route.js';
@@ -18,7 +18,7 @@ const USAGE = `loadout — pick the model, skills and MCP servers for each agent
 Usage:
   loadout init [--key-file <path>]        Write ~/.loadout/config.json
   loadout add <dir|github-url>...         Copy skills into the library (searches recursively)
-  loadout list [--json]                   Show the library
+  loadout list [--json] [--sources]       Show the library (--sources: the add commands that rebuild it)
   loadout route [--json] [--lexical] <task>
                                           Show what would be selected, without launching
   loadout claude [--dry-run] [--headless] <task> [-- <claude args>]
@@ -142,7 +142,17 @@ async function main(): Promise<number> {
     }
 
     case 'list': {
-      const { values } = parseArgs({ args: rest, options: { json: { type: 'boolean' } } });
+      const { values } = parseArgs({ args: rest, options: { json: { type: 'boolean' }, sources: { type: 'boolean' } } });
+      if (values.sources) {
+        const sources = librarySources(paths.library());
+        if (values.json) console.log(JSON.stringify(sources, null, 2));
+        else
+          for (const s of sources) {
+            const where = s.origin.startsWith('github.com/') ? `https://${s.origin}` : s.origin;
+            console.log(`loadout add ${where}   # ${s.skills} skills${s.revisions.length ? ` @ ${s.revisions.map((r) => r.slice(0, 12)).join(', ')}` : ''}`);
+          }
+        return 0;
+      }
       const library = scanLibrary(paths.library());
       if (values.json) console.log(JSON.stringify(library, null, 2));
       else {

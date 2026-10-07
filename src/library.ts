@@ -154,6 +154,22 @@ export function scanLibrary(libraryDir: string): Capability[] {
   return capabilities;
 }
 
+/** Where the library's skills came from: one entry per origin, with the revisions seen and a skill count. */
+export function librarySources(libraryDir: string): { origin: string; skills: number; revisions: string[] }[] {
+  const byOrigin = new Map<string, { skills: number; revisions: Set<string> }>();
+  for (const dir of subdirs(join(libraryDir, 'skills'))) {
+    const s = readSource(dir);
+    const key = s?.origin ?? '(unknown)';
+    const e = byOrigin.get(key) ?? { skills: 0, revisions: new Set<string>() };
+    e.skills++;
+    if (s?.revision) e.revisions.add(s.revision);
+    byOrigin.set(key, e);
+  }
+  return [...byOrigin]
+    .map(([origin, e]) => ({ origin, skills: e.skills, revisions: [...e.revisions] }))
+    .sort((a, b) => b.skills - a.skills || a.origin.localeCompare(b.origin));
+}
+
 /** A folder name made only of lowercase letters, digits and hyphens. */
 export function slug(text: string): string {
   return (

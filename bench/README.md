@@ -71,6 +71,7 @@ real library, are the choices reasonable, and do agents use them? There are no
 gold labels; a frontier model judges.
 
 ```bash
+sh bench/data/library.sh                                # rebuild the 1,262-skill library these results used
 # seeds: data/seeds.jsonl (315 requests written by Codex without seeing any library)
 npx tsx bench/expand.ts bench/data/seeds.jsonl          # Sonnet expands each into a detailed prompt (~$3 of Claude usage)
 npx tsx bench/sweep.ts                                  # route all 315 through your library (~$0.34 of Jev), stores raw answers
