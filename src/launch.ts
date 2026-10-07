@@ -4,7 +4,7 @@ import { basename, delimiter, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import { tierTarget, type Config } from './config.js';
-import { copySkillConfined, skillBody } from './library.js';
+import { capabilityKey, copySkillConfined, skillBody } from './library.js';
 import { reportJson, type Capability, type McpServerConfig, type RouteDecision } from './types.js';
 
 export type Agent = 'claude' | 'codex';
@@ -31,8 +31,6 @@ export interface Session {
   mcpConfig?: string;
   /** `loadout mcp` for this agent, when mid-session search is on. */
   search?: McpServerConfig;
-  /** HTTP header tokens excluded by Codex's default shell environment policy. */
-  env?: Record<string, string>;
 }
 
 /** The MCP server name loadout's own search server is attached under. */
@@ -148,7 +146,7 @@ export function materialize(
 ): Session {
   const id = `${new Date().toISOString().replace(/[:.]/g, '-')}-${Math.random().toString(36).slice(2, 6)}`;
   const dir = join(sessionsDir, id);
-  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, 'decision.json'), reportJson(decision));
 
   const primary = decision.selected.filter((s) => s.capability.kind === 'skill').map((s) => s.capability);
@@ -196,7 +194,7 @@ export function materialize(
     if (block) session.injected.push(block);
   }
 
-  if (mcp.length > 0 || search) {
+  if (agent === 'claude' && (mcp.length > 0 || search)) {
     session.mcpConfig = join(dir, 'mcp.json');
     const translate = (a: string) => (a.startsWith('/') && existsSync(a) ? toPath(a) : a);
     const mcpServers = Object.fromEntries([
@@ -204,7 +202,7 @@ export function materialize(
       // Already in the agent's form: searchServer() handles the WSL → Windows hop itself.
       ...(search ? [[SEARCH_SERVER, search]] : []),
     ]);
-    writeFileSync(session.mcpConfig, JSON.stringify({ mcpServers }, null, 2), { mode: 0o600 });
+    writeFileSync(session.mcpConfig, JSON.stringify({ mcpServers }, null, 2));
   }
 
   return session;
@@ -321,7 +319,6 @@ export interface LaunchOptions {
   /** Run once and exit (`claude -p`, `codex exec`) instead of an interactive session. */
   headless?: boolean;
   toPath?: (p: string) => string;
-  env?: Record<string, string>;
 }
 
 export function claudeArgs(session: Session, task: string, extra: string[], opts: LaunchOptions = {}): string[] {
@@ -367,33 +364,6 @@ export function toToml(value: unknown): string {
   throw new Error(`cannot serialise ${String(value)} as TOML`);
 }
 
-function codexServer(server: McpServerConfig, index: number, session: Session, autoApprove = false): Record<string, unknown> {
-  const { url, headers } = server;
-  const approval = autoApprove ? 'approve' : undefined;
-  if (url) {
-    let parsed: URL;
-    try { parsed = new URL(url); }
-    catch { throw new Error('invalid Codex MCP HTTP URL; put credentials in headers'); }
-    if (parsed.username || parsed.password || parsed.search || parsed.hash) throw new Error('Codex MCP URLs cannot contain userinfo, query strings or fragments; put credentials in headers');
-    return {
-      url,
-      env_http_headers: headers ? Object.fromEntries(Object.entries(headers).map(([name, value], i) => {
-        // Codex's default *TOKEN* exclusion keeps these out of model-run shells.
-        const variable = `LOADOUT_MCP_${index}_HEADER_TOKEN_${i}`;
-        (session.env ??= Object.create(null) as Record<string, string>)[variable] = value;
-        return [name, variable];
-      })) : undefined,
-      default_tools_approval_mode: approval,
-    };
-  }
-  const file = join(session.dir, `mcp-${index}.json`);
-  writeFileSync(file, JSON.stringify(server), { mode: 0o600 });
-  return {
-    ...loadoutCommand(['mcp-launch', file], session.toPath('/') !== '/'),
-    default_tools_approval_mode: approval,
-  };
-}
-
 export function codexPrompt(session: Session, task: string): string {
   const injected = session.injected.length ? ['', TRUST_NOTE, '', ...session.injected] : [];
   if (session.skills.length === 0) return [task, ...(session.relevance ? ['', session.relevance] : []), ...injected].join('\n');
@@ -426,33 +396,25 @@ export function codexArgs(session: Session, task: string, extra: string[], opts:
     };
     args.push('-c', `mcp_servers.${SEARCH_SERVER}=${toToml(server)}`);
   }
-  for (const [index, c] of session.mcp.entries()) {
+  for (const c of session.mcp) {
     // A bare TOML key; `a.b` and `a_b` both sanitise to `a_b`, so keep keys unique.
     const stem = c.name.replace(/[^A-Za-z0-9_-]/g, '_') || 'server';
     let key = stem;
     for (let i = 2; used.has(key); i++) key = `${stem}_${i}`;
     used.add(key);
-    if (c.server?.type === 'sse') throw new Error(`MCP server "${c.name}" uses SSE, which Codex does not support`);
-    args.push('-c', `mcp_servers.${key}=${toToml(codexServer(c.server ?? {}, index, session, c.autoApprove))}`);
+    const server = {
+      ...loadoutCommand(['mcp-launch', capabilityKey(c)], session.toPath('/') !== '/'),
+      default_tools_approval_mode: c.autoApprove ? 'approve' : undefined,
+    };
+    args.push('-c', `mcp_servers.${key}=${toToml(server)}`);
   }
   return [...args, ...extra, codexPrompt(session, task)];
-}
-
-export function mergeEnvironment(base: NodeJS.ProcessEnv, extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = {};
-  for (const [key, value] of [...Object.entries(base), ...Object.entries(extra)]) {
-    if (process.platform === 'win32') {
-      for (const old of Object.keys(env)) if (old.toLowerCase() === key.toLowerCase()) delete env[old];
-    }
-    env[key] = value;
-  }
-  return env;
 }
 
 export function launch(bin: string, args: string[], opts: LaunchOptions = {}): Promise<number> {
   return new Promise((resolve, reject) => {
     // Headless runs get no stdin: `codex exec` otherwise waits for more prompt text on a non-TTY stdin.
-    const child = spawn(bin, args, { stdio: opts.headless ? ['ignore', 'inherit', 'inherit'] : 'inherit', env: mergeEnvironment(process.env, opts.env) });
+    const child = spawn(bin, args, { stdio: opts.headless ? ['ignore', 'inherit', 'inherit'] : 'inherit' });
     child.on('error', reject);
     child.on('exit', (code, signal) => resolve(code ?? (signal ? 1 : 0)));
   });

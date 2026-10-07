@@ -30,7 +30,7 @@ export interface McpServerConfig {
   headers?: Record<string, string>;
 }
 
-/** Reports allow only server metadata that is useful without credentials. */
+/** Reports omit server arguments and credential values. */
 export function reportJson(value: unknown): string {
   return JSON.stringify(value, (key, v) => {
     if (key !== 'server' || !v || typeof v !== 'object') return v;
@@ -43,9 +43,8 @@ export function reportJson(value: unknown): string {
       } catch { url = '[invalid URL]'; }
     }
     return {
-      transport: server.url ? (server.type === 'sse' ? 'sse' : 'http') : 'stdio',
-      command: server.command,
-      argCount: server.args?.length ?? 0,
+      ...server,
+      args: undefined,
       url,
       env: Object.keys(server.env ?? {}),
       headers: Object.keys(server.headers ?? {}),

@@ -26,7 +26,7 @@ import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { loadConfig, paths } from '../src/config.js';
-import { claudeArgs, claudeHookSettings, codexArgs, materialize, mergeEnvironment, pathTranslator, which, type Agent } from '../src/launch.js';
+import { claudeArgs, claudeHookSettings, codexArgs, materialize, pathTranslator, which, type Agent } from '../src/launch.js';
 import { scanLibrary } from '../src/library.js';
 import type { RouteDecision, ScoredCapability } from '../src/types.js';
 import { readJsonl } from './lib.js';
@@ -83,11 +83,11 @@ function decisionFor(row: SweepRow): RouteDecision {
 /** One tool call; `ok` is false when the call itself failed (a failed call is not an invocation). */
 interface Event { tool: string; detail: string; ok: boolean; id?: string }
 
-function run(bin: string, args: string[], cwd: string, timeoutMs: number, env?: Record<string, string>): Promise<{ stdout: string; stderr: string; code: number | null; timedOut: boolean }> {
+function run(bin: string, args: string[], cwd: string, timeoutMs: number): Promise<{ stdout: string; stderr: string; code: number | null; timedOut: boolean }> {
   return new Promise((resolve) => {
     // Its own process group, so a timeout also stops what the CLI started (Codex's native
     // binary, the Windows process behind claude.exe), which would otherwise hold the pipes open.
-    const child = spawn(bin, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'], detached: true, env: mergeEnvironment(process.env, env) });
+    const child = spawn(bin, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
     let stdout = '';
     let stderr = '';
     let timedOut = false;
@@ -156,7 +156,7 @@ for (const id of values.ids.split(',')) {
       ? claudeArgs(session, task, ['--output-format', 'stream-json', '--verbose', '--max-turns', values['max-turns']!, '--strict-mcp-config', '--permission-mode', 'acceptEdits', ...hookArgs], { headless: true, toPath })
       : codexArgs(session, task, ['--json', '-s', 'workspace-write', '--skip-git-repo-check'], { headless: true });
   const started = Date.now();
-  const proc = await run(bin, args, cwd, Number(values['timeout-s']) * 1000, session.env);
+  const proc = await run(bin, args, cwd, Number(values['timeout-s']) * 1000);
   const { events, costUsd } = toolEvents(proc.stdout);
 
   // Which library skills did the agent actually open?

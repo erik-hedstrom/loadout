@@ -371,29 +371,16 @@ Acceptance:
 **E9. Security hardening.**
 
 Acceptance:
-- `list --json`, `route --json` and saved decisions report only MCP transport,
-  command, arg count, URL origin/path, and env/header keys alongside the name.
-- Codex stdio servers start through `loadout mcp-launch` and private 0600
-  session files. Server args/env values never enter the agent's argv or env.
-  The WSL hop preserves native search-server and launcher arguments.
-- HTTP header references use `LOADOUT_MCP_<index>_HEADER_TOKEN_<index>` names,
-  covered by Codex's default `*TOKEN*` shell exclusion. No shell-policy config
-  is overridden. HTTP URLs with userinfo, query strings or fragments fail with
-  a message directing credentials to headers.
-- Both agent benchmarks forward HTTP header tokens through `session.env`;
-  environment merging respects Windows' case-insensitive keys.
-- Session skill copies reject links and read regular files through
-  `readConfined()` under the existing manifest, total-size, file and depth limits,
-  with a root pinned once for the whole copy.
-- Skill paths, keys, names, descriptions and excerpts are escaped at prompt
-  boundaries. All Jev library data is framed as third-party and instructions
-  tell Jev not to follow it. Prompt wording changed; the orchestrator must run
-  `bench/handwritten.ts`. `decide()` and `bench/judge.ts` stay untouched.
-- Upstream errors redact the resolved Jev key and cap text at 512 characters.
-- Adversarial tests cover agent/server separation, private files, report and
-  argv credential canaries, root swaps, WSL translation and both benchmarks.
-- Merge requires `npm test` and `npm run typecheck` green after E1's Windows
-  hook-test fix lands; E9 restores the original assertion owned by E1.
+- Reports omit MCP arguments and credential values; URLs show origin/path.
+- Codex MCP credentials stay in the library and server process, absent from
+  agent argv, environment and session files. Library keys are validated.
+- MCP stdio/HTTP relays preserve JSON-RPC and propagate closure and failures;
+  Windows shims work. Credential-bearing URLs are rejected with a header hint.
+- Skill copies reject links and retain pinned confinement and size limits.
+- Third-party prompt data is escaped and framed; Jev error details redact
+  the resolved key and stay bounded. `decide()` and `bench/judge.ts` are unchanged.
+- Adversarial tests and typecheck pass, except the known Windows hook test
+  awaiting E1. Routing remeasurement remains with the orchestrator.
 
 PR/commit and routing remeasurement are left to the orchestrator.
 No live Jev, judge or agent invocations; incurred API cost $0.

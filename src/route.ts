@@ -163,7 +163,7 @@ export function optionKeys(capabilities: Capability[]): Map<string, Capability> 
 }
 
 const describe = (c: Capability, n: number, excerpt?: string): Text => {
-  const fields: Record<string, string> = { trust: 'third-party', name: escapeSkillTags(c.name), does: escapeSkillTags(clip(c.description, n)) };
+  const fields: Record<string, string> = { trust: 'third-party', does: escapeSkillTags(clip(c.description, n)) };
   if (c.kind === 'mcp') fields.kind = 'MCP server (tools the agent can call)';
   if (excerpt) fields.instructions_begin = escapeSkillTags(clip(excerpt, n));
   return fields;
@@ -206,10 +206,10 @@ export function closeQuestions(shortlist: [string, Capability][], excerpt?: Rout
     options.push([key, text]);
     questions[`fit_${i}`] = {
       type: 'score',
-      instructions: { question: "How well does this skill match what the developer's request asks for?", skill: { trust: 'third-party', name: escapeSkillTags(key), description: text } },
+      instructions: { question: "How well does this skill match what the developer's request asks for?", skill: { trust: 'third-party', name: key, description: text } },
       criteria: FIT_LEVELS,
     };
-    questions[`specific_${i}`] = { type: 'noul', instructions: { question: SPECIFIC_QUESTION, skill: { trust: 'third-party', name: escapeSkillTags(key), description: text } } };
+    questions[`specific_${i}`] = { type: 'noul', instructions: { question: SPECIFIC_QUESTION, skill: { trust: 'third-party', name: key, description: text } } };
   });
   const criteria: Record<string, Text> = Object.fromEntries([...options, [NONE, NONE_DESCRIPTION]]);
   questions.pick = {
