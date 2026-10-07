@@ -1,0 +1,58 @@
+{
+  "sizes": [
+    1000,
+    5000,
+    20000
+  ],
+  "arms": [
+    "loadout"
+  ],
+  "config": {
+    "router": "jev",
+    "jev": {
+      "baseUrl": "https://api.typesafe.ai",
+      "model": "jev-latest",
+      "inputPricePerMTok": 0.042
+    },
+    "maxCandidates": 200,
+    "shortlist": 8,
+    "fitBy": "exact",
+    "threshold": 0.6,
+    "minShare": 0.03,
+    "needThreshold": 0.45,
+    "inject": {
+      "wide": 0.5,
+      "share": 0.8,
+      "exact": 0.95
+    },
+    "maxSkills": 3,
+    "maxMcp": 2,
+    "showThreshold": 0.7,
+    "maxShown": 4,
+    "defaultTier": "medium",
+    "tiers": {
+      "claude": {
+        "small": "haiku",
+        "medium": "sonnet",
+        "large": {
+          "model": "opus",
+          "effort": "high"
+        }
+      },
+      "codex": {
+        "small": {
+          "model": "gpt-5.6-luna",
+          "effort": "low"
+        },
+        "medium": {
+          "model": "gpt-6.1-sol",
+          "effort": "medium"
+        },
+        "large": {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      }
+    }
+  }
+}

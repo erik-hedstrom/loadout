@@ -1,0 +1,640 @@
+{
+  "cells": [
+    {
+      "arm": "popular",
+      "size": 100,
+      "n": 169,
+      "recall": 0.11834319526627218,
+      "recallBy": {
+        "popular": {
+          "n": 20,
+          "recall": 1
+        },
+        "head": {
+          "n": 49,
+          "recall": 0
+        },
+        "torso": {
+          "n": 50,
+          "recall": 0
+        },
+        "tail": {
+          "n": 50,
+          "recall": 0
+        },
+        "repo": {
+          "n": 108,
+          "recall": 0.05555555555555555
+        },
+        "general": {
+          "n": 61,
+          "recall": 0.22950819672131148
+        }
+      },
+      "meanSelected": 50,
+      "noneSelected": 50,
+      "contextTokens": 5251,
+      "routerCostUsd": 0,
+      "routerMs": 0
+    },
+    {
+      "arm": "popular",
+      "size": 1000,
+      "n": 169,
+      "recall": 0.11834319526627218,
+      "recallBy": {
+        "popular": {
+          "n": 20,
+          "recall": 1
+        },
+        "head": {
+          "n": 49,
+          "recall": 0
+        },
+        "torso": {
+          "n": 50,
+          "recall": 0
+        },
+        "tail": {
+          "n": 50,
+          "recall": 0
+        },
+        "repo": {
+          "n": 108,
+          "recall": 0.05555555555555555
+        },
+        "general": {
+          "n": 61,
+          "recall": 0.22950819672131148
+        }
+      },
+      "meanSelected": 50,
+      "noneSelected": 50,
+      "contextTokens": 5251,
+      "routerCostUsd": 0,
+      "routerMs": 0
+    },
+    {
+      "arm": "popular",
+      "size": 5000,
+      "n": 169,
+      "recall": 0.11834319526627218,
+      "recallBy": {
+        "popular": {
+          "n": 20,
+          "recall": 1
+        },
+        "head": {
+          "n": 49,
+          "recall": 0
+        },
+        "torso": {
+          "n": 50,
+          "recall": 0
+        },
+        "tail": {
+          "n": 50,
+          "recall": 0
+        },
+        "repo": {
+          "n": 108,
+          "recall": 0.05555555555555555
+        },
+        "general": {
+          "n": 61,
+          "recall": 0.22950819672131148
+        }
+      },
+      "meanSelected": 50,
+      "noneSelected": 50,
+      "contextTokens": 5251,
+      "routerCostUsd": 0,
+      "routerMs": 0
+    },
+    {
+      "arm": "popular",
+      "size": 20000,
+      "n": 169,
+      "recall": 0.11834319526627218,
+      "recallBy": {
+        "popular": {
+          "n": 20,
+          "recall": 1
+        },
+        "head": {
+          "n": 49,
+          "recall": 0
+        },
+        "torso": {
+          "n": 50,
+          "recall": 0
+        },
+        "tail": {
+          "n": 50,
+          "recall": 0
+        },
+        "repo": {
+          "n": 108,
+          "recall": 0.05555555555555555
+        },
+        "general": {
+          "n": 61,
+          "recall": 0.22950819672131148
+        }
+      },
+      "meanSelected": 50,
+      "noneSelected": 50,
+      "contextTokens": 5251,
+      "routerCostUsd": 0,
+      "routerMs": 0
+    },
+    {
+      "arm": "bm25",
+      "size": 100,
+      "n": 169,
+      "recall": 1,
+      "recallBy": {
+        "popular": {
+          "n": 20,
+          "recall": 1
+        },
+        "head": {
+          "n": 49,
+          "recall": 1
+        },
+        "torso": {
+          "n": 50,
+          "recall": 1
+        },
+        "tail": {
+          "n": 50,
+          "recall": 1
+        },
+        "repo": {
+          "n": 108,
+          "recall": 1
+        },
+        "general": {
+          "n": 61,
+          "recall": 1
+        }
+      },
+      "meanSelected": 10,
+      "noneSelected": 10,
+      "contextTokens": 869.8844221105528,
+      "routerCostUsd": 0,
+      "routerMs": 0.7236180904522613,
+      "recallAt200": 1
+    },
+    {
+      "arm": "bm25",
+      "size": 1000,
+      "n": 169,
+      "recall": 0.9704142011834319,
+      "recallBy": {
+        "popular": {
+          "n": 20,
+          "recall": 0.9
+        },
+        "head": {
+          "n": 49,
+          "recall": 0.9795918367346939
+        },
+        "torso": {
+          "n": 50,
+          "recall": 1
+        },
+        "tail": {
+          "n": 50,
+          "recall": 0.96
+        },
+        "repo": {
+          "n": 108,
+          "recall": 0.9814814814814815
+        },
+        "general": {
+          "n": 61,
+          "recall": 0.9508196721311475
+        }
+      },
+      "meanSelected": 10,
+      "noneSelected": 10,
+      "contextTokens": 873.8542713567839,
+      "routerCostUsd": 0,
+      "routerMs": 6.231155778894473,
+      "recallAt200": 1
+    },
+    {
+      "arm": "bm25",
+      "size": 5000,
+      "n": 169,
+      "recall": 0.9171597633136095,
+      "recallBy": {
+        "popular": {
+          "n": 20,
+          "recall": 0.8
+        },
+        "head": {
+          "n": 49,
+          "recall": 0.9387755102040817
+        },
+        "torso": {
+          "n": 50,
+          "recall": 1
+        },
+        "tail": {
+          "n": 50,
+          "recall": 0.86
+        },
+        "repo": {
+          "n": 108,
+          "recall": 0.9444444444444444
+        },
+        "general": {
+          "n": 61,
+          "recall": 0.8688524590163934
+        }
+      },
+      "meanSelected": 10,
+      "noneSelected": 10,
+      "contextTokens": 895.9597989949749,
+      "routerCostUsd": 0,
+      "routerMs": 36.7286432160804,
+      "recallAt200": 0.9940828402366864
+    },
+    {
+      "arm": "bm25",
+      "size": 20000,
+      "n": 169,
+      "recall": 0.863905325443787,
+      "recallBy": {
+        "popular": {
+          "n": 20,
+          "recall": 0.7
+        },
+        "head": {
+          "n": 49,
+          "recall": 0.8979591836734694
+        },
+        "torso": {
+          "n": 50,
+          "recall": 0.96
+        },
+        "tail": {
+          "n": 50,
+          "recall": 0.8
+        },
+        "repo": {
+          "n": 108,
+          "recall": 0.9074074074074074
+        },
+        "general": {
+          "n": 61,
+          "recall": 0.7868852459016393
+        }
+      },
+      "meanSelected": 10,
+      "noneSelected": 10,
+      "contextTokens": 900.7437185929648,
+      "routerCostUsd": 0,
+      "routerMs": 156.77386934673368,
+      "recallAt200": 0.9763313609467456
+    },
+    {
+      "arm": "jev",
+      "size": 100,
+      "n": 169,
+      "recall": 1,
+      "recallBy": {
+        "popular": {
+          "n": 20,
+          "recall": 1
+        },
+        "head": {
+          "n": 49,
+          "recall": 1
+        },
+        "torso": {
+          "n": 50,
+          "recall": 1
+        },
+        "tail": {
+          "n": 50,
+          "recall": 1
+        },
+        "repo": {
+          "n": 108,
+          "recall": 1
+        },
+        "general": {
+          "n": 61,
+          "recall": 1
+        }
+      },
+      "meanSelected": 5.396449704142012,
+      "noneSelected": 2.1,
+      "contextTokens": 306.8894472361809,
+      "routerCostUsd": 0.00041219791959798993,
+      "routerMs": 429.10552763819095
+    },
+    {
+      "arm": "jev",
+      "size": 1000,
+      "n": 169,
+      "recall": 1,
+      "recallBy": {
+        "popular": {
+          "n": 20,
+          "recall": 1
+        },
+        "head": {
+          "n": 49,
+          "recall": 1
+        },
+        "torso": {
+          "n": 50,
+          "recall": 1
+        },
+        "tail": {
+          "n": 50,
+          "recall": 1
+        },
+        "repo": {
+          "n": 108,
+          "recall": 1
+        },
+        "general": {
+          "n": 61,
+          "recall": 1
+        }
+      },
+      "meanSelected": 10.136094674556213,
+      "noneSelected": 4.4,
+      "contextTokens": 672.4824120603015,
+      "routerCostUsd": 0.000829641195979899,
+      "routerMs": 679.7839195979899
+    },
+    {
+      "arm": "jev",
+      "size": 5000,
+      "n": 169,
+      "recall": 0.9881656804733728,
+      "recallBy": {
+        "popular": {
+          "n": 20,
+          "recall": 0.95
+        },
+        "head": {
+          "n": 49,
+          "recall": 1
+        },
+        "torso": {
+          "n": 50,
+          "recall": 1
+        },
+        "tail": {
+          "n": 50,
+          "recall": 0.98
+        },
+        "repo": {
+          "n": 108,
+          "recall": 0.9907407407407407
+        },
+        "general": {
+          "n": 61,
+          "recall": 0.9836065573770492
+        }
+      },
+      "meanSelected": 11.414201183431953,
+      "noneSelected": 6.7,
+      "contextTokens": 793.9597989949749,
+      "routerCostUsd": 0.0008482282010050259,
+      "routerMs": 594.0402010050251
+    },
+    {
+      "arm": "jev",
+      "size": 20000,
+      "n": 169,
+      "recall": 0.9585798816568047,
+      "recallBy": {
+        "popular": {
+          "n": 20,
+          "recall": 0.85
+        },
+        "head": {
+          "n": 49,
+          "recall": 0.9591836734693877
+        },
+        "torso": {
+          "n": 50,
+          "recall": 1
+        },
+        "tail": {
+          "n": 50,
+          "recall": 0.96
+        },
+        "repo": {
+          "n": 108,
+          "recall": 0.9722222222222222
+        },
+        "general": {
+          "n": 61,
+          "recall": 0.9344262295081968
+        }
+      },
+      "meanSelected": 11.875739644970414,
+      "noneSelected": 7.566666666666666,
+      "contextTokens": 866.2110552763819,
+      "routerCostUsd": 0.0008555611055276381,
+      "routerMs": 772.3768844221106
+    }
+  ],
+  "sweep": [
+    {
+      "size": 100,
+      "threshold": 0.5,
+      "recall": 1,
+      "selected": 5.396449704142012,
+      "noneSelected": 2.1
+    },
+    {
+      "size": 100,
+      "threshold": 0.7,
+      "recall": 0.9940828402366864,
+      "selected": 2.8224852071005917,
+      "noneSelected": 1.0333333333333334
+    },
+    {
+      "size": 100,
+      "threshold": 0.8,
+      "recall": 0.9940828402366864,
+      "selected": 1.9644970414201184,
+      "noneSelected": 0.5666666666666667
+    },
+    {
+      "size": 100,
+      "threshold": 0.9,
+      "recall": 0.9585798816568047,
+      "selected": 1.1420118343195267,
+      "noneSelected": 0.13333333333333333
+    },
+    {
+      "size": 100,
+      "threshold": 0.95,
+      "recall": 0.6449704142011834,
+      "selected": 0.650887573964497,
+      "noneSelected": 0.03333333333333333
+    },
+    {
+      "size": 100,
+      "threshold": 0.98,
+      "recall": 0.023668639053254437,
+      "selected": 0.023668639053254437,
+      "noneSelected": 0
+    },
+    {
+      "size": 1000,
+      "threshold": 0.5,
+      "recall": 1,
+      "selected": 10.136094674556213,
+      "noneSelected": 4.4
+    },
+    {
+      "size": 1000,
+      "threshold": 0.7,
+      "recall": 0.9940828402366864,
+      "selected": 6.289940828402367,
+      "noneSelected": 2.2333333333333334
+    },
+    {
+      "size": 1000,
+      "threshold": 0.8,
+      "recall": 0.9940828402366864,
+      "selected": 4.047337278106509,
+      "noneSelected": 1.2666666666666666
+    },
+    {
+      "size": 1000,
+      "threshold": 0.9,
+      "recall": 0.9585798816568047,
+      "selected": 1.7100591715976332,
+      "noneSelected": 0.5666666666666667
+    },
+    {
+      "size": 1000,
+      "threshold": 0.95,
+      "recall": 0.6568047337278107,
+      "selected": 0.7988165680473372,
+      "noneSelected": 0.26666666666666666
+    },
+    {
+      "size": 1000,
+      "threshold": 0.98,
+      "recall": 0.023668639053254437,
+      "selected": 0.029585798816568046,
+      "noneSelected": 0.03333333333333333
+    },
+    {
+      "size": 5000,
+      "threshold": 0.5,
+      "recall": 0.9881656804733728,
+      "selected": 11.414201183431953,
+      "noneSelected": 6.7
+    },
+    {
+      "size": 5000,
+      "threshold": 0.7,
+      "recall": 0.9881656804733728,
+      "selected": 8.923076923076923,
+      "noneSelected": 4.033333333333333
+    },
+    {
+      "size": 5000,
+      "threshold": 0.8,
+      "recall": 0.9881656804733728,
+      "selected": 6.727810650887574,
+      "noneSelected": 2.5
+    },
+    {
+      "size": 5000,
+      "threshold": 0.9,
+      "recall": 0.9467455621301775,
+      "selected": 3.4792899408284024,
+      "noneSelected": 1.5666666666666667
+    },
+    {
+      "size": 5000,
+      "threshold": 0.95,
+      "recall": 0.650887573964497,
+      "selected": 1.272189349112426,
+      "noneSelected": 0.6
+    },
+    {
+      "size": 5000,
+      "threshold": 0.98,
+      "recall": 0.023668639053254437,
+      "selected": 0.029585798816568046,
+      "noneSelected": 0.06666666666666667
+    },
+    {
+      "size": 20000,
+      "threshold": 0.5,
+      "recall": 0.9585798816568047,
+      "selected": 11.875739644970414,
+      "noneSelected": 7.566666666666666
+    },
+    {
+      "size": 20000,
+      "threshold": 0.7,
+      "recall": 0.9585798816568047,
+      "selected": 10.887573964497042,
+      "noneSelected": 5.566666666666666
+    },
+    {
+      "size": 20000,
+      "threshold": 0.8,
+      "recall": 0.9585798816568047,
+      "selected": 9.372781065088757,
+      "noneSelected": 4.366666666666666
+    },
+    {
+      "size": 20000,
+      "threshold": 0.9,
+      "recall": 0.9289940828402367,
+      "selected": 5.704142011834319,
+      "noneSelected": 2.9
+    },
+    {
+      "size": 20000,
+      "threshold": 0.95,
+      "recall": 0.6390532544378699,
+      "selected": 2.0236686390532546,
+      "noneSelected": 1.7666666666666666
+    },
+    {
+      "size": 20000,
+      "threshold": 0.98,
+      "recall": 0.03550295857988166,
+      "selected": 0.04142011834319527,
+      "noneSelected": 0.13333333333333333
+    }
+  ],
+  "everything": [
+    {
+      "size": 100,
+      "contextTokens": 7537
+    },
+    {
+      "size": 1000,
+      "contextTokens": 75374
+    },
+    {
+      "size": 5000,
+      "contextTokens": 376872
+    },
+    {
+      "size": 20000,
+      "contextTokens": 1507489
+    }
+  ]
+}

@@ -1,0 +1,144 @@
+{"id":"web-18","loaded":[],"missed_better":"accessibility-review","note":"Nothing loaded; an a11y audit skill would help with WCAG error-handling checks and verification."}
+{"id":"web-20","loaded":[],"missed_better":null,"note":"Strong engineer handles accessible tabs; optional skills marginal. Nothing loaded is acceptable."}
+{"id":"web-19","loaded":[{"key":"frontend-ui-engineering","rating":"helpful"}],"missed_better":null,"note":"Accessible responsive UI guidance fits; design or deploy skills optional extras."}
+{"id":"web-24","loaded":[{"key":"frontend-ui-engineering","rating":"helpful"}],"missed_better":null,"note":"Good fit for accessible responsive static page; reasonable set."}
+{"id":"web-23","loaded":[{"key":"frontend-ui-engineering","rating":"helpful"},{"key":"impeccable","rating":"helpful"}],"missed_better":null,"note":"Both cover polish, loading/empty states, and accessibility well."}
+{"id":"web-01","loaded":[],"missed_better":null,"note":"Simple site; design/deploy skills would be minor improvements only."}
+{"id":"web-03","loaded":[{"key":"frontend-ui-engineering","rating":"helpful"}],"missed_better":null,"note":"Responsive layout guidance relevant to fixing image cropping."}
+{"id":"web-02","loaded":[{"key":"design-taste-frontend","rating":"helpful"},{"key":"redesign-existing-projects","rating":"helpful"},{"key":"frontend-ui-engineering","rating":"helpful"}],"missed_better":null,"note":"Well-matched redesign and anti-generic design skills."}
+{"id":"web-04","loaded":[],"missed_better":null,"note":"Keyboard menu pattern is well-known; skills optional."}
+{"id":"web-05","loaded":[{"key":"frontend-ui-engineering","rating":"helpful"},{"key":"design-taste-frontend","rating":"helpful"}],"missed_better":null,"note":"Good fit for a tasteful, accessible single landing page."}
+{"id":"web-08","loaded":[{"key":"redesign-existing-projects","rating":"helpful"},{"key":"impeccable","rating":"helpful"},{"key":"frontend-ui-engineering","rating":"helpful"}],"missed_better":null,"note":"Redesign, IA and accessibility guidance all match the homepage redesign."}
+{"id":"web-11","loaded":[{"key":"frontend-ui-engineering","rating":"helpful"},{"key":"design-taste-frontend","rating":"neutral"}],"missed_better":null,"note":"Taste skill may push flair; minimalist-ui fits better but set is acceptable."}
+{"id":"web-12","loaded":[{"key":"accessibility-review","rating":"helpful"},{"key":"frontend-ui-engineering","rating":"helpful"}],"missed_better":null,"note":"WCAG audit skill directly matches contrast audit."}
+{"id":"web-14","loaded":[],"missed_better":null,"note":"Debugging layout shift is standard; skills marginal."}
+{"id":"web-16","loaded":[{"key":"frontend-ui-engineering","rating":"helpful"},{"key":"impeccable","rating":"helpful"}],"missed_better":null,"note":"Distill/clarify and accessibility guidance fit simplification task."}
+{"id":"web-15","loaded":[],"missed_better":"frontend-design","note":"A design-direction skill would materially improve landing page quality."}
+{"id":"web-25","loaded":[{"key":"impeccable","rating":"helpful"}],"missed_better":null,"note":"Covers UX and accessibility states; accessibility-review would be a nice addition."}
+{"id":"backend-02","loaded":[],"missed_better":"security-and-hardening","note":"Nothing loaded. A security hardening skill would help with the token, enumeration and rate-limit details."}
+{"id":"backend-03","loaded":[],"missed_better":null,"note":"Nothing loaded. A strong engineer can handle idempotent webhooks. The optional skills are fine but not clearly needed."}
+{"id":"backend-07","loaded":[{"key":"implement","rating":"neutral"},{"key":"doubt-driven-development","rating":"helpful"}],"missed_better":"security-and-hardening","note":"Adversarial review suits security-sensitive auth. A dedicated security skill would add more."}
+{"id":"backend-08","loaded":[{"key":"api-and-interface-design","rating":"neutral"}],"missed_better":null,"note":"A general API design skill adds little here. It doesn't hurt."}
+{"id":"backend-10","loaded":[{"key":"planning-and-task-breakdown","rating":"neutral"},{"key":"incremental-implementation","rating":"neutral"}],"missed_better":null,"note":"Generic process skills. Soft delete is ordinary work."}
+{"id":"backend-11","loaded":[{"key":"api-and-interface-design","rating":"neutral"},{"key":"incremental-implementation","rating":"neutral"}],"missed_better":"django-access-review","note":"The generic skills add little. A Django access-control review would help with the permission requirements."}
+{"id":"backend-19","loaded":[{"key":"implement","rating":"neutral"}],"missed_better":null,"note":"Generic. The task is standard retry and dead-letter work."}
+{"id":"backend-20","loaded":[],"missed_better":"security-review","note":"A cross-tenant data-access audit would benefit from a structured security review skill."}
+{"id":"integrations-04","loaded":[{"key":"cli-creator","rating":"neutral"}],"missed_better":null,"note":"Aimed at Codex-oriented CLIs with JSON output and a companion skill. Only partly fits a user-facing Linear CLI."}
+{"id":"integrations-07","loaded":[],"missed_better":"mcp-builder","note":"The MCP server-building guide fits this exactly and should have been loaded."}
+{"id":"integrations-08","loaded":[{"key":"start","rating":"misleading"}],"missed_better":null,"note":"A bio-research setup skill, irrelevant to a Telegram bot."}
+{"id":"integrations-09","loaded":[],"missed_better":"gha-security-review","note":"The injection-safe workflow requirement would benefit from GitHub Actions security guidance."}
+{"id":"integrations-10","loaded":[],"missed_better":null,"note":"A strong engineer can build this RAG bot. The optional ai-rag-pipeline is only marginal."}
+{"id":"integrations-14","loaded":[],"missed_better":null,"note":"A PDF skill would help a little with extraction, but it is not clearly essential."}
+{"id":"integrations-18","loaded":[],"missed_better":null,"note":"No catalog skill clearly covers Teams bots."}
+{"id":"documents-01","loaded":[{"key":"pdf--openai","rating":"helpful"},{"key":"pdf","rating":"helpful"}],"missed_better":null,"note":"PDF generation skills fit well."}
+{"id":"documents-08","loaded":[],"missed_better":"docx","note":"OCR to .docx needs the docx skill, plus pdf or liteparse for OCR."}
+{"id":"documents-11","loaded":[{"key":"docx","rating":"helpful"},{"key":"proposal-builder","rating":"neutral"}],"missed_better":null,"note":"docx is essential. proposal-builder relies on the owner's templates and routing workflows, so it is only marginally relevant."}
+{"id":"documents-17","loaded":[],"missed_better":"pdf","note":"A PDF plus DOCX deliverable benefits from the pdf and docx skills."}
+{"id":"documents-19","loaded":[],"missed_better":"pdf","note":"Nothing loaded; true PDF redaction, plus checking metadata and annotations, needs the pdf skill."}
+{"id":"documents-20","loaded":[{"key":"proposal-builder","rating":"neutral"},{"key":"docx","rating":"helpful"}],"missed_better":null,"note":"docx is essential for the Word output. proposal-builder is SMB-connector oriented and adds little here."}
+{"id":"documents-21","loaded":[],"missed_better":"docx","note":"The editable Word plus PDF deliverables benefit from the docx skill, and pdf would help as well."}
+{"id":"documents-25","loaded":[],"missed_better":"pdf--openai","note":"A print-ready PDF brochure with visual checks needs a PDF creation and rendering skill."}
+{"id":"documents-24","loaded":[],"missed_better":"pdf","note":"Extracting invoice data from PDFs, including scans, needs the pdf skill."}
+{"id":"documents-28","loaded":[{"key":"pdf--openai","rating":"helpful"}],"missed_better":null,"note":"reportlab generation and render checks fit the badge PDF well. xlsx would be a minor add."}
+{"id":"documents-29","loaded":[],"missed_better":"pptx","note":"Converting PPTX to PDF and fixing the copy needs the pptx skill, with PDF rendering checks."}
+{"id":"business-02","loaded":[],"missed_better":null,"note":"A strong assistant can do the calculation directly. payroll-prep is optional and connector-oriented."}
+{"id":"business-03","loaded":[],"missed_better":null,"note":"A UK checklist is general knowledge. tax-season-organizer is US-focused."}
+{"id":"business-04","loaded":[{"key":"draft-outreach","rating":"neutral"},{"key":"outreach-composer","rating":"neutral"},{"key":"draft-content","rating":"neutral"}],"missed_better":null,"note":"A simple email draft needs no skill. The CRM and sequence features in these skills are irrelevant here."}
+{"id":"business-05","loaded":[{"key":"crm-autopilot","rating":"misleading"}],"missed_better":"crm-hygiene-check","note":"crm-autopilot creates and updates records, but the user wants recommendations only. The read-only hygiene audit fits better."}
+{"id":"business-12","loaded":[],"missed_better":null,"note":"Categorizing into a CSV is straightforward. xlsx is optional."}
+{"id":"business-15","loaded":[{"key":"interview-prep","rating":"helpful"},{"key":"job-post-builder","rating":"neutral"},{"key":"docx","rating":"helpful"}],"missed_better":null,"note":"interview-prep covers the scorecards and docx covers the printable format. job-post-builder is broader than needed."}
+{"id":"business-21","loaded":[{"key":"process-doc","rating":"helpful"},{"key":"process-optimization","rating":"helpful"}],"missed_better":null,"note":"Both fit: they structure the process with owners and flag gaps."}
+{"id":"business-22","loaded":[{"key":"ad-manager","rating":"neutral"},{"key":"performance-report","rating":"helpful"},{"key":"statistical-analysis--anthropics","rating":"helpful"}],"missed_better":null,"note":"Statistics supports the uncertainty analysis. ad-manager is connector-focused."}
+{"id":"business-23","loaded":[{"key":"process-doc","rating":"helpful"}],"missed_better":"customer-escalation","note":"process-doc helps with the SOP format. customer-escalation is directly about escalations, though it's per-case packaging."}
+{"id":"business-24","loaded":[{"key":"discernment-nudge","rating":"neutral"}],"missed_better":null,"note":"This is a knowledge-based estimate. The nudge adds only follow-up questions."}
+{"id":"business-30","loaded":[{"key":"xlsx","rating":"helpful"},{"key":"analyze","rating":"helpful"}],"missed_better":null,"note":"Reasonable set for inspecting and analyzing the files."}
+{"id":"data-01","loaded":[],"missed_better":null,"note":"A strong programmer writes this query easily. write-query would be a minor help."}
+{"id":"data-02","loaded":[],"missed_better":null,"note":"Ordinary pandas cleaning; a strong agent manages without skills. xlsx would be marginal for CSV."}
+{"id":"data-03","loaded":[{"key":"build-dashboard","rating":"helpful"},{"key":"report-builder","rating":"neutral"}],"missed_better":null,"note":"build-dashboard fits the interactive dashboard. report-builder is SMB XLSX-oriented and only loosely relevant."}
+{"id":"data-05","loaded":[],"missed_better":"jupyter-notebook","note":"A notebook deliverable; the jupyter-notebook scaffolding would help. EDA and viz skills would be optional."}
+{"id":"data-06","loaded":[{"key":"sql-queries","rating":"helpful"},{"key":"debugging-and-error-recovery","rating":"neutral"}],"missed_better":null,"note":"sql-queries covers join fan-out fixes. The generic debugging skill adds little."}
+{"id":"data-12","loaded":[],"missed_better":null,"note":"dbt SQL modeling; sql-queries could help slightly, but a strong agent handles this."}
+{"id":"data-13","loaded":[{"key":"investigate-first","rating":"helpful"}],"missed_better":"reconciliation","note":"investigate-first fits the evidence-ranked diagnosis. reconciliation directly matches building a reconciliation table that sums to the gap."}
+{"id":"data-14","loaded":[],"missed_better":null,"note":"Country normalization is a plain scripting task, so no skill is needed."}
+{"id":"data-16","loaded":[{"key":"create-viz","rating":"helpful"}],"missed_better":"geopandas","note":"create-viz helps with the charts. A choropleth needs geospatial joins, so geopandas would materially help."}
+{"id":"data-18","loaded":[{"key":"scientific-visualization","rating":"helpful"}],"missed_better":null,"note":"Covers uncertainty display in matplotlib. jupyter-notebook would be optional."}
+{"id":"data-19","loaded":[{"key":"report-builder","rating":"neutral"}],"missed_better":null,"note":"report-builder relies on connected sources; here it's a local log script. Marginal, not harmful."}
+{"id":"data-20","loaded":[{"key":"sql-queries","rating":"helpful"},{"key":"write-query","rating":"helpful"},{"key":"investigate-first","rating":"neutral"}],"missed_better":null,"note":"Both SQL skills cover Snowflake partition-pruning optimization. investigate-first adds little."}
+{"id":"ml-01","loaded":[],"missed_better":"transformers","note":"Fine-tuning with HF Trainer; the transformers skill would materially help and was offered."}
+{"id":"ml-02","loaded":[],"missed_better":null,"note":"A simple embedding search a strong agent can build. train-sentence-transformers is marginal since no training is needed."}
+{"id":"ml-03","loaded":[],"missed_better":null,"note":"Leakage audit is general ML expertise; scikit-learn would be optional."}
+{"id":"ml-06","loaded":[],"missed_better":null,"note":"Writing an eval set needs judgment more than tools. Document parsing skills are optional."}
+{"id":"ml-07","loaded":[],"missed_better":null,"note":"Group-aware split plus balancing is standard sklearn work. No skill clearly needed."}
+{"id":"ml-09","loaded":[],"missed_better":"huggingface-local-models","note":"GGUF/llama.cpp quantization guidance would materially help choose quants and tooling."}
+{"id":"ml-10","loaded":[],"missed_better":null,"note":"Baseline PyTorch classifier is standard. huggingface-vision-trainer is optional."}
+{"id":"ml-13","loaded":[],"missed_better":null,"note":"Per-language metrics with bootstrap is routine. No skill needed."}
+{"id":"ml-14","loaded":[],"missed_better":null,"note":"Reranking eval is doable without skills. train-sentence-transformers would be optional for the cross-encoder."}
+{"id":"ml-15","loaded":[{"key":"investigate-first","rating":"neutral"}],"missed_better":null,"note":"Generic diagnosis discipline; the user already gave a detailed procedure. Doesn't hurt."}
+{"id":"science-01","loaded":[{"key":"python-executor","rating":"misleading"}],"missed_better":"statistical-analysis","note":"A remote inference.sh sandbox is the wrong fit for local files. Statistical test selection guidance would help more."}
+{"id":"science-02","loaded":[],"missed_better":null,"note":"Nothing loaded. Visualization or PDF skills would be mildly useful, but none is clearly essential."}
+{"id":"science-05","loaded":[],"missed_better":null,"note":"Biopython or phylogenetics (MAFFT) skills would help a little; a strong agent can do this without them."}
+{"id":"science-06","loaded":[],"missed_better":null,"note":"A standard 4PL fit with scipy; skills add only modest value."}
+{"id":"science-07","loaded":[{"key":"scientific-critical-thinking","rating":"helpful"},{"key":"paperclip","rating":"misleading"}],"missed_better":null,"note":"Critical thinking fits evidence appraisal. Paperclip is an external search CLI; the papers are local and outside literature is discouraged."}
+{"id":"science-09","loaded":[{"key":"statistical-analysis","rating":"helpful"},{"key":"scientific-critical-thinking","rating":"helpful"}],"missed_better":null,"note":"Both fit a review of pseudoreplication and mixed models."}
+{"id":"science-10","loaded":[],"missed_better":null,"note":"The worksheet format is unknown and the chemistry is straightforward. No skill is clearly needed."}
+{"id":"devops-01","loaded":[],"missed_better":null,"note":"ci-cd-and-automation would help a bit, but a GitHub Actions test workflow is routine."}
+{"id":"devops-05","loaded":[{"key":"gke-workload-troubleshooting","rating":"helpful"},{"key":"investigate-first","rating":"neutral"}],"missed_better":null,"note":"The GKE skill covers CrashLoopBackOff and OOMKilled diagnosis well, though it is GKE-specific. investigate-first is generic."}
+{"id":"devops-07","loaded":[{"key":"shipping-and-launch","rating":"helpful"}],"missed_better":null,"note":"Covers rollback strategy. ci-cd-and-automation would also help, but it isn't clearly better."}
+{"id":"devops-12","loaded":[],"missed_better":"observability-and-instrumentation","note":"Structured logging and request-ID propagation match the observability skill directly."}
+{"id":"devops-13","loaded":[{"key":"investigate-first","rating":"neutral"}],"missed_better":null,"note":"A read-only disk investigation is well specified already. The generic skill adds little."}
+{"id":"devops-15","loaded":[{"key":"investigate-first","rating":"neutral"}],"missed_better":null,"note":"Certificate renewal debugging is well specified. The generic investigation skill adds little."}
+{"id":"devops-16","loaded":[{"key":"ci-cd-and-automation","rating":"helpful"}],"missed_better":null,"note":"Relevant to pipeline modification and deployment gates."}
+{"id":"devops-18","loaded":[{"key":"runbook","rating":"helpful"},{"key":"documentation","rating":"neutral"}],"missed_better":null,"note":"The runbook skill fits exactly. The documentation skill overlaps with it."}
+{"id":"devops-20","loaded":[],"missed_better":"cost-optimization","note":"If the cloud turns out to be Azure, cost-optimization fits idle-resource hunting. The provider is unknown, so this is moderate."}
+{"id":"security-03","loaded":[{"key":"trailmark","rating":"neutral"}],"missed_better":"supply-chain-risk-auditor","note":"Trailmark graphs could help trace reachability but are heavy. The supply-chain auditor targets dependency advisories directly."}
+{"id":"security-02","loaded":[],"missed_better":null,"note":"No dedicated secret-scanning skill exists. A general agent can use gitleaks or trufflehog."}
+{"id":"security-05","loaded":[{"key":"security-best-practices","rating":"helpful"}],"missed_better":null,"note":"Python and Flask security best practices fit cookie and CSRF hardening."}
+{"id":"security-06","loaded":[{"key":"security-and-hardening","rating":"helpful"}],"missed_better":null,"note":"Hardening skill covers auth flows and OWASP; reasonable fit for an enumeration audit."}
+{"id":"security-07","loaded":[],"missed_better":null,"note":"IAM least-privilege review is mostly IaC reasoning; no catalog skill clearly fits beyond generic security review."}
+{"id":"security-08","loaded":[{"key":"security-and-hardening","rating":"helpful"}],"missed_better":"security-review","note":"Hardening helps with the fixes; security-review's injection-focused methodology would add value for the testing report."}
+{"id":"security-09","loaded":[{"key":"observability-and-instrumentation","rating":"helpful"}],"missed_better":"secret-serialization","note":"Observability helps with logging conventions; secret-serialization directly targets preventing token leaks into logs."}
+{"id":"security-10","loaded":[{"key":"security-and-hardening","rating":"helpful"}],"missed_better":null,"note":"Covers XSS and untrusted input handling; adequate for a React XSS audit."}
+{"id":"security-13","loaded":[{"key":"security-review","rating":"helpful"},{"key":"security-and-hardening","rating":"helpful"}],"missed_better":null,"note":"Both support a token storage review; neither is mobile-specific, but together they're reasonable."}
+{"id":"security-14","loaded":[{"key":"security-best-practices","rating":"helpful"}],"missed_better":null,"note":"Security best-practices review fits; constant-time-analysis could add a little for the signature comparison check."}
+{"id":"debug-02","loaded":[{"key":"debugging-and-error-recovery","rating":"helpful"},{"key":"debug","rating":"helpful"},{"key":"diagnosing-bugs","rating":"neutral"}],"missed_better":null,"note":"Debugging skills overlap; the third adds little but does no harm."}
+{"id":"debug-01","loaded":[{"key":"debug","rating":"helpful"},{"key":"debugging-and-error-recovery","rating":"helpful"},{"key":"surgical-patch","rating":"helpful"}],"missed_better":null,"note":"Good set: reproduce, root-cause, focused fix with a regression test."}
+{"id":"debug-04","loaded":[{"key":"investigate-first","rating":"helpful"},{"key":"debugging-and-error-recovery","rating":"helpful"},{"key":"systematic-debugging","rating":"helpful"}],"missed_better":null,"note":"Fits intermittent-failure diagnosis; a Playwright-specific skill would have helped but isn't clearly better."}
+{"id":"debug-03","loaded":[{"key":"investigate-first","rating":"helpful"},{"key":"debug","rating":"helpful"}],"missed_better":"vercel-react-best-practices","note":"Debug process skills help; React rerender expertise from vercel-react-best-practices would be more targeted."}
+{"id":"debug-05","loaded":[{"key":"investigate-first","rating":"helpful"},{"key":"debug","rating":"helpful"}],"missed_better":null,"note":"Evidence-ranked hypotheses suit leak hunting well."}
+{"id":"debug-06","loaded":[{"key":"debug","rating":"helpful"},{"key":"debugging-and-error-recovery","rating":"helpful"}],"missed_better":null,"note":"Appropriate for stack-trace-driven root cause analysis."}
+{"id":"debug-08","loaded":[{"key":"supabase-postgres-best-practices","rating":"helpful"},{"key":"investigate-first","rating":"helpful"}],"missed_better":null,"note":"Postgres indexing and query guidance plus a diagnostic process; solid choice if the engine is Postgres."}
+{"id":"debug-07","loaded":[{"key":"debugging-and-error-recovery","rating":"helpful"},{"key":"debug","rating":"helpful"}],"missed_better":null,"note":"No iOS skill in the catalog; generic debugging is reasonable."}
+{"id":"debug-09","loaded":[{"key":"debugging-and-error-recovery","rating":"helpful"}],"missed_better":null,"note":"Fine fit for test failures after an upgrade."}
+{"id":"debug-10","loaded":[{"key":"debug","rating":"helpful"},{"key":"surgical-patch","rating":"helpful"},{"key":"debugging-and-error-recovery","rating":"neutral"}],"missed_better":null,"note":"Reasonable; the debugging skills overlap with each other."}
+{"id":"debug-11","loaded":[{"key":"debug","rating":"helpful"},{"key":"surgical-patch","rating":"helpful"}],"missed_better":null,"note":"Reasonable for finding the duplicate scheduling and making a focused fix with tests."}
+{"id":"everyday-08","loaded":[{"key":"code-testing-agent","rating":"neutral"}],"missed_better":null,"note":"Simple clamp tests; a heavy testing pipeline adds little and could overcomplicate things."}
+{"id":"debug-12","loaded":[{"key":"debug","rating":"helpful"},{"key":"debugging-and-error-recovery","rating":"helpful"},{"key":"systematic-debugging","rating":"neutral"}],"missed_better":null,"note":"Debugging skills fit; the third is redundant."}
+{"id":"debug-14","loaded":[{"key":"debugging-and-error-recovery","rating":"helpful"},{"key":"debug","rating":"helpful"},{"key":"systematic-debugging","rating":"helpful"}],"missed_better":null,"note":"Debugging skills fit the reproduce, isolate and fix workflow. They overlap, but all three are reasonable."}
+{"id":"debug-13","loaded":[{"key":"debug","rating":"helpful"},{"key":"debugging-and-error-recovery","rating":"helpful"}],"missed_better":null,"note":"General debugging skills support the reproduce-and-fix structure. No Vite-specific skill exists."}
+{"id":"debug-15","loaded":[{"key":"debug","rating":"helpful"},{"key":"debugging-and-error-recovery","rating":"helpful"}],"missed_better":null,"note":"Structured debugging fits tracing intermittent stale state. The loaded set is reasonable."}
+{"id":"everyday-23","loaded":[{"key":"surgical-patch","rating":"neutral"}],"missed_better":null,"note":"This is a simple CSV escaping fix. A narrow-patch skill is harmless but adds little."}
+{"id":"everyday-31","loaded":[{"key":"code-testing-agent","rating":"neutral"}],"missed_better":null,"note":"Adding one trivial test needs no skill. The heavy testing pipeline could over-engineer it."}
+{"id":"media-02","loaded":[{"key":"image-edit","rating":"helpful"},{"key":"gpt-image-edit","rating":"neutral"},{"key":"nano-banana-edit","rating":"helpful"}],"missed_better":null,"note":"The edit router and Nano Banana suit a background swap that keeps the bottle intact. GPT edit is redundant."}
+{"id":"media-04","loaded":[{"key":"media-use","rating":"misleading"}],"missed_better":null,"note":"media-use is tied to HyperFrames projects. Plain ffmpeg GIF extraction needs no skill."}
+{"id":"media-07","loaded":[],"missed_better":"markdown-mermaid-writing","note":"The Mermaid skill would help produce the editable diagram source and handle rendering."}
+{"id":"media-10","loaded":[],"missed_better":"hyperframes","note":"Edited demos with eased zooms benefit from the HyperFrames video workflow and keyframes."}
+{"id":"media-13","loaded":[],"missed_better":null,"note":"A code-built animation is doable without a skill. motion-graphics could help, but it isn't clearly needed."}
+{"id":"apps-10","loaded":[],"missed_better":null,"note":"A strong programmer can build this. Verification skills would be a marginal gain only."}
+{"id":"productivity-03","loaded":[],"missed_better":"schedule-meeting","note":"The scheduling skill covers calendar availability lookup, which this task depends on."}
+{"id":"productivity-05","loaded":[{"key":"planning-and-task-breakdown","rating":"neutral"}],"missed_better":null,"note":"The skill is software-oriented. Personal study planning needs no skill."}
+{"id":"productivity-06","loaded":[{"key":"file-organizer","rating":"neutral"}],"missed_better":null,"note":"Hash-based duplicate detection is straightforward. The organizer's cleanup bias conflicts slightly with the read-only rule."}
+{"id":"productivity-07","loaded":[],"missed_better":null,"note":"No Notion skill clearly covers database and view creation. A CSV fallback is easy."}
+{"id":"productivity-08","loaded":[],"missed_better":null,"note":"Extracting commitments from transcripts is plain reading comprehension. No skill is needed."}
+{"id":"productivity-09","loaded":[],"missed_better":null,"note":"The calendar provider is unknown, so no catalog calendar skill clearly fits."}
+{"id":"productivity-10","loaded":[],"missed_better":null,"note":"Wiki restructuring is a general analysis task; nothing loaded is reasonable. file-organizer is local-filesystem focused, marginal."}
+{"id":"apps-03","loaded":[],"missed_better":"webapp-testing","note":"Simple vanilla game is doable unaided, but webapp-testing would help verify the requested win/loss rounds in a browser."}
+{"id":"apps-04","loaded":[],"missed_better":"vercel-react-native-skills","note":"RN biometric work benefits from React Native/Expo best practices; the optional skill should have been loaded."}
+{"id":"web-17","loaded":[{"key":"frontend-ui-engineering","rating":"neutral"}],"missed_better":null,"note":"Accessible breadcrumbs are standard work. The generic UI skill does no harm but adds little."}
+{"id":"web-09","loaded":[],"missed_better":null,"note":"Nothing loaded. frontend-ui-engineering could help a little with responsive, accessible tables, but it isn't clearly required."}
+{"id":"web-10","loaded":[{"key":"frontend-ui-engineering","rating":"neutral"}],"missed_better":null,"note":"A dark mode toggle with no flash is a well-known pattern. The skill does no harm but adds little."}
+{"id":"backend-01","loaded":[{"key":"api-and-interface-design","rating":"neutral"},{"key":"implement","rating":"neutral"}],"missed_better":null,"note":"The spec is already detailed. Generic API and implementation guidance adds little to keyset pagination."}
+{"id":"backend-05","loaded":[{"key":"implement","rating":"neutral"},{"key":"planning-and-task-breakdown","rating":"neutral"}],"missed_better":null,"note":"Generic process skills. They do no harm but don't help much with this background-queue refactor."}
+{"id":"business-18","loaded":[{"key":"draft-response","rating":"neutral"}],"missed_better":null,"note":"A simple reminder template. draft-response fits loosely. invoice-chase targets the ledger workflow, so it isn't clearly better."}
+{"id":"writing-08","loaded":[{"key":"documentation","rating":"neutral"}],"missed_better":null,"note":"Rewriting in plain language is an ordinary writing task. The documentation skill adds little."}
+{"id":"writing-11","loaded":[{"key":"documentation","rating":"neutral"}],"missed_better":null,"note":"The README requirements are clear and simple. The documentation skill does no harm but isn't needed."}
+{"id":"writing-14","loaded":[{"key":"draft-content","rating":"neutral"}],"missed_better":null,"note":"Writing subject lines is trivial. draft-content is relevant but not needed."}

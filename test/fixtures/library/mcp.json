@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "postgres": {
+      "description": "Query and inspect a PostgreSQL database: list tables, describe schemas, run read-only SQL.",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-postgres",
+        "postgresql://localhost/dev"
+      ],
+      "autoApprove": true
+    }
+  }
+}

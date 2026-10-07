@@ -1,0 +1,36 @@
+{
+  "name": "loadout",
+  "version": "0.1.0",
+  "description": "Pick the model, skills and MCP servers for each coding-agent session from an unlimited library, using a cheap System One router.",
+  "type": "module",
+  "bin": {
+    "loadout": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsx src/cli.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "yaml": "^2.9.1",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.3"
+  },
+  "optionalDependencies": {
+    "@huggingface/transformers": "^4.3.0"
+  }
+}

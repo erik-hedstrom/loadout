@@ -1,0 +1,47 @@
+{
+  "cells": [
+    {
+      "arm": "frontier",
+      "size": 100,
+      "n": 20,
+      "recall": 1,
+      "recallBy": {
+        "popular": {
+          "n": 3,
+          "recall": 1
+        },
+        "head": {
+          "n": 6,
+          "recall": 1
+        },
+        "torso": {
+          "n": 6,
+          "recall": 1
+        },
+        "tail": {
+          "n": 5,
+          "recall": 1
+        },
+        "repo": {
+          "n": 10,
+          "recall": 1
+        },
+        "general": {
+          "n": 10,
+          "recall": 1
+        }
+      },
+      "meanSelected": 1.45,
+      "contextTokens": 7255.75,
+      "routerCostUsd": 0.03459851,
+      "routerMs": 9530.95
+    }
+  ],
+  "sweep": [],
+  "everything": [
+    {
+      "size": 100,
+      "contextTokens": 7537
+    }
+  ]
+}

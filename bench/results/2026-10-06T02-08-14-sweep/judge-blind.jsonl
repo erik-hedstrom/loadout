@@ -1,0 +1,315 @@
+{"id":"web-14","need":"helpful","useful":["investigate-first","frontend-ui-engineering","systematic-debugging","webapp-testing"],"note":"Debugging a CSS layout shift; a diagnosis process and browser checks help, but the fix is standard."}
+{"id":"web-13","need":"helpful","useful":["frontend-ui-engineering","accessibility-review"],"note":"Standard component work; accessibility and convention guidance offer small benefits."}
+{"id":"web-16","need":"helpful","useful":["redesign-existing-projects","frontend-design","frontend-ui-engineering","accessibility-review","design-critique"],"note":"Design simplification benefits from redesign and hierarchy guidance plus accessibility checks."}
+{"id":"web-15","need":"helpful","useful":["landing-page-design","frontend-design","design-taste-frontend","frontend-ui-engineering","web-perf"],"note":"Landing page layout and conversion guidance improve design quality; image performance helps too."}
+{"id":"web-25","need":"helpful","useful":["accessibility-review","frontend-ui-engineering"],"note":"Covers disabled states and accessibility; WCAG guidance helps somewhat."}
+{"id":"backend-02","need":"helpful","useful":["security-and-hardening","security-best-practices"],"note":"Security-sensitive reset flow; a hardening checklist helps avoid subtle mistakes."}
+{"id":"backend-03","need":"helpful","useful":["investigate-first","systematic-debugging","supabase-postgres-best-practices"],"note":"Idempotency is a known pattern; confirming the root cause first is useful."}
+{"id":"backend-04","need":"helpful","useful":["supabase-postgres-best-practices"],"note":"Postgres schema design with exclusion constraints; Postgres best practices help."}
+{"id":"web-18","need":"helpful","useful":["accessibility-review","frontend-ui-engineering","webapp-testing","browser-testing-with-devtools"],"note":"WCAG form error patterns plus browser testing with axe help verification."}
+{"id":"web-20","need":"helpful","useful":["frontend-ui-engineering","webapp-testing","accessibility-review"],"note":"Accessible tabs pattern and URL sync; browser testing to verify links."}
+{"id":"web-19","need":"helpful","useful":["frontend-design","netlify-deploy","accessibility-review","deploy-to-vercel"],"note":"Static site design and free deploy guidance help; straightforward otherwise."}
+{"id":"web-21","need":"helpful","useful":["web-perf","vercel-react-best-practices","browser-testing-with-devtools"],"note":"CLS measurement and next/font guidance improve result."}
+{"id":"web-24","need":"helpful","useful":["frontend-design","netlify-deploy","accessibility-review","deploy-to-vercel"],"note":"Static bilingual site; design and deploy skills marginally helpful."}
+{"id":"web-23","need":"helpful","useful":["frontend-ui-engineering","accessibility-review"],"note":"Loading state UX and a11y patterns; mostly standard frontend work."}
+{"id":"web-01","need":"helpful","useful":["frontend-design","netlify-deploy","deploy-to-vercel"],"note":"Simple static site with form service; design and deploy guidance help."}
+{"id":"web-03","need":"helpful","useful":["webapp-testing","frontend-ui-engineering","browser-testing-with-devtools"],"note":"Responsive image CSS fix; browser testing at viewport widths helps verify."}
+{"id":"web-02","need":"helpful","useful":["frontend-design","redesign-existing-projects","design-taste-frontend","high-end-visual-design","accessibility-review"],"note":"Design-direction skills help produce a distinctive, non-generic hero."}
+{"id":"web-04","need":"helpful","useful":["frontend-ui-engineering","accessibility-review","webapp-testing"],"note":"ARIA menu pattern knowledge helps; a strong programmer can mostly handle it."}
+{"id":"web-05","need":"helpful","useful":["frontend-design","landing-page-design","netlify-deploy","og-image-design","design-taste-frontend"],"note":"Design taste and deploy guidance improve a simple static page."}
+{"id":"web-06","need":"essential","useful":["figma-implement-design","figma--openai","figma-use","frontend-ui-engineering"],"note":"Figma MCP workflow needed to fetch the design context accurately."}
+{"id":"web-08","need":"helpful","useful":["redesign-existing-projects","frontend-design","accessibility-review","high-end-visual-design","web-perf"],"note":"Redesign and accessibility guidance improve homepage overhaul quality."}
+{"id":"web-07","need":"none","useful":[],"note":"Simple flexbox alignment fix; no skill needed."}
+{"id":"web-11","need":"helpful","useful":["frontend-design","minimalist-ui","frontend-ui-engineering"],"note":"Typography-focused design guidance adds modest value to scaffolding."}
+{"id":"web-12","need":"helpful","useful":["accessibility-review","web-design-guidelines"],"note":"WCAG contrast audit skill structures the check and reporting."}
+{"id":"backend-06","need":"none","useful":[],"note":"Standard rate-limiting middleware work; strong backend engineer handles without a skill."}
+{"id":"backend-07","need":"helpful","useful":["security-and-hardening"],"note":"Security hardening guidance could help with token theft and cookie settings."}
+{"id":"backend-08","need":"none","useful":[],"note":"Ordinary async upload and job pipeline; no specialized skill needed."}
+{"id":"backend-09","need":"none","useful":[],"note":"Optimistic locking or atomic updates is routine backend work."}
+{"id":"backend-10","need":"none","useful":[],"note":"Soft delete with default scoping is a common ORM pattern."}
+{"id":"backend-11","need":"helpful","useful":["django-access-review"],"note":"Django access-control review could help get the technician/manager permissions right."}
+{"id":"backend-13","need":"none","useful":[],"note":"Transactions and row locking are standard database practice."}
+{"id":"backend-12","need":"none","useful":[],"note":"HMAC verification over the raw body is well-known; no skill needed."}
+{"id":"backend-14","need":"none","useful":[],"note":"Moving plan-limit checks to the server is ordinary backend work."}
+{"id":"backend-15","need":"none","useful":[],"note":"Transactional outbox is a known pattern a strong engineer can build."}
+{"id":"backend-17","need":"none","useful":[],"note":"Routine Redis caching with invalidation."}
+{"id":"backend-16","need":"none","useful":[],"note":"Admin refund endpoint with audit follows the codebase's conventions; no skill needed."}
+{"id":"backend-18","need":"helpful","useful":["migration","deprecation-and-migration"],"note":"Migration skills help with live backfill, a deprecation period and a rollout plan."}
+{"id":"backend-19","need":"none","useful":[],"note":"Retries with backoff and a dead-letter store are standard queue work."}
+{"id":"backend-20","need":"helpful","useful":["security-review","variant-analysis"],"note":"Security audit methods help find cross-tenant access paths in a structured way."}
+{"id":"integrations-02","need":"none","useful":[],"note":"Slack Bolt bot; the catalog's Slack skill is browser automation and doesn't apply."}
+{"id":"integrations-01","need":"helpful","useful":["mcp-builder"],"note":"MCP server guide covers SDK usage, tool design and client config."}
+{"id":"integrations-03","need":"none","useful":[],"note":"discord.py bot with persistent views; no matching skill."}
+{"id":"integrations-05","need":"none","useful":[],"note":"MV3 extension calling the Notion API; no matching skill in the catalog."}
+{"id":"integrations-04","need":"none","useful":[],"note":"Linear SDK CLI; the linear skill manages tickets and doesn't cover building tools."}
+{"id":"integrations-06","need":"none","useful":[],"note":"Standard webhook service; strong programmer handles Shopify HMAC and Airtable API."}
+{"id":"integrations-07","need":"helpful","useful":["mcp-builder"],"note":"MCP server design guidance improves tool naming, schemas, errors."}
+{"id":"integrations-08","need":"none","useful":[],"note":"Simple Telegram bot with SQLite; no special skill needed."}
+{"id":"integrations-09","need":"helpful","useful":["gha-security-review","ci-cd-and-automation"],"note":"GHA injection safety guidance useful for release-notes handling."}
+{"id":"integrations-10","need":"helpful","useful":["claude-api","ai-rag-pipeline"],"note":"RAG chatbot; LLM API reference helps if Claude chosen."}
+{"id":"integrations-11","need":"none","useful":[],"note":"Raycast extension; no Raycast skill in catalog."}
+{"id":"integrations-12","need":"none","useful":[],"note":"Typeform-HubSpot sync script; ordinary integration work."}
+{"id":"integrations-13","need":"none","useful":[],"note":"Gmail API CLI; standard Python work."}
+{"id":"integrations-14","need":"helpful","useful":["pdf","claude-api"],"note":"PDF extraction and LLM usage help PO parsing agent."}
+{"id":"integrations-15","need":"none","useful":[],"note":"Zendesk-Jira webhook integration; general coding."}
+{"id":"integrations-16","need":"none","useful":[],"note":"MV3 extension in plain JS; standard work."}
+{"id":"integrations-18","need":"helpful","useful":["microsoft-foundry"],"note":"Teams bot; limited catalog support, Azure guidance marginally useful."}
+{"id":"integrations-17","need":"helpful","useful":["mcp-builder"],"note":"MCP server construction guidance useful."}
+{"id":"integrations-19","need":"none","useful":[],"note":"Salesforce connector; general integration engineering."}
+{"id":"integrations-20","need":"none","useful":[],"note":"VS Code extension; no matching skill."}
+{"id":"documents-01","need":"helpful","useful":["pdf","xlsx"],"note":"PDF creation and timesheet reading."}
+{"id":"documents-02","need":"essential","useful":["docx"],"note":"Real Word styles, TOC, footers need docx skill."}
+{"id":"documents-03","need":"helpful","useful":["docx","tailored-resume-generator","pdf"],"note":"Resume editing preserving format, one-page check."}
+{"id":"documents-04","need":"helpful","useful":["docx"],"note":"Produce cover letter as docx."}
+{"id":"documents-05","need":"essential","useful":["xlsx"],"note":"Formulas, conditional formatting, recalculation check need xlsx skill."}
+{"id":"documents-06","need":"essential","useful":["pptx","pitch-deck-visuals"],"note":"PPTX creation with speaker notes, charts, overflow checks; pitch structure guidance."}
+{"id":"documents-07","need":"essential","useful":["pdf","pdf--openai","docx"],"note":"Read PDF, fill form fields; form may be PDF or Word."}
+{"id":"documents-08","need":"essential","useful":["docx","pdf","liteparse","pdf--openai"],"note":"OCR scan and produce structured docx with flags."}
+{"id":"documents-09","need":"essential","useful":["docx"],"note":"Editable Word contract template creation."}
+{"id":"documents-10","need":"essential","useful":["pdf","pdf--openai"],"note":"Merge PDFs, add page numbers, preserve bookmarks."}
+{"id":"documents-11","need":"essential","useful":["docx"],"note":"Word proposal with tables and correct totals."}
+{"id":"documents-12","need":"essential","useful":["xlsx"],"note":"Fix spreadsheet formulas and formatting."}
+{"id":"documents-13","need":"essential","useful":["pdf","pdf--openai"],"note":"Create fillable AcroForm PDF with interactive fields."}
+{"id":"documents-14","need":"essential","useful":["docx"],"note":"Word styles, TOC, section page numbering reformatting."}
+{"id":"documents-15","need":"essential","useful":["docx","pdf"],"note":"Docx template plus PDF export."}
+{"id":"documents-16","need":"essential","useful":["pptx","pdf"],"note":"Board deck pptx from report; report may be PDF."}
+{"id":"documents-17","need":"helpful","useful":["pdf","docx"],"note":"Simple one-page receipt in PDF and Word."}
+{"id":"documents-18","need":"essential","useful":["xlsx"],"note":"Live-formula mortgage comparison xlsx."}
+{"id":"documents-19","need":"essential","useful":["pdf","pdf--openai"],"note":"True PDF redaction including metadata, annotations."}
+{"id":"documents-20","need":"essential","useful":["docx"],"note":"Word SOW document drafting."}
+{"id":"documents-21","need":"helpful","useful":["docx","pdf"],"note":"Printable checklist in Word and PDF."}
+{"id":"documents-22","need":"essential","useful":["docx"],"note":"Find/replace across headers, footers, text boxes in docx."}
+{"id":"documents-23","need":"essential","useful":["xlsx"],"note":"xlsx with validation, conditional formatting, formulas."}
+{"id":"documents-25","need":"essential","useful":["pdf","canvas-design","pdf--openai"],"note":"Two-page print brochure PDF with editable source."}
+{"id":"documents-24","need":"essential","useful":["pdf","pdf--openai","liteparse"],"note":"Extract invoice line items from PDFs into CSV."}
+{"id":"documents-26","need":"essential","useful":["docx"],"note":"DOCX TOC fields, numbering tied to heading styles require OOXML manipulation."}
+{"id":"documents-27","need":"helpful","useful":["docx"],"note":"Generating a well-formatted DOCX with tables benefits from docx skill."}
+{"id":"documents-28","need":"helpful","useful":["pdf","xlsx","pdf--openai"],"note":"Reading spreadsheet and generating exact-size PDF layout with shrink-to-fit."}
+{"id":"documents-29","need":"essential","useful":["pptx","pdf--openai","pdf"],"note":"PPTX to PDF conversion, rendering pages for visual clipping checks."}
+{"id":"documents-30","need":"essential","useful":["docx","pdf"],"note":"Edit letterhead DOCX template preserving layout, export PDF, read quote."}
+{"id":"business-02","need":"helpful","useful":["xlsx","payroll-prep"],"note":"Payroll calc with overtime; spreadsheet output helpful."}
+{"id":"business-01","need":"helpful","useful":["reconciliation","xlsx","month-end-prep"],"note":"Bank reconciliation methodology and XLSX output."}
+{"id":"business-03","need":"helpful","useful":["tax-season-organizer"],"note":"UK checklist mostly general knowledge; tax organizer marginally relevant."}
+{"id":"business-04","need":"none","useful":[],"note":"Short outreach email; general writing."}
+{"id":"business-06","need":"helpful","useful":["job-post-builder"],"note":"Job post builder matches directly."}
+{"id":"business-05","need":"helpful","useful":["crm-hygiene-check","xlsx"],"note":"CSV dedup analysis; CRM hygiene partially relevant."}
+{"id":"business-07","need":"helpful","useful":["draft-response"],"note":"Customer-facing response drafting skill fits."}
+{"id":"business-08","need":"helpful","useful":["email-sequence","campaign-plan","email-design"],"note":"Email campaign sequence planning skills fit well."}
+{"id":"business-09","need":"helpful","useful":["seo-audit","seo-ai-visibility"],"note":"SEO audit skill fits local service page review."}
+{"id":"business-10","need":"helpful","useful":["vendor-review","xlsx"],"note":"Vendor comparison and TCO analysis skill applies."}
+{"id":"business-12","need":"helpful","useful":["xlsx","ap-processor"],"note":"Categorization CSV output; spreadsheet skill helpful."}
+{"id":"business-11","need":"helpful","useful":["contract-review","legal-risk-assessment","review-contract"],"note":"Contract review skill for flagging lease clauses."}
+{"id":"business-13","need":"helpful","useful":["xlsx","cash-flow-snapshot"],"note":"Formula-driven 13-week XLSX forecast."}
+{"id":"business-14","need":"helpful","useful":["win-loss-review","process-optimization"],"note":"Win/loss pattern analysis of CRM notes."}
+{"id":"business-16","need":"helpful","useful":["research-synthesis","synthesize-research"],"note":"Thematic synthesis of support tickets with counts."}
+{"id":"business-15","need":"helpful","useful":["interview-prep","docx","xlsx"],"note":"Interview scorecard skill plus Word/spreadsheet output formatting."}
+{"id":"business-17","need":"helpful","useful":["xlsx"],"note":"Reusable spreadsheet calculator with formulas benefits from xlsx skill."}
+{"id":"business-19","need":"helpful","useful":["contract-review","review-contract","legal-risk-assessment"],"note":"Contract review skills structure clause conflict analysis."}
+{"id":"business-20","need":"none","useful":[],"note":"General question checklist; strong assistant handles well."}
+{"id":"business-21","need":"helpful","useful":["process-doc","recruiting-pipeline"],"note":"Process documentation with owners/RACI; table output."}
+{"id":"business-22","need":"helpful","useful":["statistical-analysis--anthropics","analyze","ad-manager","validate-data"],"note":"Ad performance analysis with uncertainty and stats checks."}
+{"id":"business-23","need":"helpful","useful":["customer-escalation","runbook","incident-response"],"note":"Escalation policy doc; escalation and incident skills add structure."}
+{"id":"business-24","need":"helpful","useful":["xlsx","comp-analysis"],"note":"Mostly domain knowledge on CA rates; spreadsheet table optional."}
+{"id":"business-25","need":"helpful","useful":["competitor-teardown","competitive-brief--anthropics","xlsx"],"note":"Pricing comparison matrix; competitor analysis frameworks help."}
+{"id":"business-26","need":"none","useful":[],"note":"Short negotiation email; no skill needed."}
+{"id":"business-27","need":"helpful","useful":["pipeline-review","crm-hygiene-check","xlsx"],"note":"Pipeline health and CRM hygiene skills match flagging stale deals."}
+{"id":"business-29","need":"none","useful":[],"note":"Simple one-page program copy; general writing suffices."}
+{"id":"business-28","need":"none","useful":[],"note":"Question list on EU VAT; general knowledge suffices."}
+{"id":"business-30","need":"helpful","useful":["xlsx","explore-data","variance-analysis"],"note":"Data file inspection and margin analysis; spreadsheet handling helps."}
+{"id":"data-01","need":"helpful","useful":["write-query","sql-queries"],"note":"SQL query writing with dialect guidance."}
+{"id":"data-02","need":"helpful","useful":["xlsx","explore-data"],"note":"CSV cleaning; standard pandas work, xlsx skill covers CSV."}
+{"id":"data-03","need":"helpful","useful":["build-dashboard","write-query","data-visualization--anthropics"],"note":"Interactive dashboard with cohort metrics."}
+{"id":"data-04","need":"helpful","useful":["statistical-analysis","statistical-power","statistical-analysis--anthropics"],"note":"Significance testing and power analysis for A/B test."}
+{"id":"data-05","need":"helpful","useful":["jupyter-notebook","exploratory-data-analysis","create-viz","seaborn"],"note":"Notebook scaffolding plus EDA and chart saving."}
+{"id":"data-07","need":"helpful","useful":["xlsx","explore-data","validate-data"],"note":"Multi-file merge and ID cleanup; xlsx helps if inputs are Excel."}
+{"id":"data-06","need":"helpful","useful":["sql-queries","write-query","validate-data"],"note":"Join fan-out diagnosis; SQL best-practice skills help with the fix and validation."}
+{"id":"data-08","need":"none","useful":[],"note":"No DAX or Power BI skill in the catalog; standard DAX knowledge is enough."}
+{"id":"data-09","need":"helpful","useful":["xlsx","explore-data"],"note":"Custom dedupe logic; inspecting the data and handling the spreadsheet helps a bit."}
+{"id":"data-10","need":"helpful","useful":["sql-queries","write-query","bigquery-basics"],"note":"BigQuery cohort SQL; the dialect-aware SQL skills help."}
+{"id":"data-11","need":"helpful","useful":["statistical-analysis","scientific-visualization","matplotlib"],"note":"Bootstrap CIs, nonparametric tests, Holm correction and an interval plot."}
+{"id":"data-12","need":"helpful","useful":["sql-queries","write-query"],"note":"No dbt skill fits; general SQL guidance gives modest help."}
+{"id":"data-13","need":"helpful","useful":["reconciliation","validate-data","xlsx","analyze"],"note":"Reconciling the dashboard against the finance sheet; the reconciliation methodology fits."}
+{"id":"data-14","need":"helpful","useful":["xlsx"],"note":"Plain normalization script; xlsx only matters if the file is Excel."}
+{"id":"data-15","need":"none","useful":[],"note":"A standard pandas melt script that needs no skill."}
+{"id":"data-17","need":"helpful","useful":["exploratory-data-analysis","explore-data","jupyter-notebook","statistical-analysis"],"note":"Missingness profiling report with charts and notebook output."}
+{"id":"data-16","need":"helpful","useful":["geopandas","data-visualization--anthropics","create-viz"],"note":"Choropleth or point map with geospatial joins and an interactive export."}
+{"id":"data-18","need":"helpful","useful":["jupyter-notebook","statistical-analysis","matplotlib"],"note":"Notebook edit adding Wilson intervals to the existing chart."}
+{"id":"data-19","need":"helpful","useful":["build-dashboard","create-viz","xlsx","data-visualization--anthropics"],"note":"Reusable weekly report with charts; the report and viz skills help."}
+{"id":"data-20","need":"helpful","useful":["sql-queries"],"note":"Snowflake pruning and sargability; dialect guidance helps somewhat."}
+{"id":"ml-01","need":"helpful","useful":["transformers","scikit-learn","huggingface-llm-trainer"],"note":"HF fine-tuning compared with a TF-IDF baseline; the transformers skill helps."}
+{"id":"ml-02","need":"helpful","useful":["train-sentence-transformers","transformers"],"note":"Embedding model choice and retrieval evaluation; the sentence-transformers knowledge helps."}
+{"id":"ml-03","need":"helpful","useful":["scikit-learn","analyze-project"],"note":"Leakage audit; sklearn pipeline and group-split guidance help."}
+{"id":"ml-04","need":"none","useful":[],"note":"A plain PyTorch training script that a strong engineer handles without help."}
+{"id":"ml-05","need":"none","useful":[],"note":"ONNX Runtime CPU benchmark; no specific skill applies."}
+{"id":"ml-06","need":"helpful","useful":["markitdown","liteparse","pdf"],"note":"Document parsing skills help ingest the corpus; eval design itself is general work."}
+{"id":"ml-07","need":"helpful","useful":["scikit-learn"],"note":"StratifiedGroupKFold and SMOTE/class weights covered by scikit-learn guidance."}
+{"id":"ml-09","need":"helpful","useful":["huggingface-local-models","transformers","hf-mem"],"note":"GGUF quant selection, llama.cpp usage and memory estimation guidance help."}
+{"id":"ml-08","need":"none","useful":[],"note":"Adding MLflow/TensorBoard logging is routine for a strong engineer."}
+{"id":"ml-11","need":"none","useful":[],"note":"Guideline rewriting is writing work; no specific skill needed."}
+{"id":"ml-10","need":"helpful","useful":["huggingface-vision-trainer","scikit-learn","matplotlib"],"note":"Vision fine-tuning and metrics/plots guidance useful but baseline is standard."}
+{"id":"ml-12","need":"none","useful":[],"note":"FastAPI service with dynamic batching and Dockerfile is standard engineering."}
+{"id":"ml-13","need":"helpful","useful":["scikit-learn","statistical-analysis","data-visualization--anthropics"],"note":"Per-group metrics with bootstrap CIs and a chart; skills mildly helpful."}
+{"id":"ml-14","need":"helpful","useful":["train-sentence-transformers","statistical-analysis","scikit-learn"],"note":"Cross-encoder reranking and paired significance tests benefit from guidance."}
+{"id":"ml-15","need":"none","useful":[],"note":"PyTorch memory profiling and grad accumulation are standard debugging."}
+{"id":"science-01","need":"helpful","useful":["statistical-analysis","scientific-visualization","matplotlib"],"note":"ΔΔCq is known; stats test selection and plotting guidance help."}
+{"id":"science-02","need":"helpful","useful":["pdf","scientific-visualization","matplotlib"],"note":"Read paper PDF and regenerate publication figure faithfully."}
+{"id":"science-03","need":"essential","useful":["nextflow","bulk-rnaseq","nextflow-development"],"note":"RNA-seq pipeline with strandedness, nf-core conventions; domain skills matter."}
+{"id":"science-04","need":"helpful","useful":["uncertainty-and-units"],"note":"Direct fit: pint units and GUM uncertainty propagation checks."}
+{"id":"science-05","need":"helpful","useful":["phylogenetics","biopython"],"note":"MAFFT alignment and sequence handling; conservation scoring via Biopython."}
+{"id":"science-06","need":"helpful","useful":["statistical-analysis","scientific-visualization","matplotlib"],"note":"4PL fitting is standard; stats and plotting guidance aid rigor."}
+{"id":"science-08","need":"none","useful":[],"note":"Plain Python log parsing script with tests; no skill needed."}
+{"id":"science-07","need":"helpful","useful":["scientific-critical-thinking","pdf","literature-review"],"note":"Evidence grading and PDF reading support the mechanism synthesis."}
+{"id":"science-09","need":"helpful","useful":["statistical-analysis","statsmodels","experimental-design"],"note":"Mixed models and pseudoreplication review; statsmodels for example fix code."}
+{"id":"science-10","need":"helpful","useful":["xlsx","sympy","docx"],"note":"Worksheet likely spreadsheet/doc; sympy can balance equations exactly."}
+{"id":"devops-02","need":"none","useful":[],"note":"Standard Django Docker/Compose work; no dedicated container skill in catalog."}
+{"id":"devops-01","need":"helpful","useful":["ci-cd-and-automation"],"note":"CI pipeline setup guidance helps; GitHub Actions workflow otherwise routine."}
+{"id":"devops-03","need":"none","useful":[],"note":"No Fly.io skill available; general deployment knowledge suffices."}
+{"id":"devops-04","need":"none","useful":[],"note":"Standard Terraform S3; no AWS/Terraform skill in catalog."}
+{"id":"devops-05","need":"helpful","useful":["gke-workload-troubleshooting","debugging-and-error-recovery"],"note":"GKE troubleshooting covers CrashLoopBackOff/OOMKilled patterns applicable to generic Kubernetes."}
+{"id":"devops-06","need":"helpful","useful":["observability-and-instrumentation"],"note":"Alerting design guidance useful; stack unknown, no Prometheus-specific skill."}
+{"id":"devops-07","need":"helpful","useful":["ci-cd-and-automation","shipping-and-launch"],"note":"Deployment strategy and rollback guidance from CI/CD and launch skills."}
+{"id":"devops-08","need":"helpful","useful":["ci-cd-and-automation"],"note":"CI pipeline optimization guidance; otherwise general engineering."}
+{"id":"devops-10","need":"none","useful":[],"note":"Generic backup scripting and runbook; no matching skill."}
+{"id":"devops-09","need":"none","useful":[],"note":"Standard nginx config; no nginx skill in catalog."}
+{"id":"devops-11","need":"none","useful":[],"note":"Terraform import of AWS resources; no relevant skill."}
+{"id":"devops-12","need":"helpful","useful":["observability-and-instrumentation"],"note":"Structured logging and request-ID tracing covered by observability skill."}
+{"id":"devops-14","need":"none","useful":[],"note":"Generic Helm chart authoring; no Helm skill available."}
+{"id":"devops-13","need":"none","useful":[],"note":"Linux disk investigation; no specific skill applies."}
+{"id":"devops-15","need":"none","useful":[],"note":"Cert renewal troubleshooting; no certbot/cert-manager skill."}
+{"id":"devops-16","need":"none","useful":[],"note":"GitLab CI manual gate; no GitLab skill in catalog."}
+{"id":"devops-18","need":"helpful","useful":["runbook"],"note":"Runbook skill gives structure for on-call operational docs."}
+{"id":"devops-17","need":"helpful","useful":["investigate-first","gke-reliability"],"note":"Evidence-ranked hypothesis diagnosis; probe/readiness guidance if Kubernetes."}
+{"id":"devops-19","need":"none","useful":[],"note":"Docker image slimming is routine; no matching skill."}
+{"id":"devops-20","need":"helpful","useful":["cost-optimization","google-cloud-waf-cost-optimization","gke-cost-analysis"],"note":"Provider-specific cost skills apply if Azure or GCP is detected."}
+{"id":"security-03","need":"helpful","useful":["supply-chain-risk-auditor","trailmark-finding-triage","fp-check"],"note":"Dependency advisory audit plus reachability triage; supply-chain and triage skills add structure."}
+{"id":"security-01","need":"helpful","useful":["security-review","django-access-review","audit-context-building","sharp-edges"],"note":"IDOR/BOLA audit; security review checklists help, framework unknown."}
+{"id":"security-02","need":"helpful","useful":["security-review","security-best-practices"],"note":"Secret scanning in git history; strong agent can use gitleaks/trufflehog directly."}
+{"id":"security-04","need":"helpful","useful":["security-threat-model","audit-context-building","security-review"],"note":"Threat model skill directly matches the deliverable format."}
+{"id":"security-05","need":"helpful","useful":["security-and-hardening","security-best-practices"],"note":"Flask cookie/CSRF hardening; general hardening guidance helps modestly."}
+{"id":"security-06","need":"helpful","useful":["security-review","security-and-hardening"],"note":"Account enumeration review; general security review checklist applies."}
+{"id":"security-07","need":"helpful","useful":["security-best-practices","security-review"],"note":"IAM least privilege in IaC; no AWS-specific IAM skill in catalog."}
+{"id":"security-08","need":"helpful","useful":["security-review","fp-check","post-patch-validation"],"note":"Local SQLi testing and fixes; security review and validation skills help."}
+{"id":"security-09","need":"helpful","useful":["secret-serialization","observability-and-instrumentation","security-and-hardening"],"note":"Audit logging without secret leakage; secret-serialization targets leak paths."}
+{"id":"security-10","need":"helpful","useful":["security-review","security-best-practices","frontend-ui-engineering"],"note":"React XSS review and fixes; security review covers XSS patterns."}
+{"id":"security-11","need":"helpful","useful":["security-review","sharp-edges","audit-context-building"],"note":"SSRF review; security review checklist helps."}
+{"id":"security-12","need":"essential","useful":["gha-security-review","agentic-actions-auditor"],"note":"GitHub Actions workflow security review skill matches directly."}
+{"id":"security-13","need":"helpful","useful":["security-review","security-best-practices","vercel-react-native-skills"],"note":"Mobile token storage review; generic security guidance helps."}
+{"id":"security-14","need":"helpful","useful":["security-review","constant-time-analysis","sharp-edges"],"note":"Signed URL review including constant-time comparison check."}
+{"id":"security-15","need":"helpful","useful":["differential-review","security-review","test-gap-analysis"],"note":"Security-focused diff review plus abuse test gaps."}
+{"id":"debug-02","need":"helpful","useful":["systematic-debugging","debugging-and-error-recovery"],"note":"Timezone test flakiness; standard debugging, minor skill benefit."}
+{"id":"debug-01","need":"helpful","useful":["systematic-debugging","diagnosing-bugs","test-driven-development"],"note":"Race on double save; reproduce-first debugging and regression test."}
+{"id":"debug-04","need":"helpful","useful":["systematic-debugging","playwright","webapp-testing"],"note":"Playwright flake root cause; debugging discipline helps."}
+{"id":"debug-03","need":"helpful","useful":["vercel-react-best-practices","systematic-debugging","performance-optimization"],"note":"React rerender diagnosis; React performance guidance useful."}
+{"id":"debug-05","need":"helpful","useful":["diagnosing-bugs","systematic-debugging","performance-optimization"],"note":"Memory leak hunt; diagnosis loop with ranked hypotheses fits."}
+{"id":"debug-06","need":"helpful","useful":["systematic-debugging","debugging-and-error-recovery","diagnosing-bugs"],"note":"Structured debugging procedure helps; domain knowledge of size limits is standard."}
+{"id":"debug-08","need":"helpful","useful":["supabase-postgres-best-practices","sql-queries","diagnosing-bugs","optimizing-ef-core-queries"],"note":"Query plan analysis and indexing guidance improve diagnosis; engine unknown."}
+{"id":"debug-07","need":"helpful","useful":["systematic-debugging","diagnosing-bugs","debugging-and-error-recovery"],"note":"No iOS-specific skill; general debugging methodology helps somewhat."}
+{"id":"debug-09","need":"helpful","useful":["systematic-debugging","debugging-and-error-recovery"],"note":"Generic debugging workflow; grouping failures by root cause is standard practice."}
+{"id":"debug-10","need":"helpful","useful":["systematic-debugging","test-driven-development","diagnosing-bugs"],"note":"Money rounding bug; reproduce with failing test first."}
+{"id":"everyday-05","need":"none","useful":[],"note":"Simple parameter addition; no skill needed."}
+{"id":"debug-11","need":"helpful","useful":["systematic-debugging","diagnosing-bugs","test-driven-development"],"note":"DST scheduling bug; structured debugging and deterministic tests help."}
+{"id":"everyday-06","need":"none","useful":[],"note":"Trivial refactor to list comprehension."}
+{"id":"everyday-07","need":"none","useful":[],"note":"Simple extract-function refactor."}
+{"id":"everyday-08","need":"none","useful":[],"note":"Straightforward pytest unit tests."}
+{"id":"everyday-09","need":"none","useful":[],"note":"Import sorting per project convention; trivial."}
+{"id":"everyday-10","need":"none","useful":[],"note":"Simple label text change."}
+{"id":"everyday-11","need":"none","useful":[],"note":"Simple return-value change and caller audit."}
+{"id":"everyday-12","need":"none","useful":[],"note":"Adding type hints is routine."}
+{"id":"everyday-13","need":"none","useful":[],"note":"JSON to YAML conversion is trivial."}
+{"id":"everyday-14","need":"none","useful":[],"note":"Simple find/wc one-liner."}
+{"id":"everyday-15","need":"none","useful":[],"note":"Add one case to formatter; routine."}
+{"id":"everyday-16","need":"none","useful":[],"note":"Replace magic number with constant; trivial."}
+{"id":"everyday-17","need":"none","useful":[],"note":"Simplify nested if; routine."}
+{"id":"everyday-18","need":"none","useful":[],"note":"Case-insensitive comparison; routine."}
+{"id":"everyday-19","need":"none","useful":[],"note":"Simple docstring addition; no skill needed."}
+{"id":"everyday-20","need":"none","useful":[],"note":"Basic JavaScript utility function."}
+{"id":"debug-12","need":"helpful","useful":["systematic-debugging","diagnosing-bugs","surgical-patch"],"note":"Find the root cause first, then make a minimal fix."}
+{"id":"debug-14","need":"helpful","useful":["systematic-debugging","diagnosing-bugs","investigate-first"],"note":"Reproduce and isolate the silent failure before fixing."}
+{"id":"debug-13","need":"helpful","useful":["systematic-debugging","investigate-first"],"note":"Vite asset debugging; investigating systematically helps."}
+{"id":"debug-15","need":"helpful","useful":["systematic-debugging","diagnosing-bugs","investigate-first"],"note":"Intermittent race; rank hypotheses using evidence before fixing."}
+{"id":"everyday-01","need":"none","useful":[],"note":"Ordinary codebase-wide rename."}
+{"id":"everyday-02","need":"none","useful":[],"note":"Trivial typo fix."}
+{"id":"everyday-03","need":"none","useful":[],"note":"Plain explanation of the code."}
+{"id":"everyday-04","need":"none","useful":[],"note":"Simple regex task."}
+{"id":"everyday-21","need":"none","useful":[],"note":"Small Python type-hint change."}
+{"id":"everyday-22","need":"none","useful":[],"note":"Remove a lint warning."}
+{"id":"everyday-23","need":"none","useful":[],"note":"Switch to the standard CSV writer; routine fix."}
+{"id":"everyday-24","need":"none","useful":[],"note":"Callback usage example."}
+{"id":"everyday-25","need":"none","useful":[],"note":"README filename update."}
+{"id":"everyday-26","need":"none","useful":[],"note":"Add an enum display method."}
+{"id":"everyday-27","need":"none","useful":[],"note":"Add a null check."}
+{"id":"everyday-28","need":"none","useful":[],"note":"Standard-library datetime snippet."}
+{"id":"everyday-29","need":"none","useful":[],"note":"Small Bash rename script."}
+{"id":"everyday-30","need":"none","useful":[],"note":"Promise chain to async/await conversion."}
+{"id":"everyday-31","need":"none","useful":[],"note":"Simple unit test following existing conventions; no skill needed."}
+{"id":"everyday-32","need":"none","useful":[],"note":"Small Intl.NumberFormat refactor; standard programming."}
+{"id":"everyday-33","need":"none","useful":[],"note":"Error message tweak plus test updates; routine."}
+{"id":"everyday-34","need":"none","useful":[],"note":"Replace literals with enum members; routine refactor."}
+{"id":"everyday-35","need":"none","useful":[],"note":"Single gitignore entry; trivial."}
+{"id":"media-02","need":"helpful","useful":["background-removal","ai-product-photography","product-photography","image-edit"],"note":"Clean cutout model helps; compositing must preserve branding faithfully."}
+{"id":"media-01","need":"none","useful":[],"note":"ffmpeg silencedetect and trim handle this directly."}
+{"id":"media-03","need":"helpful","useful":["embedded-captions","transcribe","speech-to-text"],"note":"Caption workflow and alignment of transcript to speech benefit from skills."}
+{"id":"media-04","need":"none","useful":[],"note":"ffmpeg palettegen GIF workflow is standard."}
+{"id":"media-05","need":"none","useful":[],"note":"ffmpeg spectrum analysis and notch filters suffice."}
+{"id":"media-06","need":"helpful","useful":["motion-graphics","hyperframes","hyperframes-animation"],"note":"Logo sting workflow with alpha export aided by motion-graphics skills."}
+{"id":"media-07","need":"helpful","useful":["markdown-mermaid-writing"],"note":"Mermaid diagram authoring and export guidance."}
+{"id":"media-08","need":"none","useful":[],"note":"PIL cropping/padding; detection judgement doable without skill."}
+{"id":"media-09","need":"essential","useful":["ai-image-generation","generate-image","imagegen","ai-image-generation--prime-skills"],"note":"Requires an image generation model access."}
+{"id":"media-10","need":"helpful","useful":["hyperframes","general-video","hyperframes-keyframes"],"note":"Eased zoom punch-ins on screen recording via keyframe tooling."}
+{"id":"media-11","need":"none","useful":[],"note":"ffmpeg two-pass loudnorm handles this."}
+{"id":"media-12","need":"helpful","useful":["background-removal","image-edit"],"note":"BiRefNet cutout improves thin-part segmentation."}
+{"id":"media-13","need":"helpful","useful":["motion-graphics","hyperframes"],"note":"Code-based animation feasible; motion skills help render polished MP4."}
+{"id":"media-14","need":"none","useful":[],"note":"No plate-detection skill in catalog; custom OpenCV pipeline needed."}
+{"id":"media-15","need":"essential","useful":["ai-video-generation","google-veo","ai-video-generation--prime-skills","video-prompting-guide"],"note":"Requires text-to-video model access and prompting."}
+{"id":"writing-01","need":"none","useful":[],"note":"Simple polite email; no skill needed."}
+{"id":"writing-03","need":"helpful","useful":["documentation","writing-guidelines"],"note":"Codebase-grounded config docs; documentation skill offers structure guidance."}
+{"id":"writing-02","need":"helpful","useful":["technical-blog-writing","content-creation"],"note":"Developer blog post conventions help structure and code examples."}
+{"id":"writing-04","need":"helpful","useful":["changelog-generator","product-changelog"],"note":"Changelog from commits matches changelog skills directly."}
+{"id":"writing-05","need":"helpful","useful":["product-changelog","changelog-generator"],"note":"Release notes guidance useful; breaking change emphasis."}
+{"id":"writing-07","need":"none","useful":[],"note":"Tone rewrite of email; general writing ability suffices."}
+{"id":"writing-09","need":"helpful","useful":["incident-response"],"note":"Incident status update template from incident-response skill."}
+{"id":"writing-10","need":"none","useful":[],"note":"Proofreading; no skill needed."}
+{"id":"writing-12","need":"none","useful":[],"note":"Short thank-you email; no skill needed."}
+{"id":"writing-13","need":"none","useful":[],"note":"Translate design for sales; general writing skill."}
+{"id":"writing-15","need":"none","useful":[],"note":"French translation; model handles natively."}
+{"id":"productivity-01","need":"none","useful":[],"note":"Meeting notes summary; straightforward."}
+{"id":"productivity-02","need":"helpful","useful":["file-organizer"],"note":"File organization workflow with approval step matches file-organizer."}
+{"id":"apps-10","need":"helpful","useful":["test-driven-development","verification-before-completion","incremental-implementation"],"note":"Desktop app build; testing and verification discipline helps."}
+{"id":"productivity-03","need":"helpful","useful":["schedule-meeting"],"note":"Calendar availability lookup needs calendar connector workflow."}
+{"id":"questions-02","need":"none","useful":[],"note":"Conceptual programming explanation; no skill needed."}
+{"id":"questions-01","need":"none","useful":[],"note":"Conceptual explanation; general knowledge suffices."}
+{"id":"questions-03","need":"none","useful":[],"note":"Beginner SQL index explanation; no skill needed."}
+{"id":"questions-04","need":"none","useful":[],"note":"Architecture advice essay; general knowledge."}
+{"id":"questions-05","need":"none","useful":[],"note":"Simple conceptual clarification."}
+{"id":"questions-06","need":"none","useful":[],"note":"Plain-language explanation; no skill needed."}
+{"id":"questions-07","need":"none","useful":[],"note":"Conversational essay on naming."}
+{"id":"productivity-04","need":"helpful","useful":["obsidian-markdown","obsidian-cli"],"note":"Obsidian syntax for wikilinks, heading links, properties; CLI for backlinks."}
+{"id":"productivity-05","need":"none","useful":[],"note":"Planning checklist; strong assistant handles directly."}
+{"id":"productivity-06","need":"none","useful":[],"note":"Straightforward hashing script and report."}
+{"id":"productivity-07","need":"helpful","useful":["notion-spec-to-implementation","notion-knowledge-capture"],"note":"Notion database creation workflows somewhat relevant; CSV fallback easy."}
+{"id":"productivity-08","need":"helpful","useful":["meeting-insights-analyzer"],"note":"Transcript analysis; skill marginally helps extraction."}
+{"id":"productivity-09","need":"helpful","useful":["lark-calendar"],"note":"Calendar tool unspecified; calendar skill helps only if Lark used."}
+{"id":"productivity-10","need":"helpful","useful":["notion-research-documentation","file-organizer"],"note":"Mostly analysis; organization skills marginal."}
+{"id":"apps-01","need":"none","useful":[],"note":"Standard Flutter app; no specific catalog skill."}
+{"id":"apps-02","need":"none","useful":[],"note":"Simple Electron tray app; general coding."}
+{"id":"apps-03","need":"helpful","useful":["webapp-testing","frontend-ui-engineering"],"note":"Playwright testing of win/lose rounds; accessible responsive UI."}
+{"id":"apps-04","need":"helpful","useful":["vercel-react-native-skills","security-and-hardening"],"note":"RN best practices and secure storage guidance."}
+{"id":"apps-06","need":"none","useful":[],"note":"SwiftUI menu bar app; no relevant skill."}
+{"id":"apps-05","need":"none","useful":[],"note":"Standard Android Compose app; no catalog skill."}
+{"id":"apps-07","need":"none","useful":[],"note":"Godot prototype; no relevant skill."}
+{"id":"apps-08","need":"none","useful":[],"note":"No Unity or Input System skill in the catalog; this is general game engineering."}
+{"id":"apps-09","need":"none","useful":[],"note":"No Swift/SwiftUI/iPad skill in the catalog; a strong assistant handles this."}
+{"id":"questions-08","need":"none","useful":[],"note":"Conceptual explanation of recursion; no skill needed."}
+{"id":"questions-09","need":"none","useful":[],"note":"General code-design advice; the code-simplification skills add little."}
+{"id":"questions-10","need":"none","useful":[],"note":"A simple joke request; no skill needed."}
+{"id":"web-17","need":"none","useful":[],"note":"Standard breadcrumb implementation; strong programmer handles conventions, ARIA, JSON-LD without skill."}
+{"id":"web-22","need":"none","useful":[],"note":"Print CSS is routine; no specialized skill needed."}
+{"id":"web-09","need":"helpful","useful":["frontend-ui-engineering"],"note":"Responsive accessible table work; frontend UI guidance marginally helps."}
+{"id":"web-10","need":"none","useful":[],"note":"Dark mode toggle with localStorage is common, well-known pattern."}
+{"id":"backend-01","need":"none","useful":[],"note":"Keyset pagination is standard backend work for strong engineers."}
+{"id":"backend-05","need":"none","useful":[],"note":"Background queue refactor is ordinary engineering; no catalog skill materially needed."}
+{"id":"business-18","need":"helpful","useful":["invoice-chase"],"note":"Invoice-chase skill covers overdue reminder tone; simple drafting otherwise."}
+{"id":"writing-06","need":"none","useful":[],"note":"Short announcement email; trivial writing task."}
+{"id":"writing-08","need":"none","useful":[],"note":"Plain-language rewrite; instructions not yet pasted. General writing ability suffices."}
+{"id":"writing-11","need":"none","useful":[],"note":"Concise README from project inspection; routine."}
+{"id":"writing-14","need":"none","useful":[],"note":"Subject lines; must ask for content first. No skill needed."}

@@ -1,0 +1,315 @@
+{"category":"web","request":"Build a simple website for my dog grooming business. People should be able to see prices and request an appointment."}
+{"category":"web","request":"The hero on our landing page feels really generic. Can you give it a stronger layout using the copy that's already there?"}
+{"category":"web","request":"Make my photography portfolio look good on phones. The landscape shots are getting cropped weirdly."}
+{"category":"web","request":"Add keyboard navigation to this dropdown and make sure Escape closes it."}
+{"category":"web","request":"I need a coming soon page for a coffee shop called Little Hours, with an email signup and our opening date."}
+{"category":"web","request":"Can you recreate this Figma checkout screen in React? We already use Tailwind and Radix."}
+{"category":"web","request":"fix the spacing on the pricing cards, the buttons don't line up"}
+{"category":"web","request":"Our nonprofit site looks dated. Keep the logo and existing content, but redesign the homepage so donations and volunteer opportunities are easier to find."}
+{"category":"web","request":"Make this table usable on mobile without hiding any of the columns."}
+{"category":"web","request":"Add a dark mode toggle and remember the choice next time someone visits."}
+{"category":"web","request":"I want a personal site with an about page, selected projects, and a small blog. Clean typography, no fancy animations."}
+{"category":"web","request":"Can you check the color contrast on these form fields and fix anything that fails WCAG AA?"}
+{"category":"web","request":"Build a reusable empty state component for our dashboard. It needs an icon, a title, optional help text, and an action button."}
+{"category":"web","request":"The navbar jumps when I open the menu. Please smooth that out."}
+{"category":"web","request":"Create a landing page for our online ceramics class using the photos in public/images."}
+{"category":"web","request":"Our product page has too much going on. Simplify the layout while keeping the size guide, reviews, and delivery estimate easy to access."}
+{"category":"web","request":"Add breadcrumbs to the documentation site."}
+{"category":"web","request":"Can you make the contact form errors readable by screen readers?"}
+{"category":"web","request":"I need a wedding website with the schedule, travel details, and an RSVP form. We'd like it to feel warm and understated."}
+{"category":"web","request":"Turn this long settings page into tabs, but keep direct links to each section working."}
+{"category":"web","request":"The font loads late and shifts the whole page. Fix the layout shift in our Next.js site."}
+{"category":"web","request":"Add a print stylesheet for the recipe pages so people don't print the navigation and ads."}
+{"category":"web","request":"Can you polish the loading states? Right now every page just says Loading..."}
+{"category":"web","request":"Make a bilingual homepage for my accounting practice, English and Spanish, with a clear language switch."}
+{"category":"web","request":"I want the booking calendar to show unavailable days more clearly. Customers keep trying to click them."}
+{"category":"backend","request":"Add cursor pagination to the orders endpoint."}
+{"category":"backend","request":"We need password reset in our FastAPI app. Links should expire and only work once."}
+{"category":"backend","request":"Stripe sometimes sends the same webhook twice and we're creating duplicate subscriptions. Make processing idempotent."}
+{"category":"backend","request":"Design the PostgreSQL tables for a small equipment rental service, including bookings and maintenance periods."}
+{"category":"backend","request":"Move PDF generation out of the request handler and into a background queue."}
+{"category":"backend","request":"Add rate limits to the public search API, with a useful response when clients hit the limit."}
+{"category":"backend","request":"Can you implement refresh token rotation in our Express auth service?"}
+{"category":"backend","request":"Build an endpoint that accepts CSV uploads and returns a job ID so clients can check import progress."}
+{"category":"backend","request":"Our inventory updates can overwrite each other when two staff members save at once. Add proper concurrency handling."}
+{"category":"backend","request":"Add soft delete for customers, but make sure deleted customers don't appear in normal queries."}
+{"category":"backend","request":"I need a Django API for recording maintenance tickets and assigning them to technicians."}
+{"category":"backend","request":"Make the webhook receiver verify the signature before parsing or processing the payload."}
+{"category":"backend","request":"Add database transactions around transferring credit between accounts."}
+{"category":"backend","request":"We have free and paid plans. Enforce the project limits on the server instead of relying on the frontend."}
+{"category":"backend","request":"Set up an outbox so saving an order and scheduling its confirmation email can't get out of sync."}
+{"category":"backend","request":"Add an admin endpoint to refund a payment, including an audit record of who did it."}
+{"category":"backend","request":"Can you add Redis caching to the product lookup? Product edits should invalidate the cached result."}
+{"category":"backend","request":"Replace our sequential numeric public IDs with opaque IDs without breaking existing API clients."}
+{"category":"backend","request":"Implement retry handling for failed delivery jobs, with a limit and somewhere to inspect jobs that never succeed."}
+{"category":"backend","request":"We need tenant isolation in this Rails app. Review the query paths and make sure one company can't read another company's records."}
+{"category":"integrations","request":"Build an MCP server that lets me search our internal Markdown docs and retrieve individual pages."}
+{"category":"integrations","request":"Make a Slack bot that collects standup updates in a thread every weekday morning."}
+{"category":"integrations","request":"I want a Discord bot that assigns a role when someone accepts the server rules."}
+{"category":"integrations","request":"Create a CLI that lists my open Linear issues and lets me change their status."}
+{"category":"integrations","request":"Build a Chrome extension that saves the current page title and URL to a Notion database."}
+{"category":"integrations","request":"Connect our Shopify orders to Airtable. New orders should create records, and cancellations should update them."}
+{"category":"integrations","request":"Can you build an MCP server around our read-only inventory API? Include clear errors for missing items."}
+{"category":"integrations","request":"Make a Telegram bot for logging expenses. I should be able to send '12.50 lunch' and get a confirmation."}
+{"category":"integrations","request":"I need a GitHub Action that posts a short release summary to our team's Slack channel."}
+{"category":"integrations","request":"Build a support chatbot for our website using the help center articles. It should hand off when it can't answer."}
+{"category":"integrations","request":"Create a Raycast extension to search our company directory."}
+{"category":"integrations","request":"Sync new Typeform responses into HubSpot, matching existing contacts by email."}
+{"category":"integrations","request":"Write a command line tool that downloads attachments from a specific Gmail label."}
+{"category":"integrations","request":"Build an agent that checks incoming purchase orders against our catalog and drafts a reply for human review."}
+{"category":"integrations","request":"Can you connect Zendesk tickets to Jira so escalated tickets create linked bugs and keep their status updated?"}
+{"category":"integrations","request":"I want a browser extension that highlights Jira ticket IDs on any page and links them to our instance."}
+{"category":"integrations","request":"Expose our local SQLite research database through an MCP server with read-only queries and a schema endpoint."}
+{"category":"integrations","request":"Make a Microsoft Teams bot that answers office location and Wi-Fi questions from a maintained FAQ."}
+{"category":"integrations","request":"Build a Salesforce connector for our app that imports accounts nightly and reports sync failures."}
+{"category":"integrations","request":"Create a VS Code extension that inserts our standard ticket reference into commit messages."}
+{"category":"documents","request":"Create an invoice PDF for the attached timesheet. My rate is £65 an hour."}
+{"category":"documents","request":"Turn this proposal into a clean Word document with a cover page and consistent headings."}
+{"category":"documents","request":"Update my resume for this data analyst job. Keep it to one page."}
+{"category":"documents","request":"Write a cover letter using my CV and the job description, but don't invent experience."}
+{"category":"documents","request":"Make an Excel budget template for a kitchen renovation, with estimated and actual costs."}
+{"category":"documents","request":"Build a 10-slide pitch deck from these notes. We're pitching a scheduling tool for dental clinics."}
+{"category":"documents","request":"Fill out this supplier onboarding form using the company details in the attached PDF."}
+{"category":"documents","request":"Convert this scanned lease to editable text and flag anything you can't read confidently."}
+{"category":"documents","request":"Create a simple freelance design contract with blanks for scope, payment milestones, and delivery dates."}
+{"category":"documents","request":"Combine these PDFs in the order shown in the filenames and add page numbers."}
+{"category":"documents","request":"Make a project proposal for replacing the client's website. Include scope, timeline, assumptions, and a price table."}
+{"category":"documents","request":"The formulas in my mileage spreadsheet are broken. Fix the totals and format it so I can send it to my accountant."}
+{"category":"documents","request":"Create a fillable PDF intake form for new tutoring students."}
+{"category":"documents","request":"Reformat this dissertation in Word to match the university's attached formatting requirements."}
+{"category":"documents","request":"I need a delivery note template we can print and have customers sign."}
+{"category":"documents","request":"Turn this quarterly report into six slides for the board. Keep the numbers exactly as provided."}
+{"category":"documents","request":"Make a rent receipt for September using these payment details."}
+{"category":"documents","request":"Can you build a spreadsheet comparing these three mortgage offers, including fees and total payments?"}
+{"category":"documents","request":"Remove my phone number and home address from this PDF before I share it publicly."}
+{"category":"documents","request":"Draft a statement of work for a six-week analytics project based on the attached scope."}
+{"category":"documents","request":"Create a printable checklist for opening and closing our bakery."}
+{"category":"documents","request":"Update the dates and client name throughout this contract, including the headers and signature block."}
+{"category":"documents","request":"Make a Google Sheets tracker for wedding RSVPs, dietary requirements, and table assignments."}
+{"category":"documents","request":"Extract the line items from these supplier invoices into one CSV."}
+{"category":"documents","request":"Create a two-page product brochure from this copy and the attached photos."}
+{"category":"documents","request":"Fix the table of contents and heading numbering in this DOCX."}
+{"category":"documents","request":"Prepare a handover document for my replacement using the notes I've pasted below."}
+{"category":"documents","request":"Make printable name badges from this attendee spreadsheet, six per A4 page."}
+{"category":"documents","request":"Convert this PowerPoint to a PDF and check that none of the charts or labels get cut off."}
+{"category":"documents","request":"Create a purchase order for these items using our company letterhead and the supplier's quote."}
+{"category":"business","request":"Reconcile last month's bank transactions with my QuickBooks export and list anything that doesn't match."}
+{"category":"business","request":"Help me calculate payroll for these hourly employees, including overtime, using the rules for our state."}
+{"category":"business","request":"I'm a sole trader in the UK. What records do I need to gather before doing my tax return?"}
+{"category":"business","request":"Draft a short outreach email to independent bookstores about stocking our greeting cards."}
+{"category":"business","request":"Clean up these duplicate contacts in our CRM and suggest which record to keep for each pair."}
+{"category":"business","request":"Write a job posting for a part-time operations assistant. We're a small remote team and need someone organized."}
+{"category":"business","request":"Help me reply to this customer who wants a refund outside our return window."}
+{"category":"business","request":"Plan a two-week email campaign for our spring sale using the products in this list."}
+{"category":"business","request":"Audit the SEO on our service pages and prioritize fixes that would help local search."}
+{"category":"business","request":"Compare these vendor quotes on price, lead time, warranty, and hidden costs."}
+{"category":"business","request":"Review this commercial lease and list clauses I should discuss with a lawyer before signing."}
+{"category":"business","request":"Categorize these expenses for bookkeeping. Put anything ambiguous in a separate list instead of guessing."}
+{"category":"business","request":"Build a cash flow forecast for the next 13 weeks from these receivables, bills, and payroll dates."}
+{"category":"business","request":"We keep losing leads after the demo. Look at these CRM notes and suggest changes to our follow-up process."}
+{"category":"business","request":"Create an interview scorecard for a customer success manager."}
+{"category":"business","request":"Summarize the main reasons people cancelled this month from these support tickets."}
+{"category":"business","request":"I sell handmade candles. Help me work out wholesale pricing that leaves enough margin for me and the retailer."}
+{"category":"business","request":"Draft a polite but firm reminder for clients whose invoices are more than 30 days overdue."}
+{"category":"business","request":"Check whether this contractor agreement has conflicting payment or termination terms."}
+{"category":"business","request":"Prepare a list of questions for our insurance broker before we renew the business policy."}
+{"category":"business","request":"Can you turn our messy hiring process into a clear checklist with owners and deadlines?"}
+{"category":"business","request":"Look at these ad results and tell me which campaigns deserve more budget. Explain the uncertainty too."}
+{"category":"business","request":"We need a customer support escalation policy for billing problems, outages, and angry customers."}
+{"category":"business","request":"Help me estimate the actual cost of hiring my first employee in California."}
+{"category":"business","request":"Make a competitor pricing comparison for these five products and note where the plans aren't directly comparable."}
+{"category":"business","request":"Write a renewal negotiation email to our software vendor. We use fewer seats now and want a lower minimum."}
+{"category":"business","request":"Review this sales pipeline and flag deals that probably shouldn't be in the forecast."}
+{"category":"business","request":"What should I ask my accountant about VAT before selling digital downloads to EU customers?"}
+{"category":"business","request":"Create a referral program for our cleaning company with a simple reward structure and clear eligibility rules."}
+{"category":"business","request":"Our restaurant food costs went up. Use these purchase and sales exports to find which menu items lost the most margin."}
+{"category":"data","request":"Write SQL to find customers who ordered last quarter but haven't ordered this quarter."}
+{"category":"data","request":"Clean this CSV: dates are in three formats and some amounts have currency symbols."}
+{"category":"data","request":"Build a dashboard showing weekly signups, activation rate, and retention by acquisition channel."}
+{"category":"data","request":"Can you check whether this A/B test has enough evidence to call a winner?"}
+{"category":"data","request":"Create a Jupyter notebook that explores this bike share dataset and saves the charts."}
+{"category":"data","request":"My join doubles the revenue total. Find which relationship is causing it and fix the query."}
+{"category":"data","request":"Turn these monthly exports into a single report with consistent customer IDs."}
+{"category":"data","request":"Make a Power BI measure for year-to-date sales that respects the region filter."}
+{"category":"data","request":"Identify duplicate survey responses without deleting legitimate responses from people in the same household."}
+{"category":"data","request":"I need a cohort retention table in BigQuery, grouped by the month of a user's first purchase."}
+{"category":"data","request":"Compare median delivery times across these warehouses and account for the different sample sizes."}
+{"category":"data","request":"Create a dbt model for daily recurring revenue, including cancellations and plan changes."}
+{"category":"data","request":"Find out why our Looker dashboard and finance spreadsheet disagree on March revenue."}
+{"category":"data","request":"Normalize the country names in this dataset and keep a mapping of every change."}
+{"category":"data","request":"Write a pandas script that reshapes these wide survey columns into one row per answer."}
+{"category":"data","request":"Make a map of sales by postcode using this customer export."}
+{"category":"data","request":"Analyze missing values in this dataset before we decide how to fill them."}
+{"category":"data","request":"Add confidence intervals to the conversion chart in this notebook."}
+{"category":"data","request":"Produce a weekly operations report from these shipment logs, with late deliveries and the most common causes."}
+{"category":"data","request":"Optimize this Snowflake query. It scans the whole events table even when I select one day."}
+{"category":"ml","request":"Fine-tune a small text classifier on these labeled support tickets and compare it with a simple baseline."}
+{"category":"ml","request":"Build an embedding search index for our product descriptions and evaluate it with these example queries."}
+{"category":"ml","request":"Our model looks great on validation but bad in production. Check the split for leakage."}
+{"category":"ml","request":"Write a training script for this image dataset with checkpoints and reproducible seeds."}
+{"category":"ml","request":"Benchmark this ONNX model on CPU and report latency at different batch sizes."}
+{"category":"ml","request":"Create an evaluation set for our document Q&A system, including questions that the documents can't answer."}
+{"category":"ml","request":"Help me balance this dataset without putting copies of the same sample in both train and test."}
+{"category":"ml","request":"Add experiment tracking to the PyTorch training loop so I can compare runs."}
+{"category":"ml","request":"Quantize this local language model and check how much answer quality changes."}
+{"category":"ml","request":"We need to detect damaged packaging from photos. Set up a baseline and show where it fails."}
+{"category":"ml","request":"Review these annotation guidelines and make the ambiguous labels easier for annotators to distinguish."}
+{"category":"ml","request":"Deploy this classifier behind an inference endpoint with batching and a health check."}
+{"category":"ml","request":"Measure precision and recall separately for each language in our moderation dataset."}
+{"category":"ml","request":"Build a reranking experiment for our search results using the relevance judgments in this file."}
+{"category":"ml","request":"My GPU runs out of memory halfway through training. Profile memory usage and suggest a change that preserves the effective batch size."}
+{"category":"science","request":"Analyze these qPCR results using the controls listed in the experiment notes."}
+{"category":"science","request":"Help me reproduce the main figure from this paper using the authors' published dataset."}
+{"category":"science","request":"Build a bioinformatics workflow to align these RNA-seq reads and generate gene count tables."}
+{"category":"science","request":"Check the units and uncertainty propagation in my spectroscopy calculations."}
+{"category":"science","request":"Compare these protein sequences and mark the conserved regions."}
+{"category":"science","request":"Fit a dose-response curve to our assay data and report the IC50 with uncertainty."}
+{"category":"science","request":"Summarize the evidence in these papers for and against the proposed mechanism."}
+{"category":"science","request":"Write a script to parse these instrument logs and flag samples measured outside the calibration range."}
+{"category":"science","request":"Can you check whether our statistical analysis accounts for repeated measurements from the same animal?"}
+{"category":"science","request":"Help me balance these chemical equations and verify the molar quantities in my reaction worksheet."}
+{"category":"devops","request":"Add a GitHub Actions workflow that runs tests on pull requests."}
+{"category":"devops","request":"Containerize this Django app with a production-ready Dockerfile and a local Compose setup."}
+{"category":"devops","request":"Deploy our staging environment to Fly.io and document the required environment variables."}
+{"category":"devops","request":"Write Terraform for an S3 bucket that blocks public access and has lifecycle rules for old exports."}
+{"category":"devops","request":"Our Kubernetes pods keep restarting. Find the cause from these events and logs."}
+{"category":"devops","request":"Set up alerts for elevated API error rates without paging us for one failed request."}
+{"category":"devops","request":"Make our deployment support rolling back to the previous image."}
+{"category":"devops","request":"The CI build takes 18 minutes. Look for safe caching and parallelization opportunities."}
+{"category":"devops","request":"Configure nginx to serve the frontend and proxy /api to the backend."}
+{"category":"devops","request":"Add a scheduled database backup and a documented restore check."}
+{"category":"devops","request":"Move these manual AWS setup steps into Terraform without recreating the existing resources."}
+{"category":"devops","request":"Set up structured logs and request IDs across the API and worker."}
+{"category":"devops","request":"Our disk filled up overnight. Check what's growing and propose a retention policy before deleting anything."}
+{"category":"devops","request":"Create a Helm chart for this service with configurable resource limits and probes."}
+{"category":"devops","request":"Investigate why the staging certificate isn't renewing."}
+{"category":"devops","request":"Add a deployment approval step before the production job in GitLab CI."}
+{"category":"devops","request":"We're seeing intermittent 502s after deploys. Check the load balancer health checks and app startup behavior."}
+{"category":"devops","request":"Create a runbook for when the queue backlog starts growing."}
+{"category":"devops","request":"Reduce this Docker image size without removing anything the app needs at runtime."}
+{"category":"devops","request":"Review our cloud bill and identify idle resources or obvious configuration waste."}
+{"category":"security","request":"Audit this API for authorization bugs, especially endpoints that accept an account ID."}
+{"category":"security","request":"Check the repository for committed secrets and tell me what needs rotating."}
+{"category":"security","request":"Review our dependency audit results and prioritize issues that are actually reachable in this app."}
+{"category":"security","request":"Threat model the file upload feature before we launch it."}
+{"category":"security","request":"Harden the session cookies and CSRF protection in this Flask app."}
+{"category":"security","request":"Check whether this password reset flow leaks which email addresses have accounts."}
+{"category":"security","request":"Review the IAM permissions for our deployment role and reduce them to what it needs."}
+{"category":"security","request":"Test our own search endpoint for SQL injection in the local test environment."}
+{"category":"security","request":"Add audit logging for changes to user roles, without recording tokens or passwords."}
+{"category":"security","request":"Look for unsafe HTML rendering in these React components."}
+{"category":"security","request":"We allow users to provide webhook URLs. Review the implementation for SSRF risks."}
+{"category":"security","request":"Check the GitHub Actions workflow for ways an untrusted pull request could access secrets."}
+{"category":"security","request":"Review how our mobile app stores access tokens and recommend a safer implementation."}
+{"category":"security","request":"Validate the permissions on these signed download links. They should only expose the requested file for a short time."}
+{"category":"security","request":"Assess the security impact of this authentication change and identify any missing abuse tests."}
+{"category":"debug","request":"The app crashes when I click Save twice quickly. Reproduce it and fix the cause."}
+{"category":"debug","request":"These tests pass locally but fail in CI with a timezone mismatch."}
+{"category":"debug","request":"Find why this React component keeps rerendering even when the props haven't changed."}
+{"category":"debug","request":"Our Playwright checkout test fails about one run in ten. Don't just increase the timeout."}
+{"category":"debug","request":"The worker memory usage climbs all day until it gets killed. Can you track down the leak?"}
+{"category":"debug","request":"I get a 500 only when uploading files larger than 10 MB. Here's the stack trace."}
+{"category":"debug","request":"The iOS app freezes after returning from the background. Investigate the lifecycle handling."}
+{"category":"debug","request":"Why does this query get much slower when the customer has more than 1,000 orders?"}
+{"category":"debug","request":"Fix the failing tests after the dependency update, and explain which behavior changed."}
+{"category":"debug","request":"The total on the cart page is sometimes one cent off from checkout."}
+{"category":"debug","request":"Our scheduled job runs twice after daylight saving changes. Find where the duplicate gets scheduled."}
+{"category":"debug","request":"This websocket reconnect loop keeps opening more connections. Please fix it."}
+{"category":"debug","request":"Images load in development but return 404 after the Vite build."}
+{"category":"debug","request":"The CSV importer stops on this one file without showing an error. Figure out what it's doing."}
+{"category":"debug","request":"Users occasionally see the previous user's name after logging out and back in. Trace the stale state."}
+{"category":"everyday","request":"Rename getUserData to fetchUserProfile and update its references."}
+{"category":"everyday","request":"Fix the typo in the success toast: it says 'succesfully'."}
+{"category":"everyday","request":"Explain what this function does in plain English."}
+{"category":"everyday","request":"Write a regex that matches our ticket IDs, like OPS-1234."}
+{"category":"everyday","request":"Add an optional timeout parameter to this helper, defaulting to five seconds."}
+{"category":"everyday","request":"Convert this for loop to a list comprehension if it stays readable."}
+{"category":"everyday","request":"Extract the repeated date formatting into one small function."}
+{"category":"everyday","request":"Write a unit test for this clamp function, including values outside the range."}
+{"category":"everyday","request":"Sort these imports the way the rest of the project does."}
+{"category":"everyday","request":"Change this button label from Submit to Save changes."}
+{"category":"everyday","request":"Make this helper return an empty list instead of None when there are no results."}
+{"category":"everyday","request":"Add type hints to these three Python functions."}
+{"category":"everyday","request":"Convert this JSON sample to YAML."}
+{"category":"everyday","request":"Write a shell command to count the .ts files under src, excluding node_modules."}
+{"category":"everyday","request":"Add a case for cancelled to this status formatter."}
+{"category":"everyday","request":"Replace the magic number 86400 with a named constant."}
+{"category":"everyday","request":"Can you simplify this nested if statement without changing what it does?"}
+{"category":"everyday","request":"Make the filename comparison case insensitive."}
+{"category":"everyday","request":"Add a docstring explaining the arguments and return value of parse_duration."}
+{"category":"everyday","request":"Write a JavaScript function that chunks an array into groups of a given size."}
+{"category":"everyday","request":"Change this function to accept a pathlib.Path as well as a string."}
+{"category":"everyday","request":"Remove the unused variable that's causing the lint warning."}
+{"category":"everyday","request":"Escape the commas and quotes properly when this function writes CSV."}
+{"category":"everyday","request":"Show me how to call this function with a callback."}
+{"category":"everyday","request":"Update the example command in the README to use the new filename."}
+{"category":"everyday","request":"Make this enum's display names use spaces instead of underscores."}
+{"category":"everyday","request":"Add a null check before accessing the customer's address."}
+{"category":"everyday","request":"Convert this Unix timestamp to an ISO 8601 string in Python."}
+{"category":"everyday","request":"Write a tiny script that renames .jpeg extensions to .jpg in this folder. Include a dry run."}
+{"category":"everyday","request":"Change this promise chain to async/await."}
+{"category":"everyday","request":"Add a test for an empty input to slugify."}
+{"category":"everyday","request":"Use locale-aware formatting for the price in this helper."}
+{"category":"everyday","request":"Can you make the error message include the invalid value?"}
+{"category":"everyday","request":"Replace these repeated string literals with the existing enum values."}
+{"category":"everyday","request":"i just need a gitignore entry for the generated reports folder"}
+{"category":"media","request":"Trim the dead air from the beginning and end of this interview recording."}
+{"category":"media","request":"Create a square product image with this bottle on a soft beige background."}
+{"category":"media","request":"Add burned-in subtitles to this video using the transcript, and keep them clear of the speaker's face."}
+{"category":"media","request":"Make a short looping GIF from the part where the cat jumps onto the chair."}
+{"category":"media","request":"Remove the background hum from this podcast clip without making the voices sound metallic."}
+{"category":"media","request":"Animate this logo with a simple two-second reveal for our video intro."}
+{"category":"media","request":"Draw a diagram showing how requests travel from the browser through the API to the database."}
+{"category":"media","request":"Crop these photos to 4:5 for Instagram while keeping the products fully visible."}
+{"category":"media","request":"Generate a watercolor illustration of a tiny bookstore on a rainy street."}
+{"category":"media","request":"Turn this screen recording into a 30-second demo with zooms on the important clicks."}
+{"category":"media","request":"Normalize the volume across these lecture recordings and export them as MP3s."}
+{"category":"media","request":"Make a transparent PNG cutout of the chair in this photo."}
+{"category":"media","request":"Create a simple animation of the moon's phases for a school presentation."}
+{"category":"media","request":"Blur the license plates in this dashcam video before I share it."}
+{"category":"media","request":"Generate a five-second video of sunlight moving across a quiet kitchen table, with no text or music."}
+{"category":"writing","request":"Write an email asking my professor for a two-day extension. I've been sick, but I don't want it to sound dramatic."}
+{"category":"writing","request":"Turn these bullet points into a blog post for developers who are new to PostgreSQL."}
+{"category":"writing","request":"Document how to configure this service, with a working example and the required environment variables."}
+{"category":"writing","request":"Create a changelog entry from these commits. Focus on changes users will notice."}
+{"category":"writing","request":"Draft release notes for version 2.4, including the breaking change to the export format."}
+{"category":"writing","request":"Write a short announcement that our office is moving next month."}
+{"category":"writing","request":"Make this email less defensive while keeping the boundary clear."}
+{"category":"writing","request":"Rewrite our onboarding instructions so a nontechnical customer can follow them."}
+{"category":"writing","request":"Help me write an incident update that explains what happened without speculating about the cause."}
+{"category":"writing","request":"Proofread this grant application and keep my writing style."}
+{"category":"writing","request":"Write a concise README for this command line tool, including installation and two examples."}
+{"category":"writing","request":"Draft a thank-you email after my interview that mentions our conversation about accessibility."}
+{"category":"writing","request":"Turn this technical design into an explanation for the sales team."}
+{"category":"writing","request":"Write three subject lines for this newsletter. Please avoid clickbait."}
+{"category":"writing","request":"Can you translate this customer email into natural French and keep the tone polite but direct?"}
+{"category":"productivity","request":"Turn these meeting notes into decisions, action items, and unresolved questions."}
+{"category":"productivity","request":"Organize my Downloads folder by file type. Show me the proposed moves before making them."}
+{"category":"productivity","request":"Find a 45-minute slot next week when everyone on this invite is free."}
+{"category":"productivity","request":"Merge these notes into one Obsidian page and preserve the useful links."}
+{"category":"productivity","request":"Make a realistic task plan for finishing my dissertation chapter by Friday."}
+{"category":"productivity","request":"Find duplicate files in this folder by content, not just filename."}
+{"category":"productivity","request":"Create a Notion project tracker from this list of deliverables and deadlines."}
+{"category":"productivity","request":"Summarize what I still owe people from these meeting transcripts."}
+{"category":"productivity","request":"Add study sessions to my calendar around my existing classes, leaving Sunday free."}
+{"category":"productivity","request":"Our team wiki is a mess. Propose a folder structure and identify pages that should be combined."}
+{"category":"apps","request":"Build a Flutter habit tracker with offline storage and a simple weekly view."}
+{"category":"apps","request":"Make a small Electron app that sits in the tray and reminds me to take breaks."}
+{"category":"apps","request":"Create a browser-based word game where players guess a word from progressively clearer clues."}
+{"category":"apps","request":"Add biometric unlock to our React Native journal app, with a fallback when biometrics aren't available."}
+{"category":"apps","request":"Build an Android app for tracking pantry items and warning me before they expire."}
+{"category":"apps","request":"I want a macOS menu bar app that shows the current timer and lets me start a focus session."}
+{"category":"apps","request":"Make a simple Godot platformer prototype with jumping, moving platforms, and one playable level."}
+{"category":"apps","request":"Add local multiplayer controller support to this Unity game."}
+{"category":"apps","request":"Create an iPad sketching app with undo, a few brush sizes, and PNG export."}
+{"category":"apps","request":"Build a desktop utility that previews batch filename changes before applying them."}
+{"category":"questions","request":"What's the difference between authentication and authorization?"}
+{"category":"questions","request":"Why would I use composition instead of inheritance?"}
+{"category":"questions","request":"Can you explain database indexes using a simple example?"}
+{"category":"questions","request":"When does a side project actually need a queue?"}
+{"category":"questions","request":"Is a monorepo the same thing as a monolith?"}
+{"category":"questions","request":"What does eventual consistency mean for someone using an app?"}
+{"category":"questions","request":"Why do people say naming things is one of the hardest parts of programming?"}
+{"category":"questions","request":"Explain recursion without using the factorial example."}
+{"category":"questions","request":"How do you decide whether a function is doing too much?"}
+{"category":"questions","request":"I'm tired of coding today. Tell me a mildly terrible programming joke."}

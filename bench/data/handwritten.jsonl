@@ -1,0 +1,18 @@
+{"kind": "niche", "accept": ["zeroize-audit"], "task": "Our Rust crypto library keeps secret keys in Vec<u8>; check whether we actually wipe them from memory after use and fix the places where we don't."}
+{"kind": "niche", "accept": ["yara-rule-authoring", "yara-authoring"], "task": "Write a detection rule that flags PE files containing a Cobalt Strike beacon config and a high-entropy .text section."}
+{"kind": "niche", "accept": ["remotion-render", "remotion-create", "remotion-best-practices", "remotion-captions", "remotion"], "task": "Make a 30-second vertical promo video of our changelog with animated subtitles, rendered from React components."}
+{"kind": "niche", "accept": ["durable-objects"], "task": "Add a per-user rate limiter on our Cloudflare Worker whose counters survive across isolates and regions."}
+{"kind": "niche", "accept": ["json-canvas"], "task": "Lay out our service architecture as a canvas file I can open in Obsidian, one node per service with arrows for calls."}
+{"kind": "niche", "accept": ["huggingface-zerogpu"], "task": "Our GPU demo Space times out on cold start; restructure model loading so it works with the shared ZeroGPU hardware."}
+{"kind": "niche", "accept": ["maui-shell-navigation"], "task": "Implement flyout navigation with route-based pages in our .NET MAUI app."}
+{"kind": "niche", "accept": ["bigquery-slot-cost-optimizer", "bigquery-optimization"], "task": "Our BigQuery bill spiked this month; figure out which reservations and queries are wasting slots."}
+{"kind": "niche", "accept": ["writing-lean-proofs"], "task": "Prove in Lean 4 that reversing a list twice gives back the original list."}
+{"kind": "niche", "accept": ["zarr-python"], "task": "Store our 3D microscopy arrays chunked in S3 so the analysis notebooks can read slices lazily from Python."}
+{"kind": "niche", "accept": ["torch-geometric"], "task": "Train a graph neural network on our citation graph to predict each paper's topic."}
+{"kind": "several", "accept": ["brainstorming", "writing-plans", "spec-driven-development", "idea-refine"], "task": "Before we build the CSV import feature, help me think through the design options and turn the result into an implementation plan."}
+{"kind": "several", "accept": ["impeccable", "frontend-design", "redesign-existing-projects", "high-end-visual-design", "design-taste-frontend"], "task": "Our checkout page looks generic and bland; give it a distinctive, polished visual design."}
+{"kind": "none", "accept": [], "task": "rename the variable cnt to count in utils.py"}
+{"kind": "none", "accept": [], "task": "why does this loop run 11 times? for (let i = 0; i <= 10; i++) { ... }"}
+{"kind": "none", "accept": [], "task": "bump lodash to the latest patch version in package.json"}
+{"kind": "mention", "accept": ["systematic-debugging"], "task": "use /systematic-debugging to find out why the websocket reconnect test is flaky"}
+{"kind": "mention", "accept": ["test-driven-development"], "task": "follow test-driven-development to add the discount calculation to cart.ts"}

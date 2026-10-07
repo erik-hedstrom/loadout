@@ -1,0 +1,41 @@
+{
+  "sizes": [
+    1000,
+    5000,
+    20000
+  ],
+  "arms": [
+    "popular",
+    "bm25",
+    "hybrid",
+    "loadout"
+  ],
+  "config": {
+    "router": "jev",
+    "jev": {
+      "baseUrl": "https://api.typesafe.ai",
+      "model": "jev-latest",
+      "inputPricePerMTok": 0.042
+    },
+    "maxCandidates": 200,
+    "shortlist": 8,
+    "threshold": 0.7,
+    "needThreshold": 0.4,
+    "exactThreshold": 0.5,
+    "maxSkills": 12,
+    "maxMcp": 4,
+    "defaultTier": "medium",
+    "tiers": {
+      "claude": {
+        "small": "haiku",
+        "medium": "sonnet",
+        "large": "opus"
+      },
+      "codex": {
+        "small": "gpt-5.6-luna",
+        "medium": "gpt-5.6-terra",
+        "large": "gpt-6-astra"
+      }
+    }
+  }
+}
