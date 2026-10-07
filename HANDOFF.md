@@ -53,7 +53,7 @@ those, not this table.
 | Question | Result |
 |---|---|
 | Right skill reaches the agent, synthetic tasks, 20k-skill library | 93% loaded (95% offered), 1.2 skills loaded, 5% needless loads |
-| Reasonable choices on 315 realistic requests, real 1,262-skill library, Opus judge, held-out split | 76% useful loaded (86% offered), 84% quiet when nothing is needed, 82% of loads useful, 1% misleading |
+| Reasonable choices on 315 realistic requests, real 1,262-skill library, Opus judge, held-out split | 76% useful loaded (86% offered), 84% quiet when nothing is needed, 82% of loads useful, 1% misleading. These are v4's decisions: after E9 about 12% of test requests load differently, against 7.5% run-to-run, and those rows are not judged (RESULTS, E9 re-measure) |
 | Do agents use what they get? | Claude Code 9/10 and Codex 11/11 open a preloaded skill |
 | Agents searching on their own (no preload) | Claude 2/10, Codex 5/10, but when they search, they find the right skill (7/7) |
 | Prompt hook (Claude Code, same 10 requests) | 6/10 open a useful skill (vs 2/10 with search alone) |

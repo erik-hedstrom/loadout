@@ -1,38 +1,54 @@
 /**
- * Decision agreement between two sweeps (bench/sweep.ts), per split: same
- * loaded skills, offered skills, load-vs-quiet, injected skills and tier.
- * Run two sweeps of identical code to get the run-to-run floor, then compare
- * across a change. Agreement is not quality: changed rows need judging.
+ * Did a change move the router's decisions beyond run-to-run noise? Give the
+ * sweep (bench/sweep.ts) from before the change and two sweeps of identical
+ * code after it. Per split, for the loaded skills and the load-vs-quiet
+ * choice: agreement of the two after-runs (the floor) and of before with
+ * each after-run, with 95% Wilson intervals, plus an exact McNemar test
+ * pairing each before/after agreement with the floor on the same requests.
+ * Two tests, uncorrected: read them as exploratory. Agreement is not quality;
+ * changed rows still need judging.
  *
- *   npx tsx bench/agree.ts <before>/decisions.jsonl <after>/decisions.jsonl
+ *   npx tsx bench/agree.ts <before>/decisions.jsonl <after-1>/decisions.jsonl <after-2>/decisions.jsonl
  */
-import { readFileSync } from 'node:fs';
-import { splitOf } from './lib.js';
+import { readJsonl, splitOf, wilson } from './lib.js';
 
-type Pick = { key: string; inject?: string };
-type Row = { id: string; loaded: Pick[]; offered: Pick[]; warning?: string; need?: number; tier: string };
-const read = (p: string) => new Map(readFileSync(p, 'utf8').trim().split('\n').map((l) => JSON.parse(l) as Row).map((r) => [r.id, r]));
-const [oldPath, newPath] = process.argv.slice(2);
-const before = read(oldPath!);
-const after = read(newPath!);
-const keys = (ps: Pick[]) => ps.map((p) => p.key).sort().join('|');
+interface Row { id: string; loaded: { key: string }[]; warning?: string }
 
-for (const split of ['all', 'dev', 'test'] as const) {
-  const ids = [...before.keys()].filter((id) => after.has(id) && (split === 'all' || splitOf(id) === split));
-  let loaded = 0, offered = 0, quiet = 0, injected = 0, tier = 0;
-  const changed: string[] = [];
-  for (const id of ids) {
-    const a = before.get(id)!, b = after.get(id)!;
-    if (keys(a.loaded) === keys(b.loaded)) loaded++; else changed.push(id);
-    if (keys(a.offered) === keys(b.offered)) offered++;
-    if ((a.loaded.length === 0) === (b.loaded.length === 0)) quiet++;
-    if (keys(a.loaded.filter((p) => p.inject)) === keys(b.loaded.filter((p) => p.inject))) injected++;
-    if (a.tier === b.tier) tier++;
-  }
-  const pct = (n: number) => `${n}/${ids.length} (${((100 * n) / ids.length).toFixed(1)}%)`;
-  console.log(`${split}: same loaded ${pct(loaded)}; same offered ${pct(offered)}; same load-vs-quiet ${pct(quiet)}; same injected ${pct(injected)}; same tier ${pct(tier)}`);
-  if (split === 'test') console.log(`test ids with changed loads: ${changed.join(', ')}`);
+const files = process.argv.slice(2);
+if (files.length !== 3) throw new Error('usage: agree.ts <before> <after-1> <after-2> (decisions.jsonl files)');
+const [before, after1, after2] = files.map((f) => new Map(readJsonl<Row>(f).map((r) => [r.id, r])));
+const metrics: Record<string, (r: Row) => string> = {
+  'loaded skills': (r) => r.loaded.map((p) => p.key).sort().join('|'),
+  'load-vs-quiet': (r) => String(r.loaded.length > 0),
+};
+
+/** Exact two-sided McNemar p-value for b and c discordant pairs. */
+function mcnemar(b: number, c: number): number {
+  const n = b + c;
+  let tail = 0;
+  for (let i = 0, coef = 1; i <= Math.min(b, c); coef = (coef * (n - i)) / (i + 1), i++) tail += coef;
+  return Math.min(1, (2 * tail) / 2 ** n);
 }
-const warned = [...after.values()].filter((r) => r.warning).length;
-const loads = (m: Map<string, Row>) => [...m.values()].reduce((t, r) => t + r.loaded.length, 0);
-console.log(`new sweep rows with a warning: ${warned}; loads per request before ${(loads(before) / before.size).toFixed(2)}, after ${(loads(after) / after.size).toFixed(2)}; ids missing from new: ${[...before.keys()].filter((id) => !after.has(id)).length}`);
+const count = (xs: boolean[]) => {
+  const k = xs.filter(Boolean).length;
+  return `${k}/${xs.length} (${(100 * k / xs.length).toFixed(1)}%, ${wilson(k, xs.length)})`;
+};
+
+for (const split of ['test', 'dev', 'all'] as const) {
+  const ids = [...before!.keys()].filter((id) => after1!.has(id) && after2!.has(id) && (split === 'all' || splitOf(id) === split));
+  for (const [name, f] of Object.entries(metrics)) {
+    const agree = (a: Map<string, Row>, b: Map<string, Row>) => ids.map((id) => f(a.get(id)!) === f(b.get(id)!));
+    const floor = agree(after1!, after2!);
+    const lines = [`floor ${count(floor)}`];
+    for (const [label, after] of [['before/after-1', after1!], ['before/after-2', after2!]] as const) {
+      const cross = agree(before!, after);
+      const b = ids.filter((_, i) => floor[i] && !cross[i]).length;
+      const c = ids.filter((_, i) => !floor[i] && cross[i]).length;
+      lines.push(`${label} ${count(cross)}, discordant ${b} vs ${c}, McNemar p = ${mcnemar(b, c).toFixed(3)}`);
+    }
+    console.log(`${split}, same ${name}: ${lines.join('; ')}`);
+  }
+}
+const perRequest = (m: Map<string, Row>) => ([...m.values()].reduce((t, r) => t + r.loaded.length, 0) / m.size).toFixed(2);
+const warned = [after1!, after2!].map((m) => [...m.values()].filter((r) => r.warning).length);
+console.log(`loads per request: before ${perRequest(before!)}, after ${perRequest(after1!)} and ${perRequest(after2!)}; rows with a warning after: ${warned.join(' and ')}`);

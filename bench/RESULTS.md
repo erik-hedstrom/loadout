@@ -103,28 +103,31 @@ spend.
 E9 changed what Jev sees: library names, descriptions and excerpts are now
 always escaped and framed as third-party data. This entry checks whether that
 moved the v4 decisions. Two sweeps of the same 315 requests were run on main
-at 662e0d5 (E9 merged), with the same library and embeddings. Agreement is
-measured with `bench/agree.ts`, on the 213 test-split requests:
+at 662e0d5 (E9 merged), with the same library and embeddings. `bench/agree.ts`
+measures agreement on the 213 test-split requests. The McNemar column pairs
+each v4 comparison with the floor on the same requests, as an exact test
+reporting discordant counts and p. It is exploratory: two tests, uncorrected.
 
-| Comparison | Same loaded skills | Same load-vs-quiet |
-|---|---:|---:|
-| Run 1 vs run 2, identical code (run-to-run floor) | 197 (92.5%, 88.1–95.3) | 206 (96.7%, 93.4–98.4) |
-| v4 vs post-E9 run 1 | 188 (88.3%, 83.2–91.9) | 199 (93.4%, 89.3–96.0) |
-| v4 vs post-E9 run 2 | 186 (87.3%, 82.2–91.1) | 200 (93.9%, 89.8–96.4) |
+| Comparison | Same loaded skills | McNemar vs floor | Same load-vs-quiet |
+|---|---:|---:|---:|
+| Post-E9 run 1 vs run 2 (identical code: the floor) | 197 (92.5%, 88–95%) | — | 206 (96.7%, 93–98%) |
+| v4 vs post-E9 run 1 | 188 (88.3%, 83–92%) | 17 vs 8, p = 0.11 | 199 (93.4%, 89–96%) |
+| v4 vs post-E9 run 2 | 186 (87.3%, 82–91%) | 17 vs 6, p = 0.035 | 200 (93.9%, 90–96%) |
 
 (95% Wilson intervals.)
-- Jev is not deterministic. Identical code changes the loaded set for about
-  1 test request in 13 between runs.
-- Across E9 the loaded set changed for 25–27 test requests, against 16 between
-  identical runs. The intervals overlap, so an effect of the framing change is
-  **not shown** at this sample size. If there is one, it moves at most about 5
-  points of decisions. E9's escaping changes and any server-side drift since
-  v4 are mixed in with it.
-- Skills loaded per request: 0.75 (v4), 0.73 and 0.74 (post-E9). No request
-  fell back to keyword ranking.
-- The v4 quality numbers stand for unchanged rows. The changed rows are not
-  judged, so their quality is **not shown**. They will be judged with C1's new
-  held-out requests rather than re-tuning on these.
+- **Jev is not deterministic.** In the one repeat pair, identical code
+  changed the loaded set for 16 of 213 test requests (about 1 in 13).
+- **Decisions probably shifted across E9.** Agreement with v4 is 4–5 points
+  below the floor. The paired test is nominally significant for one of the
+  two runs. On all 315 requests the same comparison gives p = 0.004 and 0.050.
+  How large the shift is cannot be bounded from one repeat pair.
+- **The cause is not identified.** E9's framing, its escaping, and any
+  server-side drift since v4 cannot be separated.
+- **The direction is not shown.** Skills loaded per request: 0.75 (v4), 0.73
+  and 0.74 (post-E9). No request fell back to keyword ranking. The changed
+  rows are not judged, so whether quality rose or fell is unknown.
+- The v4 quality numbers describe v4's decisions. They will be re-established
+  on C1's new held-out requests rather than by re-tuning on these.
 
 Rows: `results/2026-10-07T21-34-39-sweep/` and
 `results/2026-10-07T21-40-26-sweep/`. Cost: $0.77 of Jev for two sweeps,

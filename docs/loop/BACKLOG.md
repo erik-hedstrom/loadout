@@ -462,8 +462,10 @@ Acceptance:
 - Third-party prompt data is escaped and framed; Jev errors contain only HTTP
   status or fixed failure categories. `decide()` and `bench/judge.ts` are unchanged.
 - Adversarial tests for each path. Routing re-measured after the Jev framing
-  change: an effect is not shown against the run-to-run floor ("E9
-  re-measure" in `bench/RESULTS.md`).
+  change ([PR #7](https://github.com/erik-hedstrom/loadout/pull/7), "E9
+  re-measure" in `bench/RESULTS.md`): decisions probably shifted a few points
+  beyond run-to-run noise. The cause and the effect on quality are not
+  identified. C1 re-establishes quality on new held-out requests.
 
 **E3. Test split.**
 
