@@ -20,6 +20,7 @@ import { bm25, prefilter } from '../src/prefilter.js';
 import { mentionedSkills, NONE, optionKeys, route } from '../src/route.js';
 import type { RepoSignals } from '../src/types.js';
 import { relay } from '../src/relay.js';
+import { safeDetail } from '../src/errors.js';
 
 const LIBRARY = join(import.meta.dirname, 'fixtures', 'library');
 
@@ -280,9 +281,14 @@ describe('E9 security', () => {
     expect(result.stderr).toContain('requires a library MCP server key');
   });
 
-  it.each([401, 500])('keeps relaying after HTTP %s with redacted bare tokens and negotiated POST/GET headers', async (status) => {
+  it.each([
+    { status: 401, credentials: 'bearer' },
+    { status: 500, credentials: 'bearer' },
+    { status: 500, credentials: 'userinfo' },
+    { status: 500, credentials: 'env-header' },
+  ])('keeps relaying after HTTP $status with redacted $credentials credentials and negotiated POST/GET headers', async ({ status, credentials }) => {
     const home = tempDir('loadout-e9-failure-');
-    const secret = 'e9-header"secret\\value';
+    const secret = credentials === 'userinfo' ? 'admin-long-secret-canary' : 'e9-header"secret\\value';
     const seen: { method: string | undefined; version: string | string[] | undefined }[] = [];
     let failed = false;
     const http = createHttpServer(async (req, res) => {
@@ -314,7 +320,12 @@ describe('E9 security', () => {
     await new Promise<void>((resolve) => { http.listen(0, '127.0.0.1', resolve); });
     const port = (http.address() as { port: number }).port;
     mkdirSync(join(home, 'library'));
-    writeFileSync(join(home, 'library/mcp.json'), JSON.stringify({ mcpServers: { http: { url: `http://127.0.0.1:${port}/mcp?format=json&page=1&api_key=e9-query-secret`, headers: { Authorization: `Bearer ${secret}` }, description: 'Playwright' } } }));
+    writeFileSync(join(home, 'library/mcp.json'), JSON.stringify({ mcpServers: { http: {
+      url: `http://${credentials === 'userinfo' ? `admin:${secret}@` : ''}127.0.0.1:${port}/mcp?format=json&page=1&api_key=e9-query-secret`,
+      ...(credentials === 'userinfo' ? {} : { headers: { Authorization: `Bearer ${secret}` } }),
+      ...(credentials === 'env-header' ? { env: { TOKEN: 'e9-header' } } : {}),
+      description: 'Playwright',
+    } } }));
     await runRoute(scanLibrary(join(home, 'library')));
     const transport = new StdioClientTransport({ command: process.execPath, args: ['--import', 'tsx', join(import.meta.dirname, '../src/cli.ts'), 'mcp-launch', 'mcp:http'], env: { LOADOUT_HOME: home }, stderr: 'pipe' });
     const client = new Client({ name: 'strict-host', version: '0.0.1' });
@@ -325,6 +336,7 @@ describe('E9 security', () => {
       expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual(['canary']);
       const failure = await client.callTool({ name: 'canary', arguments: {} }).catch((error: Error) => error.message);
       expect(failure).toContain('upstream rejected');
+      expect(failure).toContain(`upstream rejected ${status === 401 ? '[REDACTED]' : '"[REDACTED]"'} -y mcp`);
       expect(failure).toContain('[REDACTED]');
       expect(failure).toContain('-y mcp');
       expect(failure).toContain('json 1 [REDACTED]');
@@ -336,6 +348,7 @@ describe('E9 security', () => {
       expect(seen.every((entry) => entry.version === '2025-03-26')).toBe(true);
       await client.close();
       expect(stderr).toContain('upstream rejected');
+      expect(stderr).toContain(`upstream rejected ${status === 401 ? '[REDACTED]' : '"[REDACTED]"'} -y mcp`);
       expect(stderr).not.toContain(secret);
       expect(stderr).not.toContain(JSON.stringify(secret).slice(1, -1));
     } finally {
@@ -356,6 +369,14 @@ describe('E9 security', () => {
       await client.connect(new StdioClientTransport({ command: process.execPath, args: ['--import', 'tsx', join(import.meta.dirname, '../src/cli.ts'), 'mcp-launch', 'mcp:shim'], env: { LOADOUT_HOME: home }, stderr: 'ignore' }));
       expect(await client.callTool({ name: 'ledger_memo', arguments: { entry: 3 } })).toMatchObject({ content: [{ text: 'entry 3: LOADOUT-MCP-CANARY-5521' }] });
     } finally { await client.close(); }
+  });
+
+  it.each([
+    { text: 'prefix abcdef suffix', secrets: ['abcd', 'cdef'], expected: 'prefix [REDACTED] suffix' },
+    { text: 'ababa', secrets: ['aba'], expected: '[REDACTED]' },
+    { text: 'top-secret', secrets: ['top-secret', 'REDACTED'], expected: '[REDACTED]' },
+  ])('redacts overlapping spans in the original text: $text', ({ text, secrets, expected }) => {
+    expect(safeDetail(text, secrets)).toBe(expected);
   });
 
   it('starts the requested MCP server without scanning skill directories', async () => {

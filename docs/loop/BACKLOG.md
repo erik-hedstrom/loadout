@@ -439,7 +439,8 @@ Acceptance:
   agent argv, environment and session files. Library keys are validated.
 - Public HTTP servers retain native Codex OAuth. Relays support credential-bearing
   URLs, negotiated protocol versions and recoverable request errors with bounded,
-  redacted diagnostics. Windows shims and server startup logs work.
+  redacted diagnostics even for overlapping credentials. Windows shims and
+  server startup logs work.
 - MCP startup reads only its config; Claude MCP session files retain private modes.
 - Skill copies reject links and retain pinned confinement and size limits.
 - Third-party prompt data is escaped and framed; Jev error details redact
