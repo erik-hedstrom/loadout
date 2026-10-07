@@ -37,6 +37,28 @@ that use his logged-in agent CLIs or desktop apps.
 
   Findings go back to the author before the merge.
 
+## How the loop runs now (since 2026-10-07)
+
+Erik chose this over the cloud-session topology above, because Claude
+subagents draw on his main usage and Codex runs on the ChatGPT plan:
+
+- **The orchestrator** runs in the Claude desktop app on Erik's machine.
+- **Sol builds.** Most items go to Codex (`gpt-6.1-sol`, effort `high`)
+  through the Codex plugin's companion script, one git worktree per item
+  under `dev/sandbox/loadout-wt/<item>`:
+  `node <codex plugin>/scripts/codex-companion.mjs task --write --model gpt-6.1-sol --effort high --prompt-file <brief>`.
+  Its sandbox cannot write `.git` or reach the network, so the orchestrator
+  commits, pushes and opens the PR. Review rounds resume the same thread with
+  `--resume-last`.
+- **Claude reviews.** `pr-reviewer` runs as a local subagent on every PR. A
+  fresh Sol review (`review` or `adversarial-review --base origin/main`)
+  is the second review, and its result goes into the PR.
+- **Cloud sessions** are started by Erik, from a short brief, only for
+  Claude-specific checks (E7: `claude -p` and Opus judging inside a cloud
+  session).
+- Briefs tell Sol not to edit HANDOFF.md, because it tends to append
+  working-tree notes there.
+
 ## One-time setup (Erik)
 
 1. **Claude cloud.**
