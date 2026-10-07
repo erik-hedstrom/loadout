@@ -93,6 +93,8 @@ function writeState(dir: string, file: string, state: SessionState): void {
 }
 
 export const JEV_FALLBACK_NOTE = 'loadout: Jev unavailable; fell back to keyword ranking (`loadout route "<prompt>"` shows why)';
+/** Fixed text: parse errors quote their input, which can be the prompt or a config file's credentials. */
+export const HOOK_FAILURE_NOTE = 'loadout: hook failed; added nothing (`loadout route "<prompt>"` runs the same steps and shows the error)';
 
 /** The context to add to this prompt, or undefined to add nothing. */
 export async function promptContext(input: HookInput, deps: HookDeps): Promise<string | undefined> {

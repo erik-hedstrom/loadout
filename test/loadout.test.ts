@@ -7,7 +7,7 @@ import { afterAll, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CONFIG, type Config } from '../src/config.js';
 import { jevClient, JevError, validateResponse, type Question, type SystemOneClient } from '../src/jev.js';
 import { claudeArgs, claudeHookSettings, codexArgs, hookCommand, hostSetup, launch, loaderArgs, materialize, searchServer, toToml } from '../src/launch.js';
-import { hookOutput, isFollowUp, JEV_FALLBACK_NOTE, promptContext } from '../src/hook.js';
+import { hookOutput, isFollowUp, HOOK_FAILURE_NOTE, JEV_FALLBACK_NOTE, promptContext } from '../src/hook.js';
 import { createServer, readSkillFile, serveHttp } from '../src/mcp.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
@@ -1110,6 +1110,31 @@ describe('claude hook', () => {
     // Named skills are still injected on fallback; without names the hook adds nothing.
     if (!named.length) expect(result.stdout).toBe('');
     expect(result.stderr).toBe(stderr);
+  });
+
+  // JSON parse errors quote their input; each fixture puts a canary where the parser stops.
+  it.each([
+    { name: 'hook input', input: 'CANARY-PROMPT is not json' },
+    { name: 'config.json', config: '{"router": "jev", "token": CANARY-CONFIG}' },
+    { name: 'library/mcp.json', mcp: '{"mcpServers": {"x": {"command": "x", "env": {"TOKEN": CANARY-MCP}}}}' },
+  ])('keeps a malformed $name out of its failure note', ({ input, config, mcp }) => {
+    const home = tempDir('loadout-hook-fail-');
+    writeFileSync(join(home, 'config.json'), config ?? JSON.stringify({ ...DEFAULT_CONFIG, embeddings: false }));
+    if (mcp) {
+      mkdirSync(join(home, 'library'), { recursive: true });
+      writeFileSync(join(home, 'library/mcp.json'), mcp);
+    }
+    // Jev is never reached; the outage preload keeps it that way if a fixture ever parses.
+    const file = join(home, 'preload.mjs');
+    writeFileSync(file, outage);
+    const result = spawnSync(process.execPath, ['--import', 'tsx', '--import', pathToFileURL(file).href, join(import.meta.dirname, '../src/cli.ts'), 'hook', 'claude'], {
+      encoding: 'utf8', timeout: 10_000,
+      env: { ...process.env, LOADOUT_HOME: home, TYPESAFE_API_KEY: 'hook-test-fake' },
+      input: input ?? JSON.stringify({ prompt: TASK, cwd: home }),
+    });
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toBe(`${HOOK_FAILURE_NOTE}\n`);
   });
 
   it('routes each prompt once per session and injects a clear winner', async () => {

@@ -10,7 +10,7 @@ import { addFromGitHub, addSkills, librarySources, parseGitHub, scanLibrary, ski
 import { repoSignals } from './repo.js';
 import { route } from './route.js';
 import { cachedEmbeddings, libraryEmbeddings } from './embed.js';
-import { hookOutput, promptContext, type HookInput } from './hook.js';
+import { HOOK_FAILURE_NOTE, hookOutput, promptContext, type HookInput } from './hook.js';
 import { reportJson, type Capability, type RouteDecision } from './types.js';
 import { launchMcp } from './relay.js';
 
@@ -129,7 +129,10 @@ async function runHook(rest: string[]): Promise<number> {
   try {
     const { values, positionals } = parseArgs({ args: rest, allowPositionals: true, options: { 'windows-paths': { type: 'boolean' } } });
     // Claude Code and Codex send the same fields (session_id, prompt, cwd) and read the same output.
-    if (positionals[0] !== 'claude' && positionals[0] !== 'codex') throw new Error('usage: loadout hook claude|codex');
+    if (positionals[0] !== 'claude' && positionals[0] !== 'codex') {
+      note('usage: loadout hook claude|codex');
+      return 0;
+    }
     const chunks: Buffer[] = [];
     for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
     const input = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}') as HookInput;
@@ -147,8 +150,8 @@ async function runHook(rest: string[]): Promise<number> {
       ...(values['windows-paths'] ? { toPath: (p: string) => execFileSync('wslpath', ['-w', p], { encoding: 'utf8' }).trim() } : {}),
     });
     if (context) console.log(hookOutput(context));
-  } catch (err) {
-    note(`hook: ${err instanceof Error ? err.message : err}`);
+  } catch {
+    console.error(HOOK_FAILURE_NOTE);
   } finally {
     clearTimeout(deadline);
   }
