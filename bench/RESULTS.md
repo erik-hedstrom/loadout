@@ -49,7 +49,9 @@ Revised 2026-10-07 after PR #6 round 4, before any paid call. Results: [B1 resul
 
 Raw rows: [bench/results/2026-10-07T21-04-16-645Z-overhead/](results/2026-10-07T21-04-16-645Z-overhead/).
 Claude Code CLI, haiku, two fresh sessions per arm, deltas over the
-baseline's 6,728 input tokens (call 1 / call 2):
+baseline's 6,728 input tokens (call 1 / call 2). The baseline is not bare:
+inside the isolated CLI configuration it still lists 19 ambient skills and 2
+claude.ai-synced plugins.
 
 | Arm | Skills copied (discovered) | Claude input delta |
 |---|---:|---:|
@@ -62,22 +64,25 @@ baseline's 6,728 input tokens (call 1 / call 2):
 
 - The listing grows with the library: about **10 tokens per added skill**
   between 50 and 1,232 discovered skills, ((12,283 − 477) / 1,182). The
-  listing cap does not bound it.
+  listing cap does not bound it. Pack skills were listed under generated
+  names (`b1:b1-0000`, …); the library's real folder names average 18.2
+  characters against 7, so the cost with real names is not shown.
 - The earlier ~140k-token figure for 1,262 skills summed full descriptions
   (HANDOFF). The measured cost is 12.3k tokens, about 11 times less. That
   estimate is withdrawn.
-- **Below about 57 skills, loadout's tool definitions cost more than the
-  native listing**: +546 against +477 at 50 skills, at about 10 tokens per
-  skill above that. Token savings start above that size; under it,
-  loadout's case is choosing the right skill, not cost.
+- **At 50 skills, loadout's tool definitions cost more than the native
+  listing** (+546 against +477). A straight line between the 50- and
+  1,232-skill arms crosses +546 near 57 skills. That is an interpolation of
+  listing overhead only. Router calls, the skills loadout returns, and where
+  real libraries cross over are not measured.
 - Nearly all input was cache creation (uncached: 10 tokens). Multi-turn
   sessions, where the listing is read from cache after the first turn, are
   not measured, so cost in money per session is not shown.
 
 Codex (codex-cli 0.160.1, offline `debug prompt-input`, rendered characters;
-paid runs deferred, see the method): the rendered skill section stops
-growing at about 15.7k characters from 64 skills (cap-64 +15,725, cap-256
-+15,766, top50 +15,669). All 256 skills in cap-256 stay visible. At 1,024
+paid runs deferred, see the method): the whole rendered prompt stops growing
+at about 15.7k characters over baseline by 50–64 skills (top50 +15,669,
+cap-64 +15,725, cap-256 +15,766). All 256 skills in cap-256 stay visible. At 1,024
 and 1,262 skills only **424 are visible** (the library arm adds +15,126).
 Codex bounds the cost and drops skills instead. The loadout arm's MCP tool
 definitions are not part of the rendered text, so its Codex cost is not
@@ -86,10 +91,12 @@ shown.
 Validity: the first attempt
 ([2026-10-07T20-59-10-578Z-overhead](results/2026-10-07T20-59-10-578Z-overhead/))
 stopped after 2 paid calls. The inventory guard fired when a claude.ai-synced
-plugin (`plugin-authoring`) disappeared between the two baseline calls.
-Four init-only probes then agreed, and the rerun passed every guard. Spend:
-16 haiku calls, about 136k input tokens, on the subscription. No Jev or
-Codex spend.
+plugin disappeared between the two baseline calls. Four diagnostic probes,
+each killed at its init event and not committed, then agreed. Whether a
+model request had started is not verified, so they count as up to 4 more
+calls. The rerun passed every guard. Spend: 16 haiku calls with rows (about
+136k input tokens) plus up to 4 probes, on the subscription. No Jev or Codex
+spend.
 
 ## v4 (2026-10-06): realistic requests on the real library, judged
 
