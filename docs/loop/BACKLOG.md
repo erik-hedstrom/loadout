@@ -319,11 +319,11 @@ Acceptance:
 
 Acceptance:
 - Runs on push and PR: `npm ci`, build, typecheck, test.
-- Matrix: Ubuntu, macOS, Windows × Node 20 and 24.
+- Matrix: Ubuntu, macOS, Windows × Node 22 and 24 (Node 20 is end-of-life since 2026-04-30).
 - No secrets needed.
 - The badge goes in the README.
 
-Learnings: WSL hook assertions need a Linux runtime fixture on native Windows; Node 20 requires Vitest 4; plain `npm ci` preserves Rolldown's optional native bindings.
+Learnings: WSL hook assertions need a Linux runtime fixture on native Windows; Vitest 5 needs Node ≥ 22, so engines moved to >=22 (Node 20 is EOL); plain `npm ci` preserves Rolldown's optional native bindings.
 
 **E2. Community files.**
 

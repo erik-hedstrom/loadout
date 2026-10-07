@@ -338,7 +338,6 @@ describe('launch', () => {
   it('protects WSL hook paths from Git Bash rewriting', () => {
     vi.stubGlobal('process', {
       ...process,
-      platform: 'linux',
       execPath: '/usr/bin/node',
       execArgv: ['--require', '/home/erik/tsx.cjs', '--import=file:///home/erik/tsx.mjs'],
       env: { ...process.env, WSL_DISTRO_NAME: 'Ubuntu', LOADOUT_HOME: '/tmp/loadout-home' },
