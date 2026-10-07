@@ -26,7 +26,7 @@ launcher is for power users and benchmarks.
 
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
-| A2 | P0 | `loadout audit`: what your installed skills cost you | Claude | cloud | review |
+| A2 | P0 | `loadout audit`: what your installed skills cost you | Claude | cloud | done ([PR #3](https://github.com/erik-hedstrom/loadout/pull/3)) |
 | A1 | P1 | README rewrite around the problem, 3-command quickstart, GIF | Claude | cloud | todo (after A2, B1) |
 | A3 | P1 | `loadout init` wizard + starter packs | Codex | cloud | todo |
 | A4 | P1 | npm package under an available name + release workflow | Codex | cloud + erik | blocked: npm name decision |
@@ -103,7 +103,7 @@ Acceptance:
 
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
-| B1 | P0 | Token-waste study: measured per-request overhead of popular skill packs | Claude | local (measure) + cloud (analysis) | review ([PR #6](https://github.com/erik-hedstrom/loadout/pull/6); local measurements pending) |
+| B1 | P0 | Token-waste study: measured per-request overhead of popular skill packs | Claude | local (measure) + cloud (analysis) | done ([PR #6](https://github.com/erik-hedstrom/loadout/pull/6); follow-ups under "Left" in its learnings) |
 | B3 | P1 | Fact-checked comparison with alternatives | Codex | cloud | todo |
 | B2 | P1 | Launch kit drafts | Claude | cloud | todo (after A1, B1) |
 | B4 | P1 | Repo polish: description, topics, social preview, badges | Claude | cloud + erik | todo |
@@ -332,8 +332,9 @@ Learnings (PR #9; only the desktop app check is still to do):
   ([RESULTS](../../bench/RESULTS.md#the-hook-plugin-in-the-claude-code-cli-2026-10-08)).
   That replaced the planned 10-request run: wiring needs one run, and
   skill-use rates need a plugin arm in `bench/invoke.ts` (C8).
-- Latency: p50 2.6 s and p95 3.1 s per routed prompt; the deadline never
-  bound, so it stays at 20 s. About 1.25 s is new-process start-up (D11).
+- Latency (same RESULTS section): the deadline never bound, so it stays at
+  20 s. The new process is slower than the in-process run, for reasons not
+  yet measured (D11).
 - Hook diagnostics took five Sol rounds. stderr now carries only fixed text:
   the Jev fallback note (route's warning can name skills from the prompt),
   the failure note (parse errors quote the prompt or a config credential),
@@ -346,13 +347,16 @@ Learnings (PR #9; only the desktop app check is still to do):
   Sol's non-blocking notes: native onnxruntime global logging stays at error,
   and debug flags or a WASM backend could add output.
 
-**D11. The hook's per-prompt start cost.** Every routed prompt waits about
-2.6 s (p50); the new process's median is 1.25 s above the in-process run
-(start-up, imports, library scan, embedding model load). Find where the time
-goes and cut it.
+**D11. The hook's per-prompt start cost.** Each hook call is a new process.
+Its median is above the in-process run's, but each arm made its own Jev
+requests and the subprocess was not timed by step
+([RESULTS](../../bench/RESULTS.md#the-hook-plugin-in-the-claude-code-cli-2026-10-08)).
 
-Acceptance: `bench/hook-latency.ts` with real Jev shows a lower p50 for the
-new process, with raw results and a RESULTS entry.
+Acceptance:
+- Time the subprocess's own steps (start-up, imports, library scan, model
+  load, Jev), so the breakdown is measured rather than inferred.
+- Cut what dominates. `bench/hook-latency.ts` with real Jev then shows a
+  lower p50 for the new process, with raw results and a RESULTS entry.
 
 **D1. Native Linux validation.**
 
@@ -596,3 +600,4 @@ integration layers, readable in both light and dark themes.
 | 2026-10-07 (iter 1) | None: GitHub outage (Git, PRs, Actions) from 15:16 UTC; no CI run yet | E1 #2 (pr-reviewer APPROVE, Sol clean; waits for CI); E2 #1 (draft until E9); E9 (both reviews blocked it: server env reaches the agent process [High], credentials in args/URLs [High], conditional Jev framing [Med]; Sol on round 2); A2 #3 (draft; reviews running); E7 (Sol building judge backends) | Jev $0 / Claude: orchestrator + pr-reviewer runs (main usage) / Codex: 1 repo review, 5 builds, 3 reviews (ChatGPT plan) | Decided by Erik: Apache-2.0; full CI matrix on every PR; Node ≥ 22; Sol builds, Claude reviews. Open: enable private vulnerability reporting; hook default; npm name; going public |
 | 2026-10-07 (iter 1, later) | None: no Actions run has ever been created for #2 (workflow present, Actions enabled); Erik asked to check billing or allow merging E1 on reviews + local green | #1 E2 draft (SECURITY.md to add: server-echoed credentials out of scope); #2 E1 approved by both, no CI; #3 A2 round 4 (pr-reviewer APPROVE r3, Sol found 3 Medium); #4 E9 round 4 (relay design accepted by both; declined Sol's payload-redaction High: relay stays transparent); #5 E7 round 3 (codex judge refuses on 0.160.1: unified_exec cannot be disabled; record as negative result); #6 B1 round 2 (nested-subset cap detection, `codex debug prompt-input` preflight) | Jev $0 / Claude: pr-reviewer rounds (main usage) / Codex: ~20 builds and reviews | Positioning: hosts cap listings (Claude Code 1% of context, names always listed; Codex 2% or 8,000 chars), so the headline becomes visibility + bounded cost, measured by B1. Owed after E9 merges: Jev-only agreement check of the framing change (≈ $0.5) |
 | 2026-10-07 (iter 2) | E1 #2 (merged without PR CI at Erik's direction; the first main run was green on all 6 jobs), E7 #5, E9 #4, A2 #3, B1 #6, E2 #1, E9 re-measure #7 | D10 (Sol building the plugin and the hook-latency bench) | Jev $0.77 (two sweeps) / Claude: 16 haiku calls with rows plus ≤4 probes (B1), and pr-reviewer rounds (subscription) / Codex: about 12 builds and reviews (ChatGPT plan) | Decided by Erik: in-host first (D10), with the hook automatic through the plugin he installs. Findings: the Claude listing grows about 10 tokens per skill, so the 140k estimate is withdrawn; loadout's MCP tools cost more than 50 native skills; Jev is not deterministic (about 1 request in 13); decisions probably shifted across E9 (cause unidentified). Open: a security contact; B1 raw-row names before going public; a Windows-side `loadout init` or the Linux machine for D10's CLI check |
+| 2026-10-08 (iter 3) | E10 #8; D10 #9 on merge | E11 (brief ready for Sol) | Jev about $0.05 (hook latency, probe) / Claude: one Haiku plugin probe ($0.06 reported) and pr-reviewer rounds (subscription) / Codex: four D10 review rounds (ChatGPT plan) | Desktop app check: Erik installs the plugin (D10); security contact for SECURITY.md; B1 raw-row names before going public |

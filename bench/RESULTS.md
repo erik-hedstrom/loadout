@@ -325,7 +325,7 @@ whether the result is better.
 `--plugin-dir plugins/loadout` (Haiku, at most 2 turns, hook events on). A
 shim on PATH ran this branch's `loadout` in WSL, against the 1,262-skill
 library. loadout's `UserPromptSubmit` hook exited 0 with empty stderr. It
-added 1,589 characters of `<skill_relevance>` context: `contract-review` as
+added about 1.6k characters of `<skill_relevance>` context: `contract-review` as
 most relevant, plus three others. The reply named `contract-review`. One run
 shows the wiring works. It does not measure skill use: the hook-only plugin
 has not been compared with the 6 of 10 above.
@@ -342,10 +342,11 @@ Node 24.15, the same library:
 | `loadout hook claude`, new process | 2,608 | 3,137 | 3,332 |
 
 - Every routed prompt waits about 2.6 s (p50) before Claude starts. The new
-  process's median is 1.25 s above the in-process one. That is start-up, the
-  imports, the library scan and the embedding model load, and every prompt
-  pays it, because each hook call is a new process.
-- The in-process maximums all come from the first, cold sample.
+  process's median is 1.25 s above the in-process one. Each arm made its own
+  Jev requests, and the subprocess was not timed by step, so how much of
+  that is start-up, imports, the library scan or the model load is not shown.
+- The scanLibrary, Jev wide and promptContext maximums come from the first,
+  cold sample.
 - The deadline (20 s, with 8 s per Jev request) never bound: the slowest run
   took 3.3 s. It stays as it is. A hung Jev costs a prompt one 8 s timeout,
   plus start-up and any completed request, before the keyword fallback.

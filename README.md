@@ -189,7 +189,7 @@ connector in ChatGPT's developer mode.
 
 **Prompt hook.** Install the hook-only Claude Code plugin for the CLI;
 desktop app Code tab: not yet tested. It requires `loadout` on PATH and
-Node 22.12+. In the CLI it adds about 2.6 s before each routed prompt
+Node 22.12+. The hook takes about 2.6 s per routed prompt
 ([one machine, p50](bench/RESULTS.md#the-hook-plugin-in-the-claude-code-cli-2026-10-08)).
 
 Privacy: with the hook installed, every routed prompt goes to TypeSafe's Jev
