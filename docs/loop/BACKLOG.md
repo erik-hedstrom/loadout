@@ -169,6 +169,7 @@ cross-vendor agents). Erik publishes.
 | C4 | P1 | Demote generic "fits everything" skills | Codex | cloud | todo (after C1) |
 | C5 | P2 | Retrieval beyond 200 candidates (Jev tournament) | Codex | cloud | todo |
 | C6 | P2 | Multi-intent requests | Claude | cloud | todo |
+| C7 | P1 | Recommended packs with measured upside (first: frontend with Impeccable) | Codex (harness) + Claude (runs) | cloud (fixtures) + local (runs) | todo (after B1, C2) |
 
 **C1. New held-out requests.**
 
@@ -231,6 +232,28 @@ Acceptance:
 - Detect composite requests and allow one skill per intent.
 - Evaluate on C1's dev split.
 
+**C7. Recommended packs with measured upside.**
+
+Why (Erik, 2026-10-07): people install packs such as Impeccable for their
+upside and pay for them on every request. A pack recommendation backed by
+two numbers ("costs X% less per request with loadout, wins Y% of blind
+comparisons against the host's defaults") is the strongest adoption and
+founder-facing argument, if the numbers hold.
+
+Acceptance:
+- Preregister in `bench/RESULTS.md` before any run: the metrics, the
+  fixtures, the sample size and the arms. Report whatever comes out,
+  including no gain.
+- Overhead: tokens per request with the pack installed natively vs in
+  loadout's library, on a fixed request mix, with B1's method, for Claude
+  Code and Codex.
+- Quality: fixed frontend fixtures (C2's harness). Arms: host defaults,
+  host + pack native, host + loadout with the pack in the library. Blind
+  pairwise judging in both orders, by the other family (Sol judges Claude
+  Code's output, Claude judges Codex's), from screenshots plus a rubric.
+- The pack list (A3 starter packs, README) only quotes numbers measured
+  here.
+
 ## D. Integrations and robustness
 
 | ID | P | Task | Agent | Lane | Status |
@@ -242,6 +265,8 @@ Acceptance:
 | D5 | P2 | Isolation mode | Codex | cloud | todo |
 | D4 | P2 | Gateway: native tools via `tools/list_changed` | Codex | cloud | todo |
 | D6 | P2 | HTTP: cancellation reaches Jev | Codex | cloud | todo |
+| D8 | P1 | Host capability matrix (verified vs generated) | Codex | cloud | todo |
+| D9 | P1 | Codex parity: neutral session skill dir, tier presets | Codex | cloud | todo (after E9) |
 
 **D1. Native Linux validation.**
 
@@ -295,6 +320,31 @@ Acceptance:
   to `fetch`.
 - A test shows a disconnected client stops the Jev call.
 
+**D8. Host capability matrix.**
+
+Why (Sol review, 2026-10-07): the README promises model, skill and MCP
+selection for six hosts, but only Claude Code and Codex get launch, tier and
+hook support; Cursor, OpenCode and Claude Desktop get an MCP search snippet,
+and ChatGPT skills-only HTTP search. A non-Claude user notices.
+
+Acceptance:
+- `docs/hosts.md`: one table, hosts × {launch, tier, hook, search, gateway},
+  each cell "verified" (with the date and how), "generated, untested" or
+  "not supported".
+- README and `setup` output claim no more than the table.
+
+**D9. Codex parity.**
+
+Why (Sol review): Codex sessions get Claude plugin metadata and plain prompt
+pointers, while Claude gets native registration; Codex medium and large tiers
+map to one model with different effort, and that economics is unmeasured.
+
+Acceptance:
+- The session skill directory is host-neutral; Claude metadata is written
+  only for Claude.
+- Tier mappings are documented as model/effort presets, labelled
+  unvalidated until C3 measures them.
+
 **D7. `loadout doctor`.**
 
 Acceptance:
@@ -307,10 +357,11 @@ Acceptance:
 
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
-| E1 | P0 | GitHub Actions CI | Codex | cloud | todo |
-| E2 | P0 | LICENSE, CONTRIBUTING, SECURITY.md, templates | Claude | cloud + erik | review |
-| E7 | P0 | Bench judges and expander that run inside a cloud session | Claude | cloud | todo |
+| E1 | P0 | GitHub Actions CI | Codex | cloud | done ([PR #2](https://github.com/erik-hedstrom/loadout/pull/2)) |
+| E2 | P0 | LICENSE, CONTRIBUTING, SECURITY.md, templates | Claude | cloud + erik | review ([PR #1](https://github.com/erik-hedstrom/loadout/pull/1)) |
+| E7 | P0 | Vendor-independent bench judges and expander | Codex | cloud | done ([PR #5](https://github.com/erik-hedstrom/loadout/pull/5)) |
 | E8 | P0 | Repo-wide simplification pass | Claude (pr-reviewer finds, worker fixes) + Codex review | cloud | todo |
+| E9 | P0 | Security hardening from the read-only Sol review | Codex | cloud | done ([PR #4](https://github.com/erik-hedstrom/loadout/pull/4)); routing re-measure owed |
 | E3 | P1 | Split the test file per module | Codex | cloud | todo |
 | E5 | P1 | Changelog and release automation | Codex | cloud | todo (with A4) |
 | E6 | P2 | Architecture diagram in DESIGN.md | Claude | cloud | todo |
@@ -319,9 +370,11 @@ Acceptance:
 
 Acceptance:
 - Runs on push and PR: `npm ci`, build, typecheck, test.
-- Matrix: Ubuntu, macOS, Windows × Node 20 and 24.
+- Matrix: Ubuntu, macOS, Windows × Node 22 and 24 (Node 20 is end-of-life since 2026-04-30).
 - No secrets needed.
 - The badge goes in the README.
+
+Learnings: WSL hook assertions need a Linux runtime fixture on native Windows; Vitest 5 needs Node ≥ 22, so engines moved to >=22 (Node 20 is EOL); plain `npm ci` preserves Rolldown's optional native bindings.
 
 **E2. Community files.**
 
@@ -337,19 +390,31 @@ Learnings: loopback HTTP permits no token; recheck credential protections after 
 
 **E7. Bench judging in a cloud session.**
 
-Why: the $100 credit pays for cloud sessions only (not the API, not
-Routines), and C1/C3 need judging. `bench/lib.ts` judges through `claude -p`.
-
 Acceptance:
-- Check whether `claude -p` works inside a cloud session.
-- If it does not, add a file-based mode:
-  - `judge.ts` and `expand.ts` write batch prompts and read JSON answers;
-  - an Opus subagent of the session produces the answers, with the catalog
-    passed once per batch.
-- An Anthropic API backend (`ANTHROPIC_API_KEY`, prompt caching) stays
-  optional.
-- Re-judging 40 v4 requests reproduces their verdicts within noise, and the
-  cost is reported.
+- One `modelJson` seam for judge/expander: `--backend claude|codex|files`,
+  default Claude; shared schema validation, regular-file answers and resumable batches.
+- Sequential judges; escaped third-party catalog after the rubric in Claude's
+  cached system prefix, first in Codex's prompt. Dev/test/combined Wilson reports.
+- Exact, nonempty expansion coverage before append; reject duplicate request IDs.
+  Exact verdict ratings and catalog-only missed keys; retry once, exclude and count
+  unresolved disputes. Backend/model/effort provenance and resume checks; reject
+  Claude effort. Files producers unverified; warn on same-family/global context.
+- Codex read-only sandbox, credential env stripping, shell/unified-exec/view-image
+  disabling flags; offline preflight requires shell_tool and unified_exec false.
+  Offline adversarial tests, `npm test` and typecheck (E1 owns the Windows hook failure).
+
+Remaining (orchestrator): record the 0.160.1 negative result in RESULTS:
+unified_exec stays true, so preflight refuses Codex. No Codex kappa until preflight
+and a one-call hostile temporary AGENTS.md canary both pass (answer unchanged);
+verify installed-skill isolation without relocating CODEX_HOME. Check `claude -p`
+in cloud; re-judge 40 v4 requests with an Opus subagent via `files` and, when safe,
+`codex`. Preserve IDs/splits and raw results; report stored-verdict agreement,
+inter-judge Cohen's kappa, intervals and measured cost. The judge prompt changed
+(catalog escaping/framing, rubric line), as did logic (1 retry instead of 2;
+unresolved disputes excluded). Agreement measures prompt and logic changes plus
+the judge, and must be reported that way. Budget: 4–8 batches before retries;
+Claude CLI ~$1.20–$2.40 cached, ~$3.60–$7.20 uncached (files/Opus cloud overhead
+extra); Codex quota cost not exposed. No paid calls during implementation.
 
 **E8. Simplification pass.**
 
@@ -368,6 +433,36 @@ Acceptance:
 - No behavior change: tests unchanged and green, and the bench scripts still
   run.
 - Report lines removed per area.
+
+Starting points from Sol's review (2026-10-07):
+- `src/`, ≈ 40–60 lines: `prefilter()` is used only by tests
+  (production uses `hybridRank()`); the `inverted` metadata in route.ts is
+  unused; `oneLine` is duplicated in hook.ts and mcp.ts; some module
+  introductions repeat DESIGN.
+- `bench/`, ≈ 50–75 lines: `sweep.ts` duplicates `capabilityKey()`;
+  `invoke.ts` and `outcome.ts` duplicate decision reconstruction and timeouts;
+  `route-bench.ts` retries around a client that already retries;
+  `outcome.ts --agent` has one implemented value.
+- Markdown, ≈ 100–150 lines: DESIGN's benchmark-arms section is stale; the
+  usage sections repeat README; HANDOFF's tables repeat both; absolutes at
+  DESIGN:5, 29 and HANDOFF:17 overstate what the benchmarks show.
+
+**E9. Security hardening.**
+
+Acceptance:
+- Reports allow only MCP type, command, cwd, URL origin and env/header keys.
+- Relayed MCP credentials stay in the library and server process, absent from
+  agent argv, environment and session files. Library keys are validated.
+- Public HTTP servers retain native Codex OAuth. Relays support credential-bearing
+  URLs, negotiated protocol versions and recoverable request errors. Diagnostics
+  contain controlled metadata only, never upstream error text. Windows shims and
+  server startup logs work.
+- MCP startup reads only its config; Claude MCP session files retain private modes.
+- Skill copies reject links and retain pinned confinement and size limits.
+- Third-party prompt data is escaped and framed; Jev errors contain only HTTP
+  status or fixed failure categories. `decide()` and `bench/judge.ts` are unchanged.
+- Adversarial tests for each path. Owed after merge: routing re-measured after the
+  Jev framing change (Jev-only agreement check, recorded in `bench/RESULTS.md`).
 
 **E3. Test split.**
 
@@ -389,3 +484,5 @@ integration layers, readable in both light and dark themes.
 | Date | Merged | In flight | Spend (Jev / Claude / Codex) | Decisions needed |
 |---|---|---|---|---|
 | 2026-10-07 | Handoff written (HANDOFF, AGENTS with Code Review Rules, ORCHESTRATOR, BACKLOG, `.claude/agents/{worker,pr-reviewer}.md`, auto-compact 500k) | — | — | License, public timing, npm name, budget caps, hook default; cloud setup (ORCHESTRATOR.md §One-time setup) |
+| 2026-10-07 (iter 1) | None: GitHub outage (Git, PRs, Actions) from 15:16 UTC; no CI run yet | E1 #2 (pr-reviewer APPROVE, Sol clean; waits for CI); E2 #1 (draft until E9); E9 (both reviews blocked it: server env reaches the agent process [High], credentials in args/URLs [High], conditional Jev framing [Med]; Sol on round 2); A2 #3 (draft; reviews running); E7 (Sol building judge backends) | Jev $0 / Claude: orchestrator + pr-reviewer runs (main usage) / Codex: 1 repo review, 5 builds, 3 reviews (ChatGPT plan) | Decided by Erik: Apache-2.0; full CI matrix on every PR; Node ≥ 22; Sol builds, Claude reviews. Open: enable private vulnerability reporting; hook default; npm name; going public |
+| 2026-10-07 (iter 1, later) | None: no Actions run has ever been created for #2 (workflow present, Actions enabled); Erik asked to check billing or allow merging E1 on reviews + local green | #1 E2 draft (SECURITY.md to add: server-echoed credentials out of scope); #2 E1 approved by both, no CI; #3 A2 round 4 (pr-reviewer APPROVE r3, Sol found 3 Medium); #4 E9 round 4 (relay design accepted by both; declined Sol's payload-redaction High: relay stays transparent); #5 E7 round 3 (codex judge refuses on 0.160.1: unified_exec cannot be disabled; record as negative result); #6 B1 round 2 (nested-subset cap detection, `codex debug prompt-input` preflight) | Jev $0 / Claude: pr-reviewer rounds (main usage) / Codex: ~20 builds and reviews | Positioning: hosts cap listings (Claude Code 1% of context, names always listed; Codex 2% or 8,000 chars), so the headline becomes visibility + bounded cost, measured by B1. Owed after E9 merges: Jev-only agreement check of the framing change (≈ $0.5) |
