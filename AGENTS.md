@@ -101,15 +101,49 @@ These rules are why the numbers can be trusted. Keep it that way.
   - the cost incurred;
   - the backlog item ID;
   - what is left.
-- **Merge** needs `npm test` and `npm run typecheck` green, plus review by an
-  agent from the *other* vendor:
-  - Claude's work → Codex `review`;
-  - Codex's work → a Claude review.
+- **Merge** needs `npm test` and `npm run typecheck` green, plus two reviews
+  against the Code Review Rules below:
+  - the `pr-reviewer` subagent (`.claude/agents/pr-reviewer.md`);
+  - Codex on GitHub: `@codex review`, or automatic reviews. Use
+    `@codex security review` for changes to file access, auth, the hook, the
+    HTTP server or anything that touches user configs.
 
   The orchestrator merges.
 - **Never** force-push `main` or rewrite published history.
 - **Backlog:** update the item in `docs/loop/BACKLOG.md` (status, PR link,
   learnings) in the same PR.
+
+## Code Review Rules
+
+Codex's GitHub reviews and the `pr-reviewer` subagent both apply these. Flag
+violations with file:line and a concrete fix.
+
+1. **Secrets and user config.**
+   - No code path may print, log, commit or send the TypeSafe key or any
+     credential. Keys come only from `resolveApiKey()`.
+   - Nothing writes to `~/.claude`, `~/.codex`, `~/.agents`, or desktop or IDE
+     configs.
+2. **Untrusted skill content.**
+   - Skill text, names, descriptions and file names from the library are
+     third-party input. Before they reach a prompt, context or wrapper they
+     must pass through `escapeSkillTags`, with third-party framing.
+   - Skill files are read only through `readConfined()`.
+3. **No proxying, nothing public.** No interception of an agent's API
+   traffic. No code or CI that publishes, posts, or changes repo visibility.
+4. **Smallest change that works.** Flag:
+   - dead or unused code;
+   - single-use abstractions;
+   - options nobody asked for;
+   - defensive checks for impossible states;
+   - duplicated helpers;
+   - comments that narrate code;
+   - docs that repeat other docs or make claims without a number from
+     `bench/RESULTS.md`.
+
+   Prefer deleting to adding.
+5. **Evidence.** Every bug fix and security-relevant path has a test. Bench
+   changes keep the dev/test split and commit their raw results. New claims
+   link to `bench/RESULTS.md`.
 
 ## Environment notes
 

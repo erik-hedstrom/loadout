@@ -1,159 +1,202 @@
 # The multi-agent loop
 
-One orchestrator directs workers from two vendors: Anthropic (Claude Code) and
-OpenAI (Codex). Most work runs **in the cloud** against the GitHub repo. Erik's
-machine is needed only for tasks that use his logged-in agent CLIs or desktop
-apps.
+One orchestrator session directs work by Claude and Codex. Everything runs in
+the cloud against the GitHub repo. Erik's machine is only needed for tasks
+that use his logged-in agent CLIs or desktop apps.
 
 ## Topology
 
 ```
-                     ┌──────────────── GitHub: erik-hedstrom/loadout ────────────────┐
-                     │  main ◄── PRs from agent/* branches · docs/loop/BACKLOG.md     │
-                     └──────▲──────────────────▲───────────────────────▲──────────────┘
-                            │ push/PR          │ push/PR               │ reads, merges
-             ┌──────────────┴─────┐  ┌─────────┴──────────┐  ┌────────┴─────────────────┐
-             │ Claude cloud       │  │ Codex Cloud tasks  │  │ ORCHESTRATOR             │
-             │ sessions / routines│  │ (codex cloud exec) │  │ Claude Opus 5.5          │
-             │ Opus/Sonnet 5.5    │  │ gpt-6.1-sol        │  │ cloud routine, or /loop  │
-             └────────────────────┘  └────────────────────┘  │ on the Linux machine     │
-                                                             └──────────────────────────┘
-          Local-only lane (Linux machine, Erik's logged-in CLIs): agent-in-the-loop
-          benchmarks (bench/invoke.ts, bench/outcome.ts), desktop-app checks, /hooks trust
+ Claude cloud session (claude.ai/code, repo erik-hedstrom/loadout, Opus 5.5)
+ │  paid by the cloud-session credit ($100, expires 2026-11-05)
+ │  auto-compact at 500k tokens (.claude/settings.json)
+ │
+ ├── ORCHESTRATOR (main conversation): plans, dispatches, merges, keeps BACKLOG.md
+ │     ├── worker subagents   (.claude/agents/worker.md, own worktree + branch each)
+ │     └── pr-reviewer subagent (.claude/agents/pr-reviewer.md, read-only: security + "should this exist")
+ │
+ ├── GitHub: erik-hedstrom/loadout  ← the shared bus: agent/* branches, PRs, CI, BACKLOG.md
+ │     └── Codex on GitHub: "@codex <task>" (cloud task), "@codex review", "@codex security review"
+ │
+ └── local lane (Linux machine, Erik's logged-in CLIs): bench/invoke.ts, bench/outcome.ts,
+       Codex /hooks trust, desktop-app checks, demo recording
 ```
 
-- **The bus is GitHub:** branches, PRs, and the backlog file. Agents never
-  share state any other way. Every decision and result lands in a PR or in
-  `docs/loop/BACKLOG.md`.
-- **Cross-vendor review:**
-  - Claude's PRs are reviewed by Codex (`codex review`, or a Codex Cloud task
-    "review PR #N").
-  - Codex's PRs are reviewed by Claude.
+- **The credit:** it pays for cloud sessions, not Routines or Projects. So
+  the orchestrator is a long cloud session that Erik starts, not a scheduled
+  routine. Claude-side work runs as subagents inside it; their tokens come out
+  of the same credit.
+- **Codex** is reached through GitHub. A PR or issue comment `@codex <task>`
+  starts a Codex cloud task on that branch. `@codex review` and
+  `@codex security review` post reviews. Erik can also submit tasks from his
+  machine with `codex cloud exec --env <id>`.
+- **Every PR gets two reviews** against the `## Code Review Rules` in
+  `AGENTS.md`:
+  - the `pr-reviewer` subagent;
+  - Codex on GitHub.
 
-  This held up well: five Codex review rounds found 40+ real issues in
-  Claude's work.
-- **The orchestrator owns merges and the backlog.** Workers own their branch
-  only.
+  Findings go back to the author before the merge.
 
 ## One-time setup (Erik)
 
 1. **Claude cloud.**
-   - At https://claude.ai/code, give the Claude GitHub app access to the
-     private repo `erik-hedstrom/loadout`.
-   - In the "Dev" environment (`env_01AyP9ufhZvwzrX4yNpxrMgo`), add the
-     secret `TYPESAFE_API_KEY`.
+   - GitHub is connected. Make sure the Claude GitHub app can access the
+     private repo `erik-hedstrom/loadout`, including pushing branches and
+     opening PRs.
+   - In the environment the session uses, add the secret `TYPESAFE_API_KEY`.
    - Allow network access to `api.typesafe.ai`, `registry.npmjs.org`,
      `github.com` and `huggingface.co` (the embedding model download).
-   - Routines and cloud sessions then clone the repo, run `npm ci`, and push
-     `agent/*` branches.
-2. **Codex Cloud.** At https://chatgpt.com/codex, create an environment for
-   `erik-hedstrom/loadout`:
-   - setup script `npm ci && npm run build`;
-   - secret `TYPESAFE_API_KEY`;
-   - internet access to the same hosts.
-
-   Write its id here: `CODEX_ENV=<env id>`. Tasks are then submitted with
-   `codex cloud exec --env $CODEX_ENV --branch main "<brief>"`, from any
-   machine logged into Codex, and fetched with `codex cloud diff|apply <task>`
-   or as PRs.
+2. **Codex.** At https://chatgpt.com/codex:
+   - Connect the repo to a Codex environment: setup script
+     `npm ci && npm run build`, secret `TYPESAFE_API_KEY`, the same internet
+     access.
+   - Turn on **Automatic review** for the repo (code review settings).
 3. **Budget.** Write the caps here (Erik decides):
-   - Jev: $1 per iteration, ~$6 of credit left on 2026-10-07;
-   - Claude credits: $100 available, suggested $10 per day;
+   - the cloud credit: $100 until 2026-11-05;
+   - Jev: about $6 left, so ≤ $1 per iteration;
    - Codex: by plan.
-4. **Decisions.** Answer the blocking decisions in [HANDOFF.md](../../HANDOFF.md)
-   (license, public timing, npm name), or the orchestrator will keep asking.
+4. **Decisions.** Answer the blocking decisions in [HANDOFF.md](../../HANDOFF.md):
+   license, public timing, npm name, hook default.
+5. **Start the session.** At claude.ai/code:
+   - pick the repo;
+   - choose Opus 5.5;
+   - paste the orchestrator prompt below.
 
-## Iteration protocol (orchestrator)
+   If the session's Claude Code is older than v2.1.288, run
+   `/autocompact 500000` first. The repo setting covers newer versions.
 
-Run it every few hours as a cloud routine, or on demand with `/loop`.
+## Iteration protocol
+
+The orchestrator repeats this until it hits a stop condition.
 
 1. **Sync.**
-   - Pull `main`. Read `HANDOFF.md`, `AGENTS.md`, `docs/loop/BACKLOG.md`.
-   - Check open PRs, CI status and the cloud tasks in flight
-     (`codex cloud list`; the routine run list).
-2. **Merge what is ready:** green CI, a cross-vendor review approved, and the
-   acceptance criteria checked. Update the backlog.
+   - `git pull`.
+   - Read the backlog's status table and the iteration log, not the whole
+     repo.
+   - Check open PRs, CI and Codex comments: `gh pr list`, `gh pr checks`,
+     `gh pr view N --comments`, if `gh` works.
+2. **Merge what is ready:**
+   - CI green;
+   - `pr-reviewer` APPROVE;
+   - Codex review without unresolved High or Medium findings;
+   - acceptance criteria met.
+
+   Squash-merge, then update the backlog.
 3. **Pick 2–4 tasks.**
    - Highest priority first, from different workstreams, touching
      non-overlapping files.
-   - Skip anything marked `needs: erik` or `lane: local` unless Erik is
-     available.
+   - Skip `lane: local` and `lane: erik` unless Erik is present.
    - Respect `depends`.
-4. **Dispatch** each task with the worker brief below, to the vendor in its
-   `agent` column:
-   - **Claude:** a cloud session, either `claude --cloud "<brief>"` run from a
-     checkout of the repo (`claude --teleport <session>` pulls one back
-     locally), or a one-shot routine with `run_once_at`, repo
-     `erik-hedstrom/loadout`, model `claude-opus-5-5` for design-heavy work,
-     `claude-sonnet-5-5` otherwise.
-   - **Codex:** `codex cloud exec --env $CODEX_ENV --branch main "<brief>"`.
-5. **Review** each incoming PR with the other vendor (review brief below).
-   Send the findings back to the author as a follow-up task on the same
-   branch.
-6. **Report.** Append an iteration entry to the backlog's log, and keep a
-   running cost total:
+4. **Dispatch.**
+   - Claude tasks go to `worker` subagents, run in parallel in the background
+     where the tasks are independent. Pass the item ID, its acceptance
+     criteria, files to stay within and a budget. Use the `model` override
+     `opus` for design-heavy items; Sonnet is the default.
+   - Codex tasks: open a draft PR or issue for the item and comment
+     `@codex <worker brief>`.
+5. **Review** each new PR:
+   - run `pr-reviewer` with the PR number;
+   - comment `@codex review`, plus `@codex security review` for
+     security-relevant changes, unless automatic review already ran.
+   - Send the findings to the author: resume the same `worker`, or comment
+     `@codex <fix these>` on the PR.
+6. **Log.** One row in the backlog's iteration log:
    - merged, in flight, blocked;
    - spend;
    - decisions needed from Erik.
-7. **Stop and ask Erik** when you reach:
-   - a rule-4 action (going public, publishing, posting);
-   - a budget cap;
-   - a failing result that changes the plan;
-   - the same task failing twice.
+7. **Stop and ask Erik** on:
+   - any rule-4 action (public, publish, post);
+   - a budget cap reached;
+   - a result that changes the plan;
+   - the same task failing twice;
+   - a decision listed in HANDOFF.
 
-## Worker brief (template)
+## Context discipline (orchestrator)
 
-```
-You are working on loadout (https://github.com/erik-hedstrom/loadout). First read
-AGENTS.md (rules), HANDOFF.md (state) and the backlog item below in
-docs/loop/BACKLOG.md. Follow AGENTS.md exactly: never print secrets, never touch the
-user's agent configs, nothing public.
+The orchestrator's context is for coordination, not for doing the work.
 
-Task <ID>: <title>
-Why: <one or two sentences from the backlog>
-Acceptance criteria:
-- <copied from the backlog>
-Constraints: <files to stay within; budget: e.g. ≤ $0.50 of Jev; no new runtime deps>
+- **Delegate.** Implementation, investigation and reading code go to
+  subagents. Subagents return at most 200–400 words; ask for exactly what you
+  need.
+- **Read summaries, not sources:**
+  - `git diff --stat`, `gh pr view --json title,files,additions,deletions`;
+  - the backlog tables;
+  - the first lines of RESULTS sections.
+- **Never read:** `bench/results/**` rows, `node_modules`, `dist`, lockfiles,
+  full logs or transcripts.
+- **Use** `wc -l`, `grep -c`, `head` and `jq` to check facts.
+- **Do not repeat work:** don't re-read a file you have already summarised,
+  and don't re-run a subagent's checks yourself. Trust them, then spot-check
+  one claim.
+- **Persist state in the repo, not in context:**
+  - backlog statuses;
+  - the iteration log;
+  - PR descriptions.
 
-Work on branch agent/<id>-<slug> from main. Make small commits. Run `npm test` and
-`npm run typecheck`; both must pass. Open a PR titled "<ID>: <title>" whose body
-says: what changed, how you tested it (commands + output), cost incurred, what is
-left. Update the item's status in docs/loop/BACKLOG.md in the same PR. If something
-needs Erik's decision, stop and say so in the PR instead of guessing.
-```
+  After compaction, rebuild state from those.
+- **Auto-compaction** happens at 500k tokens. Before a large step, write
+  anything you would hate to lose into the iteration log.
 
-## Review brief (template, other vendor)
+## Prompts
 
-```
-Adversarially review PR #<N> in erik-hedstrom/loadout (branch agent/...). Read AGENTS.md
-first. Read-only: do not push. Check correctness, security (secrets, path handling,
-prompt-injection framing of third-party skill text, anything that edits user config),
-evaluation discipline (no tuning on test, honest claims), tests for each fix, and
-whether the backlog acceptance criteria are met. Output a numbered list by severity
-(High/Medium/Low) with file:line, a concrete failure scenario and a fix, then
-"APPROVE" or "CHANGES REQUESTED".
-```
-
-## Orchestrator prompt (paste into a cloud routine or a `/loop` session)
+### Orchestrator (paste into the cloud session)
 
 ```
-You are the orchestrator for loadout (https://github.com/erik-hedstrom/loadout).
-Read HANDOFF.md, AGENTS.md, docs/loop/ORCHESTRATOR.md and docs/loop/BACKLOG.md, then
-run ONE iteration of the protocol in ORCHESTRATOR.md: sync, merge what is ready,
-pick 2–4 tasks, dispatch them with the worker brief to the vendor named in the
-backlog, request cross-vendor reviews, update the backlog log with results, spend and
-decisions needed. Respect every rule in AGENTS.md, in particular: nothing public
-without Erik, no secrets in output, no edits to user agent configs, budget caps.
-Goal of the whole loop: wide adoption of loadout among people who install hyped skill
-packs and waste tokens on them, a README and onboarding that take a newcomer from
-zero to a routed session in three commands, an honestly measured and improving
-router, and a repo that reads as strong, serious engineering on Erik's GitHub.
+You are the orchestrator for loadout (repo erik-hedstrom/loadout, this checkout).
+
+Read, in this order and only these to start:
+1. HANDOFF.md: state, evidence, goals, Erik's open decisions
+2. AGENTS.md: rules every agent follows, including the Code Review Rules
+3. docs/loop/ORCHESTRATOR.md: your protocol, context discipline, review gate
+4. docs/loop/BACKLOG.md: the work queue and the iteration log
+Your subagents are defined in .claude/agents/: `worker` (implements one backlog
+item on its own branch and worktree) and `pr-reviewer` (read-only review for security
+and for code or text that should not exist).
+
+Run the iteration protocol from ORCHESTRATOR.md and repeat it until a stop condition.
+Delegate all implementation and investigation to subagents or Codex. Keep your own
+context for coordination: read summaries, never bench/results rows, node_modules,
+dist, lockfiles or full logs, and never re-read what you have already summarised.
+Keep state in the repo (backlog statuses, iteration log, PR descriptions) so you can
+resume after auto-compaction at 500k tokens.
+
+Every PR needs CI green, a pr-reviewer APPROVE and a Codex review on GitHub before
+you merge it. The result must read like careful engineering: prefer deleting to
+adding, and reject filler code and filler text.
+
+Never: print or commit secrets, edit the user's agent configs, make anything public,
+publish, or post. Draft those and ask Erik. Stop and ask Erik on a budget cap, a
+decision listed in HANDOFF.md, or a task failing twice.
+
+Goal of the loop: wide adoption of loadout among people who install hyped skill packs
+and waste tokens on them. That means a README and onboarding that take a newcomer
+from zero to a routed session in three commands, a router that is honestly measured
+and improving, and a repo that reads as strong, serious engineering on Erik's
+GitHub. Start with the P0 items.
+```
+
+### Codex task (comment on a PR or issue)
+
+```
+@codex Work on backlog item <ID> in docs/loop/BACKLOG.md. Follow AGENTS.md exactly.
+Acceptance criteria: <copy>. Stay within <files>. Smallest change that meets them; no
+speculative options, single-use abstractions, narrating comments or filler docs.
+Run npm test and npm run typecheck. Update the item's status in BACKLOG.md. Commit
+with the Co-Authored-By line from AGENTS.md. Report: what changed, test output, cost.
+```
+
+### Review request (comment on a PR)
+
+```
+@codex review against the Code Review Rules in AGENTS.md. Prioritise security
+(secrets, user configs, untrusted skill text, file access) and anything that should
+be deleted rather than kept.
 ```
 
 ## Lanes
 
-| Lane | Runs where | Examples |
+| Lane | Where | Examples |
 |---|---|---|
-| `cloud` | Claude cloud or Codex Cloud | code, tests, docs, CI, README, `loadout audit`, retrieval work, sweeps and judges through the Anthropic API |
-| `local` | Linux machine with Erik's logged-in `claude` / `codex` | `bench/invoke.ts`, `bench/outcome.ts`, Codex `/hooks` trust, desktop-app setups (Claude Desktop, Cursor), demo recording |
-| `erik` | Erik himself | going public, npm publish, posting, connecting GitHub apps, secrets, budgets |
+| `cloud` | Orchestrator session subagents, or Codex on GitHub | code, tests, docs, CI, README, `loadout audit`, retrieval, sweeps and judges through an API key |
+| `local` | Linux machine with Erik's logged-in `claude` / `codex` | `bench/invoke.ts`, `bench/outcome.ts`, Codex `/hooks` trust, desktop-app setups, demo recording |
+| `erik` | Erik | going public, npm publish, posting, GitHub app and secrets, budgets, decisions |

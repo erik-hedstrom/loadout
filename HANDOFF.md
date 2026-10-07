@@ -72,23 +72,24 @@ questions, and a platform-mismatch veto.
   twice. Run judges sequentially, so the catalog prompt stays cached.
 - **Codex subscription:** used for reviews, request generation and outcome
   runs.
-- **Claude credits:** $100 unused (as of 2026-10-07), intended for cloud work.
-  Backlog item E7 moves the judges onto the Anthropic API.
+- **Cloud-session credit:** $100, expires 2026-11-05. It pays for Claude
+  cloud sessions only, not Routines, Projects or API calls. The orchestrator
+  and its subagents run in one cloud session for that reason.
 
 ## How the work continues
 
-The work continues as a multi-agent loop. One orchestrator (Claude Opus 5.5)
-directs Claude and Codex workers. **Most of it runs in the cloud** (Claude
-cloud sessions or routines, and Codex Cloud tasks) against this GitHub repo.
-Branches, PRs and `docs/loop/BACKLOG.md` are the shared bus, and every PR is
-reviewed by the other vendor. Erik's machine is only needed for tasks that use
-his logged-in agent CLIs or desktop apps (lane `local`).
+The work continues as a multi-agent loop.
 
-See [docs/loop/ORCHESTRATOR.md](docs/loop/ORCHESTRATOR.md) for:
-- the one-time cloud setup: GitHub app access, environment secrets, network
-  allowlist, the Codex Cloud environment;
-- the iteration protocol;
-- ready-to-paste orchestrator, worker and review prompts.
+- **Where it runs:** one Claude cloud session (Opus 5.5, auto-compact at
+  500k) acts as the orchestrator. It dispatches `worker` subagents for Claude
+  tasks and reaches Codex through GitHub (`@codex <task>`, `@codex review`).
+- **Merge gate:** every PR needs CI green, the `pr-reviewer` subagent's
+  approval (security, and anything that should not exist), and a Codex review.
+- **Shared state:** branches, PRs and `docs/loop/BACKLOG.md`.
+- **Erik's machine** is needed only for lane `local` tasks.
+
+See [docs/loop/ORCHESTRATOR.md](docs/loop/ORCHESTRATOR.md) for the one-time
+setup, the iteration protocol, the context discipline and the prompts.
 
 ## Goals for the loop
 
@@ -119,13 +120,14 @@ See [docs/loop/ORCHESTRATOR.md](docs/loop/ORCHESTRATOR.md) for:
 3. **npm name.** `loadout` is taken (0.0.2). Options: `@erik-hedstrom/loadout`
    (scoped, always available), or an unscoped name to check
    (`loadout-router`, `skill-loadout`, …).
-4. **Cloud setup, secrets and budget.**
-   - Do the one-time setup in ORCHESTRATOR.md.
-   - Are the $100 Claude credits API credits (then add `ANTHROPIC_API_KEY` as
-     a cloud and CI secret for E7) or claude.ai usage credits (then they fund
-     cloud sessions and routines directly)?
-   - What spending caps per iteration and per day?
-   - More Jev credit when the $10 runs out?
+4. **Cloud setup and budget.** Do the one-time setup in ORCHESTRATOR.md:
+   - GitHub app access to the repo;
+   - the `TYPESAFE_API_KEY` secret;
+   - the network allowlist;
+   - the Codex environment and automatic review.
+
+   Also set spending caps, and decide on more Jev credit when the $10 runs
+   out.
 5. **Identity.** Stay `erik-hedstrom`; the `haesteining` alias was considered
    and not adopted.
 6. **Launch channels and timing.** Show HN, Reddit, X, LinkedIn, awesome

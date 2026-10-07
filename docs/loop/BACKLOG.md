@@ -10,7 +10,8 @@ The orchestrator keeps this file current. Statuses: `todo`, `in progress (PR #)`
   logged-in CLIs or apps), `erik` (needs Erik's decision or action).
 
 **Order of things:**
-1. Foundations: CI, license, the API-based judge.
+1. Foundations: CI, license, judging inside the cloud session, a
+   simplification pass.
 2. The hook for the audience: `audit` and the token-waste study.
 3. A README built on those numbers.
 4. Launch.
@@ -308,7 +309,8 @@ Acceptance:
 |---|---|---|---|---|---|
 | E1 | P0 | GitHub Actions CI | Codex | cloud | todo |
 | E2 | P0 | LICENSE, CONTRIBUTING, SECURITY.md, templates | Claude | cloud + erik | todo (license: confirm MIT) |
-| E7 | P0 | Bench judges and expander on the Anthropic API | Claude | cloud + erik | todo (needs ANTHROPIC_API_KEY secret) |
+| E7 | P0 | Bench judges and expander that run inside a cloud session | Claude | cloud | todo |
+| E8 | P0 | Repo-wide simplification pass | Claude (pr-reviewer finds, worker fixes) + Codex review | cloud | todo |
 | E3 | P1 | Split the test file per module | Codex | cloud | todo |
 | E5 | P1 | Changelog and release automation | Codex | cloud | todo (with A4) |
 | E6 | P2 | Architecture diagram in DESIGN.md | Claude | cloud | todo |
@@ -331,19 +333,39 @@ Acceptance:
   hook's data flow, HTTP exposure, and how to report issues.
 - Issue and PR templates.
 
-**E7. API-based bench.**
+**E7. Bench judging in a cloud session.**
 
-Why: lets judging and expansion run in the cloud on Erik's Claude credits,
-with prompt caching and the Message Batches API (half price) instead of the
-`claude -p` subscription limits.
+Why: the $100 credit pays for cloud sessions only (not the API, not
+Routines), and C1/C3 need judging. `bench/lib.ts` judges through `claude -p`.
 
 Acceptance:
-- `bench/lib.ts` gains an API backend using `@anthropic-ai/sdk` (devDependency
-  only), selected by `ANTHROPIC_API_KEY`.
-- The catalog sits in a cached system block.
-- `judge.ts` gets an option to submit a whole pass as one batch.
-- Re-judging the v4 sweep reproduces its report within noise.
-- The cost is reported.
+- Check whether `claude -p` works inside a cloud session.
+- If it does not, add a file-based mode:
+  - `judge.ts` and `expand.ts` write batch prompts and read JSON answers;
+  - an Opus subagent of the session produces the answers, with the catalog
+    passed once per batch.
+- An Anthropic API backend (`ANTHROPIC_API_KEY`, prompt caching) stays
+  optional.
+- Re-judging 40 v4 requests reproduces their verdicts within noise, and the
+  cost is reported.
+
+**E8. Simplification pass.**
+
+Why: the repo must read as careful engineering, not generated filler, and
+some of it was written fast.
+
+Acceptance:
+- Run `pr-reviewer`'s "what should not exist" checklist over `src/`,
+  `bench/` and every Markdown file, one area per PR.
+- Delete or shrink:
+  - dead code;
+  - single-use abstractions;
+  - narrating comments;
+  - repeated docs (link instead);
+  - claims without numbers.
+- No behavior change: tests unchanged and green, and the bench scripts still
+  run.
+- Report lines removed per area.
 
 **E3. Test split.**
 
@@ -364,4 +386,4 @@ integration layers, readable in both light and dark themes.
 
 | Date | Merged | In flight | Spend (Jev / Claude / Codex) | Decisions needed |
 |---|---|---|---|---|
-| 2026-10-07 | Handoff written (this file, AGENTS.md, ORCHESTRATOR.md) | — | — | License, public timing, npm name, budget caps, credit type, cloud setup (ORCHESTRATOR.md §One-time setup) |
+| 2026-10-07 | Handoff written (HANDOFF, AGENTS with Code Review Rules, ORCHESTRATOR, BACKLOG, `.claude/agents/{worker,pr-reviewer}.md`, auto-compact 500k) | — | — | License, public timing, npm name, budget caps, hook default; cloud setup (ORCHESTRATOR.md §One-time setup) |

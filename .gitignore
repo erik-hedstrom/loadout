@@ -6,3 +6,4 @@ bench/data/corpus.jsonl
 bench/data/popular.jsonl
 bench/data/embeddings/
 bench/data/models/
+.claude/settings.local.json
