@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { audit, formatAudit } from '../src/audit.js';
+import { findSkillDirs, parseSkill } from '../src/library.js';
 
 let home: string;
 let project: string;
@@ -31,7 +32,6 @@ beforeEach(() => {
   vi.stubEnv('CODEX_HOME', join(home, 'codex-custom'));
   vi.stubEnv('XDG_CONFIG_HOME', join(home, '.config'));
   vi.stubEnv('LOADOUT_HOME', join(home, '.loadout'));
-  vi.stubEnv('SLASH_COMMAND_TOOL_CHAR_BUDGET', '');
 });
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -118,8 +118,6 @@ describe('audit', () => {
     expect(result.loadout.toolTokens).toBeGreaterThan(0);
     expect(result.loadout.skillTokens).toBe(12);
     expect(result.loadout.pickedSkills).toBe(3);
-    expect(result.loadout.estimatedTokens).toBe(result.loadout.toolTokens + 12);
-    expect(formatAudit(result)).toContain(`${result.loadout.toolTokens} tokens for real tool definitions`);
   });
 
   it('adopts through safe add, keeps provenance and resources, and leaves host files untouched', async () => {
@@ -175,7 +173,7 @@ describe('audit', () => {
     const result = await audit(project);
     expect(result.hosts[0]!.warnings.length).toBeGreaterThan(0);
     expect(JSON.stringify(result) + formatAudit(result)).not.toContain('TOP-SECRET');
-    expect(result.caveats.join(' ')).toMatch(/cap|truncate/);
+    expect(result.caveats.join(' ')).toMatch(/within.*context|drops descriptions/);
   });
 
   it('counts custom plugin command/agent files and direct Claude descriptions', async () => {
@@ -301,7 +299,7 @@ describe('audit', () => {
     const installed = join(home, 'installed');
     skill(join(installed, 'skills'), 'installed');
     json(join(home, 'claude-custom', 'plugins', 'installed_plugins.json'), { plugins: { 'installed@market': [{ scope: 'user', installPath: installed }] } });
-    json(join(home, 'claude-custom', 'settings.json'), { enabledPlugins: { 'installed@market': true, 'disabled@synced': false } });
+    json(join(home, 'claude-custom', 'settings.json'), { enabledPlugins: { 'installed@market': true, disabled: false } });
     json(join(bucket, 'sync', '.mcp.json'), { mcpServers: { synced: { env: { KEY: 'TOP-SECRET' } } } });
     const result = await audit(project);
     expect(result.hosts[0]!.skills.map((s) => s.name).sort()).toEqual(['generation:generation~g2', 'installed:installed', 'sync:sync']);
@@ -318,29 +316,51 @@ describe('audit', () => {
     expect((await audit(project)).hosts[0]!.servers.map((s) => s.name)).toEqual(['old']);
   });
 
-  it('reports uncapped inventories and path-inclusive full-entry fit without claiming request tokens', async () => {
+  it('reports inventory only, with documented listing rules and short per-host summaries', async () => {
     skill(join(home, 'codex-custom', 'skills'), 'large', 'x'.repeat(8100));
     skill(join(home, 'codex-custom', 'skills'), 'small', 'abcd');
     const result = await audit(project);
     const host = result.hosts.find((h) => h.host === 'Codex')!;
     expect(host.descriptionCharacters).toBe(8118);
     expect(host.estimatedTokens).toBe(2030);
-    expect(host.budget.characters).toBe(8000);
-    expect(host.budget.fullSkills).toBe(1);
-    expect(host.budget.source).toMatch(/developers\.openai\.com/);
+    expect(host).not.toHaveProperty('budget');
+    expect(host.skills[0]).not.toHaveProperty('listingCharacters');
     expect(result.summary).toMatch(/cap|truncate/);
     expect(result.summary).not.toMatch(/per request|loadout/i);
-    expect(formatAudit(result)).not.toMatch(/tokens\/request|tokens per request/);
-    expect(result.hosts.find((h) => h.host === 'Cursor')!.budget.note).toBe('budget not documented; B1 measures it');
+    expect(result.summary.split('\n')).toHaveLength(4);
+    expect(result.summary).toContain('Codex: 2 skills installed, ~2,030 description tokens');
+    expect(result.summary).toContain('MCP schemas not counted');
+    expect(formatAudit(result)).not.toMatch(/tokens\/request|tokens per request|at most.*fit|16,000/);
+    expect(result.caveats).toContain('Claude Code keeps descriptions within 1% of the context window; Codex within 2% or 8,000 characters; OpenCode and Cursor do not document one; B1 measures what is actually sent.');
+    expect(result.caveats.join(' ')).toMatch(/bundled skills.*claude\.ai connectors.*not counted/i);
   });
 
-  it('uses the documented Claude fallback and configured character budget', async () => {
-    skill(join(home, 'claude-custom', 'skills'), 'huge', 'x'.repeat(16_000));
-    const fallback = (await audit(project)).hosts[0]!;
-    expect(fallback.budget.characters).toBe(16_000);
-    expect(fallback.budget.fullSkills).toBe(0);
-    vi.stubEnv('SLASH_COMMAND_TOOL_CHAR_BUDGET', '20000');
-    expect((await audit(project)).hosts[0]!.budget.fullSkills).toBe(1);
+  it('merges Claude skill overrides through user, project and local settings before counting and adoption', async () => {
+    const root = join(home, 'claude-custom', 'skills');
+    for (const name of ['off', 'manual', 'short', 'project-on', 'local-on', 'local-off']) skill(root, name);
+    json(join(home, 'claude-custom', 'settings.json'), { skillOverrides: { off: 'off', manual: 'user-invocable-only', short: 'name-only', 'project-on': 'off', 'local-on': 'off' } });
+    json(join(project, '.claude', 'settings.json'), { skillOverrides: { 'project-on': 'on', 'local-off': 'on' } });
+    json(join(project, '.claude', 'settings.local.json'), { skillOverrides: { 'local-on': 'on', 'local-off': 'off' } });
+    const nested = join(project, 'src');
+    json(join(nested, '.claude', 'settings.json'), { skillOverrides: { 'local-off': 'on' } });
+    const result = await audit(nested, true);
+    expect(result.hosts[0]!.skills.map((s) => s.name).sort()).toEqual(['local-on', 'project-on', 'short']);
+    expect(result.hosts[0]!.skills.find((s) => s.name === 'short')).toEqual({ name: 'short', description: '', characters: 5, tokens: 2 });
+    expect(result.adopted?.added).toBe(3);
+    expect(readdirSync(join(home, '.loadout', 'library', 'skills')).sort()).toEqual(['local-on', 'project-on', 'short']);
+  });
+
+  it('uses namespaced Claude skill overrides and marketplace-specific plugin disables', async () => {
+    const one = join(home, 'plugins', 'one');
+    const two = join(home, 'plugins', 'two');
+    skill(join(one, 'skills'), 'one');
+    skill(join(two, 'skills'), 'two');
+    json(join(home, 'claude-custom', 'plugins', 'installed_plugins.json'), { plugins: {
+      'pack@one': [{ scope: 'user', installPath: one }], 'pack@two': [{ scope: 'user', installPath: two }],
+    } });
+    json(join(home, 'claude-custom', 'settings.json'), { enabledPlugins: { 'pack@one': false, 'pack@two': true }, skillOverrides: { 'pack:two': 'name-only' } });
+    const host = (await audit(project)).hosts[0]!;
+    expect(host.skills).toEqual([{ name: 'pack:two', description: '', characters: 8, tokens: 2 }]);
   });
 
   it('excludes locally disabled Codex and Claude skills from inventories', async () => {
@@ -349,9 +369,12 @@ describe('audit', () => {
     skill(root, 'kept');
     file(join(home, 'codex-custom', 'config.toml'), `[[skills.config]]\npath = ${JSON.stringify(join(root, 'hidden', 'SKILL.md'))}\nenabled = false\n`);
     file(join(home, 'claude-custom', 'skills', 'manual', 'SKILL.md'), '---\nname: manual\ndescription: Hidden from automatic listing\ndisable-model-invocation: true\n---\nbody');
-    const result = await audit(project);
+    expect(parseSkill(join(home, 'claude-custom', 'skills', 'manual'))?.disableModelInvocation).toBe(true);
+    const result = await audit(project, true);
     expect(result.hosts.find((h) => h.host === 'Codex')!.skills.map((s) => s.name)).toEqual(['kept']);
     expect(result.hosts[0]!.skills).toHaveLength(0);
+    expect(result.adopted?.added).toBe(1);
+    expect(readdirSync(join(home, '.loadout', 'library', 'skills'))).toEqual(['kept']);
   });
 
   it('finds Cursor packs in user and project .agents directories', async () => {
@@ -361,10 +384,13 @@ describe('audit', () => {
     expect(cursor.skills.map((s) => s.name).sort()).toEqual(['repo-agent', 'user-agent']);
   });
 
-  it('follows Codex folder links once, stops cycles/deep links and confines the manifest to the real skill', async () => {
+  it('follows external Codex folder links, confines manifests and adopts exactly the real skill folder', async () => {
     const root = join(home, 'codex-custom', 'skills');
     const real = join(home, 'external');
     skill(real, 'linked');
+    file(join(real, 'linked', 'reference.txt'), 'kept');
+    skill(real, 'sibling');
+    symlinkSync(join(real, 'sibling', 'SKILL.md'), join(real, 'linked', 'outside.txt'));
     mkdirSync(root, { recursive: true });
     const linkType = process.platform === 'win32' ? 'junction' : 'dir';
     symlinkSync(join(real, 'linked'), join(root, 'alias'), linkType);
@@ -373,12 +399,18 @@ describe('audit', () => {
     mkdirSync(escape);
     symlinkSync(join(real, 'linked', 'SKILL.md'), join(escape, 'SKILL.md'));
     symlinkSync(escape, join(root, 'escape'), linkType);
+    expect(findSkillDirs(root)).toEqual([]);
+    expect(findSkillDirs(root, 8, true)).toContain(join(real, 'linked'));
     const result = await audit(project, true);
     expect(result.hosts.find((h) => h.host === 'Codex')!.skills.map((s) => s.name)).toEqual(['linked']);
-    expect(existsSync(join(home, '.loadout', 'library', 'skills', 'linked', 'SKILL.md'))).toBe(true);
+    const library = join(home, '.loadout', 'library', 'skills');
+    expect(readdirSync(library)).toEqual(['linked']);
+    expect(readdirSync(join(library, 'linked')).sort()).toEqual(['.loadout-source.json', 'SKILL.md', 'reference.txt']);
+    expect(readFileSync(join(library, 'linked', 'reference.txt'), 'utf8')).toBe('kept');
+    expect(JSON.parse(readFileSync(join(library, 'linked', '.loadout-source.json'), 'utf8')).origin).toBe(join(real, 'linked'));
   });
 
-  it('applies OpenCode project name precedence, exact denies and wildcard defaults', async () => {
+  it('keeps OpenCode project name precedence without applying permission rules', async () => {
     const user = join(home, '.config', 'opencode', 'skills');
     const repo = join(project, '.opencode', 'skills');
     skill(user, 'same', 'user definition');
@@ -386,15 +418,17 @@ describe('audit', () => {
     skill(user, 'denied');
     skill(user, 'default-denied');
     json(join(home, '.config', 'opencode', 'opencode.json'), { permission: { skill: { '*': 'deny', same: 'allow', denied: 'deny' } } });
-    const host = (await audit(project)).hosts.find((h) => h.host === 'OpenCode')!;
-    expect(host.skills.map((s) => [s.name, s.description])).toEqual([['same', 'project definition']]);
+    const result = await audit(project);
+    const host = result.hosts.find((h) => h.host === 'OpenCode')!;
+    expect(host.skills.map((s) => [s.name, s.description]).sort()).toEqual([['default-denied', 'abcd'], ['denied', 'abcd'], ['same', 'project definition']]);
+    expect(result.caveats).toContain('OpenCode permission rules are not applied.');
   });
 
   it('discloses unsupported OpenCode permission patterns without printing their config values', async () => {
     skill(join(project, '.opencode', 'skills'), 'kept');
     json(join(project, 'opencode.json'), { permission: { skill: { 'TOP-SECRET*': 'deny' } } });
     const result = await audit(project);
-    expect(result.caveats.join(' ')).toMatch(/permissions not applied/);
+    expect(result.caveats).toContain('OpenCode permission rules are not applied.');
     expect(JSON.stringify(result) + formatAudit(result)).not.toContain('TOP-SECRET');
   });
 
@@ -424,20 +458,6 @@ command = "unused"
     expect(JSON.stringify(result) + formatAudit(result)).not.toContain('TOP-SECRET-CONFIG-VALUE');
   });
 
-  it('includes file paths when estimating full Codex entries near the fallback limit', async () => {
-    skill(join(home, 'codex-custom', 'skills'), 'a', 'x'.repeat(7990));
-    const host = (await audit(project)).hosts.find((h) => h.host === 'Codex')!;
-    expect(host.descriptionCharacters).toBe(7993);
-    expect(host.budget.fullSkills).toBe(0);
-  });
-
-  it('discloses compound OpenCode permission values', async () => {
-    json(join(project, 'opencode.json'), { permission: { skill: ['deny', 'TOP-SECRET'] } });
-    const result = await audit(project);
-    expect(result.caveats.join(' ')).toMatch(/permissions not applied/);
-    expect(JSON.stringify(result) + formatAudit(result)).not.toContain('TOP-SECRET');
-  });
-
   it('bounds Codex linked-directory depth', async () => {
     const root = join(home, 'codex-custom', 'skills');
     mkdirSync(root, { recursive: true });
@@ -453,15 +473,4 @@ command = "unused"
     expect((await audit(project)).hosts.find((h) => h.host === 'Codex')!.skills).toHaveLength(0);
   });
 
-  it('applies OpenCode denies to original names before terminal sanitization', async () => {
-    file(join(project, '.opencode', 'skills', 'skill', 'SKILL.md'), '---\nname: "denied\\u202e"\ndescription: x\n---\n');
-    json(join(project, 'opencode.json'), { permission: { skill: { 'denied\u202e': 'deny' } } });
-    expect((await audit(project)).hosts.find((h) => h.host === 'OpenCode')!.skills).toHaveLength(0);
-  });
-
-  it('estimates Claude description budget separately from Codex file paths', async () => {
-    skill(join(home, 'claude-custom', 'skills'), 'a', 'abcd');
-    vi.stubEnv('SLASH_COMMAND_TOOL_CHAR_BUDGET', '7');
-    expect((await audit(project)).hosts[0]!.budget.fullSkills).toBe(1);
-  });
 });

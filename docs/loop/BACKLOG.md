@@ -50,7 +50,7 @@ Acceptance:
 - Tests use fake home directories.
 - It never writes outside `~/.loadout`.
 
-A2 learnings: inventory is not request overhead; listing caps and local disables matter, claude.ai synced plugins need discovery, and structured TOML keeps config strings out of MCP server names (PR #3).
+A2 learnings: report installed inventory, not simulated request cost; Claude keeps every name and budgets descriptions at 1% of context, simple local off switches are excluded, and OpenCode permission evaluation stays out of scope (PR #3).
 
 **A1. README rewrite.**
 
