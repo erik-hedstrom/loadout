@@ -107,7 +107,7 @@ Acceptance:
 
 Why: the headline must be measured, not estimated.
 
-Learnings: [PR #6](https://github.com/erik-hedstrom/loadout/pull/6) round 4 requires stable Claude ambient inventory beyond declared treatment additions and distinguishes its isolated baseline from Codex's ambient baseline (14 Claude calls; paid Codex deferred). No paid calls or results yet.
+Learnings: [PR #6](https://github.com/erik-hedstrom/loadout/pull/6) round 4 requires stable Claude ambient inventory beyond declared treatment additions and distinguishes its isolated baseline from Codex's ambient baseline (14 Claude calls; paid Codex deferred). Measured 2026-10-07 (bench/RESULTS.md, B1 results): Claude +12.3k tokens at 1,262 skills, +477 at 50, loadout +546; Codex shows 424 of 1,262. The inventory guard stopped the first attempt when a synced plugin vanished between calls. Left: paid Codex (blocked on unified_exec), cost per 1,000 requests at list prices, the chart, and cached multi-turn cost. Pack MCP servers stay excluded: starting them runs downloaded code (AGENTS rule 5).
 
 Acceptance:
 - A script in `bench/` installs well-known packs (Superpowers, anthropics/skills,
@@ -119,8 +119,6 @@ Acceptance:
 - It reports tokens, the cost per 1,000 requests at list prices (cached and
   uncached), and whether the host truncates descriptions silently.
 - A chart and a RESULTS entry.
-- Starting point: 1,262 skills' descriptions are about 140k tokens; the top 50
-  about 6.8k (HANDOFF).
 
 **B2. Launch kit.**
 
