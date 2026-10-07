@@ -113,10 +113,13 @@ setup, the iteration protocol, the context discipline and the prompts.
 
 ## Decisions only Erik can make (ask, don't assume)
 
-1. **License.** `package.json` says MIT, but there is no LICENSE file yet.
-   Confirm MIT, then add it.
+1. **License.** Decided by Erik: Apache-2.0, 2026-10-07.
 2. **Going public.** The repo is private. Recommended order: CI green,
    LICENSE, README quickstart verified on a clean machine, then public.
+   On the day: enable private vulnerability reporting (GitHub offers it only
+   on public repos) and, if you want one, add a security contact to
+   SECURITY.md. Decide whether `bench/results/*-overhead` may keep your
+   ambient plugin and skill names.
 3. **npm name.** `loadout` is taken (0.0.2). Options: `@erik-hedstrom/loadout`
    (scoped, always available), or an unscoped name to check
    (`loadout-router`, `skill-loadout`, …).

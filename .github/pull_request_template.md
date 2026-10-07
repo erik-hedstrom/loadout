@@ -1,0 +1,5 @@
+- [ ] What changed.
+- [ ] How it was tested, with commands and their output.
+- [ ] Cost incurred (including API spend and agent quota).
+- [ ] Backlog item ID.
+- [ ] What is left, including any required reviews.

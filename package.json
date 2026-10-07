@@ -10,7 +10,7 @@
     "dist"
   ],
   "engines": {
-    "node": ">=22"
+    "node": ">=22.12"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -18,7 +18,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
-  "license": "MIT",
+  "license": "Apache-2.0",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",
     "smol-toml": "^1.9.0",

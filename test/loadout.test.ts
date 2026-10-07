@@ -1064,6 +1064,18 @@ describe('claude hook', () => {
     expect(JSON.parse(hookOutput('x'))).toEqual({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: 'x' } });
   });
 
+  it('stores skill IDs without prompt text in hook state', async () => {
+    const stateDir = tempDir('loadout-hook-');
+    const { client } = fakeClient({ 'webapp-testing': 0.95 }, { exact: 1 });
+    const canary = 'HOOK-PROMPT-CANARY-8392';
+    await promptContext({ session_id: 'privacy', prompt: `${TASK} ${canary}` }, { library, config: DEFAULT_CONFIG, client, stateDir });
+    const files = readdirSync(stateDir);
+    expect(files).toHaveLength(1);
+    const state = readFileSync(join(stateDir, files[0]!), 'utf8');
+    expect(state).not.toContain(canary);
+    expect(JSON.parse(state)).toMatchObject({ offered: ['webapp-testing'], injected: ['webapp-testing'] });
+  });
+
   it('escapes third-party metadata, injects later mentions, and keeps no state without a session id', async () => {
     const lib = tempDir('loadout-evil-lib-');
     mkdirSync(join(lib, 'skills', 'evil'), { recursive: true });
