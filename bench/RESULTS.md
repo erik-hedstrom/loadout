@@ -108,7 +108,7 @@ again on 300 new ones, with no retuning.
   300, from the prompt in [seeds.ts](seeds.ts), with no library in view. It
   then expanded them with [expand.ts](expand.ts)'s prompt:
   [requests-c1.jsonl](data/requests-c1.jsonl).
-  - None matches a v4 seed; the highest trigram Jaccard is 0.20.
+  - None repeats a v4 seed.
   - The expansions run 65–218 words, median 100. v4's Sonnet expansions had
     a median of 199.
   - Both steps ran through `--backend files`, so the provenance reads
@@ -132,7 +132,7 @@ again on 300 new ones, with no retuning.
 | Nothing loaded when none is needed | 74% (65–81) | 82% (72–88) | 84% (75–90) |
 | Loaded skills that are useful | **64%** (55–72) | 80% (73–86) | 82% (75–87) |
 | Loaded skills that would mislead | **7%** (4–13) | 1% (0–5) | 1% (0–4) |
-| Injected skills that are useful | 90% (70–97) | — | 84% (67–93) |
+| Injected skills that are useful | 90% (70–97) | 79% (60–90) | 84% (67–93) |
 
 (95% Wilson intervals; load-level intervals ignore within-request correlation.)
 

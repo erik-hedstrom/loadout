@@ -205,6 +205,8 @@ Learnings ([#16](https://github.com/erik-hedstrom/loadout/pull/16),
   the keyword fallback. Check the fallback count before judging a sweep.
 - The split, stricter than "keep a third untouched": tune on C1 dev (99)
   and on v4's 315; C1 test (201) stays untouched for reporting.
+- The judge ran through local `claude -p`, as in v4, not through the API path
+  that acceptance names (E7 has no Anthropic API backend).
 
 **C2. Small-tier outcome eval.**
 
@@ -233,17 +235,17 @@ Acceptance:
 Example: `frontend-ui-engineering` loads on simple UI work the judge says
 needs nothing.
 
-Acceptance:
-- A principled signal: a per-skill load-frequency prior, or a "general
-  practice vs specific procedure" question.
-- Tuned on C1's dev split, reported on its test split.
-
 From C1, to test on C1 dev:
 - whether a generic skill adds an action-specific procedure for this request;
 - whether a close-comparison winner fits the framework or service the
   request names.
 
 C1's non-useful loads came from both paths, the winner and P(exact).
+
+Acceptance:
+- A principled signal: a per-skill load-frequency prior, or a "general
+  practice vs specific procedure" question.
+- Tuned on C1's dev split, reported on its test split.
 - Load precision up with useful loads not down by more than the interval.
 
 **C5. Retrieval beyond 200 candidates.**

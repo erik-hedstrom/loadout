@@ -4,7 +4,7 @@
  *   npx tsx bench/seeds.ts --prefix c1 --out bench/data/seeds-c1.jsonl [--backend codex|claude|files] [--model gpt-6.1-sol] [--effort high]
  */
 import { appendFileSync, existsSync, mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { z } from 'zod';
 import { backendOf, costLabel, modelFamily, modelJson, readJsonl } from './lib.js';
@@ -47,7 +47,8 @@ const { values } = parseArgs({ options: {
   model: { type: 'string', default: 'gpt-6.1-sol' },
   effort: { type: 'string' },
 } });
-if (!values.prefix || !values.out) throw new Error('usage: seeds.ts --prefix <prefix> --out <seeds.jsonl>');
+// The prefix names the ids and the batch directory, so it must be a plain word.
+if (!values.prefix || !/^[a-z0-9]+$/i.test(values.prefix) || !values.out) throw new Error('usage: seeds.ts --prefix <letters and digits> --out <seeds.jsonl>');
 const backend = backendOf(values.backend!, values.effort);
 const model = values.model!;
 const generatedBy: { backend: string; model: string; effort: string | null; family?: string; producer?: string } = { backend, model, effort: values.effort ?? null, ...(backend === 'files' ? { producer: 'unverified' } : { family: modelFamily(model) }) };
@@ -63,11 +64,15 @@ function validate(requests: string[], category: string, count: number): string[]
   return trimmed;
 }
 
+const idsFor = (category: string, count: number) => Array.from({ length: count }, (_, i) => `${values.prefix}-${category}-${String(i + 1).padStart(2, '0')}`);
+if (records.some((r) => !CATEGORIES.some((c) => c.category === r.category))) throw new Error('stored seeds have an unknown category; use a fresh output file');
 const done = new Set<string>();
 for (const { category, count } of CATEGORIES) {
   const stored = records.filter((r) => r.category === category);
   if (!stored.length) continue;
   validate(stored.map((r) => r.request), category, count);
+  // Ids fix the dev/test split, so a resumed file must carry exactly the ids this run would write.
+  if (stored.map((r) => r.id).join() !== idsFor(category, count).join()) throw new Error(`invalid seeds for category ${category}`);
   done.add(category);
 }
 
@@ -76,13 +81,14 @@ let pending = false;
 for (const { category, count, gloss } of CATEGORIES) {
   if (done.has(category)) continue;
   const prompt = `Category: ${category}\nArea: ${gloss}\nGenerate exactly ${count} distinct requests.`;
-  const res = await modelJson(prompt, schema, { backend, model, effort: values.effort, system: SYSTEM, out: dirname(values.out) }).catch((error: unknown) => {
+  const res = await modelJson(prompt, schema, { backend, model, effort: values.effort, system: SYSTEM, out: join(dirname(values.out), values.prefix) }).catch((error: unknown) => {
     // Parse and schema errors can quote model output; backend failures carry loadout's own text.
     throw error instanceof SyntaxError || error instanceof z.ZodError ? new Error(`invalid seeds for category ${category}`) : error;
   });
   if (!res) { pending = true; continue; }
   const requests = validate(res.output.requests, category, count);
-  const rows = requests.map((request, i) => ({ id: `${values.prefix}-${category}-${String(i + 1).padStart(2, '0')}`, category, request, generatedBy }));
+  const ids = idsFor(category, count);
+  const rows = requests.map((request, i) => ({ id: ids[i]!, category, request, generatedBy }));
   mkdirSync(dirname(values.out), { recursive: true });
   appendFileSync(values.out, rows.map((row) => JSON.stringify(row)).join('\n') + '\n');
   cost += res.costUsd ?? 0;

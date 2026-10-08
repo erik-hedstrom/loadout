@@ -50,19 +50,22 @@ Claude Opus judged each choice against the whole catalog.
 
 - **v4:** the rule was tuned on a third of 315 requests and is reported on
   the other two thirds.
-- **C1:** the same rule, untuned, on 300 new requests (test split shown):
+- **C1:** the same rule, untuned, on 300 new requests. The code is current
+  (after the E9 hardening), so v4's requests were re-run on it as a control.
 
-| Test split | v4 (213 requests) | C1, new requests (201) |
-|---|---:|---:|
-| A useful skill loaded, when the request needs one | 76% | 73% |
-| A useful skill loaded or offered | 86% | 80% |
-| Nothing loaded, when it needs none | 84% | 74% |
-| Loaded skills that are useful / that would mislead | 82% / 1% | **64% / 7%** |
-| Skills loaded per request | 0.74 | 0.64 |
-| Cost per decision | $0.0011, about 1 s | $0.0012, about 2 s |
+| Test split | v4 | v4 requests, current code | C1, new requests |
+|---|---:|---:|---:|
+| A useful skill loaded, when the request needs one | 76% | 72% | 73% |
+| A useful skill loaded or offered | 86% | 85% | 80% |
+| Nothing loaded, when it needs none | 84% | 82% | 74% |
+| Loaded skills that are useful / that would mislead | 82% / 1% | 80% / 1% | **64% / 7%** |
+| Skills loaded per request | 0.74 | 0.72 | 0.64 |
 
-On new requests, recall held and precision fell. loadout loads too readily
-on general business requests
+A decision costs $0.0011–0.0012 and 1–2 s.
+
+On new requests, recall held. loadout stayed quiet less often, and more of
+what it loaded was not useful: it loads too readily on general business
+requests
 ([C1](bench/RESULTS.md#c1-2026-10-08-new-held-out-requests)).
 
 The agents use what they are given: in headless runs, Claude Code opened a
