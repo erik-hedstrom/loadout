@@ -1,0 +1,36 @@
+{
+  "results": [
+    {
+      "id": "c1-data-17",
+      "prompt": "I need my JSON records converted to CSV, with nested address fields flattened into clearly named columns such as address_street, address_city, and address_postal_code where those fields exist. Inspect the supplied records, preserve the other fields, and use a consistent column order. Assume missing or null values become empty cells, and preserve postal codes as text so leading zeros survive. Flag any arrays, conflicting field names, or inconsistent structures that need a decision rather than silently dropping information. Return the CSV and a brief field-mapping note. Verify that every input record produces one output row and that commas, quotes, and line breaks are escaped correctly."
+    },
+    {
+      "id": "c1-data-18",
+      "prompt": "I want to know how often each ingredient appears in my recipe collection. Assume frequency means the number of recipes containing an ingredient, counting it only once within each recipe. Ignore quantities and units, normalize capitalization and extra whitespace, and combine obvious spelling variants while keeping meaningfully different ingredients separate. Explain any ambiguous normalization choices rather than silently merging them. Return a table of ingredient names, recipe counts, and percentages of the collection, sorted from most to least common. Include the total number of recipes analyzed and flag entries that could not be interpreted. If I haven't supplied the collection, ask me for it."
+    },
+    {
+      "id": "c1-data-19",
+      "prompt": "I have a dataset with missing ages and incomes. I want you to assess the missingness patterns and recommend a treatment before changing any values. Start by reporting missing counts and percentages for each field, how often both are missing, and whether missingness varies across other available variables or groups. Check for placeholder values that may represent missing data. Explain which findings are consistent with different missingness mechanisms and what cannot be established from the dataset alone. Compare retaining missing values, excluding records, and suitable imputation approaches, including their risks. Ask about my intended analysis if it affects the recommendation. Deliver a concise assessment and proposed treatment plan; leave the dataset unchanged."
+    },
+    {
+      "id": "c1-ml-01",
+      "prompt": "I'm new to machine learning, and I want a clear explanation of overfitting using one simple everyday example. Assume I have no background in statistics or machine learning. Use the example to show how memorizing familiar cases can produce excellent results during practice but poor results on new cases, then connect that to training data and unseen data. Briefly explain how this differs from underfitting and give two practical ways to reduce overfitting in plain language. Avoid equations and unexplained jargon. Keep the explanation short enough that I could confidently retell the main idea to someone else."
+    },
+    {
+      "id": "c1-ml-02",
+      "prompt": "I have 800 labeled customer reviews and want help choosing a sensible baseline for sentiment classification. Check the label categories, class balance, review language, and any duplicate or related reviews that could cause leakage. Assume these are text reviews with one sentiment label each unless the data shows otherwise. Recommend a simple starting model, such as a linear classifier using TF-IDF features, and compare it with a majority-class baseline. Explain how to split or cross-validate this small dataset, fit preprocessing without leakage, and evaluate performance using appropriate metrics. Deliver a concrete baseline plan with its rationale, likely limitations, and criteria for deciding whether a more complex model is worth trying."
+    },
+    {
+      "id": "c1-ml-03",
+      "prompt": "My classifier gets 98% accuracy but misses most fraud cases. I want to understand why that can happen and which metrics should guide my decisions. Treat fraud as the positive class. Check the fraud prevalence and confusion matrix before drawing conclusions, and ask for actual labels, prediction scores, or counts if needed. Explain fraud recall, precision, false-positive rate, and precision-recall AUC in terms of missed fraud and unnecessary investigations. Show how changing the decision threshold affects these trade-offs. Help me choose metrics based on the cost of missed fraud and available review capacity, without assuming those costs. Deliver a prioritized evaluation plan and explain why accuracy alone is misleading."
+    },
+    {
+      "id": "c1-ml-04",
+      "prompt": "I want a PyTorch training loop for image classification with early stopping and checkpoints I can resume. Assume single-label multiclass classification and existing model, training, and validation data loaders; state these assumptions clearly and show how to connect them to the code.\n\nRequirements:\n- Run training and validation with the correct model modes, gradient handling, and device placement. Report epoch-level loss and accuracy, weighting metrics correctly when batch sizes differ.\n- Use validation loss for early stopping by default, with configurable patience and minimum improvement. Explain how the stopping rule works.\n- Save separate checkpoints for the best validation result and the latest completed epoch so I can resume interrupted training without losing progress.\n- Save and restore model and optimizer state, the completed epoch, best validation loss, and early-stopping counters. Include scheduler and mixed-precision state if those features are used.\n- Define resumption at epoch boundaries and explain any limits on reproducibility. Account for random-number state where relevant, and make the total-epoch behavior clear after resuming.\n- Handle checkpoint loading across devices and surface errors clearly.\n\nDeliver complete, readable code, a minimal example of starting and resuming training, and a small verification that checkpoint restoration and early stopping behave as intended. Keep optional features limited to what supports these requirements, and report which verification you actually ran."
+    },
+    {
+      "id": "c1-ml-05",
+      "prompt": "I'm predicting house prices and want to understand when I should use linear regression versus a random forest. Explain the trade-offs in terms of nonlinear relationships, feature interactions, interpretability, dataset size, preprocessing, and predictions outside the observed price or feature ranges. Use concrete examples involving house features, and distinguish standard linear regression from versions with transformed features or regularization. Assume my goal is predicting sale prices for unseen properties, but flag how future sales or new locations affect validation. Recommend a fair comparison using the same validation setup, leakage-free preprocessing, and price-error metrics. Finish with a practical starting recommendation and the evidence that would justify choosing the other model."
+    }
+  ]
+}

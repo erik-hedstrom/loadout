@@ -1,0 +1,36 @@
+{
+  "results": [
+    {
+      "id": "c1-everyday-07",
+      "prompt": "Make me a grocery list for spaghetti with tomato sauce and a green salad for four people. Assume a simple meat-free sauce and a basic salad with an easy dressing, with ordinary dinner-sized portions. Group the list by grocery-store section and include practical quantities for each ingredient. List pantry staples separately so I can check what I already have. Keep optional extras clearly marked, and avoid specialty ingredients or unnecessary purchases."
+    },
+    {
+      "id": "c1-everyday-08",
+      "prompt": "I always forget what's in my fridge. Suggest a simple way for me to track food and use it before it goes bad. Assume I want something inexpensive that takes only a few minutes to maintain and doesn't require recording every item. Give me one practical system, explain how to set it up, and show a short example. Include an easy reminder habit and a way to prioritize leftovers and opened food without treating freshness estimates as safety guarantees."
+    },
+    {
+      "id": "c1-everyday-09",
+      "prompt": "I need a birthday gift under $25 for my brother, who likes cooking and hiking. Suggest five thoughtful, practical options, with a brief explanation of why each fits his interests and an approximate price. Assume I don't know what equipment he already owns, so favor gifts that are useful even if he has the basics. Keep the total budget in mind, including likely shipping or tax, and recommend your strongest choice without inventing current prices or availability."
+    },
+    {
+      "id": "c1-everyday-10",
+      "prompt": "Help me write a return request for shoes that arrived in the wrong size. I want a short, polite but firm message I can send to the seller. Explain the problem and ask for return instructions and a prepaid return label. Assume I want a refund unless I specify otherwise. Use placeholders for the order number, size ordered, size received, and delivery date. Don't invent purchase details, seller policies, or legal claims."
+    },
+    {
+      "id": "c1-everyday-11",
+      "prompt": "I keep rushing out the door. Build me a realistic morning routine that takes 30 minutes from getting up to leaving home. Assume I need to wash, get dressed, have a simple breakfast, and collect my essentials. Give me a timed schedule with a small buffer for delays, plus a short list of things to prepare the night before. Keep it manageable, and include a fallback for mornings when I start five minutes late."
+    },
+    {
+      "id": "c1-everyday-12",
+      "prompt": "I've got a navy blazer, black jeans, and white sneakers. Does that combination work for a casual dinner? Assume the restaurant has no formal dress code and the clothes are clean and fit well. Give me a clear verdict and explain briefly how the colors and level of formality work together. Suggest a shirt or top and one or two small styling adjustments using common wardrobe basics. Keep the advice practical without turning this into a shopping list."
+    },
+    {
+      "id": "c1-everyday-13",
+      "prompt": "I spilled coffee on my white cotton shirt. What should I do first? Assume the spill just happened and I have ordinary household supplies. Lead with the immediate action, then give me a short, ordered set of steps to reduce the stain without damaging the fabric. Explain what to avoid and when to check the care label. If coffee with milk or sugar needs different treatment, mention that briefly. Don't promise complete stain removal."
+    },
+    {
+      "id": "c1-everyday-14",
+      "prompt": "I'm choosing between a 20-minute bike ride and a 45-minute bus ride to work. Help me weigh the everyday tradeoffs, including time, cost, weather, reliability, safety, exercise, arriving sweaty, and carrying things. Assume these are one-way travel times, and distinguish travel time from preparation or waiting time. Use a compact comparison and give me a conditional recommendation based on different priorities. Don't invent local conditions or fares; identify which missing details would most affect the choice."
+    }
+  ]
+}

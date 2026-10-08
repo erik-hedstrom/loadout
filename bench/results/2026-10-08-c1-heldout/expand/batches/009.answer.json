@@ -1,0 +1,36 @@
+{
+  "results": [
+    {
+      "id": "c1-documents-03",
+      "prompt": "Please convert my attached Word document to PDF, preserving its layout and clickable links. Keep the page size, margins, fonts, headings, tables, images, headers, footers, and page breaks as close to the original as possible. Preserve working hyperlinks, including linked text and email addresses. I want the converted PDF as the deliverable, not instructions for converting it myself. Check the PDF against the original for formatting changes, missing content, and broken links. If anything cannot be preserved exactly, explain the difference briefly."
+    },
+    {
+      "id": "c1-documents-04",
+      "prompt": "I don't understand this insurance letter. Please explain in plain language what it means, what I need to do, and by when. Start with a short summary, then list each required action, its deadline, any documents or information I must provide, and where to send them. Distinguish required actions from optional next steps, and explain any stated consequences of missing a deadline. Quote the relevant wording for critical dates or obligations. If a deadline depends on when I received the letter, explain that dependency and ask for the missing date. Flag anything unclear without guessing."
+    },
+    {
+      "id": "c1-documents-05",
+      "prompt": "Please make my cover letter sound less stiff while keeping it professional and recognizably in my voice. I want natural, direct language that feels warm and confident without becoming overly casual. Preserve my experience, qualifications, reasons for applying, and any specific details about the role or employer. Reduce formal phrasing, clichés, and repetition, but don't invent achievements or exaggerate my background. Assume I want roughly the same length unless trimming improves clarity. Return a complete revised letter ready for me to review, followed by a brief note on the main changes."
+    },
+    {
+      "id": "c1-documents-06",
+      "prompt": "I have three versions of a policy document. Please compare all three and list every substantive change with its section number. Establish the version order from dates or labels; if it is unclear, ask me before assuming. Track changes between successive versions, including added or removed requirements, altered scope, responsibilities, exceptions, deadlines, and definitions. Exclude purely cosmetic edits unless they change meaning. Present a table showing the versions compared, section number, previous wording or meaning, new wording or meaning, and practical effect. Where sections were renumbered or moved, map their old and new numbers. Flag ambiguous changes and provide a brief summary of the most significant differences."
+    },
+    {
+      "id": "c1-documents-07",
+      "prompt": "I'd like a reusable invoice template for my freelance translation work, with clear fields for payment details and due dates. Include placeholders for my business and client details, invoice number, issue date, due date, project description, language pair, quantity, rate, currency, line totals, applicable taxes, and total due. Allow billing by word, hour, or project, and include payment instructions and a reference field. Assume I want a clean, editable template I can reuse for different clients. Leave unknown details blank rather than inventing them. Provide the template and brief instructions for completing it, and flag any fields that depend on my location or tax status."
+    },
+    {
+      "id": "c1-documents-08",
+      "prompt": "Please turn my scanned receipts into one searchable PDF, keeping them in chronological order from oldest to newest. Use the transaction date printed on each receipt rather than the scan date or filename. Preserve the receipt images and add searchable text so I can find dates, merchant names, and amounts. Keep all pages belonging to the same receipt together, correct sideways pages, and maintain readable image quality. If a date is missing, illegible, or ambiguous, flag it rather than guessing; place unresolved receipts at the end. Return the finished PDF with a short list of any date or text-recognition issues."
+    },
+    {
+      "id": "c1-documents-09",
+      "prompt": "I need this report shortened to two pages without losing its findings or recommendations. Preserve the meaning, key evidence, important qualifications, and any figures necessary to understand the conclusions. Remove repetition, background detail, and unnecessary wording before cutting substantive content. Keep the connection between each finding and its recommendation clear, and don't introduce new claims. Assume the two-page limit includes all report content and use the original page size with readable formatting; don't meet the limit by shrinking text excessively. Return the revised report and briefly explain what was condensed or removed. Flag any material that cannot fit without losing essential meaning."
+    },
+    {
+      "id": "c1-documents-10",
+      "prompt": "Help me write a polite resignation letter that gives two weeks' notice. I want a concise, professional letter that clearly states my resignation and my intended final working day, thanks my employer, and offers reasonable help with the transition. Keep the tone respectful and neutral without adding reasons for leaving or promises I haven't provided. Ask for my submission date if needed to establish the final day; don't invent dates, names, or job details. Use clearly marked placeholders for missing information. Return a complete letter I can personalize and send, with the notice period and final working date easy to identify."
+    }
+  ]
+}

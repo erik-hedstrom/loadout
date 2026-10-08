@@ -1,0 +1,36 @@
+{
+  "results": [
+    {
+      "id": "c1-documents-19",
+      "prompt": "I need the tables from my PDF exported to CSV, with one file per table and the original column headers retained. Extract every table in document order, preserving row order, values, units, and blank cells. Assume a table continued across pages belongs in one CSV, and remove repeated header rows from its data. Use UTF-8 encoding and standard CSV quoting for commas, quotation marks, and line breaks. Name the files clearly by table number and identify their source pages. Flag unreadable cells or ambiguous table boundaries rather than guessing. Deliver the CSV files and a brief extraction summary."
+    },
+    {
+      "id": "c1-documents-20",
+      "prompt": "Please turn my interview transcript into a readable Q&A, removing filler words without changing what either speaker meant. Keep the original sequence, speaker identities, substantive questions, and answers. Remove verbal tics, accidental repetitions, and false starts only when they add no meaning; preserve uncertainty, emphasis, and qualifications. Lightly correct punctuation and paragraph breaks without adding facts or making either speaker sound more certain or polished than intended. Use consistent speaker labels, retaining names if supplied. Mark unclear passages rather than inventing wording. Deliver the edited Q&A, with any unresolved ambiguities listed separately."
+    },
+    {
+      "id": "c1-documents-21",
+      "prompt": "I want a simple permission slip for my school's museum trip, including emergency contact and parent signature fields. Draft a clear, printable, one-page form with a short trip description and fields for the student’s name and class, museum, trip date, departure and return times, and school contact. Include a plain-language statement granting permission to attend, emergency contact name, relationship and phone number, and parent or guardian printed name, signature, and date. Assume missing trip details should appear as clearly labeled placeholders. Keep the wording friendly and straightforward, without adding liability waivers or unrelated consent clauses."
+    },
+    {
+      "id": "c1-documents-22",
+      "prompt": "Explain the difference between an appendix and an annex so I can label the extra material in my report. Give me a concise, plain-language explanation with one practical example of each and a simple rule for choosing a label. Acknowledge that usage varies by organization and style guide, so the distinction is not universal. Assume my report has no required naming convention unless I provide one. Explain how to label and reference multiple supplementary sections consistently, and tell me what information about my extra material would help you recommend the most suitable term."
+    },
+    {
+      "id": "c1-documents-23",
+      "prompt": "My document's table of contents is out of date. Update it to match the actual headings and page numbers in the document. Preserve the existing formatting and heading hierarchy, and assume its current depth determines which heading levels belong in the contents. Add missing entries, remove obsolete ones, and correct wording, order, indentation, and page references. Use the document’s displayed page numbering, including any Roman-numbered preliminary pages. Verify the entries against the final pagination after updating. Deliver the revised document and briefly flag any heading inconsistencies or pagination limitations that prevent a reliable result."
+    },
+    {
+      "id": "c1-documents-24",
+      "prompt": "I'd like my handwritten journal pages transcribed, with uncertain words clearly marked. Preserve the original wording, spelling, punctuation, dates, and paragraph breaks as closely as the handwriting allows. Keep the pages in the supplied order and label each page boundary. Use [uncertain: possible word] for a tentative reading and [illegible] where no reliable reading is possible. Do not silently correct grammar, fill in missing text, or infer private details from context. Include readable marginal notes and indicate where they appear. Deliver a faithful plain-text transcription with a brief list of passages that would benefit from clearer images."
+    },
+    {
+      "id": "c1-documents-25",
+      "prompt": "Help me draft a complaint letter about a washing machine that arrived damaged. I want a firm, polite letter to the retailer describing the delivery, the damage, and the resolution I am requesting. Include placeholders for my contact details, order number, machine model, purchase and delivery dates, damage description, and any photos or other evidence. Since I have not specified a remedy, leave that clearly marked for me to choose. Request a response within a reasonable stated timeframe and clarify collection arrangements if relevant. Do not invent facts or legal claims. Deliver a ready-to-edit letter."
+    },
+    {
+      "id": "c1-documents-26",
+      "prompt": "I need my Markdown guide converted into a Word document, retaining code blocks, links, and heading levels. Deliver a .docx file that preserves the guide’s wording, order, and structure. Map Markdown headings to the corresponding Word heading styles, keep links clickable, and format code blocks in a readable monospaced style with indentation and line breaks intact. Preserve inline code, lists, emphasis, tables, and images where present. Assume a clean, simple layout unless I provide a template. Check the converted document against the source and flag any unsupported formatting or missing assets rather than silently dropping them."
+    }
+  ]
+}

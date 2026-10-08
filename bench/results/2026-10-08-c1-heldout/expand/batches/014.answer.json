@@ -1,0 +1,36 @@
+{
+  "results": [
+    {
+      "id": "c1-business-14",
+      "prompt": "Help me draft a respectful message explaining why my team is postponing a project. I want to communicate the decision clearly, acknowledge its impact, and preserve trust without sounding defensive or blaming anyone. Assume this is an email to affected stakeholders unless I specify otherwise. Use placeholders for the project name, actual reason, revised timing, and any commitments I have not provided; do not invent explanations or promise a new date. Include what happens next and when stakeholders can expect another update. Give me a concise, ready-to-adapt draft, followed by the few details I should confirm before sending it."
+    },
+    {
+      "id": "c1-business-15",
+      "prompt": "I manage twelve people across three time zones. Help me design a weekly operating rhythm that minimizes meetings while keeping work coordinated, decisions timely, and problems visible. Assume most routine updates can happen asynchronously, but check what depends on our roles and working-hour overlap.\n\nPropose a practical weekly schedule covering planning, progress updates, decisions, blockers, and reflection. For each activity, specify its purpose, participants, format, owner, and expected time commitment. Explain which meetings are essential, which can be optional or less frequent, and how to rotate inconvenient times fairly. Include simple update templates and rules for escalating urgent issues. Finish with a four-week trial and measurable signs that the rhythm is reducing meeting time without weakening coordination."
+    },
+    {
+      "id": "c1-business-16",
+      "prompt": "I want to compare selling directly to consumers with selling through retailers for my new skincare brand. Help me decide which channel to prioritize initially and when a mixed approach might make sense.\n\nCompare customer access, brand control, pricing, margins, acquisition costs, cash flow, inventory, fulfillment, returns, retailer requirements, and operational workload. Distinguish factors specific to skincare, such as sampling, customer trust, repeat purchases, and product claims. I have not supplied prices, costs, location, or target customers, so identify the information needed and label any illustrative assumptions clearly. Provide a side-by-side comparison, a simple unit-economics framework for both channels, and a conditional recommendation. End with low-cost ways to test the most important uncertainties before I commit."
+    },
+    {
+      "id": "c1-business-17",
+      "prompt": "My cofounder and I disagree about expanding internationally. Help me structure a discussion that ends with a clear decision while preserving our working relationship. Do not assume either position is correct.\n\nCreate a focused agenda that separates shared goals, evidence, assumptions, and disagreements. Include questions about market demand, financial capacity, operational readiness, timing, and the opportunity cost of expansion. Help us compare expanding now, running a limited pilot, and postponing against criteria we agree on beforehand. Specify the preparation each of us should bring, a practical time limit, and a decision rule to agree before debating options. Finish with a decision-record template covering the outcome, rationale, owner, next steps, and review triggers, plus a fallback process if we remain divided."
+    },
+    {
+      "id": "c1-business-18",
+      "prompt": "I need a launch plan for a bookkeeping service aimed at independent tradespeople, with milestones for the first ninety days. My goal is to validate demand, establish a reliable service, and win initial paying clients without taking on more work than I can deliver.\n\nAssume I am starting small with a limited budget; make that assumption explicit. Organize the plan into days 1–30, 31–60, and 61–90, with concrete actions, deliverables, dependencies, and measurable milestones. Cover customer discovery, service scope, pricing, onboarding, secure handling of financial information, delivery processes, marketing, referrals, and capacity. Flag qualifications or local requirements I need to confirm without assuming my jurisdiction. Distinguish bookkeeping from services requiring additional expertise or authorization. Include weekly leading indicators, decision gates, and what to change if early demand or delivery results fall short. Label proposed targets as planning assumptions."
+    },
+    {
+      "id": "c1-business-19",
+      "prompt": "Help me work out my break-even point. My monthly fixed costs are $8,000, and each sale contributes $40 after variable costs. Calculate the number of sales I need each month to cover those fixed costs, show the formula and substitution, and explain the result in plain language. Assume the contribution per sale remains constant and that the fixed costs include all relevant monthly fixed expenses. Explain what happens if sales are above or below break-even. Distinguish break-even sales volume from revenue, and tell me what additional information would be needed to calculate break-even revenue. Keep the answer concise."
+    },
+    {
+      "id": "c1-business-20",
+      "prompt": "I want to identify the biggest assumptions in my business plan before I spend money building the product. Help me separate evidence from beliefs and prioritize the uncertainties that could make the business fail.\n\nIf I have not provided the plan, ask for a concise summary of the customer, problem, proposed solution, pricing, distribution, costs, and current evidence. Assess assumptions about demand, willingness to pay, customer access, feasibility, delivery costs, and retention where relevant. Rank them by impact if wrong and strength of existing evidence. For each high-priority assumption, propose an inexpensive test with a clear hypothesis, success threshold, and next decision. Do not treat compliments or stated interest as proof of purchasing behavior. Give me an assumptions register and a recommended testing order before substantial development spending."
+    },
+    {
+      "id": "c1-business-21",
+      "prompt": "I'm preparing a board update. Help me organize it around performance, risks, decisions needed, and next quarter's priorities. Assume I need a concise written pre-read that can also guide the board discussion.\n\nCreate a clear outline and fill-in template. For performance, show results against plan, relevant trends, and explanations for material differences. For risks, capture potential impact, likelihood, mitigation, and ownership. For decisions needed, specify the question, options, my recommendation, trade-offs, and decision deadline. For next quarter's priorities, include intended outcomes, accountable owners, measures of success, and dependencies. Use placeholders for missing facts rather than inventing results. Include a short opening summary and a final completeness check so board members can quickly understand our position and the action I need from them."
+    }
+  ]
+}

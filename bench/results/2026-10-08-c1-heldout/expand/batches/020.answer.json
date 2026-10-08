@@ -1,0 +1,36 @@
+{
+  "results": [
+    {
+      "id": "c1-ml-14",
+      "prompt": "I’m building recommendations from purchase history. Propose a simple baseline and an evaluation plan that avoids using future purchases. Assume I have customer IDs, product IDs, and purchase timestamps; state any additional assumptions.\n\nStart with an easy-to-implement baseline and explain how it generates ranked recommendations. Design chronological training, validation, and test splits, making clear what information is available at each recommendation time. Address leakage through preprocessing, product availability, and customer history. Explain how to handle repeat purchases and new customers or products.\n\nRecommend a small set of ranking metrics, define the prediction target and candidate products, and outline implementation steps. Explain what results would justify trying a more complex model."
+    },
+    {
+      "id": "c1-science-01",
+      "prompt": "I’m confused—why does ice float? Explain it in plain English, assuming I know little chemistry. Connect floating to density, then explain why freezing makes water expand and how the arrangement of water molecules causes that change. Define any terms you introduce, including hydrogen bonds, and use one simple analogy without letting it replace the physical explanation. Help me understand why this behavior is unusual compared with most substances. Finish with a short explanation I could repeat to someone else and a simple observation that makes the idea concrete."
+    },
+    {
+      "id": "c1-science-02",
+      "prompt": "Help me design a fair experiment to test whether light color affects bean seedling growth, using materials I can get at a hardware store. Assume I’m doing this at home with a modest budget and no laboratory equipment; flag anything that may need another source.\n\nGive me a materials list, a clear hypothesis, and a practical setup with several light colors and a suitable comparison group. Explain how to keep seed variety, starting size, soil, containers, watering, temperature, and daily light duration consistent. Pay particular attention to light intensity: explain why equal-looking brightness may not mean equal light available to plants, and how that limits conclusions.\n\nInclude independent replicates, random assignment, a realistic schedule, measurable growth outcomes, and a recording table. Explain how to compare results and distinguish a color effect from confounding factors. Keep the setup practical and safe around electricity and water."
+    },
+    {
+      "id": "c1-science-03",
+      "prompt": "I want to understand what a small p-value tells me and why it doesn’t prove a scientific hypothesis. Explain this in plain English, assuming I have no formal statistics background. Define the null hypothesis and describe a p-value as a probability calculated under that hypothesis and the statistical model’s assumptions. Use a simple numerical example to make the conditional reasoning clear. Explain why it is not the probability that the hypothesis is true or that the result happened ‘by chance.’ Distinguish statistical significance from effect size and practical importance, and explain how study design, multiple testing, and replication affect what I should conclude."
+    },
+    {
+      "id": "c1-science-04",
+      "prompt": "Walk me through how researchers distinguish a planet’s atmospheric signal from noise when studying exoplanets. Assume I’m scientifically curious but unfamiliar with astronomy techniques. Use transit spectroscopy as the main example, briefly explaining that other methods exist.\n\nFollow the process from measuring starlight to identifying a possible atmospheric feature. Explain what researchers compare, why the signal is small, and how instruments, Earth’s atmosphere where relevant, and activity on the host star can mimic or obscure it. Describe how repeated observations, calibration, statistical models, and checks with simulated signals help test reliability. Clearly distinguish a tentative feature from a convincing detection, and explain why identifying a molecule still involves uncertainty."
+    },
+    {
+      "id": "c1-science-05",
+      "prompt": "I need a plain-English explanation of why antibiotics work on bacteria but not viruses. Assume I have no biology background. Explain the basic differences between bacteria and viruses, then connect those differences to what antibiotics target, using a couple of concrete examples without overwhelming me with technical terms. Explain how viruses reproduce inside our cells and why antiviral medicines require different approaches. Clarify that antibiotics do not treat a viral infection itself, although a separate bacterial infection can sometimes require them. Briefly explain antibiotic resistance and why unnecessary antibiotic use matters. Keep this educational rather than giving personal treatment advice."
+    },
+    {
+      "id": "c1-science-06",
+      "prompt": "I’m planning a yeast fermentation experiment. Help me choose temperature ranges, controls, and measurements that would make the results interpretable. Assume I’m using baker’s yeast, sugar solution, and basic home equipment; state where those assumptions affect the design.\n\nPropose a manageable set of temperatures with a rationale, distinguishing slower fermentation from temperatures that may damage yeast. Explain how to maintain and measure the actual mixture temperature. Keep yeast quantity, sugar concentration, liquid volume, containers, and timing consistent, and include appropriate controls and independent replicates.\n\nRecommend a practical way to measure fermentation rate, explaining what it measures and its limitations. Include a step-by-step procedure, measurement schedule, and recording table. Explain how to compare results, recognize confounding factors, and avoid pressure buildup when collecting gas."
+    },
+    {
+      "id": "c1-science-07",
+      "prompt": "I keep hearing that quantum particles can be in two places at once. What does that actually mean? Explain it for a curious beginner without advanced mathematics. Describe superposition and what a particle’s quantum state says about possible position measurements. Use the double-slit experiment to explain why this differs from simply not knowing where an ordinary object is. Clarify what ‘two places at once’ captures and where the phrase becomes misleading. Explain how measurement and interactions with the environment affect interference, and separate experimentally established predictions from competing interpretations. Use an analogy if helpful, but explicitly explain its limits."
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "results": [
+    {
+      "id": "c1-media-14",
+      "prompt": "I recorded a voiceover too quickly. Please edit the recording I provide to slow it down slightly while keeping my pitch and vocal tone natural, and trim the long silence at the beginning. Assume a modest speed reduction of about 5–10%, adjusting within that range for comfortable pacing. Preserve natural pauses and avoid audible distortion. Return the edited audio in its original format, keep the source intact, and briefly note the changes."
+    },
+    {
+      "id": "c1-writing-01",
+      "prompt": "I need a quick birthday text for my brother that’s funny but not sappy. Write a ready-to-send message in one or two short sentences, with a casual sibling tone and a light joke. Assume affectionate teasing is welcome, but avoid anything mean or overly sentimental. Don’t invent his age, interests, or shared memories. Give me three options so I can choose the one that sounds most like me."
+    },
+    {
+      "id": "c1-writing-02",
+      "prompt": "Help me write an email declining a job offer while leaving the door open for future opportunities. I want to sound appreciative, professional, and clear about my decision without overexplaining. Thank them for the offer and their time, decline politely, and express interest in staying in touch. Don’t invent a reason for declining or imply I might accept this offer later. Include a subject line and use placeholders for names, the role, and the company."
+    },
+    {
+      "id": "c1-writing-03",
+      "prompt": "I want this sentence to sound less defensive: “As I already explained, the delay wasn't my fault.” Help me communicate that I wasn’t responsible for the delay without sounding irritated, accusatory, or dismissive. Assume this is for a professional conversation. Preserve the meaning without adding an apology or accepting responsibility I haven’t stated. Give me three concise alternatives, ranging from neutral to more collaborative, and identify the best general-purpose option."
+    },
+    {
+      "id": "c1-writing-04",
+      "prompt": "I’m announcing that my bakery will close on Mondays starting next month. Draft a friendly Instagram caption that clearly explains the change and thanks customers for understanding. Keep it warm, welcoming, and brief, with the new Monday closure easy to spot. Don’t invent a reason, other opening hours, or a reopening date. Use [month] as a placeholder rather than guessing the timing. Give me one ready-to-post caption with light, optional emoji use."
+    },
+    {
+      "id": "c1-writing-05",
+      "prompt": "I need a formal letter asking my landlord to repair the leaking bedroom ceiling, which I reported two weeks ago. Make it polite but firm: reference my earlier report, explain that the issue remains unresolved, and request prompt repairs plus written confirmation of the proposed schedule. Don’t invent damage, health effects, legal obligations, or previous promises. Use placeholders for names, the property address, dates, and contact details. Return a complete letter I can personalize and send."
+    },
+    {
+      "id": "c1-writing-06",
+      "prompt": "I’m giving a two-minute wedding toast for my best friend. We met on a disastrous camping trip, and I want that to be the opening anecdote. Write a toast that’s warm, lightly funny, and suitable for her grandparents, with affectionate humor and a sincere closing toast to the couple. Aim for roughly 240–270 words so I have room for pauses and laughter. Don’t invent camping mishaps, names, or details about their relationship; use a few clear placeholders where personal details are needed. Make it sound natural when spoken, with an easy transition from our chaotic first meeting to our friendship and my wishes for their marriage."
+    },
+    {
+      "id": "c1-writing-07",
+      "prompt": "I need a subject line for an overdue invoice reminder. Assume this is a professional reminder to a customer, and keep the tone polite, clear, and firm without sounding threatening. Make the purpose immediately recognizable and keep each option short enough to scan easily in an inbox. Don’t invent an invoice number, amount, or deadline; use a placeholder if needed. Give me five options and recommend one for a first reminder."
+    }
+  ]
+}

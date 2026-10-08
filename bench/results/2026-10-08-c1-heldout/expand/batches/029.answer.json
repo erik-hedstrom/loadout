@@ -1,0 +1,36 @@
+{
+  "results": [
+    {
+      "id": "c1-everyday-15",
+      "prompt": "I've got guests arriving in an hour. Give me a quick, realistic cleaning checklist that prioritizes what they'll notice and use: the entrance, seating area, bathroom, and kitchen surfaces. Assume I'm cleaning on my own with basic supplies. Break the hour into short blocks, put the highest-impact jobs first, and leave a few minutes for getting myself ready. Tell me what I can skip and include a shorter fallback if I run behind. My goal is a welcoming, reasonably clean home, not a deep clean."
+    },
+    {
+      "id": "c1-everyday-16",
+      "prompt": "My houseplant's soil is still wet a week after watering. Help me figure out what to check before I change anything. I haven't specified the plant or its growing conditions, so ask for the few details that would most affect your advice. Give me an ordered checklist covering drainage, standing water, pot size, soil, light, temperature, and signs of root trouble. Explain how to check moisture below the surface and distinguish normal slow drying from a potential problem. Include sensible immediate steps without assuming wet soil alone means root rot."
+    },
+    {
+      "id": "c1-everyday-17",
+      "prompt": "I want a simple system for keeping track of bills without downloading another app. Assume I can use paper or a spreadsheet I already have; recommend one low-maintenance approach and briefly explain the alternative. Show me a copyable tracker with the essential fields, including bill name, amount, due date, payment method, and paid status. Include how to handle automatic payments, variable amounts, and less frequent bills. Give me a short weekly routine and an initial setup checklist. I want to see what's due and confirm what's paid without maintaining a complicated budget."
+    },
+    {
+      "id": "c1-everyday-18",
+      "prompt": "I'm too tired to attend dinner tonight. Help me cancel kindly without making up an excuse. Write a short, natural message I can send that honestly says I don't have the energy, acknowledges the late notice, and shows appreciation for the invitation. Since I haven't said who invited me, give me a casual version for a friend and a slightly more considerate version for someone hosting. Avoid overexplaining or sounding dramatic, and make any offer to reschedule optional so I don't promise something I can't follow through on."
+    },
+    {
+      "id": "c1-everyday-19",
+      "prompt": "I can't find my wallet. Give me a systematic search plan that helps me avoid checking the same places repeatedly. Start with reconstructing when I last definitely had it, then work through likely places at home, clothing, bags, transport, and places I've visited. Use short, ordered steps and explain how to mark an area as fully checked. Include a sensible checkpoint for contacting places or moving from searching to protecting my cards if it may be lost outside. Don't assume it's stolen or tell me to cancel everything immediately."
+    },
+    {
+      "id": "c1-everyday-20",
+      "prompt": "I'm arranging a small living room. What should I measure before buying a sofa? Give me a practical checklist covering the room, usable wall space, doors and their swing, windows, radiators, existing furniture, and walking routes. Include the delivery route through entrances, hallways, stairs, or lifts, plus the sofa dimensions I need from the seller. Explain how to mark its footprint on the floor and account for reclining or convertible features if relevant. Distinguish useful clearance guidelines from measurements I must verify. I want to check both room fit and delivery access before buying."
+    },
+    {
+      "id": "c1-everyday-21",
+      "prompt": "I'm watching my friend's dog for the weekend. Give me a concise checklist of what to ask them before they leave. Prioritize feeding, walks, toilet routines, medication instructions, behavior, escape risks, and how long the dog can be left alone. Include emergency contacts, their vet's details, what to do if I can't reach them, and any permissions or arrangements for urgent care. Ask about supplies, sleeping arrangements, house rules, and interactions with other animals or people. Keep it easy to send to my friend or work through together, without assuming where the dog will stay."
+    },
+    {
+      "id": "c1-everyday-22",
+      "prompt": "Help me split household chores fairly with my roommate when our work schedules are different. I want a practical arrangement we can discuss and try, without assuming fairness means an equal number of tasks. Explain how to account for time, effort, frequency, preferences, and shared expectations about cleanliness, including planning and buying supplies. Give me a simple chore table we can adapt and a respectful conversation starter. Include how to handle busy weeks, missed tasks, and swaps, with a brief review after a trial period. Ask for our schedules and main chores before suggesting specific assignments."
+    }
+  ]
+}

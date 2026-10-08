@@ -1,0 +1,36 @@
+{
+  "results": [
+    {
+      "id": "c1-devops-14",
+      "prompt": "I'd like to schedule nightly PostgreSQL backups and verify that I can restore them. Help me turn this into a reliable, repeatable process for my deployment. First establish my PostgreSQL version, hosting environment, database size, available storage, and acceptable data loss and recovery time; don't assume a particular backup method or scheduler.\n\nInclude a nightly schedule with an explicit time zone, retention policy, secure storage, failure notifications, and any configuration or scripts needed. Keep credentials out of scripts and logs. Restore a backup into an isolated environment without touching production, and verify the schema, representative data, and application connectivity. Deliver setup instructions and a restore runbook, and clearly distinguish completed checks from anything still untested."
+    },
+    {
+      "id": "c1-devops-15",
+      "prompt": "I need a short maintenance notice for a planned thirty-minute outage. Write a concise, customer-facing message that states when maintenance starts and ends, includes the time zone, explains which service will be unavailable, and sets expectations about access returning afterward. Use a calm, straightforward tone with a brief acknowledgment of the inconvenience. I haven't supplied the service name, date, start time, time zone, or status-page link, so use clearly labeled placeholders instead of inventing details. Deliver one ready-to-edit notice of about 60–90 words; don't promise uninterrupted data preservation or other outcomes I haven't confirmed."
+    },
+    {
+      "id": "c1-devops-16",
+      "prompt": "Help me set useful CPU, memory, and error-rate alerts without waking me for every tiny spike. I want actionable alerts that catch sustained problems and user impact while filtering normal bursts. First establish my monitoring setup, workload patterns, baseline metrics, and any service objectives.\n\nPropose initial thresholds, evaluation windows, minimum traffic requirements for error rates, and recovery conditions. Account for memory pressure and out-of-memory events as well as utilization. Separate urgent pages from lower-priority notifications, and explain how related alerts should be grouped. Deliver an alert table and configuration appropriate to my setup, clearly label assumptions, and describe how to validate and tune the rules against historical behavior before enabling overnight paging."
+    },
+    {
+      "id": "c1-devops-17",
+      "prompt": "I'm moving my app to a new server and need a migration sequence that minimizes downtime. Help me establish the current architecture, deployment process, database and persistent storage, background jobs, traffic routing, and acceptable downtime before choosing the cutover approach.\n\nGive me an ordered runbook covering preparation, configuration and secret transfer, data synchronization, testing on the new server, final cutover, and post-migration checks. Explain how to prevent lost writes, duplicate jobs, and incompatible application or schema versions. Include estimated downtime, clear go/no-go checks, and rollback steps that account for writes made after cutover. Keep the old server available until validation is complete. Flag decisions requiring my input and confirm before making changes to production traffic or real data."
+    },
+    {
+      "id": "c1-devops-18",
+      "prompt": "I want my Docker Compose services to recover after a host reboot and retain their persistent data. Review my Compose configuration and host setup to identify what needs to change. Check how Docker starts at boot, appropriate restart policies, service dependencies, health checks, and which application paths require persistent storage.\n\nExplain whether named volumes or bind mounts fit my existing setup, including ownership and permissions. Preserve existing data and avoid destructive recreation or volume removal. Deliver the necessary configuration changes and a verification procedure covering both container recreation and a host reboot. Success means the services return to a usable state automatically and previously stored data remains accessible. Ask before rebooting a shared or production host."
+    },
+    {
+      "id": "c1-devops-19",
+      "prompt": "Please help me investigate why my deployment pipeline takes twenty minutes when the build itself finishes in three. I want an evidence-based breakdown of the remaining seventeen minutes and changes that reduce total deployment time without weakening required checks.\n\nStart with pipeline configuration and timestamped logs from representative runs. Separate queue time, environment setup, dependency installation, tests, artifact transfer, deployment, health checks, retries, and explicit waits where applicable. Distinguish elapsed time from summed durations of parallel jobs. Identify the critical path, rank likely improvements by impact and effort, and verify the leading cause with the smallest useful experiment. Deliver findings with supporting timings, recommended changes, and a before-and-after measurement plan."
+    },
+    {
+      "id": "c1-security-01",
+      "prompt": "Help me pick a strong password I can actually remember. I want a practical way to create a unique, memorable passphrase for one account without relying on personal details, famous quotations, or predictable substitutions. Assume I haven't supplied the account's password requirements; ask about length limits and character restrictions if they affect the recommendation. Explain how to choose random words and remember the result without making it predictable. Treat any example you provide as illustrative, not a password I should use. Don't ask me to share an existing or final password. Briefly explain why I shouldn't reuse it across accounts."
+    },
+    {
+      "id": "c1-security-02",
+      "prompt": "I clicked a suspicious email link on my work laptop. What should I do next? Give me a short, prioritized response that starts with immediate actions and contacting my workplace IT or security team. Ask whether I entered credentials, approved a sign-in request, downloaded or opened a file, or noticed unusual behavior, but don't delay initial guidance while waiting for answers.\n\nTailor the next steps to what happened and my organization's incident procedures. Explain what details to preserve and report, how to handle potentially exposed credentials, and when to stop using or disconnect the laptop. Avoid assuming that clicking alone proves compromise, and don't suggest deleting evidence or making disruptive changes without workplace guidance."
+    }
+  ]
+}

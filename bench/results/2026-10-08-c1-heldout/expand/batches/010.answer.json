@@ -1,0 +1,36 @@
+{
+  "results": [
+    {
+      "id": "c1-documents-11",
+      "prompt": "My PDF has blank pages scattered throughout. Remove those pages and return a cleaned PDF with every remaining page in its original order. I mean pages with no meaningful content; check apparently blank pages for faint text, annotations, or images before removing them, and retain anything uncertain. Preserve the retained pages’ formatting, dimensions, and content. Save the result as a separate file so my original stays intact. Include the original page numbers removed and the before-and-after page counts."
+    },
+    {
+      "id": "c1-documents-12",
+      "prompt": "Please proofread my attached dissertation chapter for grammar and punctuation, preserving technical terminology and marking your changes. Keep my academic voice, meaning, citations, equations, and structure intact. Limit edits to proofreading rather than substantive rewriting. If a correction could alter a technical claim, flag it for my review instead of guessing. Return an edited copy with Track Changes if the file format supports it; otherwise, use clearly identified insertions and deletions. Briefly list any unresolved ambiguities or recurring issues."
+    },
+    {
+      "id": "c1-documents-13",
+      "prompt": "I want a plain-English summary of this lease, especially the fees, renewal terms, and responsibilities. Use only the lease’s contents and identify the relevant sections or pages so I can verify each point. Explain payment amounts, due dates, deposits, additional charges, renewal procedures, notice deadlines, and each party’s obligations wherever specified. Distinguish clear requirements from ambiguous wording, and flag missing details without inventing answers. Organize the summary for easy scanning, with a short list of important dates, costs, and points I may need to clarify."
+    },
+    {
+      "id": "c1-documents-14",
+      "prompt": "Put my rough instructions into a clear, practical checklist that I can follow from start to finish. Preserve every requirement, warning, deadline, and specific detail I included. Assume I want the original process clarified rather than redesigned: group related actions, put steps in a sensible order, and use short, action-oriented checkbox items. Separate prerequisites and optional steps where my instructions support that distinction. Flag unclear or contradictory instructions instead of inventing missing steps, and include any stated completion checks."
+    },
+    {
+      "id": "c1-documents-15",
+      "prompt": "I need an accessible Word version of this PDF, with proper headings, readable tables, and descriptions for informative images. Return a .docx that preserves the original content and logical reading order. Use built-in heading styles with a sensible hierarchy, real lists, and editable text. Recreate tables with clear header rows and a reading order that makes their relationships understandable. Add concise alternative text for informative images and mark purely decorative images appropriately. Prioritize accessibility over matching the PDF’s layout exactly. Check the finished document’s accessibility and flag illegible content or unresolved issues."
+    },
+    {
+      "id": "c1-documents-16",
+      "prompt": "Can you combine my five onboarding documents into one coherent handbook and remove repeated information? Assume the handbook is for new starters and organize it in the order they will need the information, with clear sections and a table of contents. Consolidate overlapping material while preserving all unique instructions, policies, contacts, links, and important details. If the documents conflict, flag the discrepancy rather than silently choosing a version. Return the complete handbook in an editable format, plus a brief consolidation note identifying the source documents and any unresolved questions."
+    },
+    {
+      "id": "c1-documents-17",
+      "prompt": "I’m applying for a research grant. Draft a budget justification using the expenses and project description I’ve provided. Explain how each expense supports the research activities and why its amount, quantity, and timing are necessary and reasonable, using the supplied information. Follow any funder requirements or budget categories included in my materials; otherwise, organize the draft by expense category in a formal grant-writing style. Keep figures consistent with the supplied budget, show supported calculations where useful, and flag discrepancies or missing information. Return a complete draft without inventing costs, eligibility rules, or project details."
+    },
+    {
+      "id": "c1-documents-18",
+      "prompt": "Fix the weird spacing in my resume so it looks consistent and professional. Check spacing between headings, paragraphs, bullet points, dates, and sections, along with indentation and alignment. Assume I want the existing design and content preserved: keep my wording, section order, fonts, and intended page count unless a spacing correction requires a small adjustment. Return a corrected copy in the original editable format if available, leaving my original intact. Check for awkward page breaks, isolated headings, and text overflow, and briefly describe the formatting changes."
+    }
+  ]
+}

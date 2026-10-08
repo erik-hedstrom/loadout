@@ -1,0 +1,36 @@
+{
+  "results": [
+    {
+      "id": "c1-debug-13",
+      "prompt": "I want to fix a mobile menu that opens correctly but won’t close when I tap outside it or press Escape. Check the menu implementation, its event handlers, and any relevant tests to identify the root cause before changing anything. Follow the project’s existing patterns and make the smallest reliable fix. Both outside taps and Escape should close the menu, while interactions inside it should still work normally. Check for event propagation issues, listener cleanup, and focus handling where relevant. Verify opening and both closing behaviors, and explain what changed and how you tested it. If the code isn’t available, ask for the relevant files."
+    },
+    {
+      "id": "c1-debug-14",
+      "prompt": "My GitHub Actions build started failing after a dependency update. I want you to identify the breaking change and suggest the smallest reliable fix. Compare the failing build output with the dependency changes, lockfile, workflow configuration, and last successful build where available. Check whether the problem comes from the updated dependency, a transitive dependency, or a compatibility requirement, and distinguish confirmed findings from hypotheses. Recommend a focused fix, explain why it addresses the failure, and describe how to validate it. Avoid unrelated upgrades or refactoring. If you’re missing evidence, ask for the specific logs or diff you need."
+    },
+    {
+      "id": "c1-everyday-01",
+      "prompt": "I’ve got eggs, rice, and frozen peas. What can I make for dinner using those ingredients? Suggest one simple meal with approximate quantities for one person and clear, short cooking steps. Assume I have basic salt, pepper, and cooking oil, but label any other additions as optional. Cover both cooked rice and uncooked rice so I can follow the instructions either way. Include the approximate cooking time and keep the recipe practical, with minimal equipment and washing up."
+    },
+    {
+      "id": "c1-everyday-02",
+      "prompt": "Help me decode this laundry label: wash at 30°C, no tumble drying, cool iron. Explain each instruction in plain language and turn it into a short, practical sequence for washing, drying, and ironing the item. Tell me what temperature settings to look for and what to avoid. Don’t assume a particular fabric or add care instructions that aren’t supported by the label. If drying position or another detail depends on missing symbols, make that uncertainty clear."
+    },
+    {
+      "id": "c1-everyday-03",
+      "prompt": "I’m spending two nights at a friend’s place. Make me a small packing list that covers the essentials without overpacking. Assume it’s a casual visit with no special activities planned, and that I’ll wear one outfit when I travel. Include clothes, sleepwear, toiletries, my phone charger, and any personal medication I normally need. Group the list so it’s easy to check off, and keep weather-dependent or optional items separate. Aim for everything to fit in one small bag."
+    },
+    {
+      "id": "c1-everyday-04",
+      "prompt": "I need a polite text asking my upstairs neighbor to keep the music down after 10. Assume I mean 10 p.m. Write one short, natural message I can send as-is. Keep it friendly and clear about the time and the request, without sounding accusatory, overly apologetic, or formal. Don’t invent a history of noise problems or personal reasons I haven’t given. I want to preserve a good relationship while making the request easy to understand."
+    },
+    {
+      "id": "c1-everyday-05",
+      "prompt": "I’ve got $80 for groceries this week for one person. Help me plan simple meals for seven days, covering breakfast, lunch, and dinner. Assume I have no dietary restrictions and only basic oil, salt, and pepper at home; state those assumptions. Reuse ingredients and leftovers to keep cooking manageable and reduce waste. Give me a compact meal plan and a shopping list with quantities, approximate prices, and a total within $80, leaving a little room for price differences. Treat prices as estimates because I haven’t specified my location, and include easy substitutions if something costs more."
+    },
+    {
+      "id": "c1-everyday-06",
+      "prompt": "My kitchen’s a mess and I’ve got 15 minutes. Where do I start? Give me a realistic, timed cleanup plan that tells me exactly what to do first and what to tackle next. Assume I have ordinary cleaning supplies. Prioritize obvious rubbish, food that needs putting away, dishes, and usable counter space. Keep each step short and avoid deep cleaning or reorganizing cupboards. Allocate the full 15 minutes and tell me what I can leave for later so I finish with a noticeably more usable kitchen."
+    }
+  ]
+}

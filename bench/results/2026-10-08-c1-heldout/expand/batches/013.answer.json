@@ -1,0 +1,36 @@
+{
+  "results": [
+    {
+      "id": "c1-business-06",
+      "prompt": "I want to understand who might buy a subscription service that delivers replacement air filters to homeowners. Assume I mean home HVAC filters, and flag anything that would change if I mean another type. Identify promising customer segments, their needs, purchase triggers, likely objections, and alternatives they currently use. Distinguish the homeowner who pays from anyone who influences the purchase. Compare segments by convenience needs, repeat-purchase potential, and ease of reaching them. Recommend two or three segments to investigate first and inexpensive ways to validate interest. Treat willingness to subscribe as a hypothesis, and explain what evidence would support it."
+    },
+    {
+      "id": "c1-business-07",
+      "prompt": "I've got too many meetings. Help me decide which ones my team can drop while preserving decisions, coordination, and accountability. Start by asking for a meeting inventory with each meeting's purpose, frequency, duration, attendees, and typical outcomes. Give me a practical rubric for deciding whether to keep, shorten, combine, reduce the frequency of, replace with an asynchronous update, or cancel each meeting. Account for recurring meetings whose value may be unclear but whose dependencies matter. Suggest a reversible trial and simple measures of time saved and work quality. The deliverable should help me make specific decisions and explain them to my team."
+    },
+    {
+      "id": "c1-business-08",
+      "prompt": "I need an agenda for a two-hour strategy workshop with six department heads, ending with agreed priorities and owners. Assume I will facilitate and that we have an existing business direction to work from; flag any essential context I should confirm. Create a timed agenda totaling exactly 120 minutes, including a short break, with the purpose, activity, and output of each segment. Include lightweight prework, a way to give all six people a voice, and a method for narrowing competing ideas into a manageable set of priorities. Explain how to resolve disagreement and what to do if consensus stalls. End with a written record of each priority, its accountable owner, first action, success measure, and review date."
+    },
+    {
+      "id": "c1-business-09",
+      "prompt": "I sell handmade furniture online. Help me identify customer segments worth considering and ways to test their demand cheaply. Ask for the product styles, price range, customization options, shipping area, production capacity, and existing customer patterns that would materially affect your advice. Until then, make assumptions explicit. Compare plausible segments by buying occasion, preferences, objections, reachability, and fit with handmade production. Recommend a small set of inexpensive demand experiments, each with a hypothesis, spending limit, measurable signal, and next-step decision. Distinguish casual interest from purchase intent, and account for shipping costs and lead times when assessing demand."
+    },
+    {
+      "id": "c1-business-10",
+      "prompt": "Help me explain revenue versus profit to my new business partner in plain language. Assume they are new to business finance. Give me a short explanation I can say aloud, followed by one simple numerical example showing sales revenue, direct costs, operating expenses, and the profit left over. Briefly distinguish gross profit from net profit, keeping the example's assumptions clear. Explain why a business can have strong revenue but little or no profit, and why profit is different from cash in the bank. Keep the tone respectful and conversational, with no unnecessary accounting jargon."
+    },
+    {
+      "id": "c1-business-11",
+      "prompt": "I'm considering opening a second café. Give me a practical decision checklist covering demand, staffing, cash flow, and operational readiness. Assume my first café is operating, but don't assume it is profitable or ready to replicate. For each area, list the questions to answer, evidence to gather, and warning signs that would justify delaying expansion. Include local demand and competition, effects on the first café, management coverage, recruitment and training, setup costs, working capital, break-even assumptions, and consistency of service. Finish with a go, delay, or no-go decision framework. Avoid invented financial thresholds; explain how to set them from my actual figures."
+    },
+    {
+      "id": "c1-business-12",
+      "prompt": "I need to choose between two suppliers: one is cheaper, while the other delivers faster and has fewer defects. Help me compare their total business impact rather than purchase price alone. Ask for the figures needed to make the decision, including prices, order volumes, lead times and reliability, defect rates, replacement terms, and the costs of delays or defects. Provide a simple comparison template covering inventory, rework, returns, and customer commitments. If figures are missing, label assumptions and show how different scenarios change the choice. End with a decision rule and the conditions under which each supplier would be preferable."
+    },
+    {
+      "id": "c1-business-13",
+      "prompt": "I want a simple SWOT analysis for my neighborhood dog-walking business. Organize it into strengths, weaknesses, opportunities, and threats, with a few clear points in each category. Since I haven't provided business details, label plausible examples as assumptions rather than facts and ask only the questions that would most improve the analysis. Consider local customer needs, competition, trust, scheduling, capacity, pricing, and neighborhood reach. Keep internal strengths and weaknesses distinct from external opportunities and threats. Finish with three practical actions the analysis suggests, prioritizing affordable steps I could take as a small local business."
+    }
+  ]
+}

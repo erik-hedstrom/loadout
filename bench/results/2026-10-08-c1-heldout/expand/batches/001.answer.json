@@ -1,0 +1,36 @@
+{
+  "results": [
+    {
+      "id": "c1-web-01",
+      "prompt": "Help me fix my mobile navbar. I’m assuming this is an existing site, so first check the current implementation and identify what breaks at narrow screen widths. If the problem isn’t clear from the code or behavior, ask me for the symptom before changing it.\n\nKeep the site’s visual style and desktop navigation intact. Check menu opening and closing, link visibility, overflow, touch targets, keyboard access, and focus behavior. Make the smallest coherent fix, including accessible labels and states where needed. Verify the affected mobile sizes and desktop behavior, then explain the cause, what changed, and anything you couldn’t verify."
+    },
+    {
+      "id": "c1-web-02",
+      "prompt": "I want a simple portfolio site for my photography, with large images and a contact page. Assume the photographs should be the main focus, with restrained typography, minimal navigation, and generous spacing.\n\nIf there’s an existing project, follow its conventions. Build a responsive gallery and a clearly linked contact page that works well on phones and desktops. Keep large images sharp while avoiding unnecessarily slow loading, and include appropriate alternative text. Ask me for photos, my name, and contact details if they aren’t available; clearly identify any temporary content. Deliver a working site, explain how I can update the photos, and verify navigation and responsive layouts."
+    },
+    {
+      "id": "c1-web-03",
+      "prompt": "My checkout loses the shipping address when I go back a step. Find the cause and fix it. I expect an address I’ve entered to remain populated when I move backward and forward through checkout, unless I explicitly change or clear it.\n\nReproduce the issue and trace how address state moves between steps, including any form resets, navigation behavior, or saved checkout data. Fix the underlying cause using the existing application patterns, without changing unrelated checkout behavior or adding unnecessary persistence of personal information. Add a regression test for entering an address, going back, and returning. Report the cause, the fix, and the verification results."
+    },
+    {
+      "id": "c1-web-04",
+      "prompt": "Can you rewrite my homepage headline so it sounds less corporate? I want it to feel natural, clear, and approachable while preserving what my business actually offers and why visitors should care.\n\nUse the current headline and surrounding homepage copy if available; otherwise, ask me to provide the headline and a brief description of the audience and offer. Assume I want plain language rather than jargon, slogans, or exaggerated claims. Give me five distinct alternatives, including one close to the original and one more conversational. Recommend the strongest option with a brief explanation. Return suggested copy for review rather than changing the page."
+    },
+    {
+      "id": "c1-web-05",
+      "prompt": "I need an accessible booking form with date selection, clear validation, and keyboard navigation. If this is an existing project, follow its form patterns and visual style. Confirm the required booking fields and date restrictions from the project or ask me where they’re unspecified; don’t invent availability rules.\n\nProvide explicit labels, understandable instructions, and validation messages associated with the relevant fields. Ensure every interaction works by keyboard, focus remains visible, and any date picker is usable without a mouse. Preserve entered values after validation errors and make submission feedback accessible. Deliver the working form and verify keyboard operation, date selection, error handling, and responsive behavior. State any missing booking integration."
+    },
+    {
+      "id": "c1-web-06",
+      "prompt": "My website feels slow on older phones. Identify the biggest bottlenecks and make practical improvements. I’m assuming I want targeted changes to the existing site rather than a rebuild.\n\nCheck representative pages under constrained processing power and network conditions. Look at loading, rendering, scrolling, and interaction delays, then prioritize the problems with the largest user impact. Make improvements supported by what you observe, preserving the site’s essential appearance and functionality. Compare before-and-after performance under the same conditions and check for regressions. Explain the main causes, changes made, and measured results. Clearly distinguish simulated conditions from actual device testing, and flag anything that remains unverified."
+    },
+    {
+      "id": "c1-web-07",
+      "prompt": "I’d like my bakery’s website to show today’s menu, opening hours, and directions without making visitors hunt around. Assume these are the main reasons people visit, especially on their phones.\n\nIf there’s an existing site, improve its homepage within the current visual style. Make today’s menu, today’s hours, and the bakery’s address easy to find, with a clear directions link. Use available business information and ask me for missing details; don’t invent menu items, hours, or an address. Make daily menu updates straightforward and handle unavailable information clearly. Verify mobile readability, accessible navigation, and the directions link, then explain how I can keep the information current."
+    },
+    {
+      "id": "c1-web-08",
+      "prompt": "Help me understand cookies versus local storage. Assume I know basic web concepts but haven’t worked much with browser storage.\n\nExplain what each stores, how long data lasts, how JavaScript accesses it, and whether it’s automatically sent to a server. Use a small comparison table and concrete examples, such as remembering a theme preference and keeping someone signed in. Explain the security implications in plain language, including cookie settings and why local storage is risky for sensitive credentials. Briefly distinguish session storage if it helps. Finish with practical guidance for choosing between them, and avoid presenting either option as universally safer or better."
+    }
+  ]
+}

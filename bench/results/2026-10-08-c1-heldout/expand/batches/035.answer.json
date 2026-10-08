@@ -1,0 +1,36 @@
+{
+  "results": [
+    {
+      "id": "c1-productivity-02",
+      "prompt": "I have a proposal due Friday, overdue invoices, and six unread client emails. Help me decide what to tackle first today and turn that decision into a realistic action plan. Consider deadlines, financial impact, client relationships, and whether the emails could contain something that changes my priorities. Don't assume whether the invoices are bills I owe or payments clients owe me; explain how that affects the order. Give me a provisional ranked list, a concrete first action, and suggested time limits. Flag any missing information that could materially change your recommendation."
+    },
+    {
+      "id": "c1-productivity-03",
+      "prompt": "I keep forgetting monthly admin tasks. Make me a simple recurring checklist covering bills, expense reports, backups, and appointment booking. Organize it around one monthly admin session, with separate reminders for anything that has an earlier deadline. For each item, include what to check, the next action, and a clear definition of done. Assume I want a lightweight routine I can copy into a calendar or task list. Leave placeholders for my actual due dates, and don't assume that a monthly backup is sufficient for all my data."
+    },
+    {
+      "id": "c1-productivity-04",
+      "prompt": "My meetings run from 10 a.m. to 3 p.m. tomorrow. Help me fit in two hours of writing, lunch, and a school pickup at 4:30 p.m. Treat the meetings and pickup as fixed commitments, and show me a schedule with explicit start and end times. If you need to assume a start time or travel time, state that assumption clearly. Protect focused writing time and allow a realistic buffer before pickup. If lunch cannot fit without a meeting break, flag the conflict and tell me what adjustment I need to make."
+    },
+    {
+      "id": "c1-productivity-05",
+      "prompt": "I need a simple Friday review routine that takes no more than 15 minutes. Create a repeatable, timeboxed checklist that helps me notice what I finished, catch loose ends, and choose my priorities for next week. Include a quick check of upcoming deadlines and commitments without turning this into a full planning session. Give each step a time allowance, keep the total within 15 minutes, and provide a short template I can reuse. Assume I want something practical enough to follow even when I'm tired or busy."
+    },
+    {
+      "id": "c1-productivity-06",
+      "prompt": "I'm drowning in little tasks. Help me set clear rules for deciding what to do now, batch, delegate, or drop. I want a lightweight decision process I can apply quickly to a messy task list. Consider urgency, consequences, effort, dependencies, and whether someone else can reasonably handle the task. Don't assume I have staff or that every short task deserves immediate attention. Give me concrete thresholds, a few examples, and a short checklist for sorting my backlog. Include a rule that prevents small tasks from consuming time reserved for important work."
+    },
+    {
+      "id": "c1-productivity-07",
+      "prompt": "Please draft a daily schedule for me as a freelancer working 9–5, with mornings reserved for client work and afternoons for sales and administration. Assume a typical weekday and include lunch, short breaks, and a little buffer for unexpected requests. Give me a timetable with clear start and end times and a purpose for each block. Keep morning client work protected, and make the afternoon split between sales and administration explicit. Include a simple rule for adjusting the schedule when client deadlines or meetings disrupt the day."
+    },
+    {
+      "id": "c1-productivity-08",
+      "prompt": "I want to stop checking email constantly. Suggest three daily email windows and a practical way to handle genuinely urgent messages between them. Assume a standard workday unless I give you different hours, and state that assumption. Specify the timing and duration of each window, what I should do during it, and when to stop. Define what counts as genuinely urgent, suggest an agreed alternative contact route, and give me a short message I can share with clients or colleagues. Make the routine realistic without requiring constant inbox monitoring."
+    },
+    {
+      "id": "c1-productivity-09",
+      "prompt": "My partner and I alternate grocery shopping and cleaning each week. Create a four-week rotation starting with me doing groceries in week one. Assume we each take one responsibility per week, so my partner handles cleaning in week one and we swap roles the following week. Show the rotation in a simple table labeled Week 1 through Week 4; I haven't supplied a calendar start date. Add a brief rule for repeating the pattern after week four and handling a temporary swap while keeping the workload balanced."
+    }
+  ]
+}
