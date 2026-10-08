@@ -170,7 +170,7 @@ cross-vendor agents). Erik publishes.
 
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
-| C1 | P0 | New held-out request set + re-measure v4 | Codex (seeds) + Claude (expand, judge) | cloud | todo (after E7) |
+| C1 | P0 | New held-out request set + re-measure v4 | Codex (seeds) + Claude (expand, judge) | cloud | in progress (seed generator; no PR yet) |
 | C2 | P1 | Outcome eval on the small tier with fixed fixtures | Claude (design) | cloud (fixtures) + local (runs) | todo |
 | C3 | P1 | Does Jev pick a sensible model tier? | Claude | cloud | todo (after E7) |
 | C4 | P1 | Demote generic "fits everything" skills | Codex | cloud | todo (after C1) |

@@ -22,6 +22,7 @@ afterAll(() => temps.forEach((dir) => rmSync(dir, { recursive: true, force: true
 
 const schema = z.strictObject({ results: z.array(z.strictObject({ id: z.string(), prompt: z.string() })) });
 const runJudge = (dir: string, extra: string[] = []) => spawnSync(process.execPath, ['--import', 'tsx', 'bench/judge.ts', dir, '--backend', 'files', ...extra], { cwd: join(import.meta.dirname, '..'), env: { ...process.env, LOADOUT_HOME: dir }, encoding: 'utf8', timeout: 15_000 });
+const runSeeds = (dir: string, extra: string[] = []) => spawnSync(process.execPath, ['--import', 'tsx', 'bench/seeds.ts', '--prefix', 'c1', '--out', join(dir, 'seeds-c1.jsonl'), '--backend', 'files', ...extra], { cwd: join(import.meta.dirname, '..'), encoding: 'utf8', timeout: 15_000 });
 
 function disputedFixture() {
   const dir = temp();
@@ -32,6 +33,72 @@ function disputedFixture() {
 }
 
 describe('benchmark backends', () => {
+  it('generates 300 seeds through pending files and resumes with IDs and provenance', () => {
+    const dir = temp(), out = join(dir, 'seeds-c1.jsonl');
+    const pending = runSeeds(dir, ['--effort', 'high']);
+    expect(pending.status, pending.stderr).toBe(0);
+    expect(pending.stdout).toContain('pending batch 017');
+    expect(pending.stdout).not.toContain('done,');
+    expect(existsSync(out)).toBe(false);
+    const categories = [
+      ['web', 24], ['backend', 19], ['integrations', 19], ['documents', 29], ['business', 29],
+      ['data', 19], ['ml', 14], ['science', 10], ['devops', 19], ['security', 14], ['debug', 14],
+      ['everyday', 33], ['media', 14], ['writing', 14], ['productivity', 10], ['apps', 10], ['questions', 9],
+    ] as const;
+    const prompts = readdirSync(join(dir, 'batches')).filter((f) => f.endsWith('.prompt.md')).sort();
+    expect(prompts).toHaveLength(17);
+    prompts.forEach((file, i) => {
+      const [category, count] = categories[i]!;
+      const prompt = readFileSync(join(dir, 'batches', file), 'utf8');
+      expect(prompt).toContain(`Category: ${category}`);
+      expect(prompt).toContain(`exactly ${count} distinct requests`);
+      writeFileSync(join(dir, 'batches', file.replace('.prompt.md', '.answer.json')), JSON.stringify({ requests: Array.from({ length: count }, (_, n) => ` I have a ${category} request number ${n + 1} `) }));
+    });
+    const completed = runSeeds(dir, ['--effort', 'high']);
+    expect(completed.status, completed.stderr).toBe(0);
+    expect(completed.stdout).toContain('done,');
+    const content = readFileSync(out, 'utf8');
+    const rows = content.trim().split('\n').map((line) => JSON.parse(line));
+    expect(rows).toHaveLength(300);
+    for (const [category, count] of categories) {
+      const batch = rows.filter((row) => row.category === category);
+      expect(batch).toHaveLength(count);
+      expect(batch.map((row) => row.id)).toEqual(Array.from({ length: count }, (_, n) => `c1-${category}-${String(n + 1).padStart(2, '0')}`));
+    }
+    expect(rows[0]).toEqual({ id: 'c1-web-01', category: 'web', request: 'I have a web request number 1', generatedBy: { backend: 'files', model: 'gpt-6.1-sol', effort: 'high', producer: 'unverified' } });
+    expect(rows.every((row) => JSON.stringify(row.generatedBy) === JSON.stringify(rows[0].generatedBy))).toBe(true);
+    const resumed = runSeeds(dir, ['--effort', 'high']);
+    expect(resumed.status, resumed.stderr).toBe(0);
+    expect(resumed.stdout).not.toContain('pending batch');
+    expect(readFileSync(out, 'utf8')).toBe(content);
+    for (const extra of [[], ['--effort', 'high', '--model', 'other']]) {
+      const refused = runSeeds(dir, extra);
+      expect(refused.status).not.toBe(0);
+      expect(refused.stderr).toContain('provenance differs');
+      expect(readFileSync(out, 'utf8')).toBe(content);
+    }
+  }, 15_000);
+
+  it.each(['wrong count', 'duplicate', 'empty', 'malformed', 'cross-category duplicate'])('refuses a seed category with $0 without appending it', (problem) => {
+    const dir = temp(), out = join(dir, 'seeds-c1.jsonl');
+    expect(runSeeds(dir).status).toBe(0);
+    const web = Array.from({ length: 24 }, (_, n) => `I have a private fixture request ${n + 1}`);
+    const requests = problem === 'cross-category duplicate' ? Array.from({ length: 19 }, (_, n) => n === 0 ? ` ${web[0]!.toUpperCase()} ` : `I have a backend fixture request ${n + 1}`) : [...web];
+    if (problem === 'wrong count') requests.pop();
+    if (problem === 'duplicate') requests[1] = ` ${requests[0]!.toUpperCase()} `;
+    if (problem === 'empty') requests[1] = '  ';
+    const crossCategory = problem === 'cross-category duplicate';
+    if (crossCategory) writeFileSync(join(dir, 'batches', '001.answer.json'), JSON.stringify({ requests: web }));
+    writeFileSync(join(dir, 'batches', crossCategory ? '002.answer.json' : '001.answer.json'), problem === 'malformed' ? '{private-model-text' : JSON.stringify({ requests }));
+    const rejected = runSeeds(dir);
+    expect(rejected.status).not.toBe(0);
+    expect(rejected.stderr).toContain(`invalid seeds for category ${crossCategory ? 'backend' : 'web'}`);
+    expect(rejected.stdout + rejected.stderr).not.toContain('private fixture request');
+    expect(rejected.stdout + rejected.stderr).not.toContain('private-model-text');
+    if (crossCategory) expect(readFileSync(out, 'utf8').trim().split('\n')).toHaveLength(24);
+    else expect(existsSync(out)).toBe(false);
+  });
+
   it.each([
     'shell_tool stable false\nunified_exec stable true\nview_image stable false\n',
     'shell_tool stable true\nunified_exec stable false\n',
@@ -355,18 +422,18 @@ describe('benchmark backends', () => {
     const dir = temp();
     const seeds = join(dir, 'seeds.jsonl');
     const out = join(dir, 'requests.jsonl');
-    writeFileSync(seeds, JSON.stringify({ category: 'fixture', request: 'Do a thing', generatedBy: { model: 'gpt-6.1-sol', family: 'openai' } }) + '\n');
+    writeFileSync(seeds, JSON.stringify({ id: 'c1-fixture-01', category: 'fixture', request: 'Do a thing', generatedBy: { model: 'gpt-6.1-sol', family: 'openai' } }) + '\n');
     const run = () => spawnSync(process.execPath, ['--import', 'tsx', 'bench/expand.ts', seeds, '--backend', 'files', '--model', 'opus', '--out', out], { cwd: join(import.meta.dirname, '..'), encoding: 'utf8', timeout: 15_000 });
     const pending = run();
     expect(pending.status, pending.stderr).toBe(0);
     expect(pending.stdout).toContain('pending batch 001');
     expect(pending.stdout).not.toContain('done,');
-    writeFileSync(join(dir, 'batches', '001.answer.json'), JSON.stringify({ results: [{ id: 'fixture-01', prompt: 'Expanded request' }] }));
+    writeFileSync(join(dir, 'batches', '001.answer.json'), JSON.stringify({ results: [{ id: 'c1-fixture-01', prompt: 'Expanded request' }] }));
     expect(run().status).toBe(0);
     expect(run().status).toBe(0);
     const results = readFileSync(out, 'utf8').trim().split('\n').map((line) => JSON.parse(line));
     expect(results).toHaveLength(1);
-    expect(results[0]).toMatchObject({ request: 'Expanded request', generatedBy: { model: 'gpt-6.1-sol', family: 'openai' } });
+    expect(results[0]).toMatchObject({ id: 'c1-fixture-01', request: 'Expanded request', generatedBy: { model: 'gpt-6.1-sol', family: 'openai' } });
     expect(results[0].expandedBy).toEqual({ backend: 'files', model: 'opus', effort: null, producer: 'unverified' });
   });
 });
