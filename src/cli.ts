@@ -11,7 +11,6 @@ import { route } from './route.js';
 import { cachedEmbeddings, libraryEmbeddings } from './embed.js';
 import { HOOK_FAILURE_NOTE, hookOutput, isFollowUp, promptContext, type HookInput } from './hook.js';
 import { reportJson, type Capability, type RouteDecision } from './types.js';
-import { launchMcp } from './relay.js';
 
 const USAGE = `loadout — pick the model, skills and MCP servers for each agent session
 
@@ -171,6 +170,8 @@ async function main(): Promise<number> {
     return 0;
   }
   if (command === 'mcp-launch') {
+    // Loaded on demand, like mcp.js: the MCP SDK added about 90 ms to every hook run.
+    const { launchMcp } = await import('./relay.js');
     await launchMcp(rest[0] ?? '', paths.library());
     return 0;
   }
