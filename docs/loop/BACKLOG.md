@@ -277,7 +277,7 @@ Acceptance: a third row in that RESULTS table, with raw results. The README's
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
 | D10 | P0 | In-host first: loadout as a Claude Code plugin (hook), CLI then desktop app | Codex | cloud + local + erik | review (plugin, CLI check, latency); desktop app check pending (Erik) |
-| D11 | P1 | Cut the hook's per-prompt start cost | Codex | cloud + local | todo |
+| D11 | P1 | Cut the hook's per-prompt start cost | Codex | cloud + local | in progress (first cut: follow-ups skip startup; no PR yet) |
 | D1 | P0 | Validate on the new native Linux machine | Claude | local | todo (machine pending) |
 | D7 | P1 | `loadout doctor` | Codex | cloud | todo |
 | D2 | P1 | Live Codex hook test | Claude | local + erik | todo |
@@ -357,6 +357,23 @@ Acceptance:
   load, Jev), so the breakdown is measured rather than inferred.
 - Cut what dominates. `bench/hook-latency.ts` with real Jev then shows a
   lower p50 for the new process, with raw results and a RESULTS entry.
+
+Learnings (first cut, 2026-10-08):
+- The orchestrator measured warm startup before Jev in WSL with the real
+  1,262-skill library: about 0.6 s, including `scanLibrary` about 250 ms,
+  `cachedEmbeddings` about 130 ms, the first query embedding about 180 ms,
+  and the remaining work under 100 ms. Raw steps:
+  [phases.mjs](../../bench/results/2026-10-08-hook-phases/phases.mjs) and
+  [phases.jsonl](../../bench/results/2026-10-08-hook-phases/phases.jsonl).
+- Follow-ups added nothing but took a median 536 ms (n = 11;
+  [followup-before.txt](../../bench/results/2026-10-08-hook-phases/followup-before.txt)):
+  `runHook` prepared dependencies before `promptContext` rejected them.
+  It now rejects empty or follow-up prompts before loading config, scanning
+  the library or loading embeddings; direct callers retain the same guard.
+- CLI regression: malformed library MCP JSON is bypassed for `yes`, while a
+  routed prompt still emits the fixed failure note. On main 7d90442 the
+  follow-up test fails; the routed-prompt control passes. No paid calls in
+  this cut. Post-fix latency measurement and the RESULTS entry remain open.
 
 **D1. Native Linux validation.**
 
