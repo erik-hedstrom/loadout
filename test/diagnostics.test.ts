@@ -41,6 +41,17 @@ async function host(deps: Partial<SearchDeps>) {
 }
 const failure = (message: string) => ({ isError: true, content: [{ text: message }] });
 
+/** Routes the gateway's next connection to an in-memory upstream server. Call it after host(). */
+async function upstream(setup: (server: Server) => void) {
+  const server = new Server({ name: 'fake', version: '0' }, { capabilities: { tools: {} } });
+  closes.push(() => server.close());
+  setup(server);
+  const [front, back] = InMemoryTransport.createLinkedPair();
+  await server.connect(front);
+  const connect = Client.prototype.connect;
+  vi.spyOn(Client.prototype, 'connect').mockImplementationOnce(function (this: Client, _transport, options) { return connect.call(this, back, options); });
+}
+
 describe('E11 diagnostics', () => {
   it.each(['config.json', 'mcp.json'])('mcp startup hides malformed %s input', (file) => {
     const home = temp();
@@ -135,18 +146,14 @@ describe('E11 diagnostics', () => {
 
   it.each(['connect', 'listTools', 'callTool', 'missing tool'] as const)('gateway %s failure keeps no upstream text', async (stage) => {
     const call = await host({ library: [capability({ command: 'unused' })] });
-    const upstream = new Server({ name: 'fake', version: '0' }, { capabilities: { tools: {} } });
-    closes.push(() => upstream.close());
-    if (stage === 'connect') upstream.setRequestHandler(InitializeRequestSchema, async () => { throw new McpError(-32603, CANARY); });
-    upstream.setRequestHandler(ListToolsRequestSchema, async () => {
-      if (stage === 'listTools') throw new McpError(-32603, CANARY);
-      return { tools: [{ name: CANARY, inputSchema: { type: 'object' } }] };
+    await upstream((server) => {
+      if (stage === 'connect') server.setRequestHandler(InitializeRequestSchema, async () => { throw new McpError(-32603, CANARY); });
+      server.setRequestHandler(ListToolsRequestSchema, async () => {
+        if (stage === 'listTools') throw new McpError(-32603, CANARY);
+        return { tools: [{ name: CANARY, inputSchema: { type: 'object' } }] };
+      });
+      server.setRequestHandler(CallToolRequestSchema, async () => { throw new McpError(-32603, CANARY); });
     });
-    upstream.setRequestHandler(CallToolRequestSchema, async () => { throw new McpError(-32603, CANARY); });
-    const [front, back] = InMemoryTransport.createLinkedPair();
-    await upstream.connect(front);
-    const connect = Client.prototype.connect;
-    vi.spyOn(Client.prototype, 'connect').mockImplementationOnce(function (this: Client, _transport, options) { return connect.call(this, back, options); });
     const result = await call(stage === 'callTool' ? 'call_server_tool' : 'server_tools', { server: 'fixture', tool: 'requested' });
     expect(JSON.stringify(result)).not.toContain(CANARY);
     expect(result).toMatchObject(failure(stage === 'missing tool' ? 'no such tool; list them with server_tools' : 'gateway fixture: upstream MCP error (-32603)'));
@@ -157,17 +164,13 @@ describe('E11 diagnostics', () => {
     ['$ref', { type: 'object', $ref: `https://user:${CANARY}@example.invalid/missing` }],
   ] as const)('server_tools ignores upstream output schema %s without stderr', async (_, outputSchema) => {
     const call = await host({ library: [capability({ command: 'unused' })] });
-    const upstream = new Server({ name: 'fake', version: '0' }, { capabilities: { tools: {} } });
-    closes.push(() => upstream.close());
-    upstream.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: [{ name: 'fixture', inputSchema: { type: 'object' }, outputSchema }] }));
-    upstream.setRequestHandler(CallToolRequestSchema, async ({ params }) => ({
-      content: [{ type: 'text', text: 'upstream result' }],
-      ...(params.arguments?.omitStructured ? {} : { structuredContent: { value: 123 } }),
-    }));
-    const [front, back] = InMemoryTransport.createLinkedPair();
-    await upstream.connect(front);
-    const connect = Client.prototype.connect;
-    vi.spyOn(Client.prototype, 'connect').mockImplementationOnce(function (this: Client, _transport, options) { return connect.call(this, back, options); });
+    await upstream((server) => {
+      server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: [{ name: 'fixture', inputSchema: { type: 'object' }, outputSchema }] }));
+      server.setRequestHandler(CallToolRequestSchema, async ({ params }) => ({
+        content: [{ type: 'text', text: 'upstream result' }],
+        ...(params.arguments?.omitStructured ? {} : { structuredContent: { value: 123 } }),
+      }));
+    });
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
@@ -181,14 +184,14 @@ describe('E11 diagnostics', () => {
 
   it('server_tools missing tool never echoes its requested name', async () => {
     const call = await host({ library: [capability({ command: 'unused' })] });
-    const upstream = new Server({ name: 'fake', version: '0' }, { capabilities: { tools: {} } });
-    closes.push(() => upstream.close());
-    upstream.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: [{ name: 'fixture', inputSchema: { type: 'object' } }] }));
-    const [front, back] = InMemoryTransport.createLinkedPair();
-    await upstream.connect(front);
-    const connect = Client.prototype.connect;
-    vi.spyOn(Client.prototype, 'connect').mockImplementationOnce(function (this: Client, _transport, options) { return connect.call(this, back, options); });
+    await upstream((server) => server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: [{ name: 'fixture', inputSchema: { type: 'object' } }] })));
     expect(await call('server_tools', { server: 'fixture', tool: CANARY })).toMatchObject(failure('no such tool; list them with server_tools'));
+  });
+
+  it('server_tools on a server without tools keeps its library name out', async () => {
+    const call = await host({ library: [capability({ command: 'unused' }, EVIL_NAME)] });
+    await upstream((server) => server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: [] })));
+    expect(await call('server_tools', { server: EVIL_NAME })).toMatchObject({ content: [{ text: 'the server has no tools.' }] });
   });
 
   it('relay retains config errors while sanitizing URL and transport failures', async () => {

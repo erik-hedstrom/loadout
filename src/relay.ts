@@ -7,11 +7,14 @@ import { readMcpServers } from './library.js';
 import { diagnostic } from './diagnostic.js';
 import { escapeSkillTags } from './launch.js';
 
+/** The prefix of every mcp-launch diagnostic; library names are third-party text. */
+const label = (key: string) => `mcp-launch ${escapeSkillTags(key)}`;
+
 export function relay(front: Transport, back: Transport, key: string, origin?: string): Promise<void> {
   return new Promise((resolve, reject) => {
     let closing = false;
     let initializeId: RequestId | undefined;
-    const detail = (error: unknown) => diagnostic(`mcp-launch ${escapeSkillTags(key)}`, origin, error);
+    const detail = (error: unknown) => diagnostic(label(key), origin, error);
     const report = (error: unknown) => { console.error(`loadout: ${detail(error)}`); };
     const finish = (error?: Error) => {
       if (closing) return;
@@ -74,7 +77,7 @@ export async function launchMcp(key: string, libraryDir: string): Promise<void> 
       back = new StdioClientTransport({ ...server, command: server.command! });
     }
   } catch (error) {
-    throw new Error(diagnostic(`mcp-launch ${escapeSkillTags(key)}`, origin, error));
+    throw new Error(diagnostic(label(key), origin, error));
   }
   const front = new StdioServerTransport();
   const end = () => { front.onclose?.(); };
@@ -85,7 +88,7 @@ export async function launchMcp(key: string, libraryDir: string): Promise<void> 
   process.once('SIGTERM', interrupt);
   try {
     await relay(front, back, key, origin);
-    if (interrupted) throw new Error(diagnostic(`mcp-launch ${escapeSkillTags(key)}`, origin, undefined));
+    if (interrupted) throw new Error(diagnostic(label(key), origin, undefined));
   } finally {
     process.stdin.off('end', end);
     process.off('SIGINT', interrupt);

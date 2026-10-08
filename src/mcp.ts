@@ -240,7 +240,7 @@ export class Gateway {
       cursor = res.nextCursor;
       if (!cursor) break;
     }
-    if (tools.length === 0) return `${name} has no tools.`;
+    if (tools.length === 0) return 'the server has no tools.';
     if (tool) {
       const t = tools.find((x) => x.name === tool);
       if (!t) throw new Error('no such tool; list them with server_tools');
