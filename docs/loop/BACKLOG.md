@@ -545,10 +545,10 @@ Starting points from Sol's review (2026-10-07):
   (production uses `hybridRank()`); the `inverted` metadata in route.ts is
   unused; `oneLine` is duplicated in hook.ts and mcp.ts; some module
   introductions repeat DESIGN.
-- `bench/`, ≈ 50–75 lines: `sweep.ts` duplicates `capabilityKey()`;
-  `invoke.ts` and `outcome.ts` duplicate decision reconstruction and timeouts;
-  `route-bench.ts` retries around a client that already retries;
-  `outcome.ts --agent` has one implemented value.
+- `bench/`, done: 64 net lines removed. Reused capability keys, decision
+  reconstruction, process-group timeouts, JSONL parsing and Windows Codex
+  lookup; removed redundant options, retries, exports and wrappers. Jev now
+  has five retries (six attempts maximum per request).
 - Markdown, ≈ 100–150 lines: DESIGN's benchmark-arms section is stale; the
   usage sections repeat README; HANDOFF's tables repeat both; absolutes at
   DESIGN:5, 29 and HANDOFF:17 overstate what the benchmarks show.

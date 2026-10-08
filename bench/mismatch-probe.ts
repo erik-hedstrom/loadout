@@ -15,7 +15,7 @@ import { capabilityKey, scanLibrary } from '../src/library.js';
 import { pool, readJsonl } from './lib.js';
 import type { SweepRow } from './sweep.js';
 
-export const MISMATCH_QUESTIONS = {
+const MISMATCH_QUESTIONS = {
   mismatch:
     'Does this skill depend on a specific product, platform, vendor or technology stack that the request does not mention and does not clearly involve?',
   wrong_stack:

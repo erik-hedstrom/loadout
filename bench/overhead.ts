@@ -10,8 +10,9 @@ import { createInterface } from 'node:readline';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { readConfined } from '../src/library.js';
 import { escapeSkillTags, toToml } from '../src/launch.js';
+import { codexCli } from './lib.js';
 
-export const PROMPT = 'Reply with exactly OK. Do not use tools, skills, commands, agents, or external services.';
+const PROMPT = 'Reply with exactly OK. Do not use tools, skills, commands, agents, or external services.';
 const CONFIGURATIONS = ['baseline', 'superpowers', 'anthropics', 'top50', 'impeccable', 'library', 'loadout'] as const;
 type Host = 'claude' | 'codex';
 type Configuration = typeof CONFIGURATIONS[number] | `cap-${number}`;
@@ -137,12 +138,12 @@ function libraryEntries(library: string) {
 }
 
 function cli(host: Host) {
+  if (host === 'codex') return codexCli((process.env.PATH ?? '').split(delimiter));
   if (process.platform === 'win32') {
     // Resolve the npm entry point without invoking cmd.exe: arbitrary temp paths must remain literal arguments.
-    const packageName = host === 'claude' ? '@anthropic-ai/claude-code' : '@openai/codex';
     for (const dir of (process.env.PATH ?? '').split(delimiter)) {
-      const entry = join(dir, 'node_modules', packageName, host === 'claude' ? 'bin/claude.exe' : 'bin/codex.js');
-      if (existsSync(entry)) return host === 'claude' ? { bin: entry, prefix: [] } : { bin: process.execPath, prefix: [entry] };
+      const entry = join(dir, 'node_modules', '@anthropic-ai/claude-code', 'bin/claude.exe');
+      if (existsSync(entry)) return { bin: entry, prefix: [] };
     }
   }
   return { bin: host, prefix: [] };
