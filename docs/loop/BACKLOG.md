@@ -360,12 +360,10 @@ Acceptance:
 
 Learnings (2026-10-08, [#14](https://github.com/erik-hedstrom/loadout/pull/14),
 [RESULTS](../../bench/RESULTS.md#hook-start-up-d11-2026-10-08)):
-- Before Jev, the library scan (about 260 ms) and the embedding model
-  (about 130 ms to load, 190 ms for the first query) dominate start-up.
-- Follow-ups now return before start-up, and `relay.js` loads only for
-  `mcp-launch`. A follow-up hook went from 536 ms to 63 ms (median, n = 11).
-- Left: cache the library scan and look at the first embedding query. Then
-  run `hook-latency.ts` with real Jev, as acceptance asks.
+- Done: follow-ups return before start-up, and `relay.js` loads only for
+  `mcp-launch`.
+- Left: the library scan and the embedding model dominate what remains.
+  Then run `hook-latency.ts` with real Jev, as acceptance asks.
 
 **D1. Native Linux validation.**
 

@@ -1077,7 +1077,7 @@ describe('claude hook', () => {
     const result = spawnSync(process.execPath, ['--import', 'tsx', join(import.meta.dirname, '../src/cli.ts'), 'hook', 'claude'], {
       encoding: 'utf8', timeout: 10_000,
       env: { ...process.env, LOADOUT_HOME: home },
-      input: JSON.stringify({ prompt, cwd: home }),
+      input: JSON.stringify({ prompt }),
     });
     expect(result.error).toBeUndefined();
     expect(result.status, result.stderr).toBe(0);

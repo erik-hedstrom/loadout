@@ -170,7 +170,7 @@ async function main(): Promise<number> {
     return 0;
   }
   if (command === 'mcp-launch') {
-    // Loaded on demand, like mcp.js: the MCP SDK added about 90 ms to every hook run.
+    // Loaded on demand, like mcp.js: relay.js and the MCP SDK added about 90 ms to every hook run.
     const { launchMcp } = await import('./relay.js');
     await launchMcp(rest[0] ?? '', paths.library());
     return 0;
