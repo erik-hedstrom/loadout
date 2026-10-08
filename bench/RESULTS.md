@@ -98,6 +98,84 @@ calls. The rerun passed every guard. Spend: 16 haiku calls with rows (about
 136k input tokens) plus up to 4 probes, on the subscription. No Jev or Codex
 spend.
 
+## C1 (2026-10-08): new held-out requests
+
+v4's 315 requests had been used for tuning twice, so the router was measured
+again on 300 new ones, with no retuning.
+
+**Setup**
+- **Requests:** gpt-6.1-sol wrote 300 seeds in v4's 17 categories, scaled to
+  300, from the prompt in [seeds.ts](seeds.ts), with no library in view. It
+  then expanded them with [expand.ts](expand.ts)'s prompt:
+  [requests-c1.jsonl](data/requests-c1.jsonl).
+  - None matches a v4 seed; the highest trigram Jaccard is 0.20.
+  - The expansions run 65–218 words, median 100. v4's Sonnet expansions had
+    a median of 199.
+  - Both steps ran through `--backend files`, so the provenance reads
+    "unverified": `--backend codex` refuses because codex-cli 0.160.1 keeps
+    its exec tools on (backlog E12). The script that answered the batches is
+    committed with them.
+- **Router:** main 7d90442, with the library and embeddings as in v4. 2 of
+  300 decisions fell back to keyword ranking. Mean 1.92 s and $0.0012 per
+  decision.
+- **Judge:** Opus with the whole catalog, as in v4: a blind pass, then
+  adjudication of disagreements. Codex wrote the requests, so the judge is
+  not grading its own family.
+- **Control:** the post-E9 sweep of v4's requests (same router code)
+  adjudicated with v4's blind answers. It separates new requests from code
+  drift.
+
+| Test split | C1: 201 new (84 need a skill) | Control: v4 requests, post-E9 code (121 need) | v4 run C |
+|---|---:|---:|---:|
+| A useful skill loaded | 73% (62–81) | 72% (63–79) | 76% (68–83) |
+| Useful loaded or offered | 80% (70–87) | 85% (78–90) | 86% (79–91) |
+| Nothing loaded when none is needed | 74% (65–81) | 82% (72–88) | 84% (75–90) |
+| Loaded skills that are useful | **64%** (55–72) | 80% (73–86) | 82% (75–87) |
+| Loaded skills that would mislead | **7%** (4–13) | 1% (0–5) | 1% (0–4) |
+| Injected skills that are useful | 90% (70–97) | — | 84% (67–93) |
+
+(95% Wilson intervals; load-level intervals ignore within-request correlation.)
+
+- **Recall holds; precision does not.** On new requests, loadout loads a
+  useful skill about as often as before, but a third of what it loads is not
+  useful, against a fifth before. Misleading loads rose from 1% to 7%.
+- **Why, as far as shown** (all 300 requests, per-category tables in the
+  reports):
+  - Fewer of the new requests need a skill: 128 of 300 (43%), against 189
+    of 315 (60%).
+  - **Business** carries most of the drop. The judge says 4 of 29 new
+    business requests need a skill, against 25 of 30 of v4's (invoices,
+    payroll). loadout loaded something for 16 of the 25 that need none.
+    Of its 22 business loads, 5 were useful and 4 misleading.
+  - **Web** adds 5 of the 10 misleading loads (5 of 30 loads; control 0 of 26).
+  - Without business, precision is 72% (121/169), against 82% (162/197) for
+    the control. So business explains part of the gap, not all of it.
+  - Non-useful loads come from both load paths: the close-comparison winner
+    and P(exact). In C1's dev split they are both generic process skills and
+    domain skills matched on surface words.
+- **Not shown:**
+  - whether shorter prompts cause it: length is confounded with need;
+  - whether the judge treats the two sets differently. One check found no
+    sign: after listing a skill blind, the judge rated it neutral in 3 of 35
+    cases (C1 dev) and 3 of 41 (control).
+- **What changes:** v4's precision numbers overstated precision on
+  requests outside the tuning set. The need gate loads too readily on
+  general business and planning requests. Backlog C4 tests fixes on C1's dev
+  split. C1's test split stays untouched for reporting, and v4's 315
+  requests are free to tune on.
+
+The first C1 sweep is recorded but not judged: 98 of 300 rows fell back to
+keyword ranking while Jev was slow (median 9.8 s even on the rows that
+answered). An 8-row probe shortly after answered through Jev, and the rerun at
+concurrency 2 had 2 fallbacks.
+
+Rows: [results/2026-10-08T13-13-52-sweep/](results/2026-10-08T13-13-52-sweep/)
+(C1), [results/2026-10-07T21-34-39-sweep/](results/2026-10-07T21-34-39-sweep/)
+(control), [results/2026-10-08T12-56-16-sweep/](results/2026-10-08T12-56-16-sweep/)
+(the slow run), [results/2026-10-08-c1-heldout/](results/2026-10-08-c1-heldout/)
+(seed and expansion batches). Cost: Jev $0.60 over three sweeps; judge $3.68
+(C1) and $2.08 (control) of Claude usage; Codex on the ChatGPT plan.
+
 ## E9 re-measure (2026-10-07): routing after the Jev framing change
 
 E9 changed what Jev sees: library names, descriptions and excerpts are now

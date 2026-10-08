@@ -73,13 +73,18 @@ gold labels; a frontier model judges.
 ```bash
 sh bench/data/library.sh                                # rebuild the 1,262-skill library these results used
 # seeds: data/seeds.jsonl (315 requests written by Codex without seeing any library)
-npx tsx bench/seeds.ts --prefix c1 --out bench/data/seeds-c1.jsonl # C1: 300 new seeds; Codex quota usage, cost not reported
 npx tsx bench/expand.ts bench/data/seeds.jsonl          # Sonnet expands each into a detailed prompt (~$3 of Claude usage)
 npx tsx bench/sweep.ts                                  # route all 315 through your library (~$0.34 of Jev), stores raw answers
 npx tsx bench/judge.ts bench/results/<sweep>            # Opus: blind pass, then adjudicates disagreements (~$5 first time)
 npx tsx bench/judge.ts bench/results/<sweep2> --blind-from bench/results/<sweep>   # re-run after a change: adjudication only
 npx tsx bench/invoke.ts bench/results/<sweep> --agent claude|codex --mode routed|search --ids a,b,c
 ```
+
+C1's new requests came from `seeds.ts --prefix c1` and `expand.ts`, both run
+with `--backend files` and answered by Codex through
+[answer-batches.sh](results/2026-10-08-c1-heldout/answer-batches.sh). They
+are then routed and judged as above, with `--requests bench/data/requests-c1.jsonl`
+([RESULTS](RESULTS.md#c1-2026-10-08-new-held-out-requests)).
 
 - `judge.ts` writes `report.md` next to the decisions, with overall and
   per-category numbers and every miss.
