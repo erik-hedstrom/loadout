@@ -569,8 +569,8 @@ Starting points from Sol's review (2026-10-07):
   introductions repeat DESIGN.
 - `bench/`, done: 64 net lines removed. Reused capability keys, decision
   reconstruction, process-group timeouts, JSONL parsing and Windows Codex
-  lookup; removed redundant options, retries, exports and wrappers. Jev now
-  has five retries (six attempts maximum per request).
+  lookup; removed redundant options, retries, exports and wrappers. route-bench
+  uses jevClient's retries (5; at most six attempts per request).
 - Markdown, ≈ 100–150 lines: DESIGN's benchmark-arms section is stale; the
   usage sections repeat README; HANDOFF's tables repeat both; absolutes at
   DESIGN:5, 29 and HANDOFF:17 overstate what the benchmarks show.
