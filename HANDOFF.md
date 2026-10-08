@@ -1,4 +1,4 @@
-# Handoff: loadout, 2026-10-07
+# Handoff: loadout, 2026-10-08
 
 Read this first if you are joining the project, human or agent. Then read
 [AGENTS.md](AGENTS.md) (rules), [docs/loop/ORCHESTRATOR.md](docs/loop/ORCHESTRATOR.md)
@@ -63,11 +63,11 @@ setup, the iteration protocol, the context discipline and the prompts.
 ## Goals for the loop
 
 1. **Wide adoption.** The audience is people who install hyped skill packs
-   and plugins. The pitch must use measured listing costs:
+   and plugins. Pitch only with
    [B1](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request)
-   puts the listing-only crossover near **57 skills**. Below it, loadout's
-   search tools add more context than the native listing (546 against 477
-   tokens at 50 skills). Router calls and returned skills are not included.
+   numbers, in their scope. Its crossover near 57 skills is interpolated from
+   Claude Code runs with generated names; for real libraries it is not
+   measured.
 2. **Ease of use.** Get from zero to a routed session in three commands. Show
    a GIF in the README. Make `loadout audit` show people their own waste
    before they install anything else.
@@ -84,18 +84,22 @@ setup, the iteration protocol, the context discipline and the prompts.
 
 ## Decisions only Erik can make (ask, don't assume)
 
-**Decided:** Apache-2.0 (2026-10-07); stay `erik-hedstrom`, not the considered `haesteining` alias; hook default (2026-10-07): loadout runs automatically inside Claude Code, in the CLI and desktop app, through a user-installed plugin (D10), whose install text says routed prompts go to TypeSafe; the launcher stays for power users and benchmarks.
+**Decided:** Apache-2.0 (2026-10-07); stay `erik-hedstrom`, not the
+considered `haesteining` alias; hook default (2026-10-07): loadout runs
+automatically inside Claude Code, in the CLI and desktop app, through a
+user-installed plugin (D10), whose install text says routed prompts go to
+TypeSafe. The launcher stays for power users and benchmarks.
 
-2. **Going public.** The repo is private. Recommended order: CI green,
+1. **Going public.** The repo is private. Recommended order: CI green,
    LICENSE, README quickstart verified on a clean machine, then public.
    On the day: enable private vulnerability reporting (GitHub offers it only
    on public repos) and, if you want one, add a security contact to
    SECURITY.md. Decide whether `bench/results/*-overhead` may keep your
    ambient plugin and skill names.
-3. **npm name.** `loadout` is taken (0.0.2). Options: `@erik-hedstrom/loadout`
+2. **npm name.** `loadout` is taken (0.0.2). Options: `@erik-hedstrom/loadout`
    (scoped, always available), or an unscoped name to check
    (`loadout-router`, `skill-loadout`, …).
-4. **Cloud setup and budget.** Do the one-time setup in ORCHESTRATOR.md:
+3. **Cloud setup and budget.** Do the one-time setup in ORCHESTRATOR.md:
    - GitHub app access to the repo;
    - the `TYPESAFE_API_KEY` secret;
    - the network allowlist;
@@ -103,7 +107,7 @@ setup, the iteration protocol, the context discipline and the prompts.
 
    Also set spending caps, and decide on more Jev credit when the $10 runs
    out.
-6. **Launch channels and timing.** Show HN, Reddit, X, LinkedIn, awesome
+4. **Launch channels and timing.** Show HN, Reddit, X, LinkedIn, awesome
    lists. Agents draft; Erik posts.
 
 ## Setting up on the new Linux machine
@@ -161,5 +165,4 @@ native machine:
 - **Router weak spots:** integrations, ML and apps. Generic skills such as
   `frontend-ui-engineering` load on simple UI work. Further tuning on the same
   315 requests would overfit, so new requests come first.
-- **Tests:** module suites exist in `test/`; `loadout.test.ts` still contains
-  the core unit tests and stdio MCP canary.
+- **Tests:** `loadout.test.ts` still mixes modules (E3).

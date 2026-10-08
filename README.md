@@ -2,9 +2,8 @@
 # loadout
 
 Pick the model, skills and MCP servers for each coding-agent session from a
-library of any size. With search attached, Claude Code's tool definitions add
-**546 input tokens** ([B1](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request));
-routing costs **$0.0011 per decision** on [v4 realistic requests](bench/RESULTS.md#v4-2026-10-06-realistic-requests-on-the-real-library-judged).
+library of any size. Routing costs **$0.0011 per decision** on
+[v4 realistic requests](bench/RESULTS.md#v4-2026-10-06-realistic-requests-on-the-real-library-judged).
 
 A very cheap System One model ([Jev](https://typesafe.ai/blog/introducing-system-one-models-and-jev),
 $0.042 per million input tokens) reads the task and the repo, picks a model

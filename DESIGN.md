@@ -22,7 +22,7 @@ arbitrarily large. The agent still makes the final call from the shortlist.
   plugins, MCP, hooks). (Contrast: [jev-router](https://github.com/gargpratyush/jev-router) routes
   per turn through a loopback proxy on `ANTHROPIC_BASE_URL`.)
 - **No per-turn tool swapping.** Tool definitions sit at the front of the
-  prompt cache; changing them per turn would cost more than the bloat saved.
+  prompt cache, so changing them per turn invalidates the cache.
 
 ## Architecture
 
@@ -214,9 +214,9 @@ library itself, in its own words, through MCP:
   the library has servers, so a skills-only library costs two tool definitions.
 
 The search tools add **546 input tokens** per request in Claude Code. A
-native listing of 50 skills adds about 477, and B1's listing-only
-interpolation crosses near 57 skills. Router calls and returned skills are
-not included ([B1](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request)).
+native listing of 50 skills with generated names adds about 477; B1
+interpolates the crossover near 57 such skills. Real-name costs, router calls
+and returned skills are not included ([B1](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request)).
 
 Approvals: the launcher pre-approves only `find_skills` and `load_skill`
 (Claude `--allowedTools`, Codex `tools.<tool>.approval_mode = "approve"`).
@@ -245,7 +245,7 @@ See [SECURITY.md](SECURITY.md#prompt-hook) for data sent to TypeSafe.
 - `jev` (default): TypeSafe official API, `TYPESAFE_API_KEY`.
 - `lexical`: prefilter only, no network. For offline use and as a benchmark arm.
 
-## Benchmark (the pitch)
+## Benchmark
 
 Methods and reproduction: [bench/README.md](bench/README.md).
 Measurements and caveats: [bench/RESULTS.md](bench/RESULTS.md).
