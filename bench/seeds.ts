@@ -47,8 +47,9 @@ const { values } = parseArgs({ options: {
   model: { type: 'string', default: 'gpt-6.1-sol' },
   effort: { type: 'string' },
 } });
-// The prefix names the ids and the batch directory, so it must be a plain word.
-if (!values.prefix || !/^[a-z0-9]+$/i.test(values.prefix) || !values.out) throw new Error('usage: seeds.ts --prefix <letters and digits> --out <seeds.jsonl>');
+// The prefix names the ids and the batch directory. Lowercase only, because on a
+// case-insensitive filesystem C1 and c1 would share c1's batches (and answers).
+if (!values.prefix || !/^[a-z0-9]+$/.test(values.prefix) || !values.out) throw new Error('usage: seeds.ts --prefix <lowercase letters and digits> --out <seeds.jsonl>');
 const backend = backendOf(values.backend!, values.effort);
 const model = values.model!;
 const generatedBy: { backend: string; model: string; effort: string | null; family?: string; producer?: string } = { backend, model, effort: values.effort ?? null, ...(backend === 'files' ? { producer: 'unverified' } : { family: modelFamily(model) }) };
@@ -72,7 +73,8 @@ for (const { category, count } of CATEGORIES) {
   if (!stored.length) continue;
   validate(stored.map((r) => r.request), category, count);
   // Ids fix the dev/test split, so a resumed file must carry exactly the ids this run would write.
-  if (stored.map((r) => r.id).join() !== idsFor(category, count).join()) throw new Error(`invalid seeds for category ${category}`);
+  const ids = idsFor(category, count);
+  if (stored.length !== count || stored.some((r, i) => r.id !== ids[i])) throw new Error(`invalid seeds for category ${category}`);
   done.add(category);
 }
 

@@ -85,6 +85,10 @@ describe('benchmark backends', () => {
     expect(next.status, next.stderr).toBe(0);
     expect(next.stdout).toContain('pending batch 017');
     expect(existsSync(join(dir, 'seeds-c2.jsonl'))).toBe(false);
+    // On a case-insensitive filesystem C1/ is c1/, so C1 would reuse c1's answers.
+    const upper = runSeeds(dir, ['--effort', 'high', '--prefix', 'C1', '--out', join(dir, 'seeds-C1.jsonl')]);
+    expect(upper.status).not.toBe(0);
+    expect(upper.stderr).toContain('usage');
   }, 15_000);
 
   it.each(['wrong count', 'duplicate', 'empty', 'malformed', 'cross-category duplicate'])('refuses a seed category with $0 without appending it', (problem) => {
@@ -107,13 +111,15 @@ describe('benchmark backends', () => {
     else expect(existsSync(out)).toBe(false);
   });
 
-  it.each(['duplicate id', 'unknown category', 'other prefix'])('refuses to resume a seed file with $0', (problem) => {
+  it.each(['duplicate id', 'unknown category', 'other prefix', 'array id'])('refuses to resume a seed file with $0', (problem) => {
     const dir = temp(), out = join(dir, 'seeds-c1.jsonl');
     const generatedBy = { backend: 'files', model: 'gpt-6.1-sol', effort: null, producer: 'unverified' };
     const rows = Array.from({ length: 24 }, (_, n) => ({ id: `${problem === 'other prefix' ? 'c2' : 'c1'}-web-${String(n + 1).padStart(2, '0')}`, category: 'web', request: `Request ${n + 1}`, generatedBy }));
     if (problem === 'duplicate id') rows[1]!.id = rows[0]!.id;
+    // join() would read ['c1-web-01'] as 'c1-web-01'.
+    const stored = problem === 'array id' ? rows.map((row) => ({ ...row, id: [row.id] })) : rows;
     if (problem === 'unknown category') rows.push({ ...rows[0]!, id: 'c1-other-01', category: 'other', request: 'Other request' });
-    const content = rows.map((row) => JSON.stringify(row)).join('\n') + '\n';
+    const content = stored.map((row) => JSON.stringify(row)).join('\n') + '\n';
     writeFileSync(out, content);
     const refused = runSeeds(dir);
     expect(refused.status).not.toBe(0);
