@@ -18,6 +18,7 @@ import { join, relative, sep } from 'node:path';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import type { JsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/types.js';
 import { getDefaultEnvironment, StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
@@ -25,6 +26,7 @@ import { z } from 'zod';
 import type { Config } from './config.js';
 import type { EmbeddingStore } from './embed.js';
 import type { SystemOneClient } from './jev.js';
+import { diagnostic } from './diagnostic.js';
 import { capabilityKey, readConfined, skillExcerpt } from './library.js';
 
 export { capabilityKey };
@@ -118,7 +120,11 @@ export function skillFiles(dir: string, max = LIST_MAX_FILES): string[] {
       else if (e.isFile() && p !== join(dir, 'SKILL.md')) out.push(relative(dir, p).split(sep).join('/'));
     }
   };
-  walk(dir);
+  try {
+    walk(dir);
+  } catch {
+    throw new Error('could not list skill files');
+  }
   return out;
 }
 
@@ -129,15 +135,28 @@ export function skillFiles(dir: string, max = LIST_MAX_FILES): string[] {
  * component between the check and the read cannot redirect it.
  */
 export function readSkillFile(dir: string, file: string): string {
-  const buf = readConfined(dir, file, FILE_MAX_BYTES);
+  let buf: Buffer;
+  try {
+    buf = readConfined(dir, file, FILE_MAX_BYTES);
+  } catch (err) {
+    // Confined-read policy errors are ours; filesystem errors include absolute paths.
+    if (err instanceof Error && 'code' in err) throw new Error('could not read skill file');
+    throw err;
+  }
   if (buf.includes(0)) throw new Error('binary file; use it from the skill folder directly');
   return buf.toString('utf8');
 }
 
 export function loadSkill(deps: SearchDeps, skill: string, file?: string): string {
   const c = resolveSkill(deps.library, skill);
-  if (!c) throw new Error(`no skill "${skill}" in the library; use find_skills to search`);
-  const toPath = deps.toPath ?? ((p: string) => p);
+  if (!c) throw new Error('no such skill in the library; use find_skills to search');
+  const toPath = (p: string) => {
+    try {
+      return deps.toPath ? deps.toPath(p) : p;
+    } catch {
+      throw new Error('could not translate skill path');
+    }
+  };
   const key = capabilityKey(c);
   if (file) {
     const text = escapeSkillTags(readSkillFile(c.source, file));
@@ -148,35 +167,55 @@ export function loadSkill(deps: SearchDeps, skill: string, file?: string): strin
   const files = skillFiles(c.source);
   if (!files.length) return block;
   // File names come from the skill too, so they stay inside its third-party block.
-  const listing = `Files in this skill (read one with load_skill and \`file\`, or directly from ${toPath(c.source)}):\n${files
+  const listing = `Files in this skill (read one with load_skill and \`file\`, or directly from ${escapeSkillTags(toPath(c.source))}):\n${files
     .map((f) => `- ${escapeSkillTags(f)}`)
     .join('\n')}${files.length >= LIST_MAX_FILES ? '\n- …' : ''}`;
   // A callback, so `$&` and friends in file names stay literal.
   return block.replace(/\n<\/skill>$/, () => `\n\n${listing}\n</skill>`);
 }
 
+const gatewayFailure = (name: string, origin: string | undefined) => (err: unknown): never => {
+  throw new Error(diagnostic(`gateway ${escapeSkillTags(name)}`, origin, err));
+};
+
 /** Connections to the library's MCP servers, opened on first use and kept for the session. */
 export class Gateway {
-  private clients = new Map<string, Promise<Client>>();
+  private clients = new Map<string, Promise<{ client: Client; origin?: string }>>();
   constructor(private servers: Capability[]) {}
 
   get names(): string[] {
     return this.servers.map((s) => s.name);
   }
 
-  private connect(name: string): Promise<Client> {
+  private connect(name: string): Promise<{ client: Client; origin?: string }> {
     const existing = this.clients.get(name);
     if (existing) return existing;
     const c = this.servers.find((s) => s.name === name || `mcp:${s.name}` === name);
-    if (!c?.server) return Promise.reject(new Error(`no MCP server "${name}" in the library (have: ${this.names.join(', ') || 'none'})`));
+    if (!c?.server) return Promise.reject(new Error(`no such MCP server in the library (have: ${this.names.map(escapeSkillTags).join(', ') || 'none'})`));
     const s = c.server;
-    const transport = s.url
-      ? s.type === 'sse'
-        ? new SSEClientTransport(new URL(s.url), { requestInit: { headers: s.headers ?? {} } })
-        : new StreamableHTTPClientTransport(new URL(s.url), { requestInit: { headers: s.headers ?? {} } })
-      : new StdioClientTransport({ command: s.command!, args: s.args ?? [], env: { ...getDefaultEnvironment(), ...(s.env ?? {}) }, stderr: 'ignore' });
-    const client = new Client({ name: 'loadout', version: '0.1.0' });
-    const ready = client.connect(transport).then(() => client);
+    let origin: string | undefined;
+    let transport;
+    try {
+      const url = s.url ? new URL(s.url) : undefined;
+      origin = url?.origin;
+      transport = url
+        ? s.type === 'sse'
+          ? new SSEClientTransport(url, { requestInit: { headers: s.headers ?? {} } })
+          : new StreamableHTTPClientTransport(url, { requestInit: { headers: s.headers ?? {} } })
+        : new StdioClientTransport({ command: s.command!, args: s.args ?? [], env: { ...getDefaultEnvironment(), ...(s.env ?? {}) }, stderr: 'ignore' });
+    } catch (err) {
+      return gatewayFailure(c.name, origin)(err);
+    }
+    // The gateway forwards results verbatim; compiling upstream output schemas can log secrets.
+    // The SDK still requires structuredContent when a tool declares an output schema.
+    const client = new Client({ name: 'loadout', version: '0.1.0' }, {
+      jsonSchemaValidator: {
+        getValidator<T>(): JsonSchemaValidator<T> {
+          return (input) => ({ valid: true, data: input as T, errorMessage: undefined });
+        },
+      },
+    });
+    const ready = client.connect(transport).then(() => ({ client, origin })).catch(gatewayFailure(c.name, origin));
     // A server that fails to start, or exits later, is reconnected on the next use.
     const forget = () => {
       if (this.clients.get(name) === ready) this.clients.delete(name);
@@ -192,19 +231,19 @@ export class Gateway {
 
   /** The server's tools; with `tool`, that one tool's complete input schema. */
   async tools(name: string, tool?: string): Promise<string> {
-    const client = await this.connect(name);
+    const { client, origin } = await this.connect(name);
     const tools: Awaited<ReturnType<Client['listTools']>>['tools'] = [];
     let cursor: string | undefined;
     for (let page = 0; page < MAX_TOOL_PAGES; page++) {
-      const res = await client.listTools(cursor ? { cursor } : {});
+      const res = await client.listTools(cursor ? { cursor } : {}).catch(gatewayFailure(name, origin));
       tools.push(...res.tools);
       cursor = res.nextCursor;
       if (!cursor) break;
     }
-    if (tools.length === 0) return `${name} has no tools.`;
+    if (tools.length === 0) return 'the server has no tools.';
     if (tool) {
       const t = tools.find((x) => x.name === tool);
-      if (!t) throw new Error(`${name} has no tool "${tool}" (has: ${tools.map((x) => x.name).join(', ')})`);
+      if (!t) throw new Error('no such tool; list them with server_tools');
       return `${t.name}: ${t.description ?? ''}\ninput schema: ${JSON.stringify(t.inputSchema)}`;
     }
     // Schemas verbatim ($defs, oneOf, enums untouched); one too long for the listing is fetched on its own.
@@ -218,12 +257,12 @@ export class Gateway {
   }
 
   async call(name: string, tool: string, args: Record<string, unknown>) {
-    const client = await this.connect(name);
-    return client.callTool({ name: tool, arguments: args });
+    const { client, origin } = await this.connect(name);
+    return client.callTool({ name: tool, arguments: args }).catch(gatewayFailure(name, origin));
   }
 
   async close(): Promise<void> {
-    await Promise.allSettled([...this.clients.values()].map(async (p) => (await p).close()));
+    await Promise.allSettled([...this.clients.values()].map(async (p) => (await p).client.close()));
     this.clients.clear();
   }
 }
@@ -287,7 +326,7 @@ export function createServer(deps: SearchDeps): { server: McpServer; gateway: Ga
     server.registerTool(
       'server_tools',
       {
-        description: `List the tools of an MCP server from the library: ${servers.map((s) => s.name).join(', ')}. Starts it on first use.`,
+        description: `List the tools of an MCP server from the library: ${servers.map((s) => escapeSkillTags(s.name)).join(', ')}. Starts it on first use.`,
         inputSchema: {
           server: z.string().min(1).max(200),
           tool: z.string().max(200).optional().describe('One tool, to get its complete input schema'),

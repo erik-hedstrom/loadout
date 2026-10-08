@@ -45,8 +45,8 @@ const SUM_TOLERANCE = 0.05;
  * over the options or levels that were asked, summing to ~1.
  */
 export function validateResponse(body: unknown, questions: Record<string, Question>): SystemOneResponse {
-  const fail = (): never => {
-    throw new JevError('Jev response did not match the schema', undefined, false);
+  const fail = (id?: string): never => {
+    throw new JevError(`Jev response did not match the schema${id === undefined ? '' : ` (answer ${id})`}`, undefined, false);
   };
   if (!body || typeof body !== 'object') fail();
   const { answers, usage, model } = body as Partial<SystemOneResponse>;
@@ -54,22 +54,22 @@ export function validateResponse(body: unknown, questions: Record<string, Questi
   const isProb = (x: unknown) => typeof x === 'number' && Number.isFinite(x) && x >= 0 && x <= 1;
   for (const [id, q] of Object.entries(questions)) {
     const a = (answers as Record<string, Answer | undefined>)[id];
-    if (!a || a.type !== q.type) fail();
+    if (!a || a.type !== q.type) fail(id);
     if (a!.type === 'noul') {
-      if (!isProb(a!.noul)) fail();
+      if (!isProb(a!.noul)) fail(id);
       continue;
     }
     const dist = a!.probabilities;
-    if (!dist || typeof dist !== 'object' || Array.isArray(dist)) fail();
+    if (!dist || typeof dist !== 'object' || Array.isArray(dist)) fail(id);
     const allowed = new Set(q.type === 'choice' ? Object.keys(q.criteria) : (q as { criteria: unknown[] }).criteria.map((_, i) => String(i)));
     const entries = Object.entries(dist);
-    if (!entries.length) fail();
+    if (!entries.length) fail(id);
     for (const [k, v] of entries) {
-      if (!allowed.has(k)) fail();
-      if (!isProb(v)) fail();
+      if (!allowed.has(k)) fail(id);
+      if (!isProb(v)) fail(id);
     }
     const sum = entries.reduce((t, [, v]) => t + v, 0);
-    if (Math.abs(sum - 1) > SUM_TOLERANCE) fail();
+    if (Math.abs(sum - 1) > SUM_TOLERANCE) fail(id);
   }
   const finite = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) && x >= 0 ? x : 0);
   return {

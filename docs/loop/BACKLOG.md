@@ -456,7 +456,7 @@ Acceptance:
 | E5 | P1 | Changelog and release automation | Codex | cloud | todo (with A4) |
 | E6 | P2 | Architecture diagram in DESIGN.md | Claude | cloud | todo |
 | E10 | P1 | Build without optional dependencies | Codex | cloud | done ([PR #8](https://github.com/erik-hedstrom/loadout/pull/8)) |
-| E11 | P1 | Fixed-text diagnostics in the gateway and relay | Codex | cloud | todo |
+| E11 | P1 | Fixed-text diagnostics in the gateway and relay | Codex | cloud | review ([PR #10](https://github.com/erik-hedstrom/loadout/pull/10)) |
 
 **E10. Build without optional dependencies.** src/embed.ts:24 types
 `@huggingface/transformers` with `typeof import(...)`. So `tsc` fails when npm
@@ -471,6 +471,28 @@ E9 round-8 reviews:
 - Jev schema errors could keep loadout's own question id.
 
 Acceptance: the same fixed-text rule and adversarial tests as E9.
+
+Learnings:
+- One `diagnostic()` (src/diagnostic.ts) serves the gateway and the relay.
+  After an SDK failure, only an HTTP status, an OS errno code, an integer MCP
+  error code and the URL origin survive.
+- Tool results, `isError` included, stay verbatim: they are the upstream
+  tool's output, and the agent needs them to correct its call. A first draft
+  turned them into "tool failed"; that was reverted.
+- Filesystem and wslpath errors in `load_skill` become fixed text, because
+  they can carry third-party file and folder names unescaped.
+- Parse errors quote their input, so the relay's `mcp.json` parse failure is
+  fixed text (the same finding as D10's hook).
+- All 23 new test cases fail on main (8e930ff).
+- Dependencies log too, as in D10. The MCP SDK compiles upstream output
+  schemas with AJV, whose default logger prints schema text to stderr. The
+  gateway passes a validator that accepts everything: it forwards results
+  verbatim anyway, and the SDK's structuredContent check stays.
+- Errors no longer echo requested names (readConfined, missing tool). A
+  hostile file name copied from a listing would come back unescaped.
+- Parse errors are fixed text where config.json and mcp.json are read, which
+  covers every command; startup ran before any sanitized handler. Library
+  server names go through escapeSkillTags wherever they reach the agent.
 
 **E1. CI.**
 

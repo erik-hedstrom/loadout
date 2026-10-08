@@ -155,8 +155,8 @@ export async function libraryEmbeddings(library: Capability[], dir: string, log:
     });
     if (added) store.save();
     return store;
-  } catch (err) {
-    log(`embeddings unavailable (${err instanceof Error ? err.message : err}); using keyword retrieval only`);
+  } catch {
+    log('embeddings unavailable; using keyword retrieval only');
     return undefined;
   }
 }

@@ -124,10 +124,19 @@ export function validateConfig(c: Config): Config {
   return c;
 }
 
+function readConfigFile(file: string): Partial<Config> {
+  const text = readFileSync(file, 'utf8');
+  try {
+    return JSON.parse(text) as Partial<Config>;
+  } catch {
+    throw new Error('config.json is not valid JSON');
+  }
+}
+
 export function loadConfig(): Config {
   const file = paths.config();
   if (!existsSync(file)) return DEFAULT_CONFIG;
-  const user = JSON.parse(readFileSync(file, 'utf8')) as Partial<Config>;
+  const user = readConfigFile(file);
   return validateConfig({
     ...DEFAULT_CONFIG,
     ...user,
@@ -148,7 +157,7 @@ export function loadConfig(): Config {
 export function writeDefaultConfig(overrides: Partial<Config['jev']> = {}): string {
   const file = paths.config();
   mkdirSync(loadoutHome(), { recursive: true });
-  const existing = existsSync(file) ? (JSON.parse(readFileSync(file, 'utf8')) as Partial<Config>) : {};
+  const existing = existsSync(file) ? readConfigFile(file) : {};
   const config: Partial<Config> = Object.keys(overrides).length ? { ...existing, jev: { ...existing.jev, ...overrides } as Config['jev'] } : existing;
   writeFileSync(file, JSON.stringify(config, null, 2) + '\n');
   return file;

@@ -53,21 +53,21 @@ export function readConfined(root: string, rel: string, maxBytes: number, realRo
   try {
     fd = openSync(join(root, rel), constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
   } catch {
-    throw new Error(`no such file in the skill: ${rel}`);
+    throw new Error('no such file in the skill');
   }
   try {
     const st = fstatSync(fd);
-    if (!st.isFile()) throw new Error(`no such file in the skill: ${rel}`);
+    if (!st.isFile()) throw new Error('no such file in the skill');
     let opened: string;
     if (process.platform === 'linux') {
       opened = readlinkSync(`/proc/self/fd/${fd}`);
     } else {
       opened = realpathSync(join(root, rel));
       const now = statSync(opened);
-      if (now.ino !== st.ino || now.dev !== st.dev) throw new Error(`${rel} changed while it was opened`);
+      if (now.ino !== st.ino || now.dev !== st.dev) throw new Error('the file changed while it was opened');
     }
     if (!isInside(realRoot, opened)) throw new Error('path leaves the skill folder');
-    if (st.size > maxBytes) throw new Error(`${rel} is larger than ${Math.round(maxBytes / 1024)} KB`);
+    if (st.size > maxBytes) throw new Error(`the file is larger than ${Math.round(maxBytes / 1024)} KB`);
     const buf = Buffer.alloc(st.size);
     return buf.subarray(0, readSync(fd, buf, 0, st.size, 0));
   } finally {
@@ -76,14 +76,14 @@ export function readConfined(root: string, rel: string, maxBytes: number, realRo
 }
 
 export function copySkillConfined(source: string, destination: string): void {
-  if (lstatSync(source).isSymbolicLink()) throw new Error('skill contains a link: .');
+  if (lstatSync(source).isSymbolicLink()) throw new Error('skill contains a link');
   const root = realpathSync(source);
   let files = 0;
   let bytes = 0;
   const walk = (rel: string, depth: number): void => {
     const path = join(root, rel);
     const st = lstatSync(path);
-    if (st.isSymbolicLink()) throw new Error(`skill contains a link: ${rel || '.'}`);
+    if (st.isSymbolicLink()) throw new Error('skill contains a link');
     if (st.isDirectory()) {
       if (depth > LIMITS.skillDepth) throw new Error(`skill nested deeper than ${LIMITS.skillDepth} folders`);
       mkdirSync(join(destination, rel), { recursive: true });
@@ -94,7 +94,7 @@ export function copySkillConfined(source: string, destination: string): void {
       const body = readConfined(root, rel, maxBytes, root);
       bytes += body.length;
       writeFileSync(join(destination, rel), body, { mode: st.mode });
-    } else throw new Error(`not a regular skill file: ${rel}`);
+    } else throw new Error('not a regular skill file');
   };
   walk('', 0);
 }
@@ -165,7 +165,15 @@ interface McpFile {
 
 export function readMcpServers(libraryDir: string): NonNullable<McpFile['mcpServers']> {
   const file = join(libraryDir, 'mcp.json');
-  return existsSync(file) ? (JSON.parse(readFileSync(file, 'utf8')) as McpFile).mcpServers ?? {} : {};
+  if (!existsSync(file)) return {};
+  const text = readFileSync(file, 'utf8');
+  let config: McpFile;
+  try {
+    config = JSON.parse(text) as McpFile;
+  } catch {
+    throw new Error('library mcp.json is not valid JSON');
+  }
+  return config.mcpServers ?? {};
 }
 
 export function scanLibrary(libraryDir: string): Capability[] {
