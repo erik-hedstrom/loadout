@@ -1,5 +1,6 @@
 /**
  * Per-prompt skill routing; see [DESIGN.md](../DESIGN.md#prompt-hook).
+ * The context is appended to the user's turn, so the prompt cache stays intact.
  * Any failure means no output: a hook must never block a prompt.
  *
  * Privacy: every routed prompt, with the repository's top-level file names and

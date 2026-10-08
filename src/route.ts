@@ -47,7 +47,7 @@ const TIER_CRITERIA: Record<Tier, Text> = {
   },
 };
 
-/** Asked about the action the request wants, not its subject matter. Inverted ones point away from a skill. */
+/** Asked about the action the request wants, not its subject matter. `needScore()` inverts `general_enough`. */
 const NEED_QUESTIONS: Record<string, string> = {
   need_procedure: 'Would an expert doing this request follow a specific documented procedure, tool, or service workflow, rather than general programming knowledge alone?',
   general_enough: 'Could a strong general programmer complete this request well using only reading and editing code and running ordinary commands, without any special instructions?',
