@@ -76,7 +76,7 @@ for (const { category, count } of CATEGORIES) {
   validate(stored.map((r) => r.request), category, count);
   // Ids fix the dev/test split, so a resumed file must carry exactly the ids this run would write.
   const ids = idsFor(category, count);
-  if (stored.length !== count || stored.some((r, i) => r.id !== ids[i])) throw new Error(`invalid seeds for category ${category}`);
+  if (stored.some((r, i) => r.id !== ids[i])) throw new Error(`invalid seeds for category ${category}`);
   done.add(category);
 }
 
