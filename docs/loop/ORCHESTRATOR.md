@@ -98,7 +98,9 @@ The orchestrator repeats this until it hits a stop condition.
    - Check open PRs, CI and Codex comments: `gh pr list`, `gh pr checks`,
      `gh pr view N --comments`, if `gh` works.
 2. **Merge what is ready:**
-   - CI green;
+   - CI green, including a full-matrix run: once both reviews approve, add
+     the `ci-full` label, which runs macOS and Windows on the latest head
+     (PR pushes run Ubuntu only, because those minutes bill 10× and 2×);
    - `pr-reviewer` APPROVE;
    - Codex review without unresolved High or Medium findings;
    - acceptance criteria met.
