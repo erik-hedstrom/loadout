@@ -1,0 +1,33 @@
+{
+  "requests": [
+    "Can you tidy up my meeting notes and pull out the decisions?",
+    "I need a one-page project brief for replacing our customer support portal, covering goals, scope, risks, and success measures.",
+    "Please convert my attached Word document to PDF while preserving its layout and clickable links.",
+    "I don't understand this insurance letter. Explain what it says I need to do and by when.",
+    "Make my cover letter sound less stiff.",
+    "I have three versions of a policy document. Compare them and list every substantive change with its section number.",
+    "I'd like a reusable invoice template for my freelance translation work, with fields for payment details and due dates.",
+    "Turn my scanned receipts into a searchable PDF, keeping them in date order.",
+    "I need this report shortened to two pages without losing the findings or recommendations.",
+    "Help me write a polite resignation letter that gives two weeks' notice.",
+    "My PDF has blank pages scattered throughout. Remove those and leave the remaining pages in their original order.",
+    "Please proofread my attached dissertation chapter for grammar and punctuation, preserving technical terminology and marking your changes.",
+    "I want a plain-English summary of this lease, especially the fees, renewal terms, and responsibilities.",
+    "Put my rough instructions into a clear checklist.",
+    "I need an accessible Word version of this PDF, with proper headings, readable tables, and descriptions for informative images.",
+    "Can you combine my five onboarding documents into one handbook and remove repeated information?",
+    "I'm applying for a research grant. Draft a budget justification using the expenses and project description I've provided.",
+    "Fix the weird spacing in my resume.",
+    "I need the tables from this PDF exported to CSV, with one file per table and the original column headers retained.",
+    "Please turn my interview transcript into a readable Q&A, removing filler words without changing what either speaker meant.",
+    "I want a simple permission slip for my school's museum trip, including emergency contact and parent signature fields.",
+    "Explain the difference between an appendix and an annex so I can label the extra material in my report.",
+    "My document's table of contents is out of date. Update it to match the headings and page numbers.",
+    "I'd like these handwritten journal pages transcribed, with uncertain words clearly marked.",
+    "Help me draft a complaint letter about a washing machine that arrived damaged.",
+    "I need my Markdown guide converted into a Word document, retaining code blocks, links, and heading levels.",
+    "Please redact my name, address, phone number, and account numbers from this PDF, including searchable text and document metadata.",
+    "I want a glossary of the acronyms in this technical report, using its own definitions and flagging any it doesn't explain.",
+    "Can you turn my event schedule into a printable program with a welcome note and speaker biographies?"
+  ]
+}

@@ -457,6 +457,7 @@ Acceptance:
 | E6 | P2 | Architecture diagram in DESIGN.md | Claude | cloud | todo |
 | E10 | P1 | Build without optional dependencies | Codex | cloud | done ([PR #8](https://github.com/erik-hedstrom/loadout/pull/8)) |
 | E11 | P1 | Fixed-text diagnostics in the gateway and relay | Codex | cloud | review ([PR #10](https://github.com/erik-hedstrom/loadout/pull/10)) |
+| E12 | P1 | A tool-less Codex bench backend (codex-cli 0.160.1 keeps unified_exec on) | Codex | local | todo |
 
 **E10. Build without optional dependencies.** src/embed.ts:24 types
 `@huggingface/transformers` with `typeof import(...)`. So `tsc` fails when npm
@@ -493,6 +494,24 @@ Learnings:
 - Parse errors are fixed text where config.json and mcp.json are read, which
   covers every command; startup ran before any sanitized handler. Library
   server names go through escapeSkillTags wherever they reach the agent.
+
+**E12. A tool-less Codex bench backend.** On codex-cli 0.160.1 (and 0.154.0),
+`unified_exec` stays `true` in `codex features list` under
+`-c features.unified_exec=false`, `--disable unified_exec` or an empty
+`CODEX_HOME`. So `--backend codex` in bench/lib.ts always refuses, which is
+correct. A probe (2026-10-08) with lib.ts's flags listed `functions.exec`,
+`apply_patch`, `web__run`, sub-agent tools and an apps MCP connector, and made
+two MCP calls. Disabling every feature that can be disabled leaves
+`functions.exec` (JavaScript, no file access, as the model reports it),
+`apply_patch`, `web__run` and sub-agents; the model could not read a canary file.
+
+Until then, Codex can produce requests only through `--backend files`, for
+inputs without third-party text (C1 does this). It cannot judge, because the
+judge sees the skill catalog.
+
+Acceptance: a Codex configuration whose `exec` exposes no tool that reads
+files, runs commands or reaches the network, checked by lib.ts before every
+run; an adversarial test with the canary probe; `@codex security review`.
 
 **E1. CI.**
 

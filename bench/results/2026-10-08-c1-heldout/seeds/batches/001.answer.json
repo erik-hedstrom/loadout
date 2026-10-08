@@ -1,0 +1,28 @@
+{
+  "requests": [
+    "Help me fix my mobile navbar.",
+    "I want a simple portfolio site for my photography, with large images and a contact page.",
+    "My checkout loses the shipping address when I go back a step. Find the cause and fix it.",
+    "Can you rewrite my homepage headline so it sounds less corporate?",
+    "I need an accessible booking form with date selection, clear validation, and keyboard navigation.",
+    "My website feels slow on older phones. Identify the biggest bottlenecks and make practical improvements.",
+    "I'd like my bakery's website to show today's menu, opening hours, and directions without making visitors hunt around.",
+    "Help me understand cookies versus local storage.",
+    "I want to turn this Figma layout into a responsive page using the conventions already in my React project.",
+    "My footer floats halfway up short pages. Fix that.",
+    "I need a searchable documentation site with permanent links to individual sections.",
+    "Please review my pricing page and suggest ways to make the plan differences easier to understand.",
+    "I want users to filter my apartment listings by rent, neighborhood, and number of bedrooms without losing their selections when they refresh.",
+    "Help me write a friendly message for my site's 404 page.",
+    "My Safari users can't dismiss the signup modal. Reproduce the issue and repair the interaction.",
+    "I'd like a browser-based timer that keeps accurate time when I switch tabs and lets me name each session.",
+    "I need to add Spanish to my existing website, including navigation, error messages, and language-specific URLs.",
+    "My blog posts look cramped. Improve the typography and spacing.",
+    "I want a Playwright test covering signup, email verification, and the first successful login using test accounts.",
+    "Help me choose five useful FAQ questions for my dog-walking website.",
+    "I need my dashboard charts to remain readable on small screens and provide an accessible text summary of the same data.",
+    "I want customers to upload a CSV in their browser, preview the rows, and correct validation errors before submitting.",
+    "My website's search results show outdated page titles. Investigate the metadata and indexing setup.",
+    "I'd like a subtle page transition on my personal site that respects reduced-motion preferences and doesn't delay navigation."
+  ]
+}

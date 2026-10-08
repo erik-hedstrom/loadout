@@ -1,0 +1,14 @@
+{
+  "requests": [
+    "I want a simple app for tracking books I’ve read.",
+    "Help me build a shared grocery list where my housemates can add items, mark them bought, and see who changed what.",
+    "I’m making a habit tracker. Suggest encouraging reminder messages that don’t sound judgmental when I miss a day.",
+    "I need a small web app for splitting trip expenses among friends, including cases where only some people shared a cost.",
+    "My recipe app feels cluttered. Help me decide what belongs on the home screen and what can move into a menu.",
+    "I wanna track my plants and watering dates.",
+    "Please design a booking application for my community workshop, with equipment reservations, member accounts, and a clear way to prevent overlapping bookings.",
+    "I’m building a family calendar. Write a short questionnaire to find out which features my relatives would actually use.",
+    "Help me create an offline notes app that saves locally and lets me export everything as Markdown.",
+    "I have a React budgeting app where editing a transaction updates the total twice. Show me how to reproduce and investigate that bug."
+  ]
+}

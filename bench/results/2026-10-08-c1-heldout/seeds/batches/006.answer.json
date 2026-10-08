@@ -1,0 +1,23 @@
+{
+  "requests": [
+    "I need this contact list deduplicated by email, keeping the most recently updated entry.",
+    "Can you turn my messy meeting notes into a table of decisions, owners, and deadlines?",
+    "I've attached monthly sales data. Compare growth across regions and flag any unusually large changes.",
+    "Help me standardize the dates in my spreadsheet without guessing whether ambiguous entries use day-first or month-first formatting.",
+    "I want a quick summary of these survey responses, including common themes and a few representative quotes.",
+    "Please examine my experiment results and explain whether the observed difference is meaningful, including any assumptions and limitations.",
+    "My expense categories are a mess. Suggest a consistent grouping and flag transactions you can't confidently classify.",
+    "I need a chart showing how my weekly running distance changed over the last six months.",
+    "I've got two customer CSVs. Match records across them and separate confident matches from ones needing review.",
+    "Can you alphabetize my book list and remove exact duplicates?",
+    "I'd like a concise executive summary of this quarterly performance table, with the three most important findings.",
+    "Help me check this inventory export for negative quantities, missing product codes, and duplicate rows.",
+    "I want to compare these apartment listings by rent, commute time, and floor area using only the information provided.",
+    "My timestamps use different time zones. Convert entries with explicit offsets to UTC and flag the rest.",
+    "Please reshape my spreadsheet from one column per month into rows containing customer, month, and revenue.",
+    "I'm tracking support tickets. Calculate median resolution time by priority and show how unresolved tickets affect the interpretation.",
+    "I need these JSON records converted to CSV, with nested address fields flattened into clearly named columns.",
+    "Can you count how often each ingredient appears in my recipe collection?",
+    "I have a dataset with missing ages and incomes. Assess the missingness patterns and recommend a treatment before changing any values."
+  ]
+}

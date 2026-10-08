@@ -1,0 +1,18 @@
+{
+  "requests": [
+    "Help me pick a strong password I can actually remember.",
+    "I clicked a suspicious email link on my work laptop. What should I do next?",
+    "I want a plain-English explanation of how two-factor authentication protects my accounts.",
+    "Review my Express authentication routes for ways someone could bypass login or access another user's account.",
+    "I need a security checklist before I launch a small online store that accepts payments through Stripe.",
+    "Help me configure SSH on my Ubuntu server so only key-based logins are allowed.",
+    "I want to remove API keys accidentally committed to my Git repository and understand which credentials I need to rotate.",
+    "I'm sharing a PDF with a client. How can I check that redacted text and hidden metadata won't expose confidential information?",
+    "Help me assess whether my company should allow employees to use personal phones for work email.",
+    "I need a threat model for a document-sharing app with public links, private folders, and external collaborators.",
+    "I'm worried my home Wi-Fi is insecure. Give me a short checklist I can follow.",
+    "Help me write a policy for securely disposing of old laptops and backup drives.",
+    "I want to check my AWS S3 configuration for buckets that accidentally allow public access.",
+    "Draft a tabletop exercise for my team involving ransomware, unavailable backups, and a suspected customer data leak."
+  ]
+}

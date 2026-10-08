@@ -1,0 +1,23 @@
+{
+  "requests": [
+    "I need a Dockerfile for my Python API that runs as a non-root user.",
+    "My deploy broke; help me roll back.",
+    "Explain blue-green deployments to me using a simple example.",
+    "I want my GitHub Actions workflow to test pull requests and deploy to staging only after merges.",
+    "Help me figure out why my Kubernetes pods keep restarting after yesterday's release.",
+    "I'd like a checklist for safely rotating database credentials across my production services.",
+    "I keep running out of disk space on my Ubuntu server. Help me find what's growing.",
+    "Can you review my Terraform plan for changes that might interrupt service?",
+    "I need to configure Nginx to serve my frontend and proxy API requests to port 8000.",
+    "I'm new to on-call work. What should I check first when an uptime alert fires?",
+    "Help me stop secrets from appearing in my CI logs.",
+    "I want a deployment runbook with verification steps, rollback criteria, and clear ownership for each stage.",
+    "My staging environment behaves differently from production; help me compare their configuration without exposing credentials.",
+    "I'd like to schedule nightly PostgreSQL backups and verify that I can restore them.",
+    "I need a short maintenance notice for a planned thirty-minute outage.",
+    "Help me set useful CPU, memory, and error-rate alerts without waking me for every tiny spike.",
+    "I'm moving my app to a new server and need a migration sequence that minimizes downtime.",
+    "I want my Docker Compose services to recover after a host reboot and retain their persistent data.",
+    "Please help me investigate why my deployment pipeline takes twenty minutes when the build itself finishes in three."
+  ]
+}
