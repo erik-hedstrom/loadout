@@ -149,7 +149,7 @@ export function readSkillFile(dir: string, file: string): string {
 
 export function loadSkill(deps: SearchDeps, skill: string, file?: string): string {
   const c = resolveSkill(deps.library, skill);
-  if (!c) throw new Error(`no skill "${skill}" in the library; use find_skills to search`);
+  if (!c) throw new Error('no such skill in the library; use find_skills to search');
   const toPath = (p: string) => {
     try {
       return deps.toPath ? deps.toPath(p) : p;
@@ -175,7 +175,7 @@ export function loadSkill(deps: SearchDeps, skill: string, file?: string): strin
 }
 
 const gatewayFailure = (name: string, origin: string | undefined) => (err: unknown): never => {
-  throw new Error(diagnostic(`gateway ${name}`, origin, err));
+  throw new Error(diagnostic(`gateway ${escapeSkillTags(name)}`, origin, err));
 };
 
 /** Connections to the library's MCP servers, opened on first use and kept for the session. */
@@ -191,7 +191,7 @@ export class Gateway {
     const existing = this.clients.get(name);
     if (existing) return existing;
     const c = this.servers.find((s) => s.name === name || `mcp:${s.name}` === name);
-    if (!c?.server) return Promise.reject(new Error(`no MCP server "${name}" in the library (have: ${this.names.join(', ') || 'none'})`));
+    if (!c?.server) return Promise.reject(new Error(`no such MCP server in the library (have: ${this.names.map(escapeSkillTags).join(', ') || 'none'})`));
     const s = c.server;
     let origin: string | undefined;
     let transport;
@@ -204,7 +204,7 @@ export class Gateway {
           : new StreamableHTTPClientTransport(url, { requestInit: { headers: s.headers ?? {} } })
         : new StdioClientTransport({ command: s.command!, args: s.args ?? [], env: { ...getDefaultEnvironment(), ...(s.env ?? {}) }, stderr: 'ignore' });
     } catch (err) {
-      return Promise.reject(new Error(diagnostic(`gateway ${c.name}`, origin, err)));
+      return gatewayFailure(c.name, origin)(err);
     }
     // The gateway forwards results verbatim; compiling upstream output schemas can log secrets.
     // The SDK still requires structuredContent when a tool declares an output schema.
@@ -326,7 +326,7 @@ export function createServer(deps: SearchDeps): { server: McpServer; gateway: Ga
     server.registerTool(
       'server_tools',
       {
-        description: `List the tools of an MCP server from the library: ${servers.map((s) => s.name).join(', ')}. Starts it on first use.`,
+        description: `List the tools of an MCP server from the library: ${servers.map((s) => escapeSkillTags(s.name)).join(', ')}. Starts it on first use.`,
         inputSchema: {
           server: z.string().min(1).max(200),
           tool: z.string().max(200).optional().describe('One tool, to get its complete input schema'),

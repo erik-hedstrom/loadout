@@ -76,14 +76,14 @@ export function readConfined(root: string, rel: string, maxBytes: number, realRo
 }
 
 export function copySkillConfined(source: string, destination: string): void {
-  if (lstatSync(source).isSymbolicLink()) throw new Error('skill contains a link: .');
+  if (lstatSync(source).isSymbolicLink()) throw new Error('skill contains a link');
   const root = realpathSync(source);
   let files = 0;
   let bytes = 0;
   const walk = (rel: string, depth: number): void => {
     const path = join(root, rel);
     const st = lstatSync(path);
-    if (st.isSymbolicLink()) throw new Error(`skill contains a link: ${rel || '.'}`);
+    if (st.isSymbolicLink()) throw new Error('skill contains a link');
     if (st.isDirectory()) {
       if (depth > LIMITS.skillDepth) throw new Error(`skill nested deeper than ${LIMITS.skillDepth} folders`);
       mkdirSync(join(destination, rel), { recursive: true });
@@ -94,7 +94,7 @@ export function copySkillConfined(source: string, destination: string): void {
       const body = readConfined(root, rel, maxBytes, root);
       bytes += body.length;
       writeFileSync(join(destination, rel), body, { mode: st.mode });
-    } else throw new Error(`not a regular skill file: ${rel}`);
+    } else throw new Error('not a regular skill file');
   };
   walk('', 0);
 }
@@ -165,7 +165,15 @@ interface McpFile {
 
 export function readMcpServers(libraryDir: string): NonNullable<McpFile['mcpServers']> {
   const file = join(libraryDir, 'mcp.json');
-  return existsSync(file) ? (JSON.parse(readFileSync(file, 'utf8')) as McpFile).mcpServers ?? {} : {};
+  if (!existsSync(file)) return {};
+  const text = readFileSync(file, 'utf8');
+  let config: McpFile;
+  try {
+    config = JSON.parse(text) as McpFile;
+  } catch {
+    throw new Error('library mcp.json is not valid JSON');
+  }
+  return config.mcpServers ?? {};
 }
 
 export function scanLibrary(libraryDir: string): Capability[] {

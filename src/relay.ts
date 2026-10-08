@@ -5,12 +5,13 @@ import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { JSONRPCMessage, RequestId } from '@modelcontextprotocol/sdk/types.js';
 import { readMcpServers } from './library.js';
 import { diagnostic } from './diagnostic.js';
+import { escapeSkillTags } from './launch.js';
 
 export function relay(front: Transport, back: Transport, key: string, origin?: string): Promise<void> {
   return new Promise((resolve, reject) => {
     let closing = false;
     let initializeId: RequestId | undefined;
-    const detail = (error: unknown) => diagnostic(`mcp-launch ${key}`, origin, error);
+    const detail = (error: unknown) => diagnostic(`mcp-launch ${escapeSkillTags(key)}`, origin, error);
     const report = (error: unknown) => { console.error(`loadout: ${detail(error)}`); };
     const finish = (error?: Error) => {
       if (closing) return;
@@ -47,12 +48,7 @@ export function relay(front: Transport, back: Transport, key: string, origin?: s
 }
 
 export async function launchMcp(key: string, libraryDir: string): Promise<void> {
-  let servers: ReturnType<typeof readMcpServers>;
-  try {
-    servers = key.startsWith('mcp:') ? readMcpServers(libraryDir) : {};
-  } catch {
-    throw new Error('could not read library MCP config');
-  }
+  const servers = key.startsWith('mcp:') ? readMcpServers(libraryDir) : {};
   const name = key.slice(4);
   if (!Object.hasOwn(servers, name)) throw new Error('mcp-launch requires a library MCP server key');
   const { description, autoApprove, gateway, ...server } = servers[name]!;
@@ -78,7 +74,7 @@ export async function launchMcp(key: string, libraryDir: string): Promise<void> 
       back = new StdioClientTransport({ ...server, command: server.command! });
     }
   } catch (error) {
-    throw new Error(diagnostic(`mcp-launch ${key}`, origin, error));
+    throw new Error(diagnostic(`mcp-launch ${escapeSkillTags(key)}`, origin, error));
   }
   const front = new StdioServerTransport();
   const end = () => { front.onclose?.(); };
@@ -89,7 +85,7 @@ export async function launchMcp(key: string, libraryDir: string): Promise<void> 
   process.once('SIGTERM', interrupt);
   try {
     await relay(front, back, key, origin);
-    if (interrupted) throw new Error(diagnostic(`mcp-launch ${key}`, origin, undefined));
+    if (interrupted) throw new Error(diagnostic(`mcp-launch ${escapeSkillTags(key)}`, origin, undefined));
   } finally {
     process.stdin.off('end', end);
     process.off('SIGINT', interrupt);

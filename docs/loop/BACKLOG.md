@@ -490,6 +490,9 @@ Learnings:
   verbatim anyway, and the SDK's structuredContent check stays.
 - Errors no longer echo requested names (readConfined, missing tool). A
   hostile file name copied from a listing would come back unescaped.
+- Parse errors are fixed text where config.json and mcp.json are read, which
+  covers every command; startup ran before any sanitized handler. Library
+  server names go through escapeSkillTags wherever they reach the agent.
 
 **E1. CI.**
 
