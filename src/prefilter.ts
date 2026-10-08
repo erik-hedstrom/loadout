@@ -68,15 +68,3 @@ export function bm25(query: string, capabilities: Capability[]): { capability: C
     .filter((r) => r.score > 0)
     .sort((a, b) => b.score - a.score);
 }
-
-/**
- * Narrow the library to at most `max` candidates for the router. Small
- * libraries pass through untouched: the router is cheap enough to see them all,
- * and lexical matching misses paraphrases ("flaky e2e" vs "Playwright").
- */
-export function prefilter(query: string, capabilities: Capability[], max: number): Capability[] {
-  if (capabilities.length <= max) return capabilities;
-  return bm25(query, capabilities)
-    .slice(0, max)
-    .map((r) => r.capability);
-}

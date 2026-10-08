@@ -116,7 +116,6 @@ describe('audit', () => {
   it('uses real serialized tools and the three largest descriptions for a bounded comparison', async () => {
     for (const [name, description] of [['a', 'abc'], ['b', 'abcdefg'], ['c', 'abcdefghijk'], ['d', 'abcdefghijklmno']]) skill(join(home, 'claude-custom', 'skills'), name!, description!);
     const result = await audit(project);
-    expect(result.loadout.toolTokens).toBeGreaterThan(0);
     expect(result.loadout.skillTokens).toBe(12);
     expect(result.loadout.pickedSkills).toBe(3);
   });

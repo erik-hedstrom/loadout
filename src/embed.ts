@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import type { Capability } from './types.js';
 
 /**
- * Local sentence embeddings for the prefilter. The model runs on CPU through
+ * Local sentence embeddings for retrieval. The model runs on CPU through
  * transformers.js (an optional dependency) and vectors are cached on disk by
  * content hash, so each skill is embedded once.
  */

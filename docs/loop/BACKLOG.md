@@ -450,7 +450,7 @@ Acceptance:
 | E1 | P0 | GitHub Actions CI | Codex | cloud | done ([PR #2](https://github.com/erik-hedstrom/loadout/pull/2)) |
 | E2 | P0 | LICENSE, CONTRIBUTING, SECURITY.md, templates | Claude | cloud + erik | done ([PR #1](https://github.com/erik-hedstrom/loadout/pull/1)) |
 | E7 | P0 | Vendor-independent bench judges and expander | Codex | cloud | done ([PR #5](https://github.com/erik-hedstrom/loadout/pull/5)) |
-| E8 | P0 | Repo-wide simplification pass | Claude (pr-reviewer finds, worker fixes) + Codex review | cloud | todo (include A2's toolTokens tautology test and E7's cosmetic items) |
+| E8 | P0 | Repo-wide simplification pass | Claude (pr-reviewer finds, worker fixes) + Codex review | cloud | partial: src/ done (69 net lines removed); bench/ and Markdown pending (include E7's cosmetic items) |
 | E9 | P0 | Security hardening from the read-only Sol review | Codex | cloud | done ([PR #4](https://github.com/erik-hedstrom/loadout/pull/4), re-measure [PR #7](https://github.com/erik-hedstrom/loadout/pull/7)) |
 | E3 | P1 | Split the test file per module | Codex | cloud | todo |
 | E5 | P1 | Changelog and release automation | Codex | cloud | todo (with A4) |
@@ -561,6 +561,12 @@ Acceptance:
 - No behavior change: tests unchanged and green, and the bench scripts still
   run.
 - Report lines removed per area.
+
+Area 2 (`src/`): done in the working tree; 98 lines deleted, 29 added (69 net
+removed). All 13 review findings verified and applied. Security code and
+fixed-text diagnostics unchanged. Tests changed only to remove the deleted
+`prefilter()` test/import and A2's `toolTokens > 0` assertion (6 net lines
+removed); the gateway token comparison remains. No paid calls.
 
 Starting points from Sol's review (2026-10-07):
 - `src/`, ≈ 40–60 lines: `prefilter()` is used only by tests
