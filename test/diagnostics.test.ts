@@ -120,7 +120,8 @@ describe('E11 diagnostics', () => {
   });
 
   it('copySkillConfined special file error is path-free', () => {
-    const dir = temp();
+    // copySkillConfined walks the real path; macOS's tmpdir is a link (/var -> /private/var).
+    const dir = fs.realpathSync(temp());
     const path = join(dir, CANARY);
     writeFileSync(path, 'reference');
     const lstat = fs.lstatSync;
