@@ -111,7 +111,7 @@ describe('benchmark backends', () => {
     else expect(existsSync(out)).toBe(false);
   });
 
-  it.each(['duplicate id', 'unknown category', 'other prefix', 'array id'])('refuses to resume a seed file with $0', (problem) => {
+  it.each(['duplicate id', 'unknown category', 'other prefix', 'array id', 'no final newline'])('refuses to resume a seed file with $0', (problem) => {
     const dir = temp(), out = join(dir, 'seeds-c1.jsonl');
     const generatedBy = { backend: 'files', model: 'gpt-6.1-sol', effort: null, producer: 'unverified' };
     const rows = Array.from({ length: 24 }, (_, n) => ({ id: `${problem === 'other prefix' ? 'c2' : 'c1'}-web-${String(n + 1).padStart(2, '0')}`, category: 'web', request: `Request ${n + 1}`, generatedBy }));
@@ -119,11 +119,11 @@ describe('benchmark backends', () => {
     // join() would read ['c1-web-01'] as 'c1-web-01'.
     const stored = problem === 'array id' ? rows.map((row) => ({ ...row, id: [row.id] })) : rows;
     if (problem === 'unknown category') rows.push({ ...rows[0]!, id: 'c1-other-01', category: 'other', request: 'Other request' });
-    const content = stored.map((row) => JSON.stringify(row)).join('\n') + '\n';
+    const content = stored.map((row) => JSON.stringify(row)).join('\n') + (problem === 'no final newline' ? '' : '\n');
     writeFileSync(out, content);
     const refused = runSeeds(dir);
     expect(refused.status).not.toBe(0);
-    expect(refused.stderr).toContain(problem === 'unknown category' ? 'unknown category' : 'invalid seeds for category web');
+    expect(refused.stderr).toContain({ 'unknown category': 'unknown category', 'no final newline': 'end with a newline' }[problem] ?? 'invalid seeds for category web');
     expect(readFileSync(out, 'utf8')).toBe(content);
     expect(existsSync(join(dir, 'c1'))).toBe(false);
   });

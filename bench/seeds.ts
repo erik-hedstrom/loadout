@@ -3,7 +3,7 @@
  *
  *   npx tsx bench/seeds.ts --prefix c1 --out bench/data/seeds-c1.jsonl [--backend codex|claude|files] [--model gpt-6.1-sol] [--effort high]
  */
-import { appendFileSync, existsSync, mkdirSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { z } from 'zod';
@@ -53,6 +53,8 @@ if (!values.prefix || !/^[a-z0-9]+$/.test(values.prefix) || !values.out) throw n
 const backend = backendOf(values.backend!, values.effort);
 const model = values.model!;
 const generatedBy: { backend: string; model: string; effort: string | null; family?: string; producer?: string } = { backend, model, effort: values.effort ?? null, ...(backend === 'files' ? { producer: 'unverified' } : { family: modelFamily(model) }) };
+// Rows are appended, so a hand-edited file without a final newline would fuse two rows.
+if (existsSync(values.out) && !readFileSync(values.out, 'utf8').endsWith('\n')) throw new Error('seed file must end with a newline; use a fresh output file');
 const records = existsSync(values.out) ? readJsonl<{ id: string; category: string; request: string; generatedBy?: typeof generatedBy }>(values.out) : [];
 if (records.some((r) => !r.generatedBy || r.generatedBy.backend !== backend || r.generatedBy.model !== model || (r.generatedBy.effort ?? null) !== generatedBy.effort || r.generatedBy.family !== generatedBy.family || r.generatedBy.producer !== generatedBy.producer)) throw new Error('seed generator provenance differs; use a fresh output file');
 
