@@ -16,9 +16,12 @@ export interface Check {
   fix?: string;
 }
 
-/** First line of `<bin> --version`, or undefined when it does not run. The host CLI does not need loadout's key. */
+/** What a CLI needs to start (Node shims, Windows and WSL), and nothing that could hold a credential. */
+const VERSION_ENV = ['PATH', 'PATHEXT', 'HOME', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'SYSTEMROOT', 'TEMP', 'TMP', 'TMPDIR', 'LANG', 'WSL_DISTRO_NAME', 'WSLENV'];
+
+/** First line of `<bin> --version`, or undefined when it does not run. */
 function version(bin: string): string | undefined {
-  const { TYPESAFE_API_KEY: _key, ...env } = process.env;
+  const env = Object.fromEntries(VERSION_ENV.flatMap((k) => (process.env[k] === undefined ? [] : [[k, process.env[k]]])));
   try {
     return execFileSync(bin, ['--version'], { encoding: 'utf8', timeout: 10_000, stdio: ['ignore', 'pipe', 'ignore'], env }).trim().split('\n')[0];
   } catch {
@@ -38,12 +41,12 @@ function readConfig(file: string, parse: (text: string) => unknown): Record<stri
 
 /**
  * Whether a UserPromptSubmit hook runs loadout's `hook <agent>`. Claude's settings.json and Codex's
- * config.toml share this shape; setup writes the command as `node …/cli.js hook <agent>`, through
- * wsl.exe under WSL, and the plugin as `loadout hook claude`.
+ * config.toml share this shape. The plugin runs `loadout hook claude`; setup writes
+ * `node …/cli.js hook <agent>` (cli.ts from a checkout), through wsl.exe under WSL.
  */
 function hasHook(config: Record<string, unknown>, agent: 'claude' | 'codex'): boolean {
   const groups = (config.hooks as { UserPromptSubmit?: unknown } | undefined)?.UserPromptSubmit;
-  const command = new RegExp(`(^|\\s|')hook ${agent}($|\\s|')`);
+  const command = new RegExp(`(^|[\\s'/])(loadout|cli\\.[jt]s)'? hook ${agent}($|[\\s'])`);
   return Array.isArray(groups) && groups.some((g) => Array.isArray(g?.hooks) && g.hooks.some((h: { command?: unknown }) => typeof h?.command === 'string' && command.test(h.command)));
 }
 
@@ -71,7 +74,7 @@ export async function doctor(config: Config, client: (apiKey: string) => SystemO
         checks.push({ name: 'Jev call', ok: true, detail: `answered in ${Date.now() - started} ms` });
       } catch (err) {
         // jevClient's errors are fixed text (E11): no key, prompt or response body.
-        checks.push({ name: 'Jev call', ok: false, detail: err instanceof Error ? err.message : 'failed', fix: `check the key, and that ${new URL(config.jev.baseUrl).host} is reachable` });
+        checks.push({ name: 'Jev call', ok: false, detail: err instanceof Error ? err.message : 'failed', fix: 'check the key, and that the Jev API (jev.baseUrl, api.typesafe.ai by default) is reachable' });
       }
     }
   }

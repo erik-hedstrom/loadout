@@ -54,10 +54,11 @@ describe('doctor', () => {
 
   it.skipIf(process.platform === 'win32')('passes when everything is set up, and never prints the key', async () => {
     vi.stubEnv('TYPESAFE_API_KEY', KEY);
+    vi.stubEnv('GITHUB_TOKEN', 'github-token-canary');
     cpSync(join(import.meta.dirname, 'fixtures', 'library'), join(home, '.loadout', 'library'), { recursive: true });
     for (const bin of ['loadout', 'claude', 'codex']) {
-      // A CLI that would print loadout's key if it received it.
-      writeFileSync(join(home, 'bin', bin), `#!/bin/sh\necho "${bin} 9.9.9 $TYPESAFE_API_KEY"\n`);
+      // A CLI that would print credentials from its environment if it received them.
+      writeFileSync(join(home, 'bin', bin), `#!/bin/sh\necho "${bin} 9.9.9 $TYPESAFE_API_KEY $GITHUB_TOKEN"\n`);
       chmodSync(join(home, 'bin', bin), 0o755);
     }
     mkdirSync(join(home, 'claude'));
@@ -109,6 +110,20 @@ describe('doctor', () => {
     const checks = byName(await doctor(config, () => okClient));
     expect(checks['Codex']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: not set up' });
     expect(checks['Claude Code']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: not set up' });
+  });
+
+  it('does not count another tool that has a hook subcommand', async () => {
+    mkdirSync(join(home, 'codex'));
+    writeFileSync(join(home, 'codex', 'config.toml'), '[[hooks.UserPromptSubmit]]\n[[hooks.UserPromptSubmit.hooks]]\ntype = "command"\ncommand = "other-tool hook codex"\n');
+    expect(byName(await doctor(config, () => okClient))['Codex']!.detail).toBe('CLI not on PATH; loadout: not set up');
+  });
+
+  it('finishes with a malformed jev.baseUrl', async () => {
+    vi.stubEnv('TYPESAFE_API_KEY', KEY);
+    const bad = { ...config, jev: { ...config.jev, baseUrl: 'not a url' } };
+    const checks = byName(await doctor(bad, (apiKey) => jevClient({ apiKey, baseUrl: bad.jev.baseUrl, model: 'fake', retries: 0 })));
+    expect(checks['Jev call']).toMatchObject({ ok: false, detail: 'Jev request failed: network error' });
+    expect(checks['library']).toBeDefined();
   });
 
   it('flags a host that is installed but has no loadout', async () => {
