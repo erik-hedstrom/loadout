@@ -191,6 +191,13 @@ describe('doctor', () => {
     expect(checks['Claude Code']!.detail).toMatch(/^version unknown;/);
   }, 30_000);
 
+  it('reads a Codex server entry that is not a table as not set up', async () => {
+    mkdirSync(join(home, 'codex'));
+    writeFileSync(join(home, 'codex', 'config.toml'), 'mcp_servers = { loadout = "wrong" }\n');
+    const checks = byName(await doctor(config, () => okClient));
+    expect(checks['Codex']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: not set up' });
+  });
+
   it('does not count a hook entry without type = "command"', async () => {
     mkdirSync(join(home, 'codex'));
     writeFileSync(join(home, 'codex', 'config.toml'), '[[hooks.UserPromptSubmit]]\n[[hooks.UserPromptSubmit.hooks]]\ncommand = "loadout hook codex"\n');

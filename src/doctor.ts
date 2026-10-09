@@ -145,7 +145,7 @@ export async function doctor(config: Config, client: (apiKey: string) => SystemO
         const hooksOff = (config.features as { hooks?: unknown } | undefined)?.hooks === false;
         const server = (config.mcp_servers as Record<string, Record<string, unknown>> | undefined)?.loadout;
         // Codex starts a server from exactly one of command (stdio) or url (HTTP), and rejects a table with both keys.
-        const transports = server ? (['command', 'url'] as const).filter((k) => k in server) : [];
+        const transports = server && typeof server === 'object' ? (['command', 'url'] as const).filter((k) => k in server) : [];
         const t = server && transports.length === 1 ? server[transports[0]!] : undefined;
         const runnable = server?.enabled !== false && typeof t === 'string' && t.trim() !== '';
         // Codex runs a user hook only once it is trusted in /hooks, keyed by a hash of Codex's own serialization; doctor cannot see that.
