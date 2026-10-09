@@ -818,7 +818,6 @@ describe('launch', () => {
     expect(args[5]).not.toContain('postgresql://localhost/dev');
     expect(args[5]).toContain('"mcp:postgres"');
     expect(args.at(-1)).toMatch(/webapp-testing \(.*SKILL\.md\)[\s\S]*Also available if needed:\n- gh-actions-debug/);
-    // Host-neutral copies: no Claude plugin metadata in a Codex session.
     expect(session.pluginDir).toBeUndefined();
     expect(session.skillsDir).toBe(join(session.dir, 'skills'));
     expect(existsSync(join(session.skillsDir!, 'webapp-testing', 'SKILL.md'))).toBe(true);
