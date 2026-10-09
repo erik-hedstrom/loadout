@@ -61,6 +61,15 @@ describe('doctor', () => {
     expect(formatDoctor(Object.values(checks))).not.toContain(keyDir);
   });
 
+  it('reports a malformed library mcp.json as a failed check and carries on', async () => {
+    mkdirSync(join(home, '.loadout', 'library'), { recursive: true });
+    writeFileSync(join(home, '.loadout', 'library', 'mcp.json'), '{ not json');
+    mkdirSync(join(home, 'codex'));
+    const checks = byName(await doctor(config, () => okClient));
+    expect(checks['library']).toMatchObject({ ok: false, detail: 'library mcp.json is not valid JSON' });
+    expect(checks['Codex']).toBeDefined();
+  });
+
   it.skipIf(process.platform === 'win32')('passes when everything is set up, and never prints the key', async () => {
     vi.stubEnv('TYPESAFE_API_KEY', KEY);
     vi.stubEnv('GITHUB_TOKEN', 'github-token-canary');

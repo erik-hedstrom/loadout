@@ -8,6 +8,7 @@ import { EmbeddingStore, hasTransformers } from './embed.js';
 import type { SystemOneClient } from './jev.js';
 import { which } from './launch.js';
 import { scanLibrary } from './library.js';
+import type { Capability } from './types.js';
 
 export interface Check {
   name: string;
@@ -92,14 +93,20 @@ export async function doctor(config: Config, client: (apiKey: string) => SystemO
     }
   }
 
-  const library = scanLibrary(paths.library());
-  const skills = library.filter((c) => c.kind === 'skill').length;
-  checks.push({
-    name: 'library',
-    ok: library.length > 0,
-    detail: `${skills} skills, ${library.length - skills} MCP servers in ${paths.library()}`,
-    fix: 'loadout add <dir|github-url>',
-  });
+  let library: Capability[] = [];
+  try {
+    library = scanLibrary(paths.library());
+    const skills = library.filter((c) => c.kind === 'skill').length;
+    checks.push({
+      name: 'library',
+      ok: library.length > 0,
+      detail: `${skills} skills, ${library.length - skills} MCP servers in ${paths.library()}`,
+      fix: 'loadout add <dir|github-url>',
+    });
+  } catch (err) {
+    // A broken library is what doctor is for: report it and run the remaining checks.
+    checks.push({ name: 'library', ok: false, detail: err instanceof Error ? err.message : 'cannot be read', fix: `fix mcp.json, or check that ${paths.library()} is readable` });
+  }
 
   if (!config.embeddings) checks.push({ name: 'embedding index', ok: true, detail: 'off in the config' });
   else if (!(await hasTransformers())) {
