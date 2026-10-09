@@ -608,6 +608,21 @@ catch (err) { console.log(err.message); }
     } finally { fetchMock.mockRestore(); }
   });
 
+  it('stops during the retry backoff when the caller cancels', async () => {
+    const cancel = new AbortController();
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+      setTimeout(() => cancel.abort(), 20);
+      throw new TypeError('network down');
+    });
+    try {
+      const started = Date.now();
+      await expect(jevClient({ apiKey: 'fake', baseUrl: 'https://example.invalid', model: 'fake', retries: 2 }).ask({}, {}, cancel.signal)).rejects.toMatchObject({ message: 'Jev request cancelled' });
+      // The first backoff is 500 ms; a cancel ends it early and no second request goes out.
+      expect(Date.now() - started).toBeLessThan(400);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally { fetchMock.mockRestore(); }
+  });
+
   it.each(['not JSON upstream credential canary', JSON.stringify({ answers: { canary: { type: 'choice', probabilities: { 'upstream credential canary': 1 } } } })])('uses fixed diagnostics for invalid Jev responses (%s)', async (body) => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response(body));
     try {

@@ -2,6 +2,8 @@
  * Minimal client for TypeSafe's System One API (POST /v1/systemone).
  * Uses fetch directly so the router has no SDK dependency.
  */
+import { setTimeout as sleep } from 'node:timers/promises';
+
 /** Instructions and criteria accept plain text or JSON structure (labelled fields, lists). */
 export type Text = string | string[] | Record<string, unknown>;
 
@@ -104,7 +106,11 @@ export function jevClient(opts: { apiKey: string; baseUrl: string; model: string
           // Network errors and timeouts are not JevErrors and are worth one more try.
           const retryable = err instanceof JevError ? err.retryable : true;
           if (!retryable || attempt >= (opts.retries ?? 1)) throw err;
-          await new Promise((r) => setTimeout(r, 500 * 2 ** attempt));
+          try {
+            await sleep(500 * 2 ** attempt, undefined, { signal });
+          } catch {
+            throw new Error('Jev request cancelled');
+          }
         }
       }
     },
