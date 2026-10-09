@@ -158,8 +158,7 @@ native machine:
   generic `call_server_tool`. Native per-tool approvals need `tools/list_changed`.
 - **Codex hook:** not tested live, because trusting it needs `/hooks`
   interactively.
-- **Untested hosts:** Cursor, OpenCode and Claude Desktop setups are generated
-  but not tested end to end. ChatGPT through a tunnel is untested.
+- **Untested hosts:** see [docs/hosts.md](docs/hosts.md).
 - **Outcome evaluation:** the arms invent their own inputs, the runs inherit
   the user's Codex config, and the sample is tiny.
 - **Router weak spots:** integrations, ML and apps. Generic skills such as
