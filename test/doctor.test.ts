@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { chmodSync, cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -128,6 +129,23 @@ describe('doctor', () => {
     const checks = byName(await doctor(config, () => okClient));
     expect(checks['Codex']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: not set up' });
     expect(checks['Claude Code']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: not set up' });
+  });
+
+  it('does not count a Codex server table with nothing to launch', async () => {
+    mkdirSync(join(home, 'codex'));
+    writeFileSync(join(home, 'codex', 'config.toml'), '[mcp_servers.loadout]\nstartup_timeout_sec = 20\n');
+    const checks = byName(await doctor(config, () => okClient));
+    expect(checks['Codex']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: not set up' });
+  });
+
+  it('reports a malformed loadout config as a failed check and runs the rest on defaults', () => {
+    mkdirSync(join(home, '.loadout'));
+    writeFileSync(join(home, '.loadout', 'config.json'), '{ "jev": { "apiKeyFile": "/secret/path" ');
+    const result = spawnSync(process.execPath, ['--import', 'tsx', join(import.meta.dirname, '../src/cli.ts'), 'doctor'], { encoding: 'utf8', env: { ...process.env } });
+    expect(result.status).toBe(1);
+    expect(result.stdout).toMatch(/✗ config +config\.json is not valid JSON/);
+    expect(result.stdout).toMatch(/library/);
+    expect(result.stdout + result.stderr).not.toContain('/secret/path');
   });
 
   it('does not count another tool that has a hook subcommand', async () => {

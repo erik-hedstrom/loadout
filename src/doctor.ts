@@ -138,8 +138,10 @@ export async function doctor(config: Config, client: (apiKey: string) => SystemO
       home: codexHome,
       attached: () => {
         const config = readConfig(join(codexHome, 'config.toml'), parseToml);
-        const server = (config.mcp_servers as Record<string, { enabled?: unknown }> | undefined)?.loadout;
-        const found = [hasHook(config, 'codex') && 'hook', server && server.enabled !== false && 'search server'].filter(Boolean);
+        const server = (config.mcp_servers as Record<string, { enabled?: unknown; command?: unknown; url?: unknown }> | undefined)?.loadout;
+        // Codex needs a command or url to start a server; a table without one launches nothing.
+        const runnable = server && server.enabled !== false && (typeof server.command === 'string' || typeof server.url === 'string');
+        const found = [hasHook(config, 'codex') && 'hook', runnable && 'search server'].filter(Boolean);
         return found.length ? found.join(' and ') : undefined;
       },
       setup: 'codex',
