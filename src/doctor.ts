@@ -15,8 +15,6 @@ export interface Check {
   fix?: string;
 }
 
-const MIN_NODE = [22, 12];
-
 /** First line of `<bin> --version`, or undefined when it does not run. */
 function version(bin: string): string | undefined {
   try {
@@ -37,13 +35,6 @@ const readText = (file: string) => {
 /** Read-only: reports what is set up and how to fix what is not. Only the Jev check makes a network call. */
 export async function doctor(config: Config, client: (apiKey: string) => SystemOneClient): Promise<Check[]> {
   const checks: Check[] = [];
-  const node = process.versions.node.split('.').map(Number);
-  checks.push({
-    name: 'node',
-    ok: node[0]! > MIN_NODE[0]! || (node[0] === MIN_NODE[0] && node[1]! >= MIN_NODE[1]!),
-    detail: process.versions.node,
-    fix: `install Node ${MIN_NODE.join('.')} or later`,
-  });
   // The plugin's hook and generated host configs run `loadout` by name.
   const self = which('loadout');
   checks.push({ name: 'loadout on PATH', ok: Boolean(self), detail: self ?? 'not found', fix: 'run `npm link` in the loadout checkout, or install the package globally' });
@@ -81,7 +72,8 @@ export async function doctor(config: Config, client: (apiKey: string) => SystemO
 
   if (!config.embeddings) checks.push({ name: 'embedding index', ok: true, detail: 'off in the config' });
   else if (!(await hasTransformers())) {
-    checks.push({ name: 'embedding index', ok: false, detail: 'optional package @huggingface/transformers not installed; keyword retrieval only', fix: 'npm install @huggingface/transformers' });
+    // Optional by design: keyword retrieval still works, so this is information, not a failure.
+    checks.push({ name: 'embedding index', ok: true, detail: 'keyword retrieval only (optional @huggingface/transformers not installed)' });
   } else {
     const store = new EmbeddingStore(paths.embeddings());
     const indexed = library.filter((c) => store.vector(c)).length;

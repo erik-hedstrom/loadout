@@ -78,6 +78,17 @@ describe('doctor', () => {
     expect(formatDoctor(Object.values(checks))).not.toContain(KEY);
   });
 
+  it('counts the library skills missing from the embedding index', async () => {
+    vi.doMock('../src/embed.js', async (original) => ({ ...(await original<typeof import('../src/embed.js')>()), hasTransformers: async () => true }));
+    vi.resetModules();
+    const { doctor: withIndex } = await import('../src/doctor.js');
+    cpSync(join(import.meta.dirname, 'fixtures', 'library'), join(home, '.loadout', 'library'), { recursive: true });
+    const index = byName(await withIndex({ ...config, embeddings: true }, () => okClient))['embedding index']!;
+    expect(index).toMatchObject({ ok: false, fix: 'the next `loadout add` or `loadout route` indexes the rest' });
+    expect(index.detail).toMatch(/^0 of [1-9]\d* indexed$/);
+    vi.doUnmock('../src/embed.js');
+  });
+
   it('flags a host that is installed but has no loadout', async () => {
     mkdirSync(join(home, 'codex'));
     writeFileSync(join(home, 'codex', 'config.toml'), 'model = "gpt-6.1-sol"\n');

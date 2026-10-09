@@ -485,10 +485,8 @@ Learnings (2026-10-09):
 - Hosts appear only when their CLI is on PATH or their config folder
   exists. A host counts as set up when the plugin is enabled or a `loadout
   hook` / `[mcp_servers.loadout]` entry is present.
-- Also checks Node ≥ 22.12 and `loadout` on PATH, which the plugin's hook
-  needs.
-- Native Windows: `which()` ignores PATHEXT, so `.cmd` shims show as not on
-  PATH. This is shared with the launcher and left as it was.
+- Also checks `loadout` on PATH, which the plugin's hook needs. A missing
+  optional embedding package is reported, not failed.
 
 ## E. Engineering quality (what a reviewer of the repo sees)
 
