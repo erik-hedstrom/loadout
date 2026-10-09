@@ -2,7 +2,8 @@
 # loadout
 
 Pick the model, skills and MCP servers for each coding-agent session from a
-library of any size, so niche capabilities cost nothing until they are needed.
+library of any size. Routing costs **$0.0011 per decision** on
+[v4 realistic requests](bench/RESULTS.md#v4-2026-10-06-realistic-requests-on-the-real-library-judged).
 
 A very cheap System One model ([Jev](https://typesafe.ai/blog/introducing-system-one-models-and-jev),
 $0.042 per million input tokens) reads the task and the repo, picks a model
@@ -59,9 +60,9 @@ other third):
 | Cost per decision | $0.0011, about 1 s |
 
 The agents use what they are given: in headless runs, Claude Code opened a
-loaded skill in 9 of 10 sessions, and Codex in 11 of 11. Without the launcher,
-the Claude Code prompt hook raised that from 2 to 6 of 10. Whether the work
-gets better is not settled yet. In an 8-request blind pilot with Codex,
+loaded skill in 9 of 10 sessions, and Codex in 11 of 11. For sessions without
+the launcher, see [search plus hook below](#search-mid-session-from-any-mcp-host). Whether
+the work gets better is not settled yet. In an 8-request blind pilot with Codex,
 loadout's version won 4, lost 3 and split 1; the wins came where a skill
 encodes conventions, and two losses ran out of time following the skill.
 
@@ -73,8 +74,10 @@ from GitSkills; the rule was tuned on a dev split and reported on test):
 | BM25 top 10 | 88% | 72% | 10 | 100% | free |
 | **loadout** | **93%** (95% incl. optional) | **86%** | **1.2** | **5%** | **$0.00082, 1.0 s** |
 
-On 18 hand-written requests (13 niche, 3 everyday, 2 that name a skill), all
-pass. Both test sets are synthetic or small; see the caveats in RESULTS.md.
+With the v3 rule on a 1,022-skill library, **18/18** hand-written requests pass:
+11 niche, 2 with several acceptable skills, 3 everyday, and 2 naming a skill
+([RESULTS](bench/RESULTS.md#real-library-hand-written-requests)). Both test sets
+are synthetic or small; see the caveats in RESULTS.md.
 
 See [DESIGN.md](DESIGN.md) for the problem and architecture.
 
@@ -140,9 +143,10 @@ loadout library (`loadout add <dir>`).
 
 ## Search mid-session, from any MCP host
 
-`loadout mcp` serves the library as a small MCP server (about 400 tokens of
-tool definitions), so an agent can look for know-how when the work drifts
-away from what the session started with, in its own words:
+`loadout mcp` serves the library as an MCP server (**546 input tokens** of
+tool definitions in Claude Code, [B1](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request)),
+so an agent can look for know-how when the work drifts away from what the
+session started with, in its own words:
 
 - `find_skills(goal, keywords?)`: a Jev-ranked handful of matches with their
   fit, about a second and $0.001 per search; "nothing fits" when nothing does;

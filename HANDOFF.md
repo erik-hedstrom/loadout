@@ -1,4 +1,4 @@
-# Handoff: loadout, 2026-10-07
+# Handoff: loadout, 2026-10-08
 
 Read this first if you are joining the project, human or agent. Then read
 [AGENTS.md](AGENTS.md) (rules), [docs/loop/ORCHESTRATOR.md](docs/loop/ORCHESTRATOR.md)
@@ -7,19 +7,13 @@ Read this first if you are joining the project, human or agent. Then read
 
 ## The one-paragraph version
 
-Developers install skills and MCP servers by the hundred. Hyped skill packs,
-"awesome" lists and plugins each add their descriptions and tool schemas to
-**every request**, relevant or not. loadout keeps all of them in a library no
-agent loads by itself. Per session (or per prompt), a very cheap System One
-model, TypeSafe's Jev at $0.042 per million input tokens, picks the few that
-fit and the model tier, for about $0.001 and a second. It integrates only
-through official extension points (CLI flags, plugins, MCP, hooks), never by
-proxying API traffic, so vendors have no reason or means to block it.
+loadout selects skills, MCP servers and a model tier from a separate library,
+using documented extension points. See [README.md](README.md) for usage and
+[DESIGN.md](DESIGN.md) for the architecture.
 
 ## Where it stands
 
-- **Repo:** https://github.com/erik-hedstrom/loadout, **private** for now, 13
-  commits on `main`. 29 tests pass; typecheck is clean.
+- **Repo:** https://github.com/erik-hedstrom/loadout, **private** for now.
 - **Version:** 0.1.0, not published. The npm name `loadout` is taken (see
   decisions below).
 - **Owner:** Erik Hedström (GitHub `erik-hedstrom`). Commits use
@@ -27,42 +21,17 @@ proxying API traffic, so vendors have no reason or means to block it.
 
 ### What exists
 
-| Command | What it does |
-|---|---|
-| `loadout route "<task>"` | Shows the decision: need score, model tier, loaded / injected / offered skills with fit |
-| `loadout claude\|codex "<task>"` | Launches Claude Code or Codex with the selection (generated plugin / prompt list, injected clear winners, MCP config, model + effort per tier) |
-| `loadout mcp` | MCP server: `find_skills`, `load_skill`, opt-in gateway to library MCP servers |
-| `loadout mcp --http` | The same over Streamable HTTP, skills only, token-protected; for ChatGPT behind a tunnel |
-| `loadout hook claude\|codex` | `UserPromptSubmit` hook: routes every prompt and adds the skills that fit as context |
-| `loadout setup <host>` | Prints config for Claude Code, Codex (also ChatGPT's Codex tab, T3 Code), Claude Desktop, Cursor, OpenCode |
-| `loadout add <dir\|github-url>` | Installs skills into the library (safe copy, provenance, no code executed), indexes embeddings |
-| `loadout list [--sources]` | Shows the library, or the `add` commands that rebuild it |
-
-How the router works ([DESIGN.md](DESIGN.md)):
-1. Keyword plus embedding retrieval narrows the library to 200 candidates.
-2. A wide Jev request picks among them and asks whether a skill is needed at all.
-3. A close Jev request grades the top 8.
-4. A pure `decide()` function, tuned offline on stored answers, loads at most
-   3, offers more, injects clear winners, or stays quiet.
+Commands and integration: [README.md](README.md#use) and
+[search and hook setup](README.md#search-mid-session-from-any-mcp-host).
+Router steps: [DESIGN.md](DESIGN.md#router).
 
 ### Evidence so far
 
-All numbers and caveats are in [bench/RESULTS.md](bench/RESULTS.md). Quote
-those, not this table.
+All numbers, caveats and negative results are in [bench/RESULTS.md](bench/RESULTS.md).
 
 | Question | Result |
 |---|---|
-| Right skill reaches the agent, synthetic tasks, 20k-skill library | 93% loaded (95% offered), 1.2 skills loaded, 5% needless loads |
-| Reasonable choices on 315 realistic requests, real 1,262-skill library, Opus judge, held-out split | 76% useful loaded (86% offered), 84% quiet when nothing is needed, 82% of loads useful, 1% misleading. These are v4's decisions: after E9 about 12% of test requests load differently, against 7.5% run-to-run, and those rows are not judged (RESULTS, E9 re-measure) |
-| Do agents use what they get? | Claude Code 9/10 and Codex 11/11 open a preloaded skill |
-| Agents searching on their own (no preload) | Claude 2/10, Codex 5/10, but when they search, they find the right skill (7/7) |
-| Prompt hook (Claude Code, same 10 requests) | 6/10 open a useful skill (vs 2/10 with search alone) |
 | **Is the work better?** (Codex, 8 requests, blind pairwise) | **Not shown yet:** loadout 4, bare 3, split 1. Wins where skills encode conventions; two losses timed out while following the skill |
-| Token cost of the problem (B1, measured) | Claude Code: 1,262 installed skills add **12.3k tokens** to every request (top 50: +477), about 10 per extra skill, not bounded by the listing cap. Codex bounds its listing (~15.7k characters) and shows 424 of 1,262. loadout's tool definitions add 546, more than the native listing at 50 skills; a straight line between the measured arms crosses near 57 skills (listing overhead only, generated skill names; router calls and loaded skills not measured). The earlier ~140k estimate is withdrawn |
-
-Negative results are recorded, as they should be. Three things did not work:
-a per-candidate yes/no router (v1), request-level "is it specialised?"
-questions, and a platform-mismatch veto.
 
 ### Spend
 
@@ -93,10 +62,12 @@ setup, the iteration protocol, the context discipline and the prompts.
 
 ## Goals for the loop
 
-1. **Wide adoption.** The audience is people who install hyped skills and
-   plugins and pay for them in tokens, latency and worse tool choice on every
-   request. The pitch must be concrete and measured: "your skills cost you N
-   tokens per request; here is the $0.001 fix".
+1. **Wide adoption.** The audience is people who install hyped skill packs
+   and plugins. Pitch only with
+   [B1](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request)
+   numbers, in their scope. Its crossover near 57 skills is interpolated from
+   Claude Code runs with generated names; for real libraries it is not
+   measured.
 2. **Ease of use.** Get from zero to a routed session in three commands. Show
    a GIF in the README. Make `loadout audit` show people their own waste
    before they install anything else.
@@ -113,17 +84,22 @@ setup, the iteration protocol, the context discipline and the prompts.
 
 ## Decisions only Erik can make (ask, don't assume)
 
-1. **License.** Decided by Erik: Apache-2.0, 2026-10-07.
-2. **Going public.** The repo is private. Recommended order: CI green,
+**Decided:** Apache-2.0 (2026-10-07); stay `erik-hedstrom`, not the
+considered `haesteining` alias; hook default (2026-10-07): loadout runs
+automatically inside Claude Code, in the CLI and desktop app, through a
+user-installed plugin (D10), whose install text says routed prompts go to
+TypeSafe. The launcher stays for power users and benchmarks.
+
+1. **Going public.** The repo is private. Recommended order: CI green,
    LICENSE, README quickstart verified on a clean machine, then public.
    On the day: enable private vulnerability reporting (GitHub offers it only
    on public repos) and, if you want one, add a security contact to
    SECURITY.md. Decide whether `bench/results/*-overhead` may keep your
    ambient plugin and skill names.
-3. **npm name.** `loadout` is taken (0.0.2). Options: `@erik-hedstrom/loadout`
+2. **npm name.** `loadout` is taken (0.0.2). Options: `@erik-hedstrom/loadout`
    (scoped, always available), or an unscoped name to check
    (`loadout-router`, `skill-loadout`, …).
-4. **Cloud setup and budget.** Do the one-time setup in ORCHESTRATOR.md:
+3. **Cloud setup and budget.** Do the one-time setup in ORCHESTRATOR.md:
    - GitHub app access to the repo;
    - the `TYPESAFE_API_KEY` secret;
    - the network allowlist;
@@ -131,14 +107,8 @@ setup, the iteration protocol, the context discipline and the prompts.
 
    Also set spending caps, and decide on more Jev credit when the $10 runs
    out.
-5. **Identity.** Stay `erik-hedstrom`; the `haesteining` alias was considered
-   and not adopted.
-6. **Launch channels and timing.** Show HN, Reddit, X, LinkedIn, awesome
+4. **Launch channels and timing.** Show HN, Reddit, X, LinkedIn, awesome
    lists. Agents draft; Erik posts.
-7. **Hook default.** Decided by Erik, 2026-10-07: loadout runs automatically
-   inside Claude Code, in the CLI and the desktop app, through a plugin the
-   user installs (D10). The install text says that routed prompts go to
-   TypeSafe. The launcher stays for power users and benchmarks.
 
 ## Setting up on the new Linux machine
 
@@ -167,10 +137,14 @@ native machine:
 | `src/launch.ts` | Session materialisation, Claude/Codex args, injection framing, host setup snippets, hook commands |
 | `src/mcp.ts` | MCP server (stdio + HTTP), confined skill file reads, gateway |
 | `src/hook.ts` | Per-prompt hook logic and session state |
+| `src/relay.ts` | MCP transport relay |
+| `src/diagnostic.ts` | Fixed-text transport diagnostics |
+| `src/audit.ts` | Installed-skill listing and tool overhead audit |
+| `plugins/` | Hook-only Claude Code plugin |
 | `src/library.ts` | Library scan, safe `add` from dirs/GitHub, confined reads, sources |
 | `src/jev.ts`, `src/embed.ts`, `src/prefilter.ts`, `src/retrieve.ts` | Jev client and validation, embeddings, BM25, fusion |
 | `src/config.ts`, `src/cli.ts`, `src/repo.ts`, `src/types.ts` | Config, CLI, repo signals, types |
-| `test/loadout.test.ts` | All unit tests (fake Jev client, real stdio MCP canary) |
+| `test/` | Module suites alongside `loadout.test.ts` (fake Jev client, real stdio MCP canary) |
 | `bench/` | Benchmarks: synthetic (`route-bench`, `tune`), realistic (`sweep`, `expand`, `judge`), agents (`invoke`, `outcome`), probes |
 | `bench/RESULTS.md` | Every result, with method and caveats |
 | `bench/results/*` | Raw rows and judge files (committed, so results are reproducible) |
@@ -191,5 +165,4 @@ native machine:
 - **Router weak spots:** integrations, ML and apps. Generic skills such as
   `frontend-ui-engineering` load on simple UI work. Further tuning on the same
   315 requests would overfit, so new requests come first.
-- **Tests:** they live in one large file and would read better split per
-  module.
+- **Tests:** `loadout.test.ts` still mixes modules (E3).

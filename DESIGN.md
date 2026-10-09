@@ -2,18 +2,11 @@
 
 ## Problem
 
-Every capability installed into a coding agent is paid for on every request,
-whether it is relevant or not:
-
-- **Tokens and latency.** Tool schemas and skill descriptions sit in context on
-  every turn.
-- **Accuracy.** Tool selection degrades as the menu grows; similar-looking
-  tools get confused.
-- **Model overkill.** Everything runs on the biggest model, even trivial edits.
-
-The cost is global but the value is local. A niche skill that is excellent for
-one repo is net-negative everywhere else, so people prune and the long tail of
-very specific tools never gets installed.
+Installed skill listings add context even when the skills are irrelevant.
+[B1](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request)
+measured about **10 tokens per added skill** in Claude Code, using generated
+names. Codex caps its rendered listing: only **424** of **1,262** skills were
+visible in the offline measurement; its token cost is not shown.
 
 **loadout decouples library size from per-request cost.** A very cheap
 System One model ([Jev](https://typesafe.ai/blog/introducing-system-one-models-and-jev))
@@ -25,12 +18,11 @@ arbitrarily large. The agent still makes the final call from the shortlist.
 
 - **No traffic interception.** loadout never sits between a CLI and its model
   provider, never forwards a CLI's auth headers, and never depends on private
-  request formats. Everything goes through official extension points (CLI
-  flags, plugins, MCP, hooks), so vendors have no reason or mechanism to block
-  it. (Contrast: [jev-router](https://github.com/gargpratyush/jev-router) routes
+  request formats. It uses only documented extension points (CLI flags,
+  plugins, MCP, hooks). (Contrast: [jev-router](https://github.com/gargpratyush/jev-router) routes
   per turn through a loopback proxy on `ANTHROPIC_BASE_URL`.)
 - **No per-turn tool swapping.** Tool definitions sit at the front of the
-  prompt cache; changing them per turn would cost more than the bloat saved.
+  prompt cache, so changing them per turn invalidates the cache.
 
 ## Architecture
 
@@ -39,10 +31,10 @@ arbitrarily large. The agent still makes the final call from the shortlist.
             │ skills/<name>/SKILL.md      mcp.json (+ description per server) │
             └───────────────────────────────┬───────────────────────────────┘
                                             │ scan
- task + repo signals ──► [1] retrieve (BM25, local, free) ──► 200 candidates
+ task + repo signals ──► [1] retrieve (BM25 + embeddings, local) ──► 200 candidates
                                             │
                          [2] Jev wide:  choice over 200 + "no skill needed"
-                                        3 nouls → need score · model tier
+                                        2 nouls → need score · model tier
                                             │ top 8
                          [3] Jev close: graded fit score per candidate
                                         choice among the 8 + "no skill needed"
@@ -69,7 +61,7 @@ Isolation needs per-CLI support that is not uniform yet (Claude Code has
 |---|---|---|---|
 | **Launcher** (v0.1) | once per session | `--model`, `--plugin-dir`, `--mcp-config` | `-m`, `-c` overrides |
 | **Search server** (`loadout mcp`) | mid-session, on demand | `find_skills`, `load_skill`, gateway to library MCP servers; attached by the launcher | same — Codex speaks MCP |
-| **Prompt hook** (`loadout hook claude\|codex`) | every prompt | `UserPromptSubmit` adds the skills that fit as context (cache-safe: appended to the user turn), once per skill per session | same contract; runs once trusted with `/hooks` |
+| **Prompt hook** (`loadout hook claude\|codex`) | every prompt | D10 plugin (`plugins/loadout`): `UserPromptSubmit` adds the skills that fit as context (cache-safe: appended to the user turn), once per skill per session | same contract; runs once trusted with `/hooks` |
 | **HTTP** (`loadout mcp --http`) | remote hosts | — | ChatGPT chat, behind an HTTPS tunnel; skills only, optional bearer token |
 
 The launcher fixes the session's tool set up front, which also keeps the prompt
@@ -78,8 +70,7 @@ cache intact. The gateway is the escape hatch when the router misses.
 ### Library
 
 Capabilities live in `~/.loadout/library`, a directory no agent loads by
-itself. Users install as many skills and MCP servers as they like; nothing is
-paid for until loadout selects it.
+itself. Users install skills and MCP servers there for loadout to select.
 
 - **Skills:** `skills/<name>/SKILL.md` (the [Agent Skills](https://agentskills.io)
   format: YAML frontmatter with `name` and `description`).
@@ -137,9 +128,11 @@ literal, atomic questions; every decision rule is code (`decide()` in
    - **offer** up to 4 more skills with fit ≥ 0.7, marked optional, so the
      agent's scope is broader than the router's pick;
    - **inject** the top skill's full SKILL.md when it is a clear winner (wide
-     pick ≥ 0.5, close share ≥ 0.8, P(exact) ≥ 0.95). Measured: it fires on
-     ~77% of tasks that have a right skill. 99.0% of its injections are a gold
-     skill (99.5% counting only tasks that have one).
+     pick ≥ 0.5, close share ≥ 0.8, P(exact) ≥ 0.95). On the
+     [v3 synthetic rows](bench/RESULTS.md#injection), it fires on 77% of rows
+     with a gold skill; 99.0% of all injections are gold (99.5% on rows with
+     one). On [v4 realistic requests](bench/RESULTS.md#v4-2026-10-06-realistic-requests-on-the-real-library-judged),
+     84% (67–93, 95% Wilson interval) of injected skills are useful on test.
 5. **Mentions override.** A library skill the user explicitly names is loaded
    and injected whatever the router or gate said, in request order, at most 3
    (more gives a warning).
@@ -177,7 +170,9 @@ literal, atomic questions; every decision rule is code (`decide()` in
    errors and timeouts are retried once; if Jev is still unavailable, loadout
    falls back to keyword ranking with a visible warning.
 
-Cost: ~16k tokens wide plus ~4k close ≈ **$0.0008 and ~1 s per decision**.
+Cost per decision: **$0.00082**, 0.95 s on the
+[v3 synthetic 20,000-skill test](bench/RESULTS.md#test-split);
+**$0.0011** on [v4 realistic requests](bench/RESULTS.md#v4-2026-10-06-realistic-requests-on-the-real-library-judged).
 Measured limits (2026-10-05): no per-request question cap below 200, state
 billed once, Choice capped at 255 options, 64k-token context.
 
@@ -192,9 +187,6 @@ Things that did not work, and why they are not used:
   question. Alternatives proposed in review ("prescribed steps not given",
   "project convention not given", "calls an external service") separated
   worse (AUC 0.83–0.88) than the current pair (0.97 each).
-- **Letting an exact fit override the need gate.** In a 20k library some skill
-  always looks like an exact fit for everyday requests; overriding brought
-  needless loads back from 5% to 37–63%.
 
 ### Search server (`loadout mcp`)
 
@@ -221,9 +213,10 @@ library itself, in its own words, through MCP:
   servers, started on first use and kept for the session. Registered only when
   the library has servers, so a skills-only library costs two tool definitions.
 
-Context cost is the point: the two skill tools are ~400 tokens of definitions,
-and a search returns ~150–300 tokens, versus thousands of tokens of skill
-descriptions held in context all session.
+The search tools add **546 input tokens** per request in Claude Code. A
+native listing of 50 skills with generated names adds about 477; B1
+interpolates the crossover near 57 such skills. Real-name costs, router calls
+and returned skills are not included ([B1](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request)).
 
 Approvals: the launcher pre-approves only `find_skills` and `load_skill`
 (Claude `--allowedTools`, Codex `tools.<tool>.approval_mode = "approve"`).
@@ -232,9 +225,9 @@ prompt, which shows the server, tool and arguments.
 
 ### Prompt hook
 
-Measured on the realistic sweep: agents open what is preloaded (9 of 10, 11 of
-11), but rarely search on their own. The hook removes the dependence on the
-agent's initiative:
+[Search plus hook](bench/RESULTS.md#do-agents-use-what-they-are-given) raised
+Claude Code's useful-skill use from **2 of 10** to **6 of 10** sessions. The
+hook alone is not measured:
 - each substantive prompt (not "yes" or "go on") is routed with the same two
   Jev requests;
 - the skills that fit are listed once per session, as third-party metadata,
@@ -245,39 +238,17 @@ It runs before the host sends the prompt, so it has a hard budget. It gives
 up after 20 s with no output, never retries Jev, and only uses the cached
 embedding index. Any error adds nothing.
 
-Privacy: the hook sends every routed prompt, with the repository's top-level
-file names and dependencies, to the Jev API, in every project once installed.
-That is the price of routing per prompt; the launchers send only the first
-prompt.
+See [SECURITY.md](SECURITY.md#prompt-hook) for data sent to TypeSafe.
 
 ### Router backends
 
 - `jev` (default): TypeSafe official API, `TYPESAFE_API_KEY`.
 - `lexical`: prefilter only, no network. For offline use and as a benchmark arm.
-- `openrouter` (planned): a small generative model with JSON output, for users
-  without Jev access.
 
-## Benchmark (the pitch)
+## Benchmark
 
-Implemented in [bench/](bench/). First results, routing only:
-[bench/RESULTS.md](bench/RESULTS.md).
-
-Same task set, five arms:
-
-1. **Bare** — no extra skills.
-2. **Top-N by stars** — what people install today.
-3. **Everything installed** — the full library dropped into the agent. Expect
-   description budgets to truncate silently; showing that is itself a result.
-4. **Native search** — the vendor's own tool search / deferred loading.
-5. **loadout** — Jev routing over the full ~20k-skill library.
-
-Metrics: task success, total cost (router included), latency, and router
-recall (did the shortlist contain the skill the task needed). The headline
-result to show: a niche skill that lifts a task in one specific repo while
-every other repo pays nothing for it.
-
-`claude plugin eval` already runs eval suites with a no-plugin baseline arm;
-worth evaluating as the harness before building our own.
+Methods and reproduction: [bench/README.md](bench/README.md).
+Measurements and caveats: [bench/RESULTS.md](bench/RESULTS.md).
 
 ## Open questions
 
@@ -286,13 +257,9 @@ worth evaluating as the harness before building our own.
   per-session extra skill root. Today selected skills are listed in the prompt
   with their paths (verified: Codex reads and follows them) and clear winners
   are injected.
-- **Isolation mode.** An opt-in flag that hides the user's own MCP servers and
-  skills for a session.
 - **Dynamic tool exposure.** The gateway exposes library MCP servers through
   one generic `call_server_tool`. MCP's `tools/list_changed` could add a
   server's real tools to the session instead (native schemas, per-tool
   approvals) on hosts that honour it.
-- **Independent evaluation.** Requests written by people who never saw the
-  skill descriptions, with several acceptable skills per request, and
-  end-to-end task outcomes, not just what was loaded.
+- **Independent evaluation.** New held-out requests: [backlog C1](docs/loop/BACKLOG.md#c-skill-decision-making-router-quality).
 - **The model tier.** Jev's tier choice is not evaluated yet.
