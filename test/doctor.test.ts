@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CONFIG, type Config } from '../src/config.js';
 import { doctor, formatDoctor } from '../src/doctor.js';
 import { jevClient, type SystemOneClient } from '../src/jev.js';
+import { claudeHookSettings, hostSetup } from '../src/launch.js';
 
 const KEY = 'doctor-key-canary-7731';
 const config: Config = { ...DEFAULT_CONFIG, embeddings: false };
@@ -55,7 +56,8 @@ describe('doctor', () => {
     vi.stubEnv('TYPESAFE_API_KEY', KEY);
     cpSync(join(import.meta.dirname, 'fixtures', 'library'), join(home, '.loadout', 'library'), { recursive: true });
     for (const bin of ['loadout', 'claude', 'codex']) {
-      writeFileSync(join(home, 'bin', bin), `#!/bin/sh\necho "${bin} 9.9.9"\n`);
+      // A CLI that would print loadout's key if it received it.
+      writeFileSync(join(home, 'bin', bin), `#!/bin/sh\necho "${bin} 9.9.9 $TYPESAFE_API_KEY"\n`);
       chmodSync(join(home, 'bin', bin), 0o755);
     }
     mkdirSync(join(home, 'claude'));
@@ -87,6 +89,26 @@ describe('doctor', () => {
     expect(index).toMatchObject({ ok: false, fix: 'the next `loadout add` or `loadout route` indexes the rest' });
     expect(index.detail).toMatch(/^0 of [1-9]\d* indexed$/);
     vi.doUnmock('../src/embed.js');
+  });
+
+  it.each([false, true])('recognises the hooks setup generates (WSL: %s)', async (windows) => {
+    mkdirSync(join(home, 'claude'));
+    writeFileSync(join(home, 'claude', 'settings.json'), JSON.stringify(claudeHookSettings(windows)));
+    mkdirSync(join(home, 'codex'));
+    writeFileSync(join(home, 'codex', 'config.toml'), hostSetup('codex', windows).snippet);
+    const checks = byName(await doctor(config, () => okClient));
+    expect(checks['Claude Code']!.detail).toMatch(/loadout: settings hook$/);
+    expect(checks['Codex']!.detail).toMatch(/loadout: hook and search server$/);
+  });
+
+  it('ignores loadout mentioned only in comments or strings', async () => {
+    mkdirSync(join(home, 'codex'));
+    writeFileSync(join(home, 'codex', 'config.toml'), '# [mcp_servers.loadout]\n# command = "loadout hook codex"\nnotes = """\n[mcp_servers.loadout]\n"""\n');
+    mkdirSync(join(home, 'claude'));
+    writeFileSync(join(home, 'claude', 'settings.json'), JSON.stringify({ note: 'loadout hook claude' }));
+    const checks = byName(await doctor(config, () => okClient));
+    expect(checks['Codex']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: not set up' });
+    expect(checks['Claude Code']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: not set up' });
   });
 
   it('flags a host that is installed but has no loadout', async () => {

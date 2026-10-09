@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { parse as parseToml } from 'smol-toml';
 import { paths, resolveApiKey, type Config } from './config.js';
 import { EmbeddingStore, hasTransformers } from './embed.js';
 import type { SystemOneClient } from './jev.js';
@@ -15,22 +16,36 @@ export interface Check {
   fix?: string;
 }
 
-/** First line of `<bin> --version`, or undefined when it does not run. */
+/** First line of `<bin> --version`, or undefined when it does not run. The host CLI does not need loadout's key. */
 function version(bin: string): string | undefined {
+  const { TYPESAFE_API_KEY: _key, ...env } = process.env;
   try {
-    return execFileSync(bin, ['--version'], { encoding: 'utf8', timeout: 10_000, stdio: ['ignore', 'pipe', 'ignore'] }).trim().split('\n')[0];
+    return execFileSync(bin, ['--version'], { encoding: 'utf8', timeout: 10_000, stdio: ['ignore', 'pipe', 'ignore'], env }).trim().split('\n')[0];
   } catch {
     return undefined;
   }
 }
 
-const readText = (file: string) => {
+/** A parsed config file, or {} when it is missing or does not parse. */
+function readConfig(file: string, parse: (text: string) => unknown): Record<string, unknown> {
   try {
-    return readFileSync(file, 'utf8');
+    const value = parse(readFileSync(file, 'utf8'));
+    return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
   } catch {
-    return '';
+    return {};
   }
-};
+}
+
+/**
+ * Whether a UserPromptSubmit hook runs loadout's `hook <agent>`. Claude's settings.json and Codex's
+ * config.toml share this shape; setup writes the command as `node …/cli.js hook <agent>`, through
+ * wsl.exe under WSL, and the plugin as `loadout hook claude`.
+ */
+function hasHook(config: Record<string, unknown>, agent: 'claude' | 'codex'): boolean {
+  const groups = (config.hooks as { UserPromptSubmit?: unknown } | undefined)?.UserPromptSubmit;
+  const command = new RegExp(`(^|\\s|')hook ${agent}($|\\s|')`);
+  return Array.isArray(groups) && groups.some((g) => Array.isArray(g?.hooks) && g.hooks.some((h: { command?: unknown }) => typeof h?.command === 'string' && command.test(h.command)));
+}
 
 /** Read-only: reports what is set up and how to fix what is not. Only the Jev check makes a network call. */
 export async function doctor(config: Config, client: (apiKey: string) => SystemOneClient): Promise<Check[]> {
@@ -88,14 +103,9 @@ export async function doctor(config: Config, client: (apiKey: string) => SystemO
       bin: 'claude',
       home: claudeHome,
       attached: () => {
-        const text = readText(join(claudeHome, 'settings.json'));
-        let plugin = false;
-        try {
-          plugin = (JSON.parse(text) as { enabledPlugins?: Record<string, unknown> }).enabledPlugins?.['loadout@loadout'] === true;
-        } catch {
-          // Unreadable settings: only the hook text below can show loadout.
-        }
-        return plugin ? 'plugin enabled' : text.includes('loadout hook claude') ? 'settings hook' : undefined;
+        const settings = readConfig(join(claudeHome, 'settings.json'), JSON.parse);
+        if ((settings.enabledPlugins as Record<string, unknown> | undefined)?.['loadout@loadout'] === true) return 'plugin enabled';
+        return hasHook(settings, 'claude') ? 'settings hook' : undefined;
       },
       setup: 'claude-code',
     },
@@ -104,8 +114,9 @@ export async function doctor(config: Config, client: (apiKey: string) => SystemO
       bin: 'codex',
       home: codexHome,
       attached: () => {
-        const text = readText(join(codexHome, 'config.toml'));
-        const found = [text.includes('loadout hook codex') && 'hook', /^\[mcp_servers\.loadout\]/m.test(text) && 'search server'].filter(Boolean);
+        const config = readConfig(join(codexHome, 'config.toml'), parseToml);
+        const server = (config.mcp_servers as Record<string, { enabled?: unknown }> | undefined)?.loadout;
+        const found = [hasHook(config, 'codex') && 'hook', server && server.enabled !== false && 'search server'].filter(Boolean);
         return found.length ? found.join(' and ') : undefined;
       },
       setup: 'codex',
