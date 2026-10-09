@@ -487,6 +487,10 @@ Learnings (2026-10-09):
   hook` / `[mcp_servers.loadout]` entry is present.
 - Also checks `loadout` on PATH, which the plugin's hook needs. A missing
   optional embedding package is reported, not failed.
+- Left: native Windows. `which()` probes bare names without PATHEXT, so an
+  install with only `claude.exe` or a `.cmd` shim reads as not on PATH, in
+  doctor and in `loadout run`. The fix belongs in `which()` and must decide
+  how `.cmd` shims are spawned, since Node refuses them without a shell.
 
 ## E. Engineering quality (what a reviewer of the repo sees)
 
