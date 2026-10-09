@@ -158,15 +158,19 @@ describe('doctor', () => {
     expect(checks['Codex']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: hook, but [features] hooks = false in config.toml turns hooks off' });
   });
 
-  it.skipIf(process.platform === 'win32')('runs no host CLI found through a relative PATH entry', async () => {
+  it.skipIf(process.platform === 'win32')('ignores binaries found through a relative PATH entry', async () => {
     const marker = join(home, 'ran');
     writeFileSync(join(home, 'bin', 'claude'), `#!/bin/sh\n: > '${marker}'\n`);
     chmodSync(join(home, 'bin', 'claude'), 0o755);
     vi.stubEnv('PATH', relative(process.cwd(), join(home, 'bin')));
     mkdirSync(join(home, 'claude'));
+    writeFileSync(join(home, 'bin', 'loadout'), '#!/bin/sh\n');
+    chmodSync(join(home, 'bin', 'loadout'), 0o755);
     const checks = byName(await doctor(config, () => okClient));
     expect(existsSync(marker)).toBe(false);
     expect(checks['Claude Code']!.detail).toMatch(/^CLI not on PATH;/);
+    // The hook runs loadout by name from another folder, where a relative entry finds nothing.
+    expect(checks['loadout on PATH']).toMatchObject({ ok: false, detail: 'not found' });
   });
 
   it.skipIf(process.platform === 'win32')('gives a host CLI shim no relative PATH entry to resolve its interpreter through', async () => {

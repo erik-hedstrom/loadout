@@ -32,6 +32,12 @@ function version(bin: string): string | undefined {
   }
 }
 
+/** `which()` limited to absolute PATH entries: an empty or relative entry resolves in the current folder only. */
+function onPath(bin: string): string | undefined {
+  const found = which(bin);
+  return found && isAbsolute(found) ? found : undefined;
+}
+
 /** A parsed config file, {} when it is missing, or undefined when it exists but cannot be read or parsed. */
 function readConfig(file: string, parse: (text: string) => unknown): Record<string, unknown> | undefined {
   if (!existsSync(file)) return {};
@@ -58,7 +64,7 @@ function hasHook(config: Record<string, unknown>, agent: 'claude' | 'codex'): bo
 export async function doctor(config: Config, client: (apiKey: string) => SystemOneClient): Promise<Check[]> {
   const checks: Check[] = [];
   // The plugin's hook and generated host configs run `loadout` by name.
-  const self = which('loadout');
+  const self = onPath('loadout');
   checks.push({ name: 'loadout on PATH', ok: Boolean(self), detail: self ?? 'not found', fix: 'run `npm link` in the loadout checkout, or install the package globally' });
 
   if (config.router === 'lexical') checks.push({ name: 'Jev key', ok: true, detail: 'not needed (router: lexical)' });
@@ -160,9 +166,8 @@ export async function doctor(config: Config, client: (apiKey: string) => SystemO
     },
   ];
   for (const h of hosts) {
-    // An empty or relative PATH entry resolves in the current folder; doctor runs no binary found there.
-    const found = which(h.bin);
-    const bin = found && isAbsolute(found) ? found : undefined;
+    // doctor runs no binary found through an empty or relative PATH entry.
+    const bin = onPath(h.bin);
     if (!bin && !existsSync(h.home)) continue;
     const { on, off, broken }: { on?: string; off?: string; broken?: string } = h.attached();
     checks.push({
