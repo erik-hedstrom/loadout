@@ -173,7 +173,7 @@ cross-vendor agents). Erik publishes.
 
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
-| C1 | P0 | New held-out request set + re-measure v4 | Codex (seeds, expand) + Claude (judge) | local | review ([#16](https://github.com/erik-hedstrom/loadout/pull/16)): precision falls on new requests (64% vs 82%) |
+| C1 | P0 | New held-out request set + re-measure v4 | Codex (seeds, expand) + Claude (judge) | local | done ([#16](https://github.com/erik-hedstrom/loadout/pull/16)): precision falls on new requests (64% vs 82%) |
 | C2 | P1 | Outcome eval on the small tier with fixed fixtures | Claude (design) | cloud (fixtures) + local (runs) | todo |
 | C3 | P1 | Does Jev pick a sensible model tier? | Claude | cloud | todo (after E7) |
 | C4 | P1 | Demote generic "fits everything" skills | Codex | cloud | todo (next: C1 shows over-loading on general business requests) |
@@ -304,8 +304,8 @@ Acceptance: a third row in that RESULTS table, with raw results. The README's
 
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
-| D10 | P0 | In-host first: loadout as a Claude Code plugin (hook), CLI then desktop app | Codex | cloud + local + erik | review (plugin, CLI check, latency); desktop app check pending (Erik) |
-| D11 | P1 | Cut the hook's per-prompt start cost | Codex | cloud + local | in progress ([#14](https://github.com/erik-hedstrom/loadout/pull/14): follow-ups skip start-up, relay loads on demand) |
+| D10 | P0 | In-host first: loadout as a Claude Code plugin (hook), CLI then desktop app | Codex | cloud + local + erik | in progress ([#9](https://github.com/erik-hedstrom/loadout/pull/9) merged: plugin, CLI check, latency); desktop app check pending (Erik) |
+| D11 | P1 | Cut the hook's per-prompt start cost | Codex | cloud + local | in progress ([#14](https://github.com/erik-hedstrom/loadout/pull/14) merged: follow-ups skip start-up, relay loads on demand); left: the real-Jev run, which needs `TYPESAFE_API_KEY` and `api.typesafe.ai` in the cloud environment |
 | D1 | P0 | Validate on the new native Linux machine | Claude | local | todo (machine pending) |
 | D7 | P1 | `loadout doctor` | Codex | cloud | todo |
 | D2 | P1 | Live Codex hook test | Claude | local + erik | todo |
@@ -485,7 +485,7 @@ Acceptance:
 | E1 | P0 | GitHub Actions CI | Codex | cloud | done ([PR #2](https://github.com/erik-hedstrom/loadout/pull/2)) |
 | E2 | P0 | LICENSE, CONTRIBUTING, SECURITY.md, templates | Claude | cloud + erik | done ([PR #1](https://github.com/erik-hedstrom/loadout/pull/1)) |
 | E7 | P0 | Vendor-independent bench judges and expander | Codex | cloud | done ([PR #5](https://github.com/erik-hedstrom/loadout/pull/5)) |
-| E8 | P0 | Repo-wide simplification pass | Claude (pr-reviewer finds, worker fixes) + Codex review | cloud | in progress (bench/ in [PR #11](https://github.com/erik-hedstrom/loadout/pull/11), src/ in [PR #12](https://github.com/erik-hedstrom/loadout/pull/12); Markdown in [PR #15](https://github.com/erik-hedstrom/loadout/pull/15)) |
+| E8 | P0 | Repo-wide simplification pass | Claude (pr-reviewer finds, worker fixes) + Codex review | cloud | in progress (merged: bench/ [#11](https://github.com/erik-hedstrom/loadout/pull/11), src/ [#12](https://github.com/erik-hedstrom/loadout/pull/12), Markdown [#15](https://github.com/erik-hedstrom/loadout/pull/15)); left: BACKLOG, RESULTS and ORCHESTRATOR, and the WSL-only `bench.test.ts` failure |
 | E9 | P0 | Security hardening from the read-only Sol review | Codex | cloud | done ([PR #4](https://github.com/erik-hedstrom/loadout/pull/4), re-measure [PR #7](https://github.com/erik-hedstrom/loadout/pull/7)) |
 | E3 | P1 | Split the test file per module | Codex | cloud | todo |
 | E5 | P1 | Changelog and release automation | Codex | cloud | todo (with A4) |
@@ -697,3 +697,4 @@ integration layers, readable in both light and dark themes.
 | 2026-10-08 (iter 4) | E11 #10 | Approved, waiting on CI (Actions blocked by the account billing limit): #11 E8 bench, #12 E8 src, #13 label-gated CI, #14 D11. Reviews running: #15 E8 Markdown. C1 seeds and expansion under way | Jev $0 / Claude: pr-reviewer rounds (subscription) / Codex: builds, reviews, C1 seed batches (ChatGPT plan) | CI billing (raise the limit or wait for the reset); desktop app check (D10); security contact; B1 raw-row names |
 | 2026-10-08 (iter 4, later) | — | C1 #16 (measured: recall holds, precision falls; reviews running). E12 found: codex exec cannot run tool-less on codex-cli 0.160.1 | Jev $0.60 (three C1 sweeps, one slowed by Jev) / Claude: judge $3.68 (C1) + $2.08 (control), pr-reviewer rounds / Codex: C1 seeds and expansion (55 batches), builds, reviews | As in iter 4 |
 | 2026-10-09 (iter 5) | #13 label-gated CI (`ci-full` label created), #11 and #12 E8 bench/src, #14 D11, #15 E8 docs, #16 C1 | — | Jev $0 / Claude: merges and conflict fixes / Codex: none | Actions runs again (GitHub Pro). Next work goes to a cloud session (Claude weekly usage at 96%) |
+| 2026-10-09 (iter 6, cloud session while the desktop orchestrator is out of usage) | — | Backlog statuses brought up to date; D8, D7, D6, D9 on their own branches | Jev $0 (no key in the cloud environment) / Claude: cloud-session credit / Codex: reviews on GitHub | Add `TYPESAFE_API_KEY` and `api.typesafe.ai` (and `huggingface.co`) to the cloud environment for D11's real-Jev run and C4 |
