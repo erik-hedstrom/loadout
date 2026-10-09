@@ -18,9 +18,10 @@ The orchestrator keeps this file current. Statuses: `todo`, `in progress (PR #)`
 
 New router tuning only happens on new held-out requests (C1).
 
-In-host first (Erik, 2026-10-07): loadout works inside Claude Code, in the
-CLI and the desktop app, through a plugin and its prompt hook (D10). The
-launcher is for power users and benchmarks.
+In-host first (Erik, 2026-10-07): loadout runs inside Claude Code, in the
+CLI and the desktop app, through a plugin and its prompt hook (D10). Shown
+for the CLI only so far ([docs/hosts.md](../hosts.md)). The launcher is for
+power users and benchmarks.
 
 ## A. Adoption and ease of use
 
