@@ -173,6 +173,24 @@ describe('doctor', () => {
     expect(checks['loadout on PATH']).toMatchObject({ ok: false, detail: 'not found' });
   });
 
+  it.skipIf(process.platform === 'win32')('finds the install in an absolute PATH entry behind a relative one', async () => {
+    const marker = join(home, 'ran');
+    mkdirSync(join(home, 'planted'));
+    for (const bin of ['claude', 'loadout']) {
+      writeFileSync(join(home, 'planted', bin), `#!/bin/sh\n: > '${marker}'\n`);
+      chmodSync(join(home, 'planted', bin), 0o755);
+    }
+    writeFileSync(join(home, 'bin', 'claude'), '#!/bin/sh\necho 9.9.9\n');
+    writeFileSync(join(home, 'bin', 'loadout'), '#!/bin/sh\n');
+    chmodSync(join(home, 'bin', 'claude'), 0o755);
+    chmodSync(join(home, 'bin', 'loadout'), 0o755);
+    vi.stubEnv('PATH', [relative(process.cwd(), join(home, 'planted')), join(home, 'bin')].join(delimiter));
+    const checks = byName(await doctor(config, () => okClient));
+    expect(existsSync(marker)).toBe(false);
+    expect(checks['loadout on PATH']).toMatchObject({ ok: true, detail: join(home, 'bin', 'loadout') });
+    expect(checks['Claude Code']!.detail).toMatch(/^9\.9\.9;/);
+  });
+
   it.skipIf(process.platform === 'win32')('gives a host CLI shim no relative PATH entry to resolve its interpreter through', async () => {
     const marker = join(home, 'ran');
     mkdirSync(join(home, 'planted'));

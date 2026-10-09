@@ -20,11 +20,14 @@ export interface Check {
 /** What a CLI needs to start (Node shims, Windows and WSL), and nothing that could hold a credential. */
 const VERSION_ENV = ['PATH', 'PATHEXT', 'HOME', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'SYSTEMROOT', 'TEMP', 'TMP', 'TMPDIR', 'LANG', 'WSL_DISTRO_NAME', 'WSLENV'];
 
+/** PATH's folders without empty or relative entries, which resolve in the current folder. */
+const absolutePath = () => (process.env.PATH ?? '').split(delimiter).filter((d) => isAbsolute(d));
+
 /** First line of `<bin> --version`, or undefined when it does not run. */
 function version(bin: string): string | undefined {
   const env = Object.fromEntries(VERSION_ENV.flatMap((k) => (process.env[k] === undefined ? [] : [[k, process.env[k]]])));
   // A shim such as `#!/usr/bin/env node` resolves through PATH too: an empty or relative entry would find a planted `node`.
-  if (env.PATH !== undefined) env.PATH = env.PATH.split(delimiter).filter((d) => isAbsolute(d)).join(delimiter);
+  if (env.PATH !== undefined) env.PATH = absolutePath().join(delimiter);
   try {
     return execFileSync(bin, ['--version'], { encoding: 'utf8', timeout: 10_000, killSignal: 'SIGKILL', stdio: ['ignore', 'pipe', 'ignore'], env }).trim().split('\n')[0];
   } catch {
@@ -32,11 +35,8 @@ function version(bin: string): string | undefined {
   }
 }
 
-/** `which()` limited to absolute PATH entries: an empty or relative entry resolves in the current folder only. */
-function onPath(bin: string): string | undefined {
-  const found = which(bin);
-  return found && isAbsolute(found) ? found : undefined;
-}
+/** `which()` over absolute PATH entries only, so a match in the current folder neither runs nor hides a later one. */
+const onPath = (bin: string) => which(bin, absolutePath());
 
 /** A parsed config file, {} when it is missing, or undefined when it exists but cannot be read or parsed. */
 function readConfig(file: string, parse: (text: string) => unknown): Record<string, unknown> | undefined {
