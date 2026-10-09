@@ -1,0 +1,139 @@
+import { execFileSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import { paths, resolveApiKey, type Config } from './config.js';
+import { EmbeddingStore, hasTransformers } from './embed.js';
+import type { SystemOneClient } from './jev.js';
+import { which } from './launch.js';
+import { scanLibrary } from './library.js';
+
+export interface Check {
+  name: string;
+  ok: boolean;
+  detail: string;
+  fix?: string;
+}
+
+const MIN_NODE = [22, 12];
+
+/** First line of `<bin> --version`, or undefined when it does not run. */
+function version(bin: string): string | undefined {
+  try {
+    return execFileSync(bin, ['--version'], { encoding: 'utf8', timeout: 10_000, stdio: ['ignore', 'pipe', 'ignore'] }).trim().split('\n')[0];
+  } catch {
+    return undefined;
+  }
+}
+
+const readText = (file: string) => {
+  try {
+    return readFileSync(file, 'utf8');
+  } catch {
+    return '';
+  }
+};
+
+/** Read-only: reports what is set up and how to fix what is not. Only the Jev check makes a network call. */
+export async function doctor(config: Config, client: (apiKey: string) => SystemOneClient): Promise<Check[]> {
+  const checks: Check[] = [];
+  const node = process.versions.node.split('.').map(Number);
+  checks.push({
+    name: 'node',
+    ok: node[0]! > MIN_NODE[0]! || (node[0] === MIN_NODE[0] && node[1]! >= MIN_NODE[1]!),
+    detail: process.versions.node,
+    fix: `install Node ${MIN_NODE.join('.')} or later`,
+  });
+  // The plugin's hook and generated host configs run `loadout` by name.
+  const self = which('loadout');
+  checks.push({ name: 'loadout on PATH', ok: Boolean(self), detail: self ?? 'not found', fix: 'run `npm link` in the loadout checkout, or install the package globally' });
+
+  if (config.router === 'lexical') checks.push({ name: 'Jev key', ok: true, detail: 'not needed (router: lexical)' });
+  else {
+    const apiKey = resolveApiKey(config);
+    const missingFile = config.jev.apiKeyFile !== undefined && !existsSync(config.jev.apiKeyFile);
+    checks.push({
+      name: 'Jev key',
+      ok: Boolean(apiKey),
+      detail: apiKey ? 'found' : missingFile ? 'not found; jev.apiKeyFile in the config names a missing file' : 'not found',
+      fix: 'set TYPESAFE_API_KEY, or run `loadout init --key-file <path>`; until then routing uses keywords only',
+    });
+    if (apiKey) {
+      const started = Date.now();
+      try {
+        await client(apiKey).ask({ request: 'loadout doctor' }, { ok: { type: 'noul', instructions: 'Is this a connectivity check?' } });
+        checks.push({ name: 'Jev call', ok: true, detail: `answered in ${Date.now() - started} ms` });
+      } catch (err) {
+        // jevClient's errors are fixed text (E11): no key, prompt or response body.
+        checks.push({ name: 'Jev call', ok: false, detail: err instanceof Error ? err.message : 'failed', fix: `check the key, and that ${new URL(config.jev.baseUrl).host} is reachable` });
+      }
+    }
+  }
+
+  const library = scanLibrary(paths.library());
+  const skills = library.filter((c) => c.kind === 'skill').length;
+  checks.push({
+    name: 'library',
+    ok: library.length > 0,
+    detail: `${skills} skills, ${library.length - skills} MCP servers in ${paths.library()}`,
+    fix: 'loadout add <dir|github-url>',
+  });
+
+  if (!config.embeddings) checks.push({ name: 'embedding index', ok: true, detail: 'off in the config' });
+  else if (!(await hasTransformers())) {
+    checks.push({ name: 'embedding index', ok: false, detail: 'optional package @huggingface/transformers not installed; keyword retrieval only', fix: 'npm install @huggingface/transformers' });
+  } else {
+    const store = new EmbeddingStore(paths.embeddings());
+    const indexed = library.filter((c) => store.vector(c)).length;
+    checks.push({ name: 'embedding index', ok: indexed === library.length, detail: `${indexed} of ${library.length} indexed`, fix: 'the next `loadout add` or `loadout route` indexes the rest' });
+  }
+
+  const claudeHome = process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude');
+  const codexHome = process.env.CODEX_HOME || join(homedir(), '.codex');
+  const hosts = [
+    {
+      name: 'Claude Code',
+      bin: 'claude',
+      home: claudeHome,
+      attached: () => {
+        const text = readText(join(claudeHome, 'settings.json'));
+        let plugin = false;
+        try {
+          plugin = (JSON.parse(text) as { enabledPlugins?: Record<string, unknown> }).enabledPlugins?.['loadout@loadout'] === true;
+        } catch {
+          // Unreadable settings: only the hook text below can show loadout.
+        }
+        return plugin ? 'plugin enabled' : text.includes('loadout hook claude') ? 'settings hook' : undefined;
+      },
+      setup: 'claude-code',
+    },
+    {
+      name: 'Codex',
+      bin: 'codex',
+      home: codexHome,
+      attached: () => {
+        const text = readText(join(codexHome, 'config.toml'));
+        const found = [text.includes('loadout hook codex') && 'hook', /^\[mcp_servers\.loadout\]/m.test(text) && 'search server'].filter(Boolean);
+        return found.length ? found.join(' and ') : undefined;
+      },
+      setup: 'codex',
+    },
+  ];
+  for (const h of hosts) {
+    const bin = which(h.bin);
+    if (!bin && !existsSync(h.home)) continue;
+    const attached = h.attached();
+    checks.push({
+      name: h.name,
+      ok: Boolean(attached),
+      detail: `${bin ? (version(bin) ?? 'version unknown') : 'CLI not on PATH'}; loadout: ${attached ?? 'not set up'}`,
+      fix: `loadout setup ${h.setup}`,
+    });
+  }
+  return checks;
+}
+
+export function formatDoctor(checks: Check[]): string {
+  const width = Math.max(...checks.map((c) => c.name.length));
+  return checks.map((c) => `${c.ok ? '✓' : '✗'} ${c.name.padEnd(width)}  ${c.detail}${c.ok || !c.fix ? '' : `\n  ${' '.repeat(width)}  fix: ${c.fix}`}`).join('\n');
+}

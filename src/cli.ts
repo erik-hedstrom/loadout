@@ -9,6 +9,7 @@ import { addFromGitHub, addSkills, librarySources, parseGitHub, scanLibrary, ski
 import { repoSignals } from './repo.js';
 import { route } from './route.js';
 import { cachedEmbeddings, libraryEmbeddings } from './embed.js';
+import { doctor, formatDoctor } from './doctor.js';
 import { HOOK_FAILURE_NOTE, hookOutput, isFollowUp, promptContext, type HookInput } from './hook.js';
 import { reportJson, type Capability, type RouteDecision } from './types.js';
 
@@ -34,6 +35,7 @@ Usage:
                                           that fit as context (reads the hook JSON on stdin)
   loadout setup <host> [--windows]        Print plugin, hook and MCP setup instructions for a host:
                                           ${HOSTS.join(', ')}
+  loadout doctor                          Check the key (one Jev call), library, index and hosts; read-only
 
 The library lives in ~/.loadout/library (override with LOADOUT_HOME):
   skills/<name>/SKILL.md   and   mcp.json ({"mcpServers": {...}}, optional "description" per server)
@@ -323,6 +325,12 @@ async function main(): Promise<number> {
       const { where, snippet } = hostSetup(host, windows);
       console.log(`# ${where}\n${snippet}`);
       return 0;
+    }
+
+    case 'doctor': {
+      const checks = await doctor(config, (apiKey) => jevClient({ apiKey, baseUrl: config.jev.baseUrl, model: config.jev.model, retries: 0 }));
+      console.log(formatDoctor(checks));
+      return checks.every((c) => c.ok) ? 0 : 1;
     }
 
     case undefined:

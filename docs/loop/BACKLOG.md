@@ -307,7 +307,7 @@ Acceptance: a third row in that RESULTS table, with raw results. The README's
 | D10 | P0 | In-host first: loadout as a Claude Code plugin (hook), CLI then desktop app | Codex | cloud + local + erik | review (plugin, CLI check, latency); desktop app check pending (Erik) |
 | D11 | P1 | Cut the hook's per-prompt start cost | Codex | cloud + local | in progress ([#14](https://github.com/erik-hedstrom/loadout/pull/14): follow-ups skip start-up, relay loads on demand) |
 | D1 | P0 | Validate on the new native Linux machine | Claude | local | todo (machine pending) |
-| D7 | P1 | `loadout doctor` | Codex | cloud | todo |
+| D7 | P1 | `loadout doctor` | Claude | cloud | review |
 | D2 | P1 | Live Codex hook test | Claude | local + erik | todo |
 | D3 | P1 | Desktop and IDE hosts end to end | Claude | local | todo |
 | D5 | P2 | Isolation mode | Codex | cloud | todo |
@@ -477,6 +477,18 @@ Acceptance:
   index, configured hosts and CLI versions.
 - Prints the fix for each failed check.
 - Read-only.
+
+Learnings (2026-10-09):
+- The key check prints only "found" or "not found", never the key file's
+  path. The live call is one Noul question with no retries; its failure text
+  comes from `jevClient`'s fixed diagnostics.
+- Hosts appear only when their CLI is on PATH or their config folder
+  exists. A host counts as set up when the plugin is enabled or a `loadout
+  hook` / `[mcp_servers.loadout]` entry is present.
+- Also checks Node ≥ 22.12 and `loadout` on PATH, which the plugin's hook
+  needs.
+- Native Windows: `which()` ignores PATHEXT, so `.cmd` shims show as not on
+  PATH. This is shared with the launcher and left as it was.
 
 ## E. Engineering quality (what a reviewer of the repo sees)
 

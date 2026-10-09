@@ -128,6 +128,7 @@ loadout codex  "<task>" [-- <codex args>]                # launch Codex with the
 loadout codex --headless "<task>" -- --skip-git-repo-check   # run once and exit (codex exec / claude -p)
 loadout mcp                                              # the library as an MCP server (see below)
 loadout setup <host>                                     # print the config that attaches it to a host
+loadout doctor                                           # check key, library, index and hosts, with fixes
 ```
 
 Flags: `--dry-run` prints the command instead of launching; `--lexical` routes

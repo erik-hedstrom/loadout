@@ -143,11 +143,7 @@ export class EmbeddingStore {
  * every skill once; later runs only embed what was added.
  */
 export async function libraryEmbeddings(library: Capability[], dir: string, log: (message: string) => void = () => {}): Promise<EmbeddingStore | undefined> {
-  try {
-    await import(TRANSFORMERS_MODULE);
-  } catch {
-    return undefined;
-  }
+  if (!(await hasTransformers())) return undefined;
   const store = new EmbeddingStore(dir);
   try {
     const added = await store.ensure(library, (done, total) => {
@@ -167,14 +163,13 @@ export async function libraryEmbeddings(library: Capability[], dir: string, log:
  * is missing. Skills without a cached vector are ranked by keywords alone.
  */
 export async function cachedEmbeddings(dir: string): Promise<EmbeddingStore | undefined> {
-  try {
-    await import(TRANSFORMERS_MODULE);
-  } catch {
-    return undefined;
-  }
+  if (!(await hasTransformers())) return undefined;
   const store = new EmbeddingStore(dir);
   return store.size > 0 ? store : undefined;
 }
+
+/** Whether the optional package is installed (without it, retrieval is keywords only). */
+export const hasTransformers = () => import(TRANSFORMERS_MODULE).then(() => true, () => false);
 
 /** Cosine similarity of unit vectors. */
 export function dot(a: Float32Array, b: Float32Array): number {
