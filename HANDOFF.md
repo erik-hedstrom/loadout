@@ -88,7 +88,8 @@ setup, the iteration protocol, the context discipline and the prompts.
 considered `haesteining` alias; hook default (2026-10-07): loadout runs
 automatically inside Claude Code, in the CLI and desktop app, through a
 user-installed plugin (D10), whose install text says routed prompts go to
-TypeSafe. The launcher stays for power users and benchmarks.
+TypeSafe. The launcher stays for power users and benchmarks. Shown for the
+CLI only; the desktop app is untested ([docs/hosts.md](docs/hosts.md)).
 
 1. **Going public.** The repo is private. Recommended order: CI green,
    LICENSE, README quickstart verified on a clean machine, then public.
