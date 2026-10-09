@@ -502,10 +502,14 @@ export async function route(input: RouteInput): Promise<RouteDecision> {
     request: task,
     repository: { name: repo.name, top_level_files: repo.files, dependencies: repo.dependencies, languages: Object.keys(repo.languages) },
   };
+  // A caller that left while the query was embedded gets no Jev call.
+  input.signal?.throwIfAborted();
   let asked: Awaited<ReturnType<typeof askJev>>;
   try {
     asked = await askJev(input.client, state, candidates, config.shortlist, input.excerpt, input.signal);
   } catch (err) {
+    // A cancelled request has nobody waiting for a fallback.
+    if (input.signal?.aborted) throw err;
     // Routing must never block a session: fall back to keyword ranking and say so.
     const why = err instanceof Error ? err.message : String(err);
     return withMentions(lexicalDecision(query, input, started, `Jev unavailable (${why}); used keyword ranking`), task, library, config.maxSkills);

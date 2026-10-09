@@ -760,6 +760,25 @@ describe('route', () => {
     expect(decision.selected[0]?.capability.name).toBe('webapp-testing');
   });
 
+  it('rejects instead of falling back when the caller cancels', async () => {
+    const cancel = new AbortController();
+    const cancelling: SystemOneClient = {
+      ask: async () => {
+        cancel.abort();
+        throw new Error('Jev request cancelled');
+      },
+    };
+    await expect(route({ task: TASK, repo: REPO, library, config, client: cancelling, signal: cancel.signal })).rejects.toThrow('Jev request cancelled');
+  });
+
+  it('makes no Jev call when the caller cancels while the query is embedded', async () => {
+    const cancel = new AbortController();
+    const ask = vi.fn(fakeClient({}).client.ask);
+    const embeddings = { size: 1, query: async () => (cancel.abort(), undefined), vector: () => undefined } as unknown as NonNullable<Parameters<typeof route>[0]['embeddings']>;
+    await expect(route({ task: TASK, repo: REPO, library, config, client: { ask }, embeddings, signal: cancel.signal })).rejects.toThrow();
+    expect(ask).not.toHaveBeenCalled();
+  });
+
   it('rejects malformed Jev responses', () => {
     const q: Record<string, Question> = { a: { type: 'noul', instructions: 'x' } };
     expect(() => validateResponse({}, q)).toThrow('Jev response did not match the schema');
