@@ -144,8 +144,8 @@ export async function doctor(config: Config, client: (apiKey: string) => SystemO
         const config = readConfig(join(codexHome, 'config.toml'), parseToml);
         const hooksOff = (config.features as { hooks?: unknown } | undefined)?.hooks === false;
         const server = (config.mcp_servers as Record<string, { enabled?: unknown; command?: unknown; url?: unknown }> | undefined)?.loadout;
-        // Codex needs a command or url to start a server; a table without one launches nothing.
-        const runnable = server && server.enabled !== false && [server.command, server.url].some((t) => typeof t === 'string' && t.trim() !== '');
+        // Codex starts a server from exactly one of command (stdio) or url (HTTP), and rejects a table with both.
+        const runnable = server && server.enabled !== false && [server.command, server.url].filter((t) => typeof t === 'string' && t.trim() !== '').length === 1;
         const found = [!hooksOff && hasHook(config, 'codex') && 'hook', runnable && 'search server'].filter(Boolean);
         if (found.length) return { on: found.join(' and ') };
         return hooksOff && hasHook(config, 'codex') ? { off: 'hook, but [features] hooks = false in config.toml turns hooks off' } : {};

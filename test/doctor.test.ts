@@ -131,7 +131,7 @@ describe('doctor', () => {
     expect(checks['Claude Code']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: not set up' });
   });
 
-  it.each(['startup_timeout_sec = 20', 'command = ""', 'url = " "'])('does not count a Codex server table with nothing to launch (%s)', async (line) => {
+  it.each(['startup_timeout_sec = 20', 'command = ""', 'url = " "', 'command = "loadout"\nurl = "http://127.0.0.1:1"'])('does not count a Codex server table that Codex cannot start (%s)', async (line) => {
     mkdirSync(join(home, 'codex'));
     writeFileSync(join(home, 'codex', 'config.toml'), `[mcp_servers.loadout]\n${line}\n`);
     const checks = byName(await doctor(config, () => okClient));
