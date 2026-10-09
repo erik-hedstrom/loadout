@@ -434,6 +434,44 @@ Raw: [results/2026-10-07T22-54-56-747Z-hook-latency/](results/2026-10-07T22-54-5
 and [results/2026-10-08-hook-plugin-probe/](results/2026-10-08-hook-plugin-probe/).
 Cost: about $0.05 of Jev; the Haiku run reported $0.06.
 
+### Hook start-up (D11, 2026-10-08)
+
+Measured in WSL with Node 24.15 and the 1,262-skill library, embeddings on.
+Each sample is a fresh process.
+
+**Steps before Jev.** [phases.mjs](results/2026-10-08-hook-phases/phases.mjs)
+runs `runHook`'s steps up to the Jev call, n = 11. Medians:
+
+| Step | ms |
+|---|---:|
+| Node start, to the script's first line | 20 |
+| Imports of config, library, route, hook and embed, summed | 28 |
+| scanLibrary | 262 |
+| cachedEmbeddings | 131 |
+| First query embedding | 186 |
+| repoSignals | 14 |
+
+**Follow-ups.** A follow-up ("yes", "continue") adds no context, but each one
+ran the whole start-up before `promptContext` dropped it. The command timed
+is `echo '{"prompt":"yes"}' | node dist/cli.js hook claude`, n = 11:
+
+| Build | Median ms | Range |
+|---|---:|---:|
+| main 7d90442 | 536 | 525–568 |
+| Follow-ups return before start-up | 149 | 142–204 |
+| `relay.js` imported only by `mcp-launch` | 63 | 58–85 |
+| Bare `node -e ''`, for comparison | 25 | 24–30 |
+
+- After the first cut, most of the remainder was one import that
+  `phases.mjs` does not make. `dist/relay.js` takes a median 88 ms to import
+  on its own, 65 ms of that through `diagnostic.js` and the MCP SDK.
+- Routed prompts skip the same import. Their before and after: not shown.
+  They still pay for the library scan, the embedding model and Jev.
+- One machine, one session.
+
+Raw: [results/2026-10-08-hook-phases/](results/2026-10-08-hook-phases/).
+Cost: $0, with no Jev calls.
+
 ### Is the work better? (outcome pilot, 2026-10-07)
 
 [outcome.ts](outcome.ts) runs each request twice with Codex (gpt-6.1-sol) in

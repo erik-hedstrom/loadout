@@ -4,10 +4,12 @@ import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSyn
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { pathTranslator, which } from '../src/launch.js';
+import { capabilityKey } from '../src/library.js';
 import { z } from 'zod';
-import type { Capability, RawRouting, RepoSignals } from '../src/types.js';
+import type { Capability, RawRouting, RepoSignals, RouteDecision, ScoredCapability } from '../src/types.js';
+import type { SweepRow } from './sweep.js';
 
-export const BENCH = import.meta.dirname;
+const BENCH = import.meta.dirname;
 export const DATA = join(BENCH, 'data');
 export const RESULTS = join(BENCH, 'results');
 
@@ -35,6 +37,61 @@ export function readJsonl<T>(file: string): T[] {
     .split('\n')
     .filter(Boolean)
     .map((line) => JSON.parse(line) as T);
+}
+
+/** Rebuild a stored decision without routing again; empty arms retain only the tier. */
+export function decisionFor(row: SweepRow, library: Capability[], empty: boolean): RouteDecision {
+  const byKey = new Map(library.map((c) => [capabilityKey(c), c]));
+  const scored = (picks: SweepRow['loaded']): ScoredCapability[] =>
+    picks.flatMap((p) => {
+      const capability = byKey.get(p.key);
+      return capability ? [{ capability, p: p.fit, exact: p.exact, share: p.share, ...(p.inject ? { inject: p.inject as 'clear' | 'mentioned' } : {}) }] : [];
+    });
+  return {
+    tier: row.tier as RouteDecision['tier'],
+    selected: empty ? [] : scored(row.loaded),
+    suggested: empty ? [] : scored(row.offered),
+    scored: [],
+    // Empty arms get only the search hint, when search is enabled.
+    router: empty ? 'lexical' : 'jev',
+    stats: { librarySize: library.length, candidates: 0, ms: 0 },
+  };
+}
+
+export function run(bin: string, args: string[], cwd: string, timeoutMs: number): Promise<{ stdout: string; stderr: string; code: number | null; timedOut: boolean }> {
+  return new Promise((resolve) => {
+    // Its own process group, so a timeout also stops what the CLI started (Codex's native
+    // binary, the Windows process behind claude.exe), which would otherwise hold the pipes open.
+    const child = spawn(bin, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
+    let stdout = '';
+    let stderr = '';
+    let timedOut = false;
+    child.stdout.on('data', (d: Buffer) => (stdout += d));
+    child.stderr.on('data', (d: Buffer) => (stderr += d));
+    const timer = setTimeout(() => {
+      timedOut = true;
+      try {
+        process.kill(-child.pid!, 'SIGKILL');
+      } catch {
+        child.kill('SIGKILL');
+      }
+    }, timeoutMs);
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      resolve({ stdout, stderr, code, timedOut });
+    });
+  });
+}
+
+export function codexCli(directories: string[]): { bin: string; prefix: string[] } {
+  if (process.platform === 'win32') {
+    // Avoid cmd.exe so arbitrary temporary paths remain literal arguments.
+    for (const dir of directories) {
+      const entry = join(dir, 'node_modules', '@openai', 'codex', 'bin', 'codex.js');
+      if (existsSync(entry)) return { bin: process.execPath, prefix: [entry] };
+    }
+  }
+  return { bin: 'codex', prefix: [] };
 }
 
 export function loadCorpus(): CorpusSkill[] {
@@ -169,13 +226,8 @@ export async function modelJson<T>(prompt: string, schema: z.ZodType<T>, opts: {
       '-c', 'features.shell_tool=false', '-c', 'features.unified_exec=false', '-c', 'features.view_image=false',
       ...(opts.effort ? ['-c', `model_reasoning_effort=${JSON.stringify(opts.effort)}`] : []),
     ];
-    const prefix: string[] = [];
-    let bin = 'codex';
-    if (process.platform === 'win32') {
-      const shim = which('codex') ?? which('codex.cmd');
-      const entry = shim && join(dirname(shim), 'node_modules', '@openai', 'codex', 'bin', 'codex.js');
-      if (entry && existsSync(entry)) { bin = process.execPath; prefix.push(entry); }
-    }
+    const shim = process.platform === 'win32' ? which('codex') ?? which('codex.cmd') : undefined;
+    const { bin, prefix } = codexCli(shim ? [dirname(shim)] : []);
     const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/_(?:KEY|TOKEN|SECRET)$/i.test(key)));
     if (!codexToolsChecked) {
       const features = execFileSync(bin, [...prefix, ...config, 'features', 'list'], { cwd: dir, env, encoding: 'utf8', timeout: 15_000, stdio: ['ignore', 'pipe', 'ignore'] });

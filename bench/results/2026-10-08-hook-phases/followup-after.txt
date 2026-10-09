@@ -1,0 +1,12 @@
+commit e2fe46e; ms per run of: echo {"prompt":"yes"} | node dist/cli.js hook claude
+204
+165
+166
+151
+142
+143
+151
+147
+146
+144
+149
