@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, relative } from 'node:path';
+import { delimiter, join, relative } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CONFIG, type Config } from '../src/config.js';
 import { doctor, formatDoctor } from '../src/doctor.js';
@@ -131,9 +131,9 @@ describe('doctor', () => {
     expect(checks['Claude Code']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: not set up' });
   });
 
-  it('does not count a Codex server table with nothing to launch', async () => {
+  it.each(['startup_timeout_sec = 20', 'command = ""', 'url = " "'])('does not count a Codex server table with nothing to launch (%s)', async (line) => {
     mkdirSync(join(home, 'codex'));
-    writeFileSync(join(home, 'codex', 'config.toml'), '[mcp_servers.loadout]\nstartup_timeout_sec = 20\n');
+    writeFileSync(join(home, 'codex', 'config.toml'), `[mcp_servers.loadout]\n${line}\n`);
     const checks = byName(await doctor(config, () => okClient));
     expect(checks['Codex']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: not set up' });
   });
@@ -160,13 +160,26 @@ describe('doctor', () => {
 
   it.skipIf(process.platform === 'win32')('runs no host CLI found through a relative PATH entry', async () => {
     const marker = join(home, 'ran');
-    writeFileSync(join(home, 'bin', 'claude'), `#!/bin/sh\ntouch '${marker}'\n`);
+    writeFileSync(join(home, 'bin', 'claude'), `#!/bin/sh\n: > '${marker}'\n`);
     chmodSync(join(home, 'bin', 'claude'), 0o755);
     vi.stubEnv('PATH', relative(process.cwd(), join(home, 'bin')));
     mkdirSync(join(home, 'claude'));
     const checks = byName(await doctor(config, () => okClient));
     expect(existsSync(marker)).toBe(false);
     expect(checks['Claude Code']!.detail).toMatch(/^CLI not on PATH;/);
+  });
+
+  it.skipIf(process.platform === 'win32')('gives a host CLI shim no relative PATH entry to resolve its interpreter through', async () => {
+    const marker = join(home, 'ran');
+    mkdirSync(join(home, 'planted'));
+    writeFileSync(join(home, 'planted', 'fake-node'), `#!/bin/sh\n: > '${marker}'\n`);
+    chmodSync(join(home, 'planted', 'fake-node'), 0o755);
+    // Like `#!/usr/bin/env node`: the interpreter is looked up on PATH.
+    writeFileSync(join(home, 'bin', 'claude'), '#!/bin/sh\nexec fake-node "$@"\n');
+    chmodSync(join(home, 'bin', 'claude'), 0o755);
+    vi.stubEnv('PATH', [relative(process.cwd(), join(home, 'planted')), join(home, 'bin')].join(delimiter));
+    await doctor(config, () => okClient);
+    expect(existsSync(marker)).toBe(false);
   });
 
   it.skipIf(process.platform === 'win32')('stops a version check that ignores SIGTERM', async () => {

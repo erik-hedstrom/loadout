@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { isAbsolute, join } from 'node:path';
+import { delimiter, isAbsolute, join } from 'node:path';
 import { parse as parseToml } from 'smol-toml';
 import { paths, resolveApiKey, type Config } from './config.js';
 import { EmbeddingStore, hasTransformers } from './embed.js';
@@ -23,6 +23,8 @@ const VERSION_ENV = ['PATH', 'PATHEXT', 'HOME', 'USERPROFILE', 'APPDATA', 'LOCAL
 /** First line of `<bin> --version`, or undefined when it does not run. */
 function version(bin: string): string | undefined {
   const env = Object.fromEntries(VERSION_ENV.flatMap((k) => (process.env[k] === undefined ? [] : [[k, process.env[k]]])));
+  // A shim such as `#!/usr/bin/env node` resolves through PATH too: an empty or relative entry would find a planted `node`.
+  if (env.PATH !== undefined) env.PATH = env.PATH.split(delimiter).filter((d) => isAbsolute(d)).join(delimiter);
   try {
     return execFileSync(bin, ['--version'], { encoding: 'utf8', timeout: 10_000, killSignal: 'SIGKILL', stdio: ['ignore', 'pipe', 'ignore'], env }).trim().split('\n')[0];
   } catch {
@@ -143,7 +145,7 @@ export async function doctor(config: Config, client: (apiKey: string) => SystemO
         const hooksOff = (config.features as { hooks?: unknown } | undefined)?.hooks === false;
         const server = (config.mcp_servers as Record<string, { enabled?: unknown; command?: unknown; url?: unknown }> | undefined)?.loadout;
         // Codex needs a command or url to start a server; a table without one launches nothing.
-        const runnable = server && server.enabled !== false && (typeof server.command === 'string' || typeof server.url === 'string');
+        const runnable = server && server.enabled !== false && [server.command, server.url].some((t) => typeof t === 'string' && t.trim() !== '');
         const found = [!hooksOff && hasHook(config, 'codex') && 'hook', runnable && 'search server'].filter(Boolean);
         if (found.length) return { on: found.join(' and ') };
         return hooksOff && hasHook(config, 'codex') ? { off: 'hook, but [features] hooks = false in config.toml turns hooks off' } : {};
