@@ -312,7 +312,7 @@ Acceptance: a third row in that RESULTS table, with raw results. The README's
 | D3 | P1 | Desktop and IDE hosts end to end | Claude | local | todo |
 | D5 | P2 | Isolation mode | Codex | cloud | todo |
 | D4 | P2 | Gateway: native tools via `tools/list_changed` | Codex | cloud | todo |
-| D6 | P2 | HTTP: cancellation reaches Jev | Codex | cloud | todo |
+| D6 | P2 | HTTP: cancellation reaches Jev | Claude | cloud | review |
 | D8 | P1 | Host capability matrix (verified vs generated) | Codex | cloud | todo |
 | D9 | P1 | Codex parity: neutral session skill dir, tier presets | Codex | cloud | todo (after E9) |
 
@@ -444,6 +444,12 @@ Acceptance:
 - An AbortSignal flows from the MCP request through `route()` and `askJev()`
   to `fetch`.
 - A test shows a disconnected client stops the Jev call.
+
+Learnings (2026-10-09): no new plumbing on the server side. The MCP SDK
+already aborts a handler's `extra.signal` when the transport closes, and
+`serveHttp` closes it when the response closes. The same signal handles a
+stdio host's `notifications/cancelled`. A cancelled request is not retried,
+and its error is fixed text like the other Jev diagnostics.
 
 **D8. Host capability matrix.**
 

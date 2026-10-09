@@ -595,6 +595,19 @@ catch (err) { console.log(err.message); }
     } finally { fetchMock.mockRestore(); }
   });
 
+  it('stops and does not retry when the caller cancels', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(
+      (_url, init) => new Promise((_resolve, reject) => init!.signal!.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))),
+    );
+    try {
+      const cancel = new AbortController();
+      const asked = jevClient({ apiKey: 'fake', baseUrl: 'https://example.invalid', model: 'fake', retries: 2 }).ask({}, {}, cancel.signal);
+      cancel.abort();
+      await expect(asked).rejects.toMatchObject({ message: 'Jev request cancelled' });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally { fetchMock.mockRestore(); }
+  });
+
   it.each(['not JSON upstream credential canary', JSON.stringify({ answers: { canary: { type: 'choice', probabilities: { 'upstream credential canary': 1 } } } })])('uses fixed diagnostics for invalid Jev responses (%s)', async (body) => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response(body));
     try {
@@ -1037,6 +1050,32 @@ describe('mcp server', () => {
       const loaded = (await client.callTool({ name: 'load_skill', arguments: { skill: 'pdf' } })) as { content: { text: string }[] };
       expect(loaded.content[0]!.text).toContain('<skill name="pdf"');
       await client.close();
+    } finally {
+      await http.close();
+    }
+  });
+
+  it('cancels the Jev call when an HTTP client disconnects mid-search', async () => {
+    let asked!: () => void;
+    const started = new Promise<void>((r) => (asked = r));
+    let cancelled!: () => void;
+    const aborted = new Promise<void>((r) => (cancelled = r));
+    const client: SystemOneClient = {
+      ask: (_state, _questions, signal) => {
+        asked();
+        signal?.addEventListener('abort', () => cancelled());
+        return new Promise(() => {});
+      },
+    };
+    const http = await serveHttp({ library: skills, config: DEFAULT_CONFIG, client }, { port: 0, host: '127.0.0.1' });
+    try {
+      const url = new URL(http.url);
+      const req = request({ host: url.hostname, port: url.port, path: '/mcp', method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream' } });
+      req.on('error', () => {});
+      req.end(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'find_skills', arguments: { goal: 'fill in a PDF form' } } }));
+      await started;
+      req.destroy();
+      await aborted;
     } finally {
       await http.close();
     }

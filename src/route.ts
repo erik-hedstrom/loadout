@@ -123,6 +123,8 @@ export interface RouteInput {
   embeddings?: EmbeddingStore;
   /** Opening of a capability's instructions, shown in the close reread when available. */
   excerpt?: (c: Capability) => string | undefined;
+  /** Cancels the Jev requests, e.g. when the MCP client that asked has gone. */
+  signal?: AbortSignal;
 }
 
 const clip = (text: string, n: number) => (text.length > n ? `${text.slice(0, n - 1)}…` : text) || '(no description)';
@@ -302,11 +304,12 @@ export async function askJev(
   candidates: Capability[],
   shortlistSize: number,
   excerpt?: RouteInput['excerpt'],
+  signal?: AbortSignal,
 ): Promise<{ raw: RawRouting; keys: Map<string, Capability> }> {
   const keys = optionKeys(candidates.slice(0, CHOICE_LIMIT - 1));
 
   let started = Date.now();
-  const wide = await client.ask(state, wideQuestions(keys));
+  const wide = await client.ask(state, wideQuestions(keys), signal);
   const wideMs = Date.now() - started;
   const pickAnswer = wide.answers.pick;
   const pick = pickAnswer?.type === 'choice' ? pickAnswer.probabilities : {};
@@ -327,7 +330,7 @@ export async function askJev(
     .map((s) => s.key);
 
   started = Date.now();
-  const close = await client.ask(state, closeQuestions(shortlist.map((k) => [k, keys.get(k)!]), excerpt));
+  const close = await client.ask(state, closeQuestions(shortlist.map((k) => [k, keys.get(k)!]), excerpt), signal);
   const closeMs = Date.now() - started;
   const closePick = close.answers.pick;
   // Keys are capability names; fromEntries defines own properties, so "__proto__" cannot corrupt these.
@@ -501,7 +504,7 @@ export async function route(input: RouteInput): Promise<RouteDecision> {
   };
   let asked: Awaited<ReturnType<typeof askJev>>;
   try {
-    asked = await askJev(input.client, state, candidates, config.shortlist, input.excerpt);
+    asked = await askJev(input.client, state, candidates, config.shortlist, input.excerpt, input.signal);
   } catch (err) {
     // Routing must never block a session: fall back to keyword ranking and say so.
     const why = err instanceof Error ? err.message : String(err);

@@ -22,7 +22,8 @@ export interface SystemOneResponse {
 }
 
 export interface SystemOneClient {
-  ask(state: unknown, questions: Record<string, Question>): Promise<SystemOneResponse>;
+  /** `signal`: the caller gave up (e.g. an HTTP client disconnected); the request stops and is not retried. */
+  ask(state: unknown, questions: Record<string, Question>, signal?: AbortSignal): Promise<SystemOneResponse>;
 }
 
 export class JevError extends Error {
@@ -80,23 +81,25 @@ export function validateResponse(body: unknown, questions: Record<string, Questi
 }
 
 export function jevClient(opts: { apiKey: string; baseUrl: string; model: string; timeoutMs?: number; retries?: number }): SystemOneClient {
-  const once = async (state: unknown, questions: Record<string, Question>) => {
+  const once = async (state: unknown, questions: Record<string, Question>, signal?: AbortSignal) => {
+    const timeout = AbortSignal.timeout(opts.timeoutMs ?? 12_000);
     const res = await fetch(`${opts.baseUrl.replace(/\/$/, '')}/v1/systemone`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${opts.apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ model: opts.model, state, questions }),
-      signal: AbortSignal.timeout(opts.timeoutMs ?? 12_000),
+      signal: signal ? AbortSignal.any([timeout, signal]) : timeout,
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new JevError(`Jev request failed: HTTP ${res.status}`, res.status);
     return validateResponse(body, questions);
   };
   return {
-    async ask(state, questions) {
+    async ask(state, questions, signal) {
       for (let attempt = 0; ; attempt++) {
         try {
-          return await once(state, questions);
+          return await once(state, questions, signal);
         } catch (err) {
+          if (signal?.aborted) throw new Error('Jev request cancelled');
           if (!(err instanceof JevError)) err = new Error(err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError') ? 'Jev request timed out' : 'Jev request failed: network error');
           // Network errors and timeouts are not JevErrors and are worth one more try.
           const retryable = err instanceof JevError ? err.retryable : true;
