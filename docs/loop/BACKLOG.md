@@ -277,7 +277,7 @@ Acceptance: a third row in that RESULTS table, with raw results. The README's
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
 | D10 | P0 | In-host first: loadout as a Claude Code plugin (hook), CLI then desktop app | Codex | cloud + local + erik | review (plugin, CLI check, latency); desktop app check pending (Erik) |
-| D11 | P1 | Cut the hook's per-prompt start cost | Codex | cloud + local | todo |
+| D11 | P1 | Cut the hook's per-prompt start cost | Codex | cloud + local | in progress ([#14](https://github.com/erik-hedstrom/loadout/pull/14): follow-ups skip start-up, relay loads on demand) |
 | D1 | P0 | Validate on the new native Linux machine | Claude | local | todo (machine pending) |
 | D7 | P1 | `loadout doctor` | Codex | cloud | todo |
 | D2 | P1 | Live Codex hook test | Claude | local + erik | todo |
@@ -357,6 +357,13 @@ Acceptance:
   load, Jev), so the breakdown is measured rather than inferred.
 - Cut what dominates. `bench/hook-latency.ts` with real Jev then shows a
   lower p50 for the new process, with raw results and a RESULTS entry.
+
+Learnings (2026-10-08, [#14](https://github.com/erik-hedstrom/loadout/pull/14),
+[RESULTS](../../bench/RESULTS.md#hook-start-up-d11-2026-10-08)):
+- Done: follow-ups return before start-up, and `relay.js` loads only for
+  `mcp-launch`.
+- Left: the library scan and the embedding model dominate what remains.
+  Then run `hook-latency.ts` with real Jev, as acceptance asks.
 
 **D1. Native Linux validation.**
 

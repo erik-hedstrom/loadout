@@ -1066,6 +1066,25 @@ describe('mcp server', () => {
 describe('claude hook', () => {
   const library = scanLibrary(LIBRARY);
 
+  it.each([
+    { name: 'skips startup for follow-ups', prompt: 'yes', stderr: '' },
+    { name: 'reports startup failures for routed prompts', prompt: TASK, stderr: `${HOOK_FAILURE_NOTE}\n` },
+  ])('$name', ({ prompt, stderr }) => {
+    const home = tempDir('loadout-hook-start-');
+    writeFileSync(join(home, 'config.json'), JSON.stringify({ router: 'lexical' }));
+    mkdirSync(join(home, 'library'));
+    writeFileSync(join(home, 'library/mcp.json'), '{');
+    const result = spawnSync(process.execPath, ['--import', 'tsx', join(import.meta.dirname, '../src/cli.ts'), 'hook', 'claude'], {
+      encoding: 'utf8', timeout: 10_000,
+      env: { ...process.env, LOADOUT_HOME: home },
+      input: JSON.stringify({ prompt }),
+    });
+    expect(result.error).toBeUndefined();
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toBe(stderr);
+  });
+
   const outage = "globalThis.fetch = async () => { throw new Error('upstream credential canary\\nsecond line'); };";
   it.each([
     { name: 'reports Jev outages on stderr in fixed text without blocking the prompt', preload: outage, stderr: `${JEV_FALLBACK_NOTE}\n` },
