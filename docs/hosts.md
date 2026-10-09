@@ -3,8 +3,7 @@
 What loadout does in each host, and whether that was checked in a real host
 session. "Untested" means loadout implements it (for most hosts,
 `loadout setup <host>` prints the config), but nobody has run it in that host
-yet. The unit tests cover the code behind every cell; this table is about the
-host end.
+yet.
 
 | Host | Launch | Tier | Hook | Search | Gateway |
 |---|---|---|---|---|---|
