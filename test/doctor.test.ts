@@ -198,6 +198,16 @@ describe('doctor', () => {
     expect(checks['Codex']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: not set up' });
   });
 
+  it('tells a broken host config apart from a missing one', async () => {
+    mkdirSync(join(home, 'claude'));
+    writeFileSync(join(home, 'claude', 'settings.json'), '{ "enabledPlugins": ');
+    mkdirSync(join(home, 'codex'));
+    writeFileSync(join(home, 'codex', 'config.toml'), '[mcp_servers.loadout\n');
+    const checks = byName(await doctor(config, () => okClient));
+    expect(checks['Claude Code']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: config cannot be read or parsed', fix: `repair ${join(home, 'claude', 'settings.json')}` });
+    expect(checks['Codex']).toMatchObject({ ok: false, fix: `repair ${join(home, 'codex', 'config.toml')}` });
+  });
+
   it('does not count a hook entry without type = "command"', async () => {
     mkdirSync(join(home, 'codex'));
     writeFileSync(join(home, 'codex', 'config.toml'), '[[hooks.UserPromptSubmit]]\n[[hooks.UserPromptSubmit.hooks]]\ncommand = "loadout hook codex"\n');

@@ -32,13 +32,14 @@ function version(bin: string): string | undefined {
   }
 }
 
-/** A parsed config file, or {} when it is missing or does not parse. */
-function readConfig(file: string, parse: (text: string) => unknown): Record<string, unknown> {
+/** A parsed config file, {} when it is missing, or undefined when it exists but cannot be read or parsed. */
+function readConfig(file: string, parse: (text: string) => unknown): Record<string, unknown> | undefined {
+  if (!existsSync(file)) return {};
   try {
     const value = parse(readFileSync(file, 'utf8'));
-    return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+    return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
   } catch {
-    return {};
+    return undefined;
   }
 }
 
@@ -129,6 +130,7 @@ export async function doctor(config: Config, client: (apiKey: string) => SystemO
       home: claudeHome,
       attached: () => {
         const settings = readConfig(join(claudeHome, 'settings.json'), JSON.parse);
+        if (!settings) return { broken: join(claudeHome, 'settings.json') };
         const plugin = (settings.enabledPlugins as Record<string, unknown> | undefined)?.['loadout@loadout'] === true;
         const on = plugin ? 'plugin enabled' : hasHook(settings, 'claude') ? 'settings hook' : undefined;
         if (on && settings.disableAllHooks === true) return { off: `${on}, but disableAllHooks in settings.json turns hooks off` };
@@ -142,6 +144,7 @@ export async function doctor(config: Config, client: (apiKey: string) => SystemO
       home: codexHome,
       attached: () => {
         const config = readConfig(join(codexHome, 'config.toml'), parseToml);
+        if (!config) return { broken: join(codexHome, 'config.toml') };
         const hooksOff = (config.features as { hooks?: unknown } | undefined)?.hooks === false;
         const server = (config.mcp_servers as Record<string, Record<string, unknown>> | undefined)?.loadout;
         // Codex starts a server from exactly one of command (stdio) or url (HTTP), and rejects a table with both keys.
@@ -161,12 +164,12 @@ export async function doctor(config: Config, client: (apiKey: string) => SystemO
     const found = which(h.bin);
     const bin = found && isAbsolute(found) ? found : undefined;
     if (!bin && !existsSync(h.home)) continue;
-    const { on, off }: { on?: string; off?: string } = h.attached();
+    const { on, off, broken }: { on?: string; off?: string; broken?: string } = h.attached();
     checks.push({
       name: h.name,
       ok: Boolean(on),
-      detail: `${bin ? (version(bin) ?? 'version unknown') : 'CLI not on PATH'}; loadout: ${on ?? off ?? 'not set up'}`,
-      fix: off ? 'turn hooks back on' : `loadout setup ${h.setup}`,
+      detail: `${bin ? (version(bin) ?? 'version unknown') : 'CLI not on PATH'}; loadout: ${broken ? 'config cannot be read or parsed' : (on ?? off ?? 'not set up')}`,
+      fix: broken ? `repair ${broken}` : off ? 'turn hooks back on' : `loadout setup ${h.setup}`,
     });
   }
   return checks;
