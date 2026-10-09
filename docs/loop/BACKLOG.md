@@ -314,7 +314,7 @@ Acceptance: a third row in that RESULTS table, with raw results. The README's
 | D4 | P2 | Gateway: native tools via `tools/list_changed` | Codex | cloud | todo |
 | D6 | P2 | HTTP: cancellation reaches Jev | Codex | cloud | todo |
 | D8 | P1 | Host capability matrix (verified vs generated) | Codex | cloud | todo |
-| D9 | P1 | Codex parity: neutral session skill dir, tier presets | Claude | cloud | review |
+| D9 | P1 | Codex parity: neutral session skill dir, tier presets | Claude | cloud | review ([#21](https://github.com/erik-hedstrom/loadout/pull/21)) |
 
 **D10. In-host first: loadout as a Claude Code plugin.**
 

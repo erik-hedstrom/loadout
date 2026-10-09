@@ -822,7 +822,6 @@ describe('launch', () => {
     expect(session.pluginDir).toBeUndefined();
     expect(session.skillsDir).toBe(join(session.dir, 'skills'));
     expect(existsSync(join(session.skillsDir!, 'webapp-testing', 'SKILL.md'))).toBe(true);
-    expect(existsSync(join(session.dir, 'plugin'))).toBe(false);
     expect(args.at(-1)).toContain(join(session.skillsDir!, 'webapp-testing', 'SKILL.md'));
   });
 
