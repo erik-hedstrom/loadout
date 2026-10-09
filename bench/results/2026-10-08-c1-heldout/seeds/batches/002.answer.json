@@ -1,0 +1,23 @@
+{
+  "requests": [
+    "I need a simple explanation of what a backend does.",
+    "Help me build an endpoint that accepts a CSV upload, validates each row, and returns errors with row numbers.",
+    "I want to store user preferences in PostgreSQL and retrieve them when someone signs in.",
+    "My login endpoint keeps returning 401 after a successful password check. Help me trace where authentication fails.",
+    "I'd like a background job that emails customers when their invoices become overdue, without sending duplicate reminders.",
+    "I need rate limiting on my public API, with stricter limits for anonymous callers.",
+    "Help me understand when I should use a database transaction.",
+    "I wanna stop duplicate orders when someone double-clicks checkout.",
+    "I need a webhook receiver that verifies Stripe signatures and safely handles repeated events.",
+    "Please help me design pagination for an activity feed where new records arrive while users browse.",
+    "My Node.js server's memory usage climbs all day. Help me investigate whether requests or background tasks are leaking memory.",
+    "I want password reset links that expire after 30 minutes and can only be used once.",
+    "Help me cache product details in Redis and invalidate the cached value whenever a product changes.",
+    "I need my API to shut down gracefully, finish active requests, and close database connections.",
+    "I'd like to compare REST and GraphQL for a small inventory application I'm planning.",
+    "I need a migration that adds customer email uniqueness, with a plan for handling existing duplicate addresses.",
+    "My file download endpoint lets users guess other people's document IDs. Help me enforce ownership checks before serving any files.",
+    "I want consistent JSON error responses across my FastAPI routes, including validation failures and unexpected exceptions.",
+    "Help me write integration tests for an order endpoint that reserves stock, records payment status, and rolls back when inventory is insufficient."
+  ]
+}

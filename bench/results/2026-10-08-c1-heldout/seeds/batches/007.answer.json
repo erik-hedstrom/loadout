@@ -1,0 +1,18 @@
+{
+  "requests": [
+    "I'm new to machine learning. Explain overfitting with a simple everyday example.",
+    "I have 800 labeled customer reviews. Help me choose a sensible baseline for sentiment classification.",
+    "My classifier gets 98% accuracy but misses most fraud cases. Help me figure out which metrics matter.",
+    "I want a PyTorch training loop for image classification with early stopping and checkpoints I can resume.",
+    "I'm predicting house prices. Explain when I should use linear regression versus a random forest.",
+    "My validation score seems suspiciously good. Review my preprocessing pipeline for data leakage.",
+    "I need to compare two classifiers evaluated on the same test set. Show me how to assess whether their performance difference is meaningful.",
+    "I've got unlabeled support tickets. Help me group them into useful topics and judge whether the clusters make sense.",
+    "I want to forecast weekly sales across 40 stores. Design a validation strategy that respects time order and handles stores with little history.",
+    "My model works offline but performs badly after deployment. Help me investigate changes in input data and prediction quality.",
+    "I need a plain-English explanation of precision and recall for a presentation to my sales team.",
+    "I'm fine-tuning a text classifier on uneven class sizes. Help me compare weighted loss, oversampling, and collecting more examples.",
+    "I want to run an ONNX model on a CPU-only service. Help me benchmark latency, memory use, and prediction consistency against the original model.",
+    "I'm building recommendations from purchase history. Propose a simple baseline and an evaluation plan that avoids using future purchases."
+  ]
+}

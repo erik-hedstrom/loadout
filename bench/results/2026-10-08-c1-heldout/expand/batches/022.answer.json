@@ -1,0 +1,36 @@
+{
+  "results": [
+    {
+      "id": "c1-devops-06",
+      "prompt": "I'd like a practical checklist for safely rotating database credentials across my production services. My goal is to replace the credentials without interrupting service or leaving old credentials active. Identify the database, credential storage, dependent services, and connection behavior that need checking before choosing a rotation sequence. Cover preparation, introducing new credentials, updating each consumer, verifying authentication and service health, handling existing connections, and revoking old credentials. Include rollback steps, stop conditions, and evidence to capture at each stage. State assumptions, especially whether overlapping credentials are supported. Keep secrets out of examples, and provide guidance only; do not change production."
+    },
+    {
+      "id": "c1-devops-07",
+      "prompt": "I keep running out of disk space on my Ubuntu server. Help me find what's growing and understand why before suggesting cleanup. Start with a read-only diagnostic sequence that checks filesystem capacity and inode usage, then narrows down the affected mount, directories, and files. Include ways to distinguish ongoing growth from existing large files and account for deleted files still held open. Explain what each command reveals and how its output determines the next step. Ask me for relevant output with sensitive details redacted. Finish with likely causes and targeted prevention options. Do not delete files, truncate logs, or restart services without my approval."
+    },
+    {
+      "id": "c1-devops-08",
+      "prompt": "Can you review my Terraform plan for changes that might interrupt service? Ask me for the plan and any necessary configuration or workload context, with credentials and sensitive values removed. Review replacements, destruction, dependency ordering, networking, access controls, load balancing, storage, and database changes where present. For each concern, identify the affected resource, explain the possible interruption and its trigger, assess severity, and suggest a mitigation or pre-apply check. Separate findings supported by the plan from risks that depend on missing context. Give me a prioritized review with unresolved questions and a go/no-go recommendation. Do not apply the plan or modify infrastructure."
+    },
+    {
+      "id": "c1-devops-09",
+      "prompt": "I need to configure Nginx to serve my frontend and proxy API requests to port 8000. Check my existing configuration and confirm the frontend build location, domain, API route prefix, and whether the frontend needs client-side routing fallback. Assume the API runs locally on port 8000 unless my setup indicates otherwise. Provide a configuration that fits the existing setup, explaining whether API paths are preserved or stripped and including appropriate forwarding headers. Account for HTTPS and WebSockets if relevant. Include configuration validation, a safe reload procedure, and checks for frontend assets, direct navigation, and API responses. Avoid overwriting unrelated configuration."
+    },
+    {
+      "id": "c1-devops-10",
+      "prompt": "I'm new to on-call work. Give me a beginner-friendly checklist for what to check first when an uptime alert fires. Organize it in the order I should act: acknowledge the alert, verify whether the failure is real, establish user impact and scope, check recent changes and dependencies, and decide when to escalate. Explain what evidence to capture and how to communicate status without guessing at the cause. Include decision points for a single failed check versus a broader outage, and distinguish safe observations from interventions that need an established runbook or approval. Make the checklist usable under pressure and adaptable to my team's escalation policy."
+    },
+    {
+      "id": "c1-devops-11",
+      "prompt": "Help me stop secrets from appearing in my CI logs. Ask which CI platform I use and review relevant pipeline configuration and redacted log excerpts; do not ask me to paste actual secrets. Identify likely exposure paths, including command tracing, environment dumps, command arguments, error output, and generated artifacts. Recommend concrete changes that fit my pipeline while preserving useful diagnostics, and explain the limits of log masking. If credentials have already leaked, include containment and rotation steps. Provide a prioritized remediation checklist and a verification method using harmless dummy values. Success means sensitive values stay out of logs and artifacts while failures remain diagnosable."
+    },
+    {
+      "id": "c1-devops-12",
+      "prompt": "I want a deployment runbook with verification steps, rollback criteria, and clear ownership for each stage. Create a practical document covering preparation, readiness checks, deployment, post-deployment verification, monitoring, rollback, and closeout. Ask for the application, deployment process, health signals, and team roles needed to tailor it; use clearly marked placeholders where information is missing. For every stage, specify the responsible role, actions, expected evidence, exit criteria, and escalation path. Define measurable rollback triggers, who makes the decision, and how to verify recovery. Account for any irreversible steps or data changes. The deliverable should be usable by someone who did not write the deployment."
+    },
+    {
+      "id": "c1-devops-13",
+      "prompt": "My staging environment behaves differently from production. Help me compare their configuration without exposing credentials and identify differences that could explain the behavior. First clarify the symptoms and how each environment's configuration is defined. Compare relevant application settings, dependency versions, infrastructure, networking, permissions, feature flags, and deployment parameters. For secrets, compare presence and configuration references without revealing values; redact sensitive identifiers consistently. Distinguish intentional environment differences from suspicious drift, and connect each finding to a testable explanation. Provide a sanitized comparison and prioritized next checks. Keep the investigation read-only, and do not change either environment or copy production credentials into staging."
+    }
+  ]
+}

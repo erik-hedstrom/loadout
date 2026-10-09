@@ -1,0 +1,36 @@
+{
+  "results": [
+    {
+      "id": "c1-media-06",
+      "prompt": "I need accurate captions for my interview recording, delivered as an SRT file with speaker labels and timestamps. Transcribe the speech faithfully, including meaningful spoken details, and keep captions readable with sensible line breaks and timing. Use consistent labels such as Interviewer and Guest when roles are clear; otherwise use Speaker 1 and Speaker 2. Do not guess names or unclear words. Flag uncertain passages for review separately. Check that timestamps match the recording, entries are numbered correctly, and captions do not overlap. If the recording is missing, ask me to provide it."
+    },
+    {
+      "id": "c1-media-07",
+      "prompt": "My podcast audio has a steady hum. Help me remove it in Audacity while keeping the voices full and natural. Assume I am a beginner and give me a clear, ordered workflow, starting with saving an untouched copy. Explain how to identify the hum and choose appropriate filtering or noise reduction, with conservative starting settings and guidance for adjusting them by ear. Avoid assuming the hum frequency without checking it. Include a short before-and-after listening check for thin voices, muffled speech, or processing artifacts, and explain when to back off the treatment."
+    },
+    {
+      "id": "c1-media-08",
+      "prompt": "I want a mellow instrumental loop for my cooking videos, featuring acoustic guitar and no vocals. Assume a 20–30-second loop unless I specify another length. Keep the arrangement warm, relaxed, and unobtrusive so it can sit comfortably beneath cooking sounds or narration. Use a gentle, steady rhythm and avoid dramatic changes or distracting accents. Deliver an audio file that repeats smoothly, without an audible gap, click, or abrupt musical change at the loop point. Include its duration and tempo, and make any usage restrictions clear without assuming rights you cannot verify."
+    },
+    {
+      "id": "c1-media-09",
+      "prompt": "Give me exactly three funny captions for my photo of a cat sitting inside a mixing bowl. Keep each caption short, punchy, and ready to post. Assume I want lighthearted, family-friendly humor, with a different joke or angle in each option rather than three variations of the same line. Base the jokes on the cat and mixing bowl; do not invent other visible details. Return only the three captions, with no explanation or hashtags."
+    },
+    {
+      "id": "c1-media-10",
+      "prompt": "I need concise alt text for my chart comparing monthly rainfall in three cities. Read the chart and preserve its main trend, the most important differences between cities, and any notable exceptions. Use the city names and units shown, but include individual values only when they are essential to understanding the pattern. Aim for one or two clear sentences rather than describing every point or visual styling. Do not invent unreadable data. If the chart is missing or unclear, ask for the chart or its underlying data before writing the final alt text."
+    },
+    {
+      "id": "c1-media-11",
+      "prompt": "I want my vacation clips turned into a one-minute montage, with gentle transitions and the original ocean sounds clearly audible. Assume the montage should keep the source clips’ predominant orientation and use no added music unless I request it. Choose the strongest moments and arrange them into a relaxed, cohesive sequence, trimming repetitive or shaky footage where practical. Keep transitions subtle and smooth the audio between clips without drowning out the waves. Deliver the finished 60-second video as an MP4. If the clips are missing, ask me to provide them."
+    },
+    {
+      "id": "c1-media-12",
+      "prompt": "Can you explain aperture to me using simple examples? Assume I am new to photography. Explain what aperture is, how f-stop numbers relate to the size of the opening, and how aperture affects brightness and how much of a scene looks sharp. Use everyday examples, such as a portrait with a blurry background and a landscape with more detail in focus. When comparing brightness, make clear that the other exposure settings are held constant. Keep the explanation approachable and finish with a short practical exercise I can try."
+    },
+    {
+      "id": "c1-media-13",
+      "prompt": "I'd like you to compare my two logo drafts for legibility at small sizes and explain which would work better on packaging. Examine the lettering, spacing, contrast, distinctive shapes, and details that may disappear when reduced or printed. Assume ordinary printed packaging unless I provide a specific material or process, and state where that assumption affects your recommendation. Give me a clear choice, explain the trade-offs, and suggest a few targeted improvements to the stronger draft. Base the assessment on the actual designs; if they are missing, ask me to provide both."
+    }
+  ]
+}

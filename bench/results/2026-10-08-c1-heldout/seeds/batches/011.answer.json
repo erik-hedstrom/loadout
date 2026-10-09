@@ -1,0 +1,18 @@
+{
+  "requests": [
+    "My Python script hangs after printing 'connected.' Help me figure out where it's getting stuck.",
+    "I'm getting duplicate charges from my checkout flow when customers double-click Pay. Find the cause and fix it without breaking retries.",
+    "My Wi-Fi works on my phone but not my laptop. Walk me through figuring out why.",
+    "I need help diagnosing a React form that clears every field whenever I change the dropdown.",
+    "My tests pass individually but fail together. Can you track down the shared state?",
+    "I changed my Excel formula and now every total is zero. Help me check the likely mistakes.",
+    "I'd like you to investigate why our nightly CSV import silently skips rows containing accented names and add a regression test for the fix.",
+    "My Docker container exits immediately, but the same app runs locally. Help me troubleshoot it.",
+    "I'm baking bread, and my dough hasn't risen after two hours. I used instant yeast and lukewarm water. What should I check?",
+    "My API sometimes returns yesterday's data after an update. Please trace the cache invalidation path and fix the stale responses.",
+    "I keep getting 'permission denied' when running my shell script. Help me work out whether it's the file permissions or something else.",
+    "My calendar reminders arrive an hour late since I traveled. Help me untangle the time zone settings.",
+    "I want to fix a mobile menu that opens correctly but won't close when I tap outside it or press Escape.",
+    "My GitHub Actions build started failing after a dependency update. Identify the breaking change and suggest the smallest reliable fix."
+  ]
+}

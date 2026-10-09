@@ -1,0 +1,36 @@
+{
+  "results": [
+    {
+      "id": "c1-web-09",
+      "prompt": "I want to turn this Figma layout into a responsive page using the conventions already in my React project. Inspect the existing components, styling, routing, and dependencies before implementing it. Use the Figma design as the visual reference and reuse established project patterns where possible. If mobile layouts are missing, infer sensible responsive behavior and explain your assumptions. Preserve the design’s typography, spacing, colors, and hierarchy while supporting keyboard navigation and accessible controls. Deliver the implemented page, verify it at narrow and wide viewport sizes, and report the checks run and any missing design assets or access."
+    },
+    {
+      "id": "c1-web-10",
+      "prompt": "My footer floats halfway up short pages. Fix the page layout so the footer sits at the bottom of the viewport when content is short and follows the content naturally when the page is long. Inspect the shared layout and existing styles to identify the cause, then make the smallest appropriate fix using the project’s conventions. Assume the footer should remain in normal document flow. Check affected pages at mobile and desktop sizes, including long content, and confirm that the change introduces no overlap, clipped content, or unnecessary scrolling. Report what changed and how you verified it."
+    },
+    {
+      "id": "c1-web-11",
+      "prompt": "I need a searchable documentation site with permanent links to individual sections. Check the existing project and documentation sources first, and build on the current stack where practical. Assume search should cover the documentation’s titles and body text, with useful result excerpts and links to the matching sections. Give sections stable, unique anchors that survive routine text edits, and make their links easy to copy. Provide clear navigation, accessible search controls, empty-result feedback, and a responsive reading layout. Verify search, duplicate headings, direct section URLs, and refresh behavior. Deliver the working site and explain how I add documentation and preserve existing links."
+    },
+    {
+      "id": "c1-web-12",
+      "prompt": "Please review my pricing page and suggest ways to make the plan differences easier to understand. Evaluate the current copy, visual hierarchy, feature comparisons, billing labels, limits, and calls to action from a visitor’s perspective. Identify where someone might struggle to choose a plan or misunderstand what is included. Prioritize practical improvements and explain the benefit of each, with concrete examples of revised copy or comparison structure where useful. Keep the existing prices and plan facts intact; flag missing information instead of inventing it. Deliver recommendations for review rather than implementing changes, and separate quick improvements from larger redesign ideas."
+    },
+    {
+      "id": "c1-web-13",
+      "prompt": "I want users to filter my apartment listings by rent, neighborhood, and number of bedrooms without losing their selections when they refresh. Inspect the existing listing data, filtering behavior, and project conventions before implementing this. Assume rent means a minimum and maximum range, and use the actual data to determine neighborhood and bedroom options. Prefer URL query parameters for persistence so filtered views also support direct links and browser navigation, unless the project already has an established approach. Include clear active-filter feedback, a reset action, and an empty-results state. Verify combined filters, refresh persistence, invalid saved values, and accessible use on mobile and desktop."
+    },
+    {
+      "id": "c1-web-14",
+      "prompt": "Help me write a friendly message for my site’s 404 page. I want visitors to understand that the page could not be found and have a clear way to continue, without feeling blamed or encountering overly clever error jargon. Assume a warm, straightforward tone unless the site’s existing copy suggests otherwise. Give me three concise options, each with a heading, one short explanatory sentence, and a primary link or button label. Use returning to the homepage as the default next step, and avoid promising search or support features unless they exist. Recommend the option you think works best."
+    },
+    {
+      "id": "c1-web-15",
+      "prompt": "My Safari users can’t dismiss the signup modal. Reproduce the issue and repair the interaction. Inspect the modal implementation and its dismissal paths, then identify the affected Safari version or device if that information is available. Check the close control, Escape behavior, and backdrop dismissal where supported by the existing design. Establish a reproducible failure before changing code, and fix the underlying cause using the project’s conventions. Preserve focus management, keyboard access, and page scrolling behavior. Verify the repair in Safari and check for regressions in other supported browsers. Report the cause, changes, and checks run, clearly stating any reproduction or browser-testing limitations."
+    },
+    {
+      "id": "c1-web-16",
+      "prompt": "I’d like a browser-based timer that keeps accurate time when I switch tabs and lets me name each session. Assume I mean an elapsed-time stopwatch unless the existing project indicates a countdown. Include start, pause, resume, and reset controls, plus a session-name field that remains associated with the current timer. Calculate elapsed time from timestamps so delayed background updates do not make the timer drift. Build a clear, responsive interface with accessible controls and readable time formatting. Verify repeated pauses, tab switching, and returning after a prolonged background period. Deliver the working timer and explain any limitations around browser sleep, reloads, and session persistence."
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "results": [
+    {
+      "id": "c1-everyday-31",
+      "prompt": "My train is delayed by 25 minutes. Write a short message I can send my friend letting them know I'll be late. Assume we're meeting soon and use a casual, friendly tone, with a brief apology. Mention the train delay without inventing an arrival time or other details. Keep it to one or two sentences and return just the message, ready to copy and send."
+    },
+    {
+      "id": "c1-everyday-32",
+      "prompt": "I keep getting streaks when I clean my bathroom mirror. Help me figure out what to change in my cleaning method. Assume it's a standard bathroom mirror and that I'd prefer to use supplies I already have. Explain the likely causes, then give me a simple cleaning and drying sequence to try next time. Include how much cleaner to use, what kind of cloth works well, and whether humidity matters. Start with the easiest changes."
+    },
+    {
+      "id": "c1-everyday-33",
+      "prompt": "Help me make a bedtime routine I can stick to, even when I'm tired. My priority is something easy and repeatable. Assume I want a short routine that fits around my existing bedtime; don't invent a sleep schedule for me. Give me a normal version lasting about 15–20 minutes and a bare-minimum version for exhausted nights. Include a clear cue to start, a few steps in order, and an easy way to restart after missing a night."
+    },
+    {
+      "id": "c1-media-01",
+      "prompt": "I need a warmer edit of my portrait, with natural skin tones and less glare on my glasses. Use my original photo as the starting point; if it isn't attached, ask me to provide it. Keep my facial features, skin texture, and overall appearance recognizable. Add subtle warmth without making my skin look orange, and reduce the reflections while preserving the glasses and any visible eye detail. Keep the original crop and resolution where possible. The finished portrait should look natural and gently improved."
+    },
+    {
+      "id": "c1-media-02",
+      "prompt": "Can you make me a spooky lighthouse illustration for a book cover, leaving room at the top for the title? Assume a vertical cover layout unless I provide dimensions. Make the lighthouse the main focal point, with an eerie atmosphere conveyed through lighting, mist, and the surrounding landscape. Keep the upper area uncluttered and suitable for readable title text. Don't add lettering or invent a book title. I'd like a finished illustration with a clear composition that still works at thumbnail size; leave exact print sizing open until I provide the cover specifications."
+    },
+    {
+      "id": "c1-media-03",
+      "prompt": "I want the background removed from my product photo and the result saved as a transparent PNG. Use the photo I provide; if it isn't attached, ask me for it. Preserve the entire product, including its colors, texture, labels, and fine edges. Remove the background cleanly without leaving halos, stray pixels, or cutting into the product. Keep the original resolution and framing where possible, and don't add a replacement background. Deliver a downloadable PNG with actual transparency, ready for me to use."
+    },
+    {
+      "id": "c1-media-04",
+      "prompt": "Help me understand why my phone videos look grainy indoors and what I can change to improve them. Explain the relationship between available light, the phone's camera sensor, and video settings in plain language. I haven't specified my phone model, so keep the initial advice general and flag anything that depends on the device. Give me a short, prioritized list of changes I can try with my current phone, starting with lighting, plus a simple comparison test to identify what helps most."
+    },
+    {
+      "id": "c1-media-05",
+      "prompt": "I'd like a practical shot list for a 30-second video introducing my neighborhood bakery. Assume a welcoming tone and that I'm filming on a phone with a small setup. Plan shots that introduce the location, show the baked goods and everyday activity, and end with a clear invitation to visit. Present a table with each shot's duration, subject, framing or movement, and suggested on-screen text or audio. Make the durations total exactly 30 seconds. Use placeholders for the bakery's name and details, and flag any shots that need staff or customer permission."
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "results": [
+    {
+      "id": "c1-debug-05",
+      "prompt": "My tests pass individually but fail when run together. I want you to identify the shared state causing the failures and fix the root cause. Start by reproducing a failing combination and checking whether execution order matters. Inspect fixtures, globals, caches, environment variables, database records, mocks, and cleanup where relevant to the failing tests. Assume the intended behavior is that tests remain independent; check that assumption against the existing setup. Make the smallest appropriate fix without weakening assertions. Add regression coverage, run the affected tests together and the relevant suite, and report the cause, changes, commands, and results."
+    },
+    {
+      "id": "c1-debug-06",
+      "prompt": "I changed my Excel formula, and now every total is zero. Help me identify the likely mistake without overwriting my original data. Ask me for the previous and current formulas, a few representative input cells, and the expected total if needed. Check the formula’s references, copied ranges, absolute versus relative references, numbers stored as text, calculation settings, and any conditions or error handling that could produce zero. Prioritize checks based on the formula I provide rather than assuming a cause. Explain how to verify each likely issue, suggest a corrected formula, and confirm it against a small example with a known result."
+    },
+    {
+      "id": "c1-debug-07",
+      "prompt": "I’d like you to investigate why our nightly CSV import silently skips rows containing accented names and fix it with a regression test. Trace a representative affected row from file decoding through CSV parsing, validation, transformation, and persistence. Check the actual encoding and error handling rather than assuming accented characters are invalid. If an input sample or import logs are missing, ask for the minimum needed to reproduce the issue. Preserve names accurately and follow the existing import behavior for genuinely invalid rows. Add a regression test that fails before the fix and passes afterward, run the relevant tests, and report the root cause and verification results."
+    },
+    {
+      "id": "c1-debug-08",
+      "prompt": "My Docker container exits immediately, but the same app runs locally. Help me find the difference causing it to stop. Ask for the Dockerfile, how I build and start the container, its exit code, and startup logs if they are not available. Compare the container’s startup command, environment, working directory, dependencies, file access, and application configuration with the working local setup. Check whether the main process crashes or simply finishes. Prioritize checks based on the evidence and explain what each result means. Suggest the smallest fix, then verify that the container stays running and the app starts successfully."
+    },
+    {
+      "id": "c1-debug-09",
+      "prompt": "I’m baking bread, and my dough hasn’t risen after two hours. I used instant yeast and lukewarm water. Help me work through the likely causes and decide whether I can rescue this batch. Ask for the recipe, yeast amount and age, approximate water and room temperatures, and any visible changes in the dough if those details matter. Check yeast activity, proofing temperature, ingredient proportions, and whether the recipe would normally rise slowly. Don’t assume that two hours means the dough has failed. Give me practical checks in priority order, explain what each result suggests, and recommend whether to wait, adjust conditions, or start over."
+    },
+    {
+      "id": "c1-debug-10",
+      "prompt": "My API sometimes returns yesterday’s data after an update. Please trace the cache invalidation path and fix the stale responses. Start with a reproducible example of an update followed by a stale read. Follow the write, transaction completion, cache keys, invalidation or refresh, and subsequent read across whichever cache layers actually exist. Check for timing races, inconsistent keys, and differences between application instances without assuming the cache is the only cause. Establish the intended freshness behavior from the existing contracts. Make a focused fix, add regression coverage for the stale-response scenario, and run the relevant tests. Report the root cause, verification results, and any remaining limitations."
+    },
+    {
+      "id": "c1-debug-11",
+      "prompt": "I keep getting “permission denied” when running my shell script. Help me determine whether the problem is file permissions or something else. Ask for my operating environment, exact command, full error message, and relevant permissions if needed. Distinguish a failure to launch the script from a command inside it failing. Check executable permissions, access to parent directories, the interpreter and shebang, filesystem execution restrictions, and any files the script accesses where relevant. Explain the evidence for each diagnosis and recommend the narrowest fix. Avoid broad permission changes or elevated privileges as a default, and confirm the original command works afterward."
+    },
+    {
+      "id": "c1-debug-12",
+      "prompt": "My calendar reminders have been arriving an hour late since I traveled. Help me untangle the time zone settings and restore reminders to the intended time. Ask which calendar app and devices I use, my previous and current time zones, and one affected event’s scheduled time and actual reminder time. Compare the device, calendar account, event, and reminder settings, including automatic time zone detection and daylight saving time where relevant. Check whether the event itself shifted or only the notification arrived late. Explain the likely mismatch before recommending changes, preserve existing event times unless a correction is needed, and verify the result with a test reminder."
+    }
+  ]
+}

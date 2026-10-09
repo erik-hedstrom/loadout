@@ -173,10 +173,10 @@ cross-vendor agents). Erik publishes.
 
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
-| C1 | P0 | New held-out request set + re-measure v4 | Codex (seeds) + Claude (expand, judge) | cloud | todo (after E7) |
+| C1 | P0 | New held-out request set + re-measure v4 | Codex (seeds, expand) + Claude (judge) | local | review ([#16](https://github.com/erik-hedstrom/loadout/pull/16)): precision falls on new requests (64% vs 82%) |
 | C2 | P1 | Outcome eval on the small tier with fixed fixtures | Claude (design) | cloud (fixtures) + local (runs) | todo |
 | C3 | P1 | Does Jev pick a sensible model tier? | Claude | cloud | todo (after E7) |
-| C4 | P1 | Demote generic "fits everything" skills | Codex | cloud | todo (after C1) |
+| C4 | P1 | Demote generic "fits everything" skills | Codex | cloud | todo (next: C1 shows over-loading on general business requests) |
 | C5 | P2 | Retrieval beyond 200 candidates (Jev tournament) | Codex | cloud | todo |
 | C6 | P2 | Multi-intent requests | Claude | cloud | todo |
 | C7 | P1 | Recommended packs with measured upside (first: frontend with Impeccable) | Codex (harness) + Claude (runs) | cloud (fixtures) + local (runs) | todo (after B1, C2) |
@@ -192,6 +192,24 @@ Acceptance:
   numbers.
 - If they differ a lot, find out why. These requests become the new tuning
   set; keep a third untouched.
+
+Learnings ([#16](https://github.com/erik-hedstrom/loadout/pull/16),
+[RESULTS](../../bench/RESULTS.md#c1-2026-10-08-new-held-out-requests)):
+- On new requests recall held (73% useful loaded) and precision fell (64%
+  of loads useful, 7% misleading, against 82% / 1% in v4). General business
+  requests carry most of the drop.
+- Codex both wrote and expanded the requests, so the Opus judge stays
+  cross-family. v4 had Sonnet expansions judged by Opus. The Codex
+  expansions are shorter (median 100 words against 199).
+- `--backend codex` cannot run tool-less on codex-cli 0.160.1 (E12). The
+  files backend with a committed producer script stands in for inputs
+  without third-party text.
+- Jev can slow down for minutes: the first sweep lost a third of its rows to
+  the keyword fallback. Check the fallback count before judging a sweep.
+- The split, stricter than "keep a third untouched": tune on C1 dev (99)
+  and on v4's 315; C1 test (201) stays untouched for reporting.
+- The judge ran through local `claude -p`, as in v4, not through the API path
+  that acceptance names (E7 has no Anthropic API backend).
 
 **C2. Small-tier outcome eval.**
 
@@ -219,6 +237,13 @@ Acceptance:
 
 Example: `frontend-ui-engineering` loads on simple UI work the judge says
 needs nothing.
+
+From C1, to test on C1 dev:
+- whether a generic skill adds an action-specific procedure for this request;
+- whether a close-comparison winner fits the framework or service the
+  request names.
+
+C1's non-useful loads came from both paths, the winner and P(exact).
 
 Acceptance:
 - A principled signal: a per-skill load-frequency prior, or a "general
@@ -467,6 +492,7 @@ Acceptance:
 | E6 | P2 | Architecture diagram in DESIGN.md | Claude | cloud | todo |
 | E10 | P1 | Build without optional dependencies | Codex | cloud | done ([PR #8](https://github.com/erik-hedstrom/loadout/pull/8)) |
 | E11 | P1 | Fixed-text diagnostics in the gateway and relay | Codex | cloud | done ([PR #10](https://github.com/erik-hedstrom/loadout/pull/10)) |
+| E12 | P1 | A tool-less Codex bench backend (codex-cli 0.160.1 keeps unified_exec on) | Codex | local | todo |
 
 **E10. Build without optional dependencies.** src/embed.ts:24 types
 `@huggingface/transformers` with `typeof import(...)`. So `tsc` fails when npm
@@ -503,6 +529,24 @@ Learnings:
 - Parse errors are fixed text where config.json and mcp.json are read, which
   covers every command; startup ran before any sanitized handler. Library
   server names go through escapeSkillTags wherever they reach the agent.
+
+**E12. A tool-less Codex bench backend.** On codex-cli 0.160.1 (and 0.154.0),
+`unified_exec` stays `true` in `codex features list` under
+`-c features.unified_exec=false`, `--disable unified_exec` or an empty
+`CODEX_HOME`. So `--backend codex` in bench/lib.ts always refuses, which is
+correct. A probe (2026-10-08) with lib.ts's flags listed `functions.exec`,
+`apply_patch`, `web__run`, sub-agent tools and an apps MCP connector, and made
+two MCP calls. Disabling every feature that can be disabled leaves
+`functions.exec` (JavaScript, no file access, as the model reports it),
+`apply_patch`, `web__run` and sub-agents; the model could not read a canary file.
+
+Until then, Codex can produce requests only through `--backend files`, for
+inputs without third-party text (C1 does this). It cannot judge, because the
+judge sees the skill catalog.
+
+Acceptance: a Codex configuration whose `exec` exposes no tool that reads
+files, runs commands or reaches the network, checked by lib.ts before every
+run; an adversarial test with the canary probe; `@codex security review`.
 
 **E1. CI.**
 
@@ -651,3 +695,5 @@ integration layers, readable in both light and dark themes.
 | 2026-10-07 (iter 2) | E1 #2 (merged without PR CI at Erik's direction; the first main run was green on all 6 jobs), E7 #5, E9 #4, A2 #3, B1 #6, E2 #1, E9 re-measure #7 | D10 (Sol building the plugin and the hook-latency bench) | Jev $0.77 (two sweeps) / Claude: 16 haiku calls with rows plus ≤4 probes (B1), and pr-reviewer rounds (subscription) / Codex: about 12 builds and reviews (ChatGPT plan) | Decided by Erik: in-host first (D10), with the hook automatic through the plugin he installs. Findings: the Claude listing grows about 10 tokens per skill, so the 140k estimate is withdrawn; loadout's MCP tools cost more than 50 native skills; Jev is not deterministic (about 1 request in 13); decisions probably shifted across E9 (cause unidentified). Open: a security contact; B1 raw-row names before going public; a Windows-side `loadout init` or the Linux machine for D10's CLI check |
 | 2026-10-08 (iter 3) | E10 #8; D10 #9 on merge | E11 (brief ready for Sol) | Jev about $0.05 (hook latency, probe) / Claude: one Haiku plugin probe ($0.06 reported) and pr-reviewer rounds (subscription) / Codex: four D10 review rounds (ChatGPT plan) | Desktop app check: Erik installs the plugin (D10); security contact for SECURITY.md; B1 raw-row names before going public |
 | 2026-10-08 (iter 4) | E11 #10 | Approved, waiting on CI (Actions blocked by the account billing limit): #11 E8 bench, #12 E8 src, #13 label-gated CI, #14 D11. Reviews running: #15 E8 Markdown. C1 seeds and expansion under way | Jev $0 / Claude: pr-reviewer rounds (subscription) / Codex: builds, reviews, C1 seed batches (ChatGPT plan) | CI billing (raise the limit or wait for the reset); desktop app check (D10); security contact; B1 raw-row names |
+| 2026-10-08 (iter 4, later) | — | C1 #16 (measured: recall holds, precision falls; reviews running). E12 found: codex exec cannot run tool-less on codex-cli 0.160.1 | Jev $0.60 (three C1 sweeps, one slowed by Jev) / Claude: judge $3.68 (C1) + $2.08 (control), pr-reviewer rounds / Codex: C1 seeds and expansion (55 batches), builds, reviews | As in iter 4 |
+| 2026-10-09 (iter 5) | #13 label-gated CI (`ci-full` label created), #11 and #12 E8 bench/src, #14 D11, #15 E8 docs, #16 C1 | — | Jev $0 / Claude: merges and conflict fixes / Codex: none | Actions runs again (GitHub Pro). Next work goes to a cloud session (Claude weekly usage at 96%) |

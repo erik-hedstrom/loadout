@@ -1,0 +1,36 @@
+{
+  "results": [
+    {
+      "id": "c1-web-17",
+      "prompt": "I need to add Spanish to my existing website, including navigation, error messages, and language-specific URLs. Review the current framework, routing, and translation setup first, and extend the existing approach where possible. Assume the current language remains the default. Include visible interface text, validation messages, page titles, and a language switcher that preserves the current page where a translation exists. Check how missing translations, direct links, and unsupported language URLs should behave. Preserve existing URLs or explain any necessary redirects before changing them. Deliver the implementation and verify both languages, navigation, error states, and direct access to localized pages."
+    },
+    {
+      "id": "c1-web-18",
+      "prompt": "My blog posts look cramped. Improve the typography and spacing while keeping the site's existing visual identity. Review the article layout and representative posts before changing styles. Focus on readable line lengths, font sizing, line height, paragraph spacing, heading hierarchy, and spacing around lists, quotes, images, and code blocks where present. Assume this is a focused improvement to blog reading pages rather than a site redesign. Make the layout comfortable on mobile and desktop, including when readers enlarge text. Deliver the styling changes, check representative content at different widths, and briefly explain what changed and how you verified it."
+    },
+    {
+      "id": "c1-web-19",
+      "prompt": "I want a Playwright test covering signup, email verification, and the first successful login using test accounts. Review the existing authentication flow and test setup, then follow the project's conventions. Use an isolated test environment and its test email mechanism; check how verification links can be retrieved without relying on a personal inbox. Create a unique account per run, verify the initial unverified state, complete email verification, and explicitly log in to confirm access to the authenticated area. Use stable locators and condition-based waits. Keep credentials out of logs, handle cleanup, and report the test command, result, and any missing environment requirements."
+    },
+    {
+      "id": "c1-web-20",
+      "prompt": "Help me choose five useful FAQ questions for my dog-walking website. Prioritize questions prospective customers need answered before booking, covering practical concerns such as scheduling, pricing, walk arrangements, safety, and suitability for their dog. Assume the site serves local dog owners considering the service for the first time. Avoid redundant questions, generic marketing language, and assumptions about policies or services I haven't provided. Return exactly five clear, customer-facing questions, with a brief explanation of why each belongs in the FAQ and what business details I would need to supply to answer it accurately."
+    },
+    {
+      "id": "c1-web-21",
+      "prompt": "I need my dashboard charts to remain readable on small screens and provide an accessible text summary of the same data. Review the existing charts, their data sources, and the dashboard layout. Adapt chart sizing, labels, legends, and spacing without hiding essential information or relying only on color. Provide a clearly associated text summary for each chart that accurately reflects its values, units, time period, and main comparisons; include a structured data table where a summary alone would omit important detail. Keep these alternatives synchronized with filters and updates. Verify narrow-screen layouts, enlarged text, keyboard interaction where applicable, and screen-reader access."
+    },
+    {
+      "id": "c1-web-22",
+      "prompt": "I want customers to upload a CSV in their browser, preview the rows, and correct validation errors before submitting. Review the existing submission flow and data requirements first. Check the required columns, field types, file-size limits, and current backend validation; flag any missing contract decisions before changing them.\n\nAssume parsing and editing happen locally until the customer submits. Handle quoted fields, embedded commas, empty values, and malformed files using a proper CSV parser. Show a clear preview with row and field errors, let customers edit invalid values, and revalidate changes. Explain whether submission requires every row to be valid, following existing product rules where available. Keep the interface responsive for supported file sizes and make upload controls, editing, and error messages accessible.\n\nDeliver the complete upload-to-submission flow with loading, failure, and success states. Preserve server-side validation and verify valid files, malformed input, corrected rows, and rejected submissions."
+    },
+    {
+      "id": "c1-web-23",
+      "prompt": "My website's search results show outdated page titles. Investigate the metadata and indexing setup to identify the cause. First establish whether the issue affects external search engines, the site's own search, or both. Compare affected pages' visible headings and rendered titles with their metadata, canonical URLs, redirects, and any search index or cache involved. Check for duplicate or stale title sources and distinguish a site configuration problem from delayed indexing or search-engine title rewriting. Deliver an evidence-based diagnosis, the affected pages or configuration, and targeted corrective recommendations. Explain what can be verified immediately and what would require a later indexing check."
+    },
+    {
+      "id": "c1-web-24",
+      "prompt": "I'd like a subtle page transition on my personal site that respects reduced-motion preferences and doesn't delay navigation. Review the existing navigation and rendering setup, then implement a restrained transition that fits the site's visual style. Assume a brief fade is a suitable starting point. Navigation and content loading should begin immediately, without waiting for an exit animation. Disable nonessential motion when reduced motion is requested, including if the preference changes during use. Preserve link behavior, browser back and forward navigation, focus handling, and scroll restoration. Deliver the implementation and verify normal navigation, rapid repeated navigation, reduced motion, and behavior when animation support is unavailable."
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "requests": [
+    "I want my Google Calendar events to show up in Outlook.",
+    "Help me turn this contacts CSV into a clean import file for HubSpot, keeping phone numbers and removing duplicate email addresses.",
+    "I need a plain-English explanation of how webhooks differ from polling.",
+    "I’m trying to send Shopify orders to our warehouse API, but failed requests keep creating duplicate shipments. Help me fix the retry logic.",
+    "I want new GitHub issues posted in our Slack project channel.",
+    "Help me draft an email asking our vendor for API documentation and sandbox access.",
+    "I need to move my Evernote notes into Notion without losing attachments or notebook groupings.",
+    "I’ve got two customer spreadsheets. Help me decide which columns should match before I combine them.",
+    "I want Stripe payment failures to create Zendesk tickets, with the customer email and invoice link included.",
+    "I need my app to accept Microsoft sign-ins. Walk me through the setup and help me implement it.",
+    "I wanna dump my saved Pocket links into a CSV.",
+    "Help me design a nightly sync from PostgreSQL to BigQuery that handles updated rows and deleted records.",
+    "I need a Zapier workflow that copies new Typeform responses into Airtable and alerts me when a required field is missing.",
+    "I’m connecting two internal services. Help me write a JSON payload contract for sending employee onboarding details between them.",
+    "I want my RSS feeds collected into one daily email digest.",
+    "Help me troubleshoot why Salesforce updates reach our billing system several hours late, using the logs I’ve pasted below.",
+    "I need to export my Apple Contacts and import them into Google Contacts. Give me clear steps.",
+    "I want a small Python script that reads an Excel file and uploads each valid row to our REST API, with a report of rejected rows.",
+    "I’m replacing an old accounting system. Help me plan the transfer of customers, invoices, and payment history, including checks that the totals match."
+  ]
+}

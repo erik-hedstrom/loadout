@@ -1,0 +1,36 @@
+{
+  "results": [
+    {
+      "id": "c1-writing-08",
+      "prompt": "Help me write a short, sincere apology to a friend after I canceled dinner twice. I want to acknowledge the inconvenience and take responsibility without making excuses, sounding overly dramatic, or asking them to reassure me. Assume this is a casual text message and keep the language warm and natural. Don’t invent a reason for the cancellations or promise a new date. Give me one ready-to-send version that leaves room for my friend’s feelings."
+    },
+    {
+      "id": "c1-writing-09",
+      "prompt": "Write a 150-word author bio for my first poetry collection. I’m a former nurse from Leeds, and my poems explore grief, ordinary routines, and coastal landscapes. Assume the bio will appear in the book and use third person, with a warm, understated literary tone. Use [Name] as a placeholder for my name and avoid assuming my pronouns. Don’t invent publications, awards, qualifications, personal losses, or connections between my nursing career and my poetry. Make the supplied details feel cohesive without overstating them, and ensure the finished bio is exactly 150 words."
+    },
+    {
+      "id": "c1-writing-10",
+      "prompt": "Help me clarify this sentence: ‘Employees may not submit requests after Friday unless approval has not yet been received.’ Give me clear versions for both possible meanings: employees can submit after Friday if approval is still pending, or employees can submit after Friday only if approval has already been received. Label each version by its meaning and briefly explain the difference. Preserve the reference to Friday without inventing a deadline time or approval process, and flag that the second interpretation changes the original sentence’s literal condition."
+    },
+    {
+      "id": "c1-writing-11",
+      "prompt": "Write a short fundraising appeal for our community garden. We’re raising £800 to cover accessible raised beds and tools, and I want a clear, friendly invitation to donate. Assume this will be shared with local residents in a community post or email. Explain what their donations will help provide, keep the tone welcoming and practical, and avoid guilt or exaggerated promises. Use [donation link] as a placeholder, and don’t invent a deadline, charity status, or details about the garden. Give me one ready-to-use appeal."
+    },
+    {
+      "id": "c1-writing-12",
+      "prompt": "Help me find a polite way to say ‘please stop replying all’ in a group email thread. I want the request to be clear without embarrassing anyone or sounding irritated or patronizing. Assume a professional setting, and suggest replying directly to me when the response doesn’t concern the whole group. Give me three brief, ready-to-send options: one gentle, one neutral, and one slightly firmer. Keep each option to one or two sentences and avoid implying that relevant group replies are unwelcome."
+    },
+    {
+      "id": "c1-writing-13",
+      "prompt": "Draft a plain-language customer email based on this technical update: our database migration is complete, average page loads are 20% faster, and no action is required. I want customers to understand the benefit without needing technical knowledge. Include a clear subject line and a brief, reassuring body. Explain the migration simply, preserve ‘average’ so the speed improvement isn’t presented as a guarantee for every page, and make the no-action message explicit. Don’t invent downtime, security improvements, or other benefits. Assume a friendly, professional tone."
+    },
+    {
+      "id": "c1-writing-14",
+      "prompt": "Write a compassionate rejection note for a volunteer applicant whose availability doesn’t match our weekend shifts. Thank them for their interest and willingness to help, explain the scheduling mismatch clearly, and invite them to apply again if their schedule changes. Assume this is a short email and use placeholders for their name and our organization. Keep the tone warm and respectful without suggesting they lack ability or commitment. Don’t promise a future position or invent alternative opportunities. Include a simple subject line and a ready-to-send message."
+    },
+    {
+      "id": "c1-productivity-01",
+      "prompt": "Help me plan my week without cramming every hour. I want a realistic plan that makes room for important work, existing commitments, rest, and unexpected things. Start by asking a few focused questions about my priorities, fixed appointments, available time, and energy patterns. Then create a flexible weekly outline with a small number of priorities each day, generous buffer time, and clearly optional tasks. Assume I prefer broad blocks over an hour-by-hour schedule. Include a simple way to adjust the plan if something takes longer or my priorities change."
+    }
+  ]
+}

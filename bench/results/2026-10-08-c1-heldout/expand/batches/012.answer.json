@@ -1,0 +1,36 @@
+{
+  "results": [
+    {
+      "id": "c1-documents-27",
+      "prompt": "Please permanently redact my name, address, phone number, and account numbers from the supplied PDF, including searchable text and document metadata. Assume I want every occurrence removed while preserving the remaining content and layout. If my identifiers are ambiguous, ask me to confirm them before redacting. Remove the underlying information, including any OCR text, annotations, or hidden content containing these identifiers; covering visible text alone is insufficient. Keep the original unchanged and return a separate redacted PDF. Verify that the identifiers cannot be found, selected, copied, or recovered from the output, and report any verification limitations without repeating my sensitive information."
+    },
+    {
+      "id": "c1-documents-28",
+      "prompt": "I want a glossary of the acronyms in the supplied technical report, based strictly on the report itself. Review the full document, including tables, figures, footnotes, and appendices. Return an alphabetized table with each acronym, its expansion, a brief explanation using the report’s own definitions, and a page or section reference. Flag acronyms the report does not explain rather than filling gaps from outside knowledge. If an acronym has multiple meanings or inconsistent definitions, list those meanings with their locations. Include each distinct acronym once unless separate entries are necessary to make its usage clear."
+    },
+    {
+      "id": "c1-documents-29",
+      "prompt": "Please turn my event schedule into a polished, printable program with a welcome note and speaker biographies. Preserve the supplied session titles, times, speakers, locations, and event details, and flag gaps or conflicts. Assume a welcoming, professional tone unless my materials suggest otherwise. Draft the welcome note from the event information and write consistent, concise biographies using only supplied speaker facts; ask for missing details rather than inventing credentials. Before finalizing the layout, confirm the paper size, audience, and any branding requirements. Provide a print-ready PDF and an editable version, with readable typography, clear schedule navigation, and sensible page breaks."
+    },
+    {
+      "id": "c1-business-01",
+      "prompt": "Help me prioritize my team’s work for next week and turn it into a realistic weekly plan. Start by asking for our task list, team availability, deadlines, dependencies, and most important business outcomes. Assume capacity is limited and leave room for unexpected work. Compare tasks by impact, urgency, effort, and the consequences of delaying them; explain the tradeoffs rather than relying only on a score. Return a ranked list showing what to commit to, what to do if capacity remains, and what to defer, with suggested owners and completion criteria. Flag any decisions that need my input."
+    },
+    {
+      "id": "c1-business-02",
+      "prompt": "I run a small bakery and want to decide whether to extend our opening hours. Help me assess the decision using my own business data rather than generic assumptions. Ask for our current hours, sales by time of day, product margins, staffing costs, waste, customer requests, and my capacity to manage longer hours. Compare the current schedule with a few plausible extensions, accounting for incremental profit, operational strain, and sales that might simply shift from existing hours. Show the break-even calculation with clearly labeled assumptions. Recommend a limited trial with measures and decision thresholds for keeping, adjusting, or ending the extended hours."
+    },
+    {
+      "id": "c1-business-03",
+      "prompt": "I need a one-page business case for hiring a customer success manager at our 30-person software company. Assume the audience is our leadership team approving headcount. Ask for the essential inputs: customer base, retention and churn, onboarding workload, current ownership of customer success, hiring cost, and budget constraints. Build the case around the problem, proposed responsibilities, expected business impact, fully loaded cost, alternatives, and risks. Connect the role to measurable outcomes without inventing financial benefits. If data is missing, label assumptions and show what would validate them. Deliver a concise, decision-ready page with a clear recommendation and first-90-day success measures."
+    },
+    {
+      "id": "c1-business-04",
+      "prompt": "I’m torn between raising prices and cutting costs at my cleaning business. Walk me through the tradeoffs using my situation. Ask for our pricing, service mix, labor and supply costs, margins, customer retention, capacity, and any contractual constraints. Compare a price increase, targeted cost reductions, and a combination, including effects on profit, customer demand, service quality, staff workload, and reputation. Distinguish efficiency improvements from cuts that could undermine our service. Use clearly labeled scenarios to show how customer losses or savings would affect the outcome. Help me choose a practical approach and a small test with measures and thresholds for reassessing it."
+    },
+    {
+      "id": "c1-business-05",
+      "prompt": "Help me turn our vague goal of improving customer retention into exactly three measurable quarterly objectives. Start by clarifying our business model, definition of retention, current baseline, customer segments, available data, and the main reasons customers leave. Assume the objectives should cover one quarter and be achievable with our team’s capacity. For each objective, specify the metric and calculation, baseline, target, deadline, accountable owner, and reporting cadence. Connect each objective to actions we can influence, and distinguish retention outcomes from supporting indicators. If baselines are missing, propose provisional targets clearly labeled for validation rather than inventing numbers."
+    }
+  ]
+}

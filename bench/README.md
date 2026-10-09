@@ -78,6 +78,12 @@ npx tsx bench/judge.ts bench/results/<sweep2> --blind-from bench/results/<sweep>
 npx tsx bench/invoke.ts bench/results/<sweep> --agent claude|codex --mode routed|search --ids a,b,c
 ```
 
+C1's new requests came from `seeds.ts --prefix c1` and `expand.ts`, both run
+with `--backend files` and answered by Codex through
+[answer-batches.sh](results/2026-10-08-c1-heldout/answer-batches.sh). They
+are then routed and judged as above, with `--requests bench/data/requests-c1.jsonl`
+([RESULTS](RESULTS.md#c1-2026-10-08-new-held-out-requests)).
+
 - `judge.ts` writes `report.md` next to the decisions, with overall and
   per-category numbers and every miss.
 - Run the judge sequentially (`--concurrency 1`), so the catalog prompt stays

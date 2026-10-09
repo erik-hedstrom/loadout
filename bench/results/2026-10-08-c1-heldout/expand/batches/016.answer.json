@@ -1,0 +1,36 @@
+{
+  "results": [
+    {
+      "id": "c1-data-01",
+      "prompt": "I need my contact list deduplicated by email, keeping the most recently updated entry for each address. Assume email matching ignores surrounding whitespace and letter case, but do not merge different addresses based on similar names. Use the update timestamp to select each retained record, preserving its original fields rather than combining conflicting values. Flag missing emails, invalid timestamps, and ties that prevent a clear choice. Return the cleaned list in the original format, plus a brief summary of records retained, duplicates removed, and cases needing my review."
+    },
+    {
+      "id": "c1-data-02",
+      "prompt": "I want my messy meeting notes turned into a clear table of decisions, owners, and deadlines. Extract confirmed decisions and their associated responsibilities; distinguish proposals or unresolved questions from agreed outcomes. Use columns for decision, owner, deadline, and any clarification needed. Preserve names and dates as written, and mark missing owners or deadlines as unspecified instead of inventing them. Convert relative deadlines to calendar dates only when the meeting date makes that unambiguous. Include a short list of unresolved items after the table."
+    },
+    {
+      "id": "c1-data-03",
+      "prompt": "I've attached monthly sales data. I want to compare growth across regions and flag unusually large changes. Check the date coverage, sales units, missing values, and duplicate region-month records before calculating growth. Assume month-over-month growth is the main comparison; include year-over-year growth where the data supports it. Show absolute and percentage changes, treating zero baselines explicitly. Define and explain a reasonable rule for flagging unusual changes, accounting for each region's typical variation and small baselines. Return a comparison table and a concise summary, distinguishing observed patterns from possible explanations."
+    },
+    {
+      "id": "c1-data-04",
+      "prompt": "Help me standardize the dates in my spreadsheet without guessing whether ambiguous entries use day-first or month-first formatting. Assume the target format is YYYY-MM-DD. Convert only dates whose interpretation is supported by the entry itself or explicit source metadata; do not resolve ambiguous entries merely from the dominant format in nearby rows. Preserve the original values alongside the standardized dates. Flag ambiguous, invalid, and missing entries separately, with row references and possible interpretations where useful. Return the revised spreadsheet and a brief summary of conversions and items requiring my clarification."
+    },
+    {
+      "id": "c1-data-05",
+      "prompt": "I want a quick summary of these survey responses, including common themes and a few representative quotes. Base the summary only on the supplied responses. Identify the main themes, note meaningful disagreements or minority views, and give approximate counts where they can be determined reliably. Clarify that responses may cover multiple themes. Select a few short, exact quotes that reflect the findings, omitting identifying details and marking any redactions. Keep the summary concise, and distinguish what respondents actually said from your interpretation. Do not generalize beyond this set of responses."
+    },
+    {
+      "id": "c1-data-06",
+      "prompt": "Please examine my experiment results and explain whether the observed difference is meaningful, including assumptions and limitations. First identify the outcome, groups or conditions, sample sizes, and whether observations are independent or paired. Assess both the size of the difference and its uncertainty, distinguishing statistical evidence from practical importance. Use an analysis appropriate to the supplied data and explain why it fits. Check relevant issues such as missing data, outliers, multiple comparisons, and study design. If no practical significance threshold is provided, state that limitation. Return a plain-language conclusion supported by the key estimates, without making causal claims the design cannot support."
+    },
+    {
+      "id": "c1-data-07",
+      "prompt": "My expense categories are a mess. I want you to suggest a consistent grouping and flag transactions you can't confidently classify. Review the existing categories and transaction descriptions, then propose a manageable category list with clear definitions and consistent naming. Map each transaction to a proposed category using only the available evidence, preserving the original category and transaction details for comparison. Flag ambiguous entries with a brief explanation and possible categories instead of forcing a choice. Return the proposed grouping, the transaction mapping, and a short summary of items needing my review."
+    },
+    {
+      "id": "c1-data-08",
+      "prompt": "I need a chart showing how my weekly running distance changed over the last six months. Use the supplied running records and, unless another reference date is provided, anchor the six-month period to the latest recorded run. Assume weeks run Monday through Sunday and label the date range and distance units clearly. Aggregate distance by week, flag partial weeks, and distinguish missing records from confirmed zero-distance weeks. Return a readable line chart and the weekly totals behind it, plus a brief description of the overall trend and any notable increases or decreases."
+    }
+  ]
+}

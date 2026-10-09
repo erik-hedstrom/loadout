@@ -1,0 +1,36 @@
+{
+  "results": [
+    {
+      "id": "c1-backend-17",
+      "prompt": "My file download endpoint lets users guess other people's document IDs. Help me fix this so files are served only after the authenticated user's ownership has been verified.\n\nInspect the endpoint, authentication flow, document ownership data, and every path that serves the files. Follow the existing authorization conventions, and check whether any intentional sharing or administrative access must remain supported. Enforce the check on the server before opening, streaming, or redirecting to a file; unpredictable IDs alone are insufficient.\n\nImplement the fix and add tests covering the owner, another authenticated user, an unauthenticated request, and a nonexistent document. Follow the application's error conventions without exposing document details. Run the relevant tests and explain what changed and any remaining access paths that need attention."
+    },
+    {
+      "id": "c1-backend-18",
+      "prompt": "I want consistent JSON error responses across my FastAPI routes, including validation failures and unexpected exceptions.\n\nInspect the existing response conventions, exception handling, and installed FastAPI version before proposing a common error structure. If no convention exists, suggest a small schema with a stable error code, a readable message, and optional details. Flag any changes that would break existing clients before implementing them.\n\nApply consistent handling for request validation errors, expected HTTP errors, and unhandled exceptions while preserving appropriate status codes and headers. Keep sensitive exception details out of responses and preserve useful server-side logging. Add and run tests for representative failures, then show example JSON responses and explain where the handling is centralized."
+    },
+    {
+      "id": "c1-backend-19",
+      "prompt": "Help me write integration tests for an order endpoint that reserves stock, records payment status, and rolls back when inventory is insufficient.\n\nInspect the endpoint, transaction boundaries, inventory and payment models, and existing test setup. Use the project's integration-test conventions and an isolated test database. Assume external payment services should be replaced at their boundary unless the project already provides a safe test environment.\n\nCover successful ordering, persisted payment status, insufficient inventory, and a multi-item order where an earlier reservation must be rolled back after a later item fails. Assert both the HTTP response and database state, including the absence of partial orders or stock changes. Check the intended payment behavior rather than inventing it. Run the tests and report results and any behavior they reveal as incorrect."
+    },
+    {
+      "id": "c1-integrations-01",
+      "prompt": "I want my Google Calendar events to show up in Outlook. Assume I want ongoing, one-way visibility in Outlook, with Google Calendar remaining where I create and edit the events.\n\nAsk which Outlook version I use and whether these are personal or work accounts if that affects the setup. Explain the appropriate supported setup in clear, numbered steps, including how to select the Google calendar and add it to Outlook. Distinguish an ongoing subscription from a one-time import, and explain any refresh delays, editing limitations, or calendar-link privacy implications. Include a simple check using a new Google Calendar event so I can confirm the connection works."
+    },
+    {
+      "id": "c1-integrations-02",
+      "prompt": "Help me turn this contacts CSV into a clean import file for HubSpot, keeping phone numbers and removing duplicate email addresses.\n\nInspect the supplied CSV and identify the columns that map to HubSpot contact properties. If the file is missing, ask me for it. Preserve phone numbers as text, including leading zeros, country prefixes, and extensions; do not guess missing country codes. Trim surrounding whitespace and compare email addresses case-insensitively when finding duplicates.\n\nAssume I want one contact per email address. Keep the most complete duplicate record, combine nonconflicting values, and flag conflicting values for review. Keep contacts without email addresses separate. Return the import-ready CSV and a brief summary of changes, duplicate counts, and unresolved mapping or data issues."
+    },
+    {
+      "id": "c1-integrations-03",
+      "prompt": "I need a plain-English explanation of how webhooks differ from polling. Assume I understand basic apps and websites but have not worked with integrations.\n\nExplain who initiates the communication in each approach, using one everyday analogy and the same practical example for both. Compare how quickly updates arrive, how much repeated work each approach creates, and what happens when a request fails or a service is temporarily unavailable. Explain when I would choose each approach and when combining them makes sense. Keep technical terms to a minimum, define any you need, and avoid code. I should finish able to explain the difference to a nontechnical colleague."
+    },
+    {
+      "id": "c1-integrations-04",
+      "prompt": "I'm trying to send Shopify orders to our warehouse API, but failed requests keep creating duplicate shipments. Help me fix the retry logic so retrying the same shipment request does not create another shipment.\n\nInspect the integration code, failure logs, stored delivery state, and warehouse API contract. Check whether a timeout can occur after the warehouse has already created a shipment, whether Shopify can deliver the same event again, and whether concurrent retries are possible.\n\nUse the warehouse's supported idempotency mechanism if available, with a stable identifier for each intended shipment. Check whether orders can legitimately have multiple shipments before choosing that identifier. If the API lacks idempotency support, explain the limits and propose a reconciliation approach. Distinguish retryable failures from permanent ones, use bounded backoff, and preserve failed work for recovery.\n\nImplement the fix and test timeouts after acceptance, duplicate events, concurrent attempts, and permanent failures. Report the test results and any remaining duplicate risk."
+    },
+    {
+      "id": "c1-integrations-05",
+      "prompt": "I want new GitHub issues posted in our Slack project channel. Assume I want a notification when an issue is opened, with its title, repository, author, and a link, without notifications for comments or routine updates.\n\nAsk for the repository and Slack channel if they are not provided, and check whether I already have an integration configured. Prefer a supported existing integration if it meets these requirements. Give me clear setup steps, explain any account permissions or administrator approval needed, and limit the subscription to the intended repository and event.\n\nInclude a verification step using a test issue, guidance for avoiding duplicate notifications, and instructions for pausing or removing the connection."
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "results": [
+    {
+      "id": "c1-science-08",
+      "prompt": "Help me critically assess a study claiming that coffee improves memory. I want a practical checklist covering sample size and participant selection, controls and randomization, effect size and uncertainty, and funding or conflicts of interest. Explain why each matters and what would weaken the claim. Also distinguish coffee from caffeine, short-term test performance from lasting memory improvements, and association from causation. Assume I have not provided the study yet: give me the checklist first, then identify the study details needed for a specific assessment. Do not invent findings or treat funding alone as proof of bias."
+    },
+    {
+      "id": "c1-science-09",
+      "prompt": "I would like an accessible explanation of how ocean currents influence regional climate, with one concrete example. Assume I understand basic geography but have little background in climate science. Explain how currents redistribute heat and how exchanges between the ocean and atmosphere affect nearby temperatures and, where relevant, rainfall. Use one named current and region to connect the mechanism to an observable climate pattern. Distinguish long-term climate from daily weather, and explain the role of other factors so the example does not imply that ocean currents alone determine the region’s climate."
+    },
+    {
+      "id": "c1-science-10",
+      "prompt": "I need to distinguish technical replicates from biological replicates before planning a cell culture experiment. Explain each in plain language, with examples involving repeated measurements, wells, independently prepared cultures, and different donors or cell lines. Clarify when separate wells count as independent biological replicates and when they do not; ask me to check my actual experimental setup rather than assuming every well is independent. Explain which sources of variability each type captures, how they affect sample size and statistical analysis, and what conclusions I can draw. Finish with a short planning checklist that helps me avoid pseudoreplication."
+    },
+    {
+      "id": "c1-devops-01",
+      "prompt": "I need a Dockerfile for my Python API that runs as a non-root user. Check the project’s Python version, dependency files, startup command, and required runtime files before choosing an implementation; ask me for any essential details that are unavailable. Follow the project’s existing packaging conventions. Make file ownership and writable directories compatible with the non-root user, and keep secrets out of the image. Provide the complete Dockerfile and a .dockerignore if needed, with build and run instructions. Verify that the API starts correctly and runs with a nonzero user ID, and clearly report anything you could not verify."
+    },
+    {
+      "id": "c1-devops-02",
+      "prompt": "My deploy broke; help me roll back safely and restore service. First establish the deployment platform, affected environment, symptoms, current release, and last known working release. Ask me for missing details instead of guessing commands. Check whether the deploy changed database schemas, persistent data, configuration, or external dependencies in ways that could make rollback unsafe. Give me a concrete rollback procedure with prerequisites, verification steps, and a fallback if recovery fails. Confirm the target and any destructive or data-changing actions before executing them. Success means the intended previous release is serving traffic and the affected functionality passes health checks."
+    },
+    {
+      "id": "c1-devops-03",
+      "prompt": "Explain blue-green deployments to me using a simple example. Assume I know what deploying an application means but have not used this approach. Walk through two environments, which one serves live traffic, how a new version is tested, how traffic switches, and how rollback works. Use a small web application example and keep infrastructure terminology understandable. Briefly explain the extra infrastructure cost and the complications caused by database changes or in-flight requests. I should finish understanding the deployment sequence, why it can reduce downtime, and what must be true for rollback to work."
+    },
+    {
+      "id": "c1-devops-04",
+      "prompt": "I want my GitHub Actions workflow to test pull requests and deploy to staging only after merges. Check the existing workflow, test commands, deployment process, and branch rules before changing it. Assume staging follows the repository’s primary branch unless its configuration says otherwise. Ensure pull request runs execute tests without deploying or accessing staging credentials, and require successful tests before staging deployment. Check whether direct pushes are allowed: a push trigger alone does not guarantee a merge, so explain and address that distinction. Provide the complete workflow changes, identify required secrets or branch settings, and verify the expected behavior for pull requests, merges, and direct pushes."
+    },
+    {
+      "id": "c1-devops-05",
+      "prompt": "Help me figure out why my Kubernetes pods keep restarting after yesterday’s release. Start with diagnosis and preserve useful evidence before suggesting changes. Establish the affected namespace, workloads, release changes, and when the restarts began. Examine restart counts, container termination reasons and exit codes, previous container logs, events, probes, resource limits, and configuration changes. Distinguish container restarts from pods being replaced during a rollout. Compare the evidence with the last working release, rank plausible causes, and test the leading explanation with the smallest safe check. Propose a targeted fix or rollback, confirm production changes before applying them, and define how we will verify recovery."
+    }
+  ]
+}

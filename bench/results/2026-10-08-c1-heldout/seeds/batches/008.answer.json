@@ -1,0 +1,14 @@
+{
+  "requests": [
+    "I’m confused—why does ice float?",
+    "Help me design a fair experiment to test whether light color affects bean seedling growth, using materials I can get at a hardware store.",
+    "I want to understand what a small p-value tells me and why it doesn’t prove a scientific hypothesis.",
+    "Walk me through how researchers distinguish a planet’s atmospheric signal from noise when studying exoplanets.",
+    "I need a plain-English explanation of why antibiotics work on bacteria but not viruses.",
+    "I’m planning a yeast fermentation experiment. Help me choose temperature ranges, controls, and measurements that would make the results interpretable.",
+    "I keep hearing that quantum particles can be in two places at once. What does that actually mean?",
+    "Help me assess a study claiming coffee improves memory: what should I check about its sample, controls, effect size, and funding?",
+    "I would like an explanation of how ocean currents influence regional climate, with one concrete example.",
+    "I need to distinguish technical replicates from biological replicates before planning a cell culture experiment. Please explain how each affects the conclusions I can draw."
+  ]
+}

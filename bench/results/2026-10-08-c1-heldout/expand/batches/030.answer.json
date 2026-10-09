@@ -1,0 +1,36 @@
+{
+  "results": [
+    {
+      "id": "c1-everyday-23",
+      "prompt": "My bedroom gets afternoon sun and feels stuffy at night. Suggest inexpensive, practical ways I can keep it cooler, prioritizing free changes before anything I need to buy. Assume I want to work with my existing room rather than install air conditioning or make permanent alterations. Explain when to block sunlight, open windows, and use a fan, accounting for whether the air outside is cooler. Give me a short plan to try tonight and a few affordable improvements if that isn't enough."
+    },
+    {
+      "id": "c1-everyday-24",
+      "prompt": "I want to organize my freezer so I actually use what's in it. Give me a simple system for sorting the food, making older items easy to find, and keeping track of what needs using soon. Assume I want to use containers and labels I already have before buying organizers. Include a manageable first organizing session, an easy inventory format, and a brief weekly habit that connects the contents to meal planning. Explain how to handle unidentified items without guessing whether they're safe."
+    },
+    {
+      "id": "c1-everyday-25",
+      "prompt": "I'm attending a wedding with a 'dressy casual' dress code, and I want to understand what I could wear without feeling underdressed or overly formal. Explain the usual meaning in plain language and give a few complete outfit options across different clothing preferences, including shoes and simple accessories. Don't assume my gender or that I need to buy a new outfit. Flag how the venue, weather, time of day, and any couple-specific instructions could change the choices, and mention common wedding etiquette pitfalls."
+    },
+    {
+      "id": "c1-everyday-26",
+      "prompt": "I struggle to let go of sentimental stuff, and I want a gentle way to sort just one box. Help me make progress without pressuring me to discard things or tackle my whole home. Suggest a short session with a few simple categories, compassionate questions for deciding what matters, and a way to handle items I'm unsure about. Include options for preserving memories while reducing physical clutter. Define success as making a few thoughtful decisions, and give me permission to pause if the process feels overwhelming."
+    },
+    {
+      "id": "c1-everyday-27",
+      "prompt": "I'm renting a car for three days and comparing two offers: $45 daily plus $20 daily insurance, or $62 daily with insurance included. Which costs less? Show the daily total and the full three-day total for each option, then state the difference and the cheaper choice clearly. Assume both offers cover the same three rental days and have equivalent insurance, with no other differing fees or taxes. Briefly note what I'd need to check if those assumptions don't hold."
+    },
+    {
+      "id": "c1-everyday-28",
+      "prompt": "I want to plan a low-key picnic date for under $30. Assume it's for two people, in a free nearby outdoor spot, and that I already have a blanket and basic reusable dishes. Give me one easy plan with a simple menu, drinks, a relaxed activity, and an itemized estimated budget that leaves a little room for price differences. Keep preparation and carrying things manageable. Include a short packing checklist and a weather backup. Treat the $30 as the total spending limit and state any excluded costs."
+    },
+    {
+      "id": "c1-everyday-29",
+      "prompt": "I need five work lunches that don't require a microwave. Suggest meals that taste good cold or at room temperature, are reasonably affordable, and can be packed without much morning effort. Assume I have no dietary restrictions and can use a refrigerator or an insulated bag with ice packs; make those storage assumptions explicit. For each lunch, list the main ingredients and brief preparation instructions. Include a combined shopping list and a simple advance-prep plan that reuses ingredients while keeping the five lunches varied."
+    },
+    {
+      "id": "c1-everyday-30",
+      "prompt": "My phone keeps distracting me in the evenings. Help me set a few manageable boundaries that let me relax and be more present without giving up my phone entirely. Assume I still need to receive important calls and messages. Suggest three small boundaries with clear times or triggers, an easy replacement activity for each, and a way to handle exceptions without abandoning the plan. Give me a one-week trial and a simple way to judge whether it's helping, using a supportive tone rather than guilt or strict productivity rules."
+    }
+  ]
+}

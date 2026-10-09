@@ -1,0 +1,36 @@
+{
+  "results": [
+    {
+      "id": "c1-productivity-10",
+      "prompt": "I have eight hours left this week and need a realistic plan: a report that will take four hours is due Thursday, I need three hours of interview prep for Friday, and I have two hours of optional filing. Help me prioritize and schedule the work around those deadlines. Since everything totals nine hours, explicitly show what to defer or reduce rather than squeezing it all in. Assume the report and interview prep take priority. Give me a simple time-block plan, explain any assumptions about my availability, and show how much time remains for filing or buffer."
+    },
+    {
+      "id": "c1-apps-01",
+      "prompt": "I want a simple app for tracking books I’ve read. Help me turn that into a small, usable first version. Assume it’s for personal use, with book title, author, date finished, and optional rating or notes. I should be able to add, edit, delete, and browse entries, and keep my records after closing the app. Keep the interface straightforward and avoid expanding into social features or reading recommendations. Check any existing project context before choosing an implementation. Deliver a working version with brief setup instructions, and verify that the basic tracking flow works."
+    },
+    {
+      "id": "c1-apps-02",
+      "prompt": "Help me build a shared grocery list where my housemates can add items, mark them bought, and see who changed what. Assume we need one household list that works well on phones. Keep the first version focused on adding items, checking them off, and a readable history showing who made each change and when. Make each housemate identifiable without assuming we need an elaborate account system. Changes should persist and become visible to everyone, and simultaneous edits should not silently overwrite each other. Check the existing project context, explain key assumptions, and deliver a working version with setup instructions and verification of the shared-list flow."
+    },
+    {
+      "id": "c1-apps-03",
+      "prompt": "I’m making a habit tracker and want encouraging reminder messages that don’t sound judgmental when I miss a day. Write a small set of concise messages for a missed day, a few missed days, and returning after a longer break. Assume these appear as notifications or short in-app reminders. Keep the tone warm, natural, and supportive of my users’ choices. Avoid guilt, pressure about streaks, exaggerated praise, or assumptions about why someone missed their habit. Offer a gentle next step where appropriate. Give me three alternatives for each situation, clearly labeled, so I can choose a consistent voice."
+    },
+    {
+      "id": "c1-apps-04",
+      "prompt": "I need a small web app for splitting trip expenses among friends, including costs shared by only some people. Assume one currency per trip and equal splits among the selected participants for each expense. I should be able to add friends, record an amount and payer, select who shared the cost, edit or remove expenses, and see everyone’s net balance and suggested repayments. Keep the interface simple and make the calculations understandable. Handle currency rounding consistently and ensure balances reconcile to zero. Check the existing project context before choosing an implementation. Deliver a working app with persistent records, setup instructions, and verified examples covering whole-group and partial-group expenses."
+    },
+    {
+      "id": "c1-apps-05",
+      "prompt": "My recipe app feels cluttered. Help me decide what belongs on the home screen and what can move into a menu. Start by checking the current screens and features if they’re available; otherwise, ask me for a brief description and label any provisional assumptions. Assume the home screen should help people quickly find a recipe and start cooking. Recommend a clear information hierarchy, explain the placement of each major feature, and identify anything that could be combined or removed. Give me a concise home-screen layout and menu structure, with reasons tied to common user tasks rather than visual preference alone."
+    },
+    {
+      "id": "c1-apps-06",
+      "prompt": "I wanna track my plants and watering dates. Help me make a simple app where I can add a plant, record when I water it, and see its latest watering date and history. Assume it’s just for me, and keep the first version easy to use on my phone. Let me edit plant details and correct a watering entry, and make sure my records stay saved. If you include watering intervals, let me set them for each plant instead of assuming a universal schedule. Check any existing project context and deliver a working version with setup instructions and a verified basic flow."
+    },
+    {
+      "id": "c1-apps-07",
+      "prompt": "Please design a booking application for my community workshop, with equipment reservations, member accounts, and a clear way to prevent overlapping bookings. I want a practical design that members can understand and that can guide implementation.\n\nAssume each piece of equipment can have only one active reservation at a time. Members should be able to view availability, reserve equipment for a start and end time, and manage their own bookings. Include a minimal administrator role for managing equipment and reservations; flag that as an assumption.\n\nDescribe the main screens, member and administrator permissions, data model, and booking rules. Explain how availability is displayed and how conflicts are prevented when two members try to book the same equipment simultaneously. Treat conflict prevention as an enforced application rule, with a clear message if a reservation cannot be saved. Define how adjacent bookings, edits, cancellations, and time zones work.\n\nList any workshop-specific decisions I need to make, such as opening hours, booking limits, or equipment eligibility. Deliver a concise design and acceptance criteria covering successful reservations, unauthorized changes, and overlapping booking attempts. Keep the scope focused on workshop bookings."
+    }
+  ]
+}

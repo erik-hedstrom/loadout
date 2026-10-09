@@ -1,0 +1,36 @@
+{
+  "results": [
+    {
+      "id": "c1-data-09",
+      "prompt": "I have two customer CSVs and want to match records across them, separating confident matches from cases needing review. Inspect the available columns and explain which identifiers support matching. Use only the supplied data, preserve original values, and document any normalization used for comparison. Treat conflicting identifiers, ambiguous candidates, and one-to-many matches as needing review. Return confident matches, review candidates, and unmatched records separately, with source row references and a brief reason for each decision. Include counts and state your matching assumptions; do not invent missing identifiers or force a match."
+    },
+    {
+      "id": "c1-data-10",
+      "prompt": "Please alphabetize my supplied book list and remove exact duplicates. I mean entries with identical text; keep differences in spelling, punctuation, capitalization, or edition information as separate entries. Assume the whole entry is the sorting key, sort alphabetically without regard to capitalization, and retain each entry’s original text. Do not rewrite titles or remove leading articles such as “A” or “The.” Return the cleaned list in the same basic format, followed by a brief count of the original entries, exact duplicates removed, and entries remaining."
+    },
+    {
+      "id": "c1-data-11",
+      "prompt": "I’d like a concise executive summary of the supplied quarterly performance table, centered on the three most important findings. Use only the table’s data and labels. Prioritize material changes, performance against any stated targets, and patterns that matter for business decisions. Support each finding with the relevant figures and clearly identify the comparison period. Distinguish percentage changes from percentage-point changes, and do not infer causes or comparisons the table cannot support. Return a short opening takeaway and three numbered findings. Briefly flag any missing context that materially limits the conclusions."
+    },
+    {
+      "id": "c1-data-12",
+      "prompt": "Help me check this inventory export for negative quantities, missing product codes, and duplicate rows. Use only the supplied export and preserve its original values. Treat blank or whitespace-only product codes as missing and, unless the export indicates otherwise, define duplicate rows as identical values across every column. Return a concise summary with counts for each issue and a detailed list with source row references, relevant values, and all applicable flags. Identify quantities that cannot be parsed separately rather than treating them as zero. Do not delete or correct records; explain any assumptions used."
+    },
+    {
+      "id": "c1-data-13",
+      "prompt": "I want to compare these apartment listings by rent, commute time, and floor area using only the information provided. Create a comparison table with the listing identifiers, values, and units, marking missing information explicitly. Normalize units only when the supplied information supports the conversion; do not estimate commutes, exchange rates, fees, or missing measurements. Highlight the lowest stated rent, shortest stated commute, and largest stated floor area where comparisons are valid. Explain the main trade-offs briefly. I have not specified weights, so keep the criteria separate and avoid declaring an overall winner."
+    },
+    {
+      "id": "c1-data-14",
+      "prompt": "My timestamps use different time zones. Convert entries with explicit UTC offsets to UTC and flag the rest for review. Use only the supplied timestamps; do not infer a time zone from location, neighboring entries, or an ambiguous abbreviation. Treat an explicit Z suffix as UTC. Preserve the original timestamp and source row reference, and return the converted value in ISO 8601 format with a Z suffix, retaining the supplied precision. Clearly flag missing offsets, invalid timestamps, and unsupported formats with reasons. Account for date changes during conversion and include counts of converted and flagged entries."
+    },
+    {
+      "id": "c1-data-15",
+      "prompt": "Please reshape my supplied spreadsheet from one column per month into rows containing customer, month, and revenue. Inspect the headers to identify the customer field and monthly revenue columns, and flag any ambiguous headers or customer identifiers. Assume each original customer row should produce one row for every monthly column, including blank revenue cells. Preserve blanks as missing values, keep zero revenue as zero, and do not aggregate repeated customers or invent years. Return the reshaped table with exactly those three columns, using chronological month order where identifiable. Include a brief row-count reconciliation and any assumptions."
+    },
+    {
+      "id": "c1-data-16",
+      "prompt": "I’m tracking support tickets and want the median resolution time by priority, with an explanation of how unresolved tickets affect interpretation. Use the supplied data and identify the ticket, priority, creation, resolution, and status fields. Assume resolution time means elapsed calendar time from creation to resolution, and state the units. Calculate medians from tickets with valid resolution times; report the resolved sample size, unresolved count, and unresolved share for each priority. Flag missing, conflicting, or invalid dates separately. Do not assign unresolved tickets zero duration. Explain that resolved-only medians may understate delays when long-running tickets remain open."
+    }
+  ]
+}
