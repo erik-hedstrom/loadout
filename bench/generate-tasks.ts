@@ -102,69 +102,65 @@ function toRepo(r: { name: string; files: string[]; dependencies: string[]; lang
   return { name: r.name, files: r.files, dependencies: r.dependencies, languages: Object.fromEntries(r.languages.map((l) => [l.replace(/^\./, ''), 1])) };
 }
 
-async function main() {
-  const corpus = loadCorpus();
-  const random = rng(Number(values.seed));
-  const popularNames = new Set(readJsonl<{ name: string }>(join(DATA, 'popular.jsonl')).slice(0, 50).map((p) => p.name));
-  const eligible = corpus.filter((s) => s.description.length >= 60 && isEnglish(s.description));
+const corpus = loadCorpus();
+const random = rng(Number(values.seed));
+const popularNames = new Set(readJsonl<{ name: string }>(join(DATA, 'popular.jsonl')).slice(0, 50).map((p) => p.name));
+const eligible = corpus.filter((s) => s.description.length >= 60 && isEnglish(s.description));
 
-  const targets: { skill: CorpusSkill; bucket: Task['bucket'] }[] = [
-    ...sample(eligible.filter((s) => popularNames.has(s.name)), Number(values.popular), random).map((skill) => ({ skill, bucket: 'popular' as const })),
-  ];
-  const taken = new Set(targets.map((t) => t.skill.name));
-  for (const b of ['head', 'torso', 'tail'] as const) {
-    const candidates = eligible.filter((s) => bucket(s.rank) === b && !taken.has(s.name) && !popularNames.has(s.name));
-    targets.push(...sample(candidates, Number(values.perBucket), random).map((skill) => ({ skill, bucket: b })));
-  }
-
-  const batches: (typeof targets)[] = [];
-  for (let i = 0; i < targets.length; i += BATCH) batches.push(targets.slice(i, i + BATCH));
-  const noneBatches = Array.from({ length: Math.ceil(Number(values.none) / BATCH) }, (_, i) => Math.min(BATCH, Number(values.none) - i * BATCH));
-
-  let cost = 0;
-  let done = 0;
-  const jobs = [...batches.map((b) => ({ kind: 'skill' as const, b })), ...noneBatches.map((n) => ({ kind: 'none' as const, n }))];
-  const tasks: Task[] = [];
-  let leaked = 0;
-
-  await pool(jobs, Number(values.concurrency), async (job) => {
-    if (job.kind === 'skill') {
-      const res = await claudeJson<{ tasks: { name: string; scope: 'repo' | 'general'; task: string; repo: Parameters<typeof toRepo>[0] }[] }>(
-        skillPrompt(job.b.map((t) => t.skill)),
-        SKILL_TASKS_SCHEMA,
-        { model: values.model!, system: SYSTEM },
-      );
-      cost += res.costUsd;
-      for (const t of job.b) {
-        const out = res.output.tasks.find((o) => o.name === t.skill.name);
-        if (!out) continue;
-        // Drop tasks that leak a multi-word skill name, with hyphens or spaces ("write behat scenarios").
-        const parts = t.skill.name.split('-').filter(Boolean);
-        const leak = new RegExp(`(?<![a-z0-9])${parts.map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[- ]')}(?![a-z0-9])`);
-        if (parts.length >= 2 && leak.test(out.task.toLowerCase())) {
-          leaked++;
-          continue;
-        }
-        tasks.push({ id: '', task: out.task, repo: toRepo(out.repo), gold: [t.skill.name], scope: out.scope, bucket: t.bucket });
-      }
-    } else {
-      const res = await claudeJson<{ tasks: { task: string; repo: Parameters<typeof toRepo>[0] }[] }>(nonePrompt(job.n), NONE_TASKS_SCHEMA, {
-        model: values.model!,
-        system: SYSTEM,
-      });
-      cost += res.costUsd;
-      for (const out of res.output.tasks) tasks.push({ id: '', task: out.task, repo: toRepo(out.repo), gold: [], scope: 'none' });
-    }
-    console.error(`  ${++done}/${jobs.length} batches, $${cost.toFixed(3)}`);
-  });
-
-  // Stable order and ids: by bucket, then gold name.
-  const order = { popular: 0, head: 1, torso: 2, tail: 3, undefined: 4 } as Record<string, number>;
-  tasks.sort((a, b) => order[String(a.bucket)]! - order[String(b.bucket)]! || (a.gold[0] ?? a.task).localeCompare(b.gold[0] ?? b.task));
-  tasks.forEach((t, i) => (t.id = `t${String(i + 1).padStart(3, '0')}`));
-
-  writeFileSync(join(DATA, 'tasks.jsonl'), tasks.map((t) => JSON.stringify(t)).join('\n') + '\n');
-  console.log(`wrote ${tasks.length} tasks (${leaked} dropped for leaking the skill name), generation cost $${cost.toFixed(3)}`);
+const targets: { skill: CorpusSkill; bucket: Task['bucket'] }[] = [
+  ...sample(eligible.filter((s) => popularNames.has(s.name)), Number(values.popular), random).map((skill) => ({ skill, bucket: 'popular' as const })),
+];
+const taken = new Set(targets.map((t) => t.skill.name));
+for (const b of ['head', 'torso', 'tail'] as const) {
+  const candidates = eligible.filter((s) => bucket(s.rank) === b && !taken.has(s.name) && !popularNames.has(s.name));
+  targets.push(...sample(candidates, Number(values.perBucket), random).map((skill) => ({ skill, bucket: b })));
 }
 
-await main();
+const batches: (typeof targets)[] = [];
+for (let i = 0; i < targets.length; i += BATCH) batches.push(targets.slice(i, i + BATCH));
+const noneBatches = Array.from({ length: Math.ceil(Number(values.none) / BATCH) }, (_, i) => Math.min(BATCH, Number(values.none) - i * BATCH));
+
+let cost = 0;
+let done = 0;
+const jobs = [...batches.map((b) => ({ kind: 'skill' as const, b })), ...noneBatches.map((n) => ({ kind: 'none' as const, n }))];
+const tasks: Task[] = [];
+let leaked = 0;
+
+await pool(jobs, Number(values.concurrency), async (job) => {
+  if (job.kind === 'skill') {
+    const res = await claudeJson<{ tasks: { name: string; scope: 'repo' | 'general'; task: string; repo: Parameters<typeof toRepo>[0] }[] }>(
+      skillPrompt(job.b.map((t) => t.skill)),
+      SKILL_TASKS_SCHEMA,
+      { model: values.model!, system: SYSTEM },
+    );
+    cost += res.costUsd;
+    for (const t of job.b) {
+      const out = res.output.tasks.find((o) => o.name === t.skill.name);
+      if (!out) continue;
+      // Drop tasks that leak a multi-word skill name, with hyphens or spaces ("write behat scenarios").
+      const parts = t.skill.name.split('-').filter(Boolean);
+      const leak = new RegExp(`(?<![a-z0-9])${parts.map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[- ]')}(?![a-z0-9])`);
+      if (parts.length >= 2 && leak.test(out.task.toLowerCase())) {
+        leaked++;
+        continue;
+      }
+      tasks.push({ id: '', task: out.task, repo: toRepo(out.repo), gold: [t.skill.name], scope: out.scope, bucket: t.bucket });
+    }
+  } else {
+    const res = await claudeJson<{ tasks: { task: string; repo: Parameters<typeof toRepo>[0] }[] }>(nonePrompt(job.n), NONE_TASKS_SCHEMA, {
+      model: values.model!,
+      system: SYSTEM,
+    });
+    cost += res.costUsd;
+    for (const out of res.output.tasks) tasks.push({ id: '', task: out.task, repo: toRepo(out.repo), gold: [], scope: 'none' });
+  }
+  console.error(`  ${++done}/${jobs.length} batches, $${cost.toFixed(3)}`);
+});
+
+// Stable order and ids: by bucket, then gold name.
+const order = { popular: 0, head: 1, torso: 2, tail: 3, undefined: 4 } as Record<string, number>;
+tasks.sort((a, b) => order[String(a.bucket)]! - order[String(b.bucket)]! || (a.gold[0] ?? a.task).localeCompare(b.gold[0] ?? b.task));
+tasks.forEach((t, i) => (t.id = `t${String(i + 1).padStart(3, '0')}`));
+
+writeFileSync(join(DATA, 'tasks.jsonl'), tasks.map((t) => JSON.stringify(t)).join('\n') + '\n');
+console.log(`wrote ${tasks.length} tasks (${leaked} dropped for leaking the skill name), generation cost $${cost.toFixed(3)}`);

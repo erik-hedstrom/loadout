@@ -277,7 +277,7 @@ Acceptance: a third row in that RESULTS table, with raw results. The README's
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
 | D10 | P0 | In-host first: loadout as a Claude Code plugin (hook), CLI then desktop app | Codex | cloud + local + erik | review (plugin, CLI check, latency); desktop app check pending (Erik) |
-| D11 | P1 | Cut the hook's per-prompt start cost | Codex | cloud + local | todo |
+| D11 | P1 | Cut the hook's per-prompt start cost | Codex | cloud + local | in progress ([#14](https://github.com/erik-hedstrom/loadout/pull/14): follow-ups skip start-up, relay loads on demand) |
 | D1 | P0 | Validate on the new native Linux machine | Claude | local | todo (machine pending) |
 | D7 | P1 | `loadout doctor` | Codex | cloud | todo |
 | D2 | P1 | Live Codex hook test | Claude | local + erik | todo |
@@ -357,6 +357,13 @@ Acceptance:
   load, Jev), so the breakdown is measured rather than inferred.
 - Cut what dominates. `bench/hook-latency.ts` with real Jev then shows a
   lower p50 for the new process, with raw results and a RESULTS entry.
+
+Learnings (2026-10-08, [#14](https://github.com/erik-hedstrom/loadout/pull/14),
+[RESULTS](../../bench/RESULTS.md#hook-start-up-d11-2026-10-08)):
+- Done: follow-ups return before start-up, and `relay.js` loads only for
+  `mcp-launch`.
+- Left: the library scan and the embedding model dominate what remains.
+  Then run `hook-latency.ts` with real Jev, as acceptance asks.
 
 **D1. Native Linux validation.**
 
@@ -450,13 +457,13 @@ Acceptance:
 | E1 | P0 | GitHub Actions CI | Codex | cloud | done ([PR #2](https://github.com/erik-hedstrom/loadout/pull/2)) |
 | E2 | P0 | LICENSE, CONTRIBUTING, SECURITY.md, templates | Claude | cloud + erik | done ([PR #1](https://github.com/erik-hedstrom/loadout/pull/1)) |
 | E7 | P0 | Vendor-independent bench judges and expander | Codex | cloud | done ([PR #5](https://github.com/erik-hedstrom/loadout/pull/5)) |
-| E8 | P0 | Repo-wide simplification pass | Claude (pr-reviewer finds, worker fixes) + Codex review | cloud | in progress (bench/ in [PR #11](https://github.com/erik-hedstrom/loadout/pull/11), src/ in [PR #12](https://github.com/erik-hedstrom/loadout/pull/12); Markdown next) |
+| E8 | P0 | Repo-wide simplification pass | Claude (pr-reviewer finds, worker fixes) + Codex review | cloud | in progress (bench/ in [PR #11](https://github.com/erik-hedstrom/loadout/pull/11), src/ in [PR #12](https://github.com/erik-hedstrom/loadout/pull/12); Markdown in [PR #15](https://github.com/erik-hedstrom/loadout/pull/15)) |
 | E9 | P0 | Security hardening from the read-only Sol review | Codex | cloud | done ([PR #4](https://github.com/erik-hedstrom/loadout/pull/4), re-measure [PR #7](https://github.com/erik-hedstrom/loadout/pull/7)) |
 | E3 | P1 | Split the test file per module | Codex | cloud | todo |
 | E5 | P1 | Changelog and release automation | Codex | cloud | todo (with A4) |
 | E6 | P2 | Architecture diagram in DESIGN.md | Claude | cloud | todo |
 | E10 | P1 | Build without optional dependencies | Codex | cloud | done ([PR #8](https://github.com/erik-hedstrom/loadout/pull/8)) |
-| E11 | P1 | Fixed-text diagnostics in the gateway and relay | Codex | cloud | review ([PR #10](https://github.com/erik-hedstrom/loadout/pull/10)) |
+| E11 | P1 | Fixed-text diagnostics in the gateway and relay | Codex | cloud | done ([PR #10](https://github.com/erik-hedstrom/loadout/pull/10)) |
 
 **E10. Build without optional dependencies.** src/embed.ts:24 types
 `@huggingface/transformers` with `typeof import(...)`. So `tsc` fails when npm
@@ -503,6 +510,13 @@ Acceptance:
 - The badge goes in the README.
 
 Learnings: WSL hook assertions need a Linux runtime fixture on native Windows; Vitest 5 needs Node ≥ 22, so engines moved to >=22 (Node 20 is EOL); plain `npm ci` preserves Rolldown's optional native bindings.
+
+2026-10-08: Actions stopped starting jobs (private-repo minutes or billing)
+after about 25 full-matrix PR runs. Decided with Sol at Erik's request: the
+full matrix runs behind the `ci-full` label before merge; other runs are
+Ubuntu only ([PR #13](https://github.com/erik-hedstrom/loadout/pull/13)).
+Without branch protection, the orchestrator checks the full jobs before each
+merge.
 
 **E2. Community files.**
 
@@ -572,10 +586,10 @@ Starting points from Sol's review (2026-10-07):
   (production uses `hybridRank()`); the `inverted` metadata in route.ts is
   unused; `oneLine` is duplicated in hook.ts and mcp.ts; some module
   introductions repeat DESIGN.
-- `bench/`, ≈ 50–75 lines: `sweep.ts` duplicates `capabilityKey()`;
-  `invoke.ts` and `outcome.ts` duplicate decision reconstruction and timeouts;
-  `route-bench.ts` retries around a client that already retries;
-  `outcome.ts --agent` has one implemented value.
+- `bench/`, done: 64 net lines removed. Reused capability keys, decision
+  reconstruction, process-group timeouts, JSONL parsing and Windows Codex
+  lookup; removed redundant options, retries, exports and wrappers. route-bench
+  uses jevClient's retries (5; at most six attempts per request).
 - Markdown, ≈ 100–150 lines: DESIGN's benchmark-arms section is stale; the
   usage sections repeat README; HANDOFF's tables repeat both; absolutes at
   DESIGN:5, 29 and HANDOFF:17 overstate what the benchmarks show.

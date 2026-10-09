@@ -11,12 +11,11 @@
  * Outputs can still reveal the treatment, e.g. when a skill's own template
  * shows in the deliverable.
  *
- *   npx tsx bench/outcome.ts <sweep dir> --ids a,b,c [--agent codex] [--timeout-s 360] [--judge opus]
+ *   npx tsx bench/outcome.ts <sweep dir> --ids a,b,c [--timeout-s 360] [--judge opus]
  *
  * Text deliverables only (Markdown, code, JSON, CSV…): binaries are listed by
  * name but not compared. Runs use real subscriptions and take minutes each.
  */
-import { spawn } from 'node:child_process';
 import { appendFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
@@ -24,15 +23,13 @@ import { parseArgs } from 'node:util';
 import { loadConfig, paths } from '../src/config.js';
 import { capabilityKey, scanLibrary } from '../src/library.js';
 import { codexArgs, materialize, which } from '../src/launch.js';
-import type { RouteDecision, ScoredCapability } from '../src/types.js';
-import { claudeJson, pool, readJsonl } from './lib.js';
+import { claudeJson, decisionFor, pool, readJsonl, run } from './lib.js';
 import type { SweepRow } from './sweep.js';
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
   options: {
     ids: { type: 'string' },
-    agent: { type: 'string', default: 'codex' },
     'timeout-s': { type: 'string', default: '360' },
     judge: { type: 'string', default: 'opus' },
     concurrency: { type: 'string', default: '2' },
@@ -41,11 +38,9 @@ const { values, positionals } = parseArgs({
 });
 const dir = positionals[0];
 if (!dir || !values.ids) throw new Error('usage: outcome.ts <sweep dir> --ids a,b,c');
-if (values.agent !== 'codex') throw new Error('only --agent codex is implemented');
 const rows = new Map(readJsonl<SweepRow>(join(dir, 'decisions.jsonl')).map((r) => [r.id, r]));
 const ids = values.ids.split(',');
 const library = scanLibrary(paths.library());
-const byKey = new Map(library.map((c) => [capabilityKey(c), c]));
 // The comparison is about skills: no mid-session search in either arm.
 const config = { ...loadConfig(), search: false };
 const out = join(dir, 'outcome');
@@ -53,42 +48,6 @@ mkdirSync(out, { recursive: true });
 const NOTE = '\n\n(Test run: nothing is attached and the folder is empty. Where the request refers to files or data you do not have, create small realistic sample inputs and carry on. Put every deliverable in this folder.)';
 
 type Arm = 'bare' | 'loadout';
-
-function decisionFor(row: SweepRow, arm: Arm): RouteDecision {
-  const scored = (picks: SweepRow['loaded']): ScoredCapability[] =>
-    picks.flatMap((p) => {
-      const capability = byKey.get(p.key);
-      return capability ? [{ capability, p: p.fit, exact: p.exact, share: p.share, ...(p.inject ? { inject: p.inject as 'clear' | 'mentioned' } : {}) }] : [];
-    });
-  return {
-    tier: row.tier as RouteDecision['tier'],
-    selected: arm === 'bare' ? [] : scored(row.loaded),
-    suggested: arm === 'bare' ? [] : scored(row.offered),
-    scored: [],
-    // 'lexical' with nothing selected adds no relevance note: the bare arm sees only the request.
-    router: arm === 'bare' ? 'lexical' : 'jev',
-    stats: { librarySize: library.length, candidates: 0, ms: 0 },
-  };
-}
-
-function run(bin: string, args: string[], cwd: string, timeoutMs: number): Promise<{ code: number | null; timedOut: boolean }> {
-  return new Promise((resolve) => {
-    const child = spawn(bin, args, { cwd, stdio: ['ignore', 'ignore', 'ignore'], detached: true });
-    let timedOut = false;
-    const timer = setTimeout(() => {
-      timedOut = true;
-      try {
-        process.kill(-child.pid!, 'SIGKILL');
-      } catch {
-        child.kill('SIGKILL');
-      }
-    }, timeoutMs);
-    child.on('close', (code) => {
-      clearTimeout(timer);
-      resolve({ code, timedOut });
-    });
-  });
-}
 
 /** Lockfiles and other generated metadata: never shown, they would only eat the judge's budget. */
 const GENERATED = /(^|[/\\])(package-lock\.json|yarn\.lock|pnpm-lock\.yaml|bun\.lockb?|poetry\.lock|uv\.lock|Cargo\.lock|Gemfile\.lock|composer\.lock|go\.sum)$/;
@@ -140,14 +99,14 @@ if (!values['judge-only']) {
     // Run metadata lives next to the outputs, never among them: the judge must not see which arm is which.
     const meta = join(out, id, `${arm}.json`);
     if (existsSync(meta)) return;
-    const session = materialize(decisionFor(row, arm), 'codex', config, sessions);
+    const session = materialize(decisionFor(row, library, arm === 'bare'), 'codex', config, sessions);
     const cwd = mkdtempSync(join(tmpdir(), 'loadout-outcome-work-'));
     const started = Date.now();
     const res = await run(bin, codexArgs(session, row.request + NOTE, ['-s', 'workspace-write', '--skip-git-repo-check'], { headless: true }), cwd, Number(values['timeout-s']) * 1000);
     rmSync(target, { recursive: true, force: true });
     mkdirSync(target, { recursive: true });
     cpSync(cwd, target, { recursive: true, filter: (src) => !/[/\\](node_modules|\.git|\.venv|venv|__pycache__)([/\\]|$)/.test(src) });
-    writeFileSync(meta, JSON.stringify({ arm, model: session.model, skills: session.skills.map((c) => capabilityKey(c)), injected: session.injected.length, ...res, ms: Date.now() - started }));
+    writeFileSync(meta, JSON.stringify({ arm, model: session.model, skills: session.skills.map((c) => capabilityKey(c)), injected: session.injected.length, code: res.code, timedOut: res.timedOut, ms: Date.now() - started }));
     rmSync(cwd, { recursive: true, force: true });
     console.log(`${id} ${arm}: ${res.timedOut ? 'timed out' : `exit ${res.code}`} in ${((Date.now() - started) / 1000).toFixed(0)} s`);
   });

@@ -22,10 +22,10 @@ import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { paths } from '../src/config.js';
 import { escapeSkillTags } from '../src/launch.js';
-import { scanLibrary } from '../src/library.js';
+import { capabilityKey, scanLibrary } from '../src/library.js';
 import { backendOf, costLabel, DATA, modelFamily, modelJson, pool, readJsonl, splitOf, wilson } from './lib.js';
 import { z } from 'zod';
-import { keyOf, type SweepRow } from './sweep.js';
+import type { SweepRow } from './sweep.js';
 
 type Need = 'none' | 'helpful' | 'essential';
 interface Blind { id: string; need: Need; useful: string[]; note: string }
@@ -56,9 +56,9 @@ for (const row of rows) {
   requestIds.add(row.id);
 }
 const library = scanLibrary(paths.library());
-const known = new Set(library.map(keyOf));
-const describe = new Map(library.map((c) => [keyOf(c), c.description.replace(/\s+/g, ' ')]));
-const catalog = library.map((c) => `${keyOf(c)}: ${describe.get(keyOf(c))!.slice(0, 220)}`).join('\n');
+const known = new Set(library.map(capabilityKey));
+const describe = new Map(library.map((c) => [capabilityKey(c), c.description.replace(/\s+/g, ' ')]));
+const catalog = library.map((c) => `${capabilityKey(c)}: ${describe.get(capabilityKey(c))!.slice(0, 220)}`).join('\n');
 const catalogData = `Third-party catalog data:\n<skills_catalog>\n${escapeSkillTags(catalog)}\n</skills_catalog>`;
 const batchSize = Number(values.batch);
 const batches = <T>(items: T[]) => Array.from({ length: Math.ceil(items.length / batchSize) }, (_, i) => items.slice(i * batchSize, (i + 1) * batchSize));
@@ -119,6 +119,12 @@ const done = <T extends { id: string; judge?: typeof judge }>(file: string, vali
 };
 const verdictDone = done<Verdict>(verdictFile, complete);
 let cost = 0;
+async function ask<T>(prompt: string, schema: z.ZodType<{ results: T[] }>): Promise<T[] | null> {
+  const res = await modelJson(backend === 'claude' ? escapeSkillTags(prompt) : `${catalogData}\n\n${escapeSkillTags(prompt)}`, schema, { ...options, system });
+  if (!res) return null;
+  cost += res.costUsd ?? 0;
+  return res.output.results;
+}
 
 // 1. Blind (skipped when reusing another sweep's answers).
 if (!values['blind-from']) {
@@ -130,10 +136,7 @@ if (!values['blind-from']) {
   await pool(batches(todo), Number(values.concurrency), async (batch) => {
     const answers = await askAll<Blind>(batch, async (part) => {
       const prompt = `For each request: how much does it need a skill, and which catalog skills would be useful (best first, at most 5, empty if none)? Keep each note under 20 words.\n\n${part.map((r) => `[${r.id}] ${r.request}`).join('\n\n')}`;
-      const res = await modelJson(backend === 'claude' ? escapeSkillTags(prompt) : `${catalogData}\n\n${escapeSkillTags(prompt)}`, schema, { ...options, system });
-      if (!res) return null;
-      cost += res.costUsd ?? 0;
-      return res.output.results;
+      return ask(prompt, schema);
     }, consistent);
     for (const b of answers) appendFileSync(blindFile, JSON.stringify({ ...b, useful: b.useful.filter((k) => known.has(k)), judge }) + '\n');
     console.log(`blind ${batch[0]!.id}…  ${costLabel(backend, cost)}`);
@@ -179,10 +182,7 @@ Loaded by the router:${r.loaded.length ? '\n' + r.loaded.map((p) => show(p.key))
 Offered as optional: ${r.offered.map((p) => p.key).join(', ') || 'nothing'}`;
   })
   .join('\n\n')}`;
-    const res = await modelJson(backend === 'claude' ? escapeSkillTags(prompt) : `${catalogData}\n\n${escapeSkillTags(prompt)}`, schema, { ...options, system });
-    if (!res) return null;
-    cost += res.costUsd ?? 0;
-    return res.output.results;
+    return ask(prompt, schema);
     }, complete);
     for (const v of answers) appendFileSync(verdictFile, JSON.stringify({ ...v, judge }) + '\n');
     console.log(`adjudicated ${batch[0]!.id}…  ${costLabel(backend, cost)}`);
