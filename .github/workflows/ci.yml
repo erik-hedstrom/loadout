@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
+    # `labeled` starts the full matrix when `ci-full` is added.
+    types: [opened, synchronize, reopened, labeled]
 
 permissions:
   contents: read
@@ -18,7 +20,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        # Private-repo minutes bill macOS at 10x and Windows at 2x. They run while a PR has the
+        # `ci-full` label, added once reviews approve, so pushes after that rerun them; macOS
+        # caught /var realpath bugs three times. Pushes to main run Ubuntu only.
+        os: ${{ fromJSON(contains(github.event.pull_request.labels.*.name, 'ci-full') && '["ubuntu-latest","macos-latest","windows-latest"]' || '["ubuntu-latest"]') }}
         node: [22, 24]
     steps:
       - uses: actions/checkout@v6

@@ -98,7 +98,11 @@ The orchestrator repeats this until it hits a stop condition.
    - Check open PRs, CI and Codex comments: `gh pr list`, `gh pr checks`,
      `gh pr view N --comments`, if `gh` works.
 2. **Merge what is ready:**
-   - CI green;
+   - CI green, including the full matrix: once both reviews approve, add
+     the `ci-full` label (PR pushes run Ubuntu only). GitHub does not enforce
+     this, because main has no branch protection. Before merging, check that
+     all six `ci` jobs and `build-without-optional` passed on the current
+     head: `gh pr view N --json headRefOid,statusCheckRollup`;
    - `pr-reviewer` APPROVE;
    - Codex review without unresolved High or Medium findings;
    - acceptance criteria met.

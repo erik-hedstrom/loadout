@@ -504,6 +504,13 @@ Acceptance:
 
 Learnings: WSL hook assertions need a Linux runtime fixture on native Windows; Vitest 5 needs Node ≥ 22, so engines moved to >=22 (Node 20 is EOL); plain `npm ci` preserves Rolldown's optional native bindings.
 
+2026-10-08: Actions stopped starting jobs (private-repo minutes or billing)
+after about 25 full-matrix PR runs. Decided with Sol at Erik's request: the
+full matrix runs behind the `ci-full` label before merge; other runs are
+Ubuntu only ([PR #13](https://github.com/erik-hedstrom/loadout/pull/13)).
+Without branch protection, the orchestrator checks the full jobs before each
+merge.
+
 **E2. Community files.**
 
 Acceptance:
