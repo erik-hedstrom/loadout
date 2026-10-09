@@ -313,7 +313,7 @@ Acceptance: a third row in that RESULTS table, with raw results. The README's
 | D5 | P2 | Isolation mode | Codex | cloud | todo |
 | D4 | P2 | Gateway: native tools via `tools/list_changed` | Codex | cloud | todo |
 | D6 | P2 | HTTP: cancellation reaches Jev | Codex | cloud | todo |
-| D8 | P1 | Host capability matrix (verified vs generated) | Claude | cloud | review (docs/hosts.md) |
+| D8 | P1 | Host capability matrix (verified vs generated) | Claude | cloud | review ([#18](https://github.com/erik-hedstrom/loadout/pull/18)) |
 | D9 | P1 | Codex parity: neutral session skill dir, tier presets | Codex | cloud | todo (after E9) |
 
 **D10. In-host first: loadout as a Claude Code plugin.**
@@ -459,6 +459,7 @@ Acceptance:
 - README and `setup` output claim no more than the table.
 
 Learnings (2026-10-09): every "verified" cell traces to a RESULTS section.
+Tier stays untested: no recorded run shows a tier choice reaching the agent.
 The README and `setup` output already claimed no more than the table, so
 they only gained a link; HANDOFF's untested-hosts note now points to it.
 Gateway is untested in every host: only the unit tests' canary server has
