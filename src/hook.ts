@@ -1,17 +1,6 @@
 /**
- * `loadout hook claude`: a Claude Code UserPromptSubmit hook that routes every
- * prompt and adds what fits as context, so a session started without the
- * launcher still gets the right skills, without relying on the agent to search.
- *
- * - Skills that fit are listed with their fit and how to load them (the loadout
- *   MCP server's load_skill, or the SKILL.md path).
- * - A clear winner, or a skill the user names, has its instructions injected
- *   as third-party reference material.
- * - Each skill is listed once per session, and injected at most once (state in
- *   the sessions folder, expired after a week).
- * - Short follow-ups ("yes", "continue") are not routed.
- *
- * The context is appended to the user's turn, so the prompt cache is intact.
+ * Per-prompt skill routing; see [DESIGN.md](../DESIGN.md#prompt-hook).
+ * The context is appended to the user's turn, so the prompt cache stays intact.
  * Any failure means no output: a hook must never block a prompt.
  *
  * Privacy: every routed prompt, with the repository's top-level file names and
@@ -23,7 +12,7 @@ import { join } from 'node:path';
 import type { Config } from './config.js';
 import type { EmbeddingStore } from './embed.js';
 import type { SystemOneClient } from './jev.js';
-import { escapeSkillTags, injectionBlock } from './launch.js';
+import { escapeSkillTags, injectionBlock, oneLine } from './launch.js';
 import { capabilityKey, skillExcerpt } from './library.js';
 import { route } from './route.js';
 import type { Capability, RepoSignals } from './types.js';
@@ -49,10 +38,6 @@ export interface HookDeps {
 }
 
 const DESCRIPTION_CHARS = 160;
-const oneLine = (s: string, n: number) => {
-  const t = s.replace(/\s+/g, ' ').trim();
-  return t.length > n ? `${t.slice(0, n - 1)}…` : t;
-};
 
 /** Too short to say what the work is ("yes", "go on"), unless it names a skill with a sigil. */
 export const isFollowUp = (prompt: string) => prompt.trim().split(/\s+/).length < 3 && !/(^|\s)[/@$][\w-]/.test(prompt);

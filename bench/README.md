@@ -36,7 +36,6 @@ verbatim are dropped.
 | `hybrid` | top 10 by BM25 + embeddings (RRF) |
 | `loadout` | the two-stage Jev router ([DESIGN.md](../DESIGN.md#router)); raw answers are stored per row |
 | `frontier` | a frontier model reads every description and picks up to 12 (small libraries only) |
-| everything | every description in context; reported as context size, since 20k skills do not fit |
 
 For each task and size N the library is the gold skill plus N−1 random corpus
 skills, nested across sizes. **Recall** = the gold skill was loaded. The
@@ -53,7 +52,7 @@ best rule per budget, and reports it on test.
 uv run --with duckdb --with pyyaml bench/scripts/build_corpus.py   # ~2 min, reads parquet metadata over HTTP
 npx tsx bench/generate-tasks.ts                                    # ~$1 of Claude usage
 npx tsx bench/retrieval-bench.ts                                   # retrieval recall@K, local only (embeds the corpus once, ~10 min)
-TYPESAFE_API_KEY=... npx tsx bench/route-bench.ts                  # ~$0.45 of Jev for 199 tasks × 3 sizes
+TYPESAFE_API_KEY=... npx tsx bench/route-bench.ts                  # $0.48 of Jev in v3 for 199 tasks × 3 sizes
 npx tsx bench/tune.ts bench/results/<run>                          # tune on dev, report on test, no API calls
 npx tsx bench/route-bench.ts --arms none --frontier 20 --sizes 100 # frontier arm, ~$1 of Claude usage
 TYPESAFE_API_KEY=... npx tsx bench/need-probe.ts bench/results/<run> # compare need questions (~$0.01)
@@ -61,8 +60,7 @@ npx tsx bench/handwritten.ts                                       # hand-writte
 ```
 
 `claude -p` calls run with `--strict-mcp-config --disable-slash-commands
---tools ""` from a neutral directory. Without that, the configured MCP
-servers alone added ~30k tokens to every call.
+--tools ""` from a neutral directory.
 
 ## Realistic requests on your library (v4)
 
@@ -74,7 +72,7 @@ gold labels; a frontier model judges.
 sh bench/data/library.sh                                # rebuild the 1,262-skill library these results used
 # seeds: data/seeds.jsonl (315 requests written by Codex without seeing any library)
 npx tsx bench/expand.ts bench/data/seeds.jsonl          # Sonnet expands each into a detailed prompt (~$3 of Claude usage)
-npx tsx bench/sweep.ts                                  # route all 315 through your library (~$0.34 of Jev), stores raw answers
+npx tsx bench/sweep.ts                                  # route all 315 (~$0.39 of Jev per sweep in E9), stores raw answers
 npx tsx bench/judge.ts bench/results/<sweep>            # Opus: blind pass, then adjudicates disagreements (~$5 first time)
 npx tsx bench/judge.ts bench/results/<sweep2> --blind-from bench/results/<sweep>   # re-run after a change: adjudication only
 npx tsx bench/invoke.ts bench/results/<sweep> --agent claude|codex --mode routed|search --ids a,b,c

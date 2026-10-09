@@ -1,11 +1,15 @@
 import { execFileSync, spawn } from 'node:child_process';
-import { accessSync, constants, mkdirSync, writeFileSync } from 'node:fs';
+import { accessSync, constants, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { basename, delimiter, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { existsSync } from 'node:fs';
 import { tierTarget, type Config } from './config.js';
 import { capabilityKey, copySkillConfined, skillBody } from './library.js';
 import { reportJson, type Capability, type McpServerConfig, type RouteDecision } from './types.js';
+
+export const oneLine = (s: string, n: number) => {
+  const t = s.replace(/\s+/g, ' ').trim();
+  return t.length > n ? `${t.slice(0, n - 1)}…` : t;
+};
 
 export type Agent = 'claude' | 'codex';
 
@@ -39,11 +43,6 @@ export const SEARCH_SERVER = 'loadout';
 export const SEARCH_TOOLS = ['find_skills', 'load_skill'];
 export const SEARCH_HINT = "When the work involves a format, product, service or domain your skills do not cover, search the user's skill library with the loadout find_skills tool before starting on it.";
 
-/**
- * How an agent starts this loadout's MCP server. A Windows agent launched from
- * WSL goes through wsl.exe (it cannot run the Linux node), and the server then
- * shows Windows paths. Uses this install's CLI and runtime, so dev (tsx) runs work too.
- */
 export function searchServer(windowsAgent: boolean): McpServerConfig {
   return loadoutCommand(['mcp'], windowsAgent);
 }

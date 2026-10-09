@@ -73,6 +73,9 @@ Acceptance:
 - Reviewed for honesty: the outcome pilot is mixed, so the README must not
   claim better results.
 
+Note (E8 find pass, 2026-10-08): README still leads with the launcher; the
+plugin appears only under "Search mid-session".
+
 **A3. `loadout init` wizard and starter packs.**
 
 Acceptance:
@@ -482,7 +485,7 @@ Acceptance:
 | E1 | P0 | GitHub Actions CI | Codex | cloud | done ([PR #2](https://github.com/erik-hedstrom/loadout/pull/2)) |
 | E2 | P0 | LICENSE, CONTRIBUTING, SECURITY.md, templates | Claude | cloud + erik | done ([PR #1](https://github.com/erik-hedstrom/loadout/pull/1)) |
 | E7 | P0 | Vendor-independent bench judges and expander | Codex | cloud | done ([PR #5](https://github.com/erik-hedstrom/loadout/pull/5)) |
-| E8 | P0 | Repo-wide simplification pass | Claude (pr-reviewer finds, worker fixes) + Codex review | cloud | in progress (bench/ in [PR #11](https://github.com/erik-hedstrom/loadout/pull/11); src/ and Markdown next; include A2's toolTokens tautology test and E7's cosmetic items) |
+| E8 | P0 | Repo-wide simplification pass | Claude (pr-reviewer finds, worker fixes) + Codex review | cloud | in progress (bench/ in [PR #11](https://github.com/erik-hedstrom/loadout/pull/11), src/ in [PR #12](https://github.com/erik-hedstrom/loadout/pull/12); Markdown in [PR #15](https://github.com/erik-hedstrom/loadout/pull/15)) |
 | E9 | P0 | Security hardening from the read-only Sol review | Codex | cloud | done ([PR #4](https://github.com/erik-hedstrom/loadout/pull/4), re-measure [PR #7](https://github.com/erik-hedstrom/loadout/pull/7)) |
 | E3 | P1 | Split the test file per module | Codex | cloud | todo |
 | E5 | P1 | Changelog and release automation | Codex | cloud | todo (with A4) |
@@ -620,6 +623,11 @@ Acceptance:
   run.
 - Report lines removed per area.
 
+Area 2 (`src/`): done in [PR #12](https://github.com/erik-hedstrom/loadout/pull/12),
+69 net lines removed. Security code and fixed-text diagnostics unchanged;
+tests changed only where they tested something deleted (`prefilter()`, A2's
+`toolTokens > 0`).
+
 Starting points from Sol's review (2026-10-07):
 - `src/`, ≈ 40–60 lines: `prefilter()` is used only by tests
   (production uses `hybridRank()`); the `inverted` metadata in route.ts is
@@ -636,6 +644,11 @@ Starting points from Sol's review (2026-10-07):
   machine where `which('claude')` finds a Windows `claude` under `/mnt/c`.
   `pathTranslator` then calls the mocked `execFileSync`. Seen in WSL during
   D10; CI does not have that PATH.
+
+Markdown area ([#15](https://github.com/erik-hedstrom/loadout/pull/15)):
+`pr-reviewer` found 28 items in DESIGN, HANDOFF, README and bench/README; Sol
+applied them. Numbers without a RESULTS figure were deleted, not rounded.
+BACKLOG, RESULTS and ORCHESTRATOR were left out because open PRs edit them.
 
 **E9. Security hardening.**
 
@@ -681,4 +694,6 @@ integration layers, readable in both light and dark themes.
 | 2026-10-07 (iter 1, later) | None: no Actions run has ever been created for #2 (workflow present, Actions enabled); Erik asked to check billing or allow merging E1 on reviews + local green | #1 E2 draft (SECURITY.md to add: server-echoed credentials out of scope); #2 E1 approved by both, no CI; #3 A2 round 4 (pr-reviewer APPROVE r3, Sol found 3 Medium); #4 E9 round 4 (relay design accepted by both; declined Sol's payload-redaction High: relay stays transparent); #5 E7 round 3 (codex judge refuses on 0.160.1: unified_exec cannot be disabled; record as negative result); #6 B1 round 2 (nested-subset cap detection, `codex debug prompt-input` preflight) | Jev $0 / Claude: pr-reviewer rounds (main usage) / Codex: ~20 builds and reviews | Positioning: hosts cap listings (Claude Code 1% of context, names always listed; Codex 2% or 8,000 chars), so the headline becomes visibility + bounded cost, measured by B1. Owed after E9 merges: Jev-only agreement check of the framing change (≈ $0.5) |
 | 2026-10-07 (iter 2) | E1 #2 (merged without PR CI at Erik's direction; the first main run was green on all 6 jobs), E7 #5, E9 #4, A2 #3, B1 #6, E2 #1, E9 re-measure #7 | D10 (Sol building the plugin and the hook-latency bench) | Jev $0.77 (two sweeps) / Claude: 16 haiku calls with rows plus ≤4 probes (B1), and pr-reviewer rounds (subscription) / Codex: about 12 builds and reviews (ChatGPT plan) | Decided by Erik: in-host first (D10), with the hook automatic through the plugin he installs. Findings: the Claude listing grows about 10 tokens per skill, so the 140k estimate is withdrawn; loadout's MCP tools cost more than 50 native skills; Jev is not deterministic (about 1 request in 13); decisions probably shifted across E9 (cause unidentified). Open: a security contact; B1 raw-row names before going public; a Windows-side `loadout init` or the Linux machine for D10's CLI check |
 | 2026-10-08 (iter 3) | E10 #8; D10 #9 on merge | E11 (brief ready for Sol) | Jev about $0.05 (hook latency, probe) / Claude: one Haiku plugin probe ($0.06 reported) and pr-reviewer rounds (subscription) / Codex: four D10 review rounds (ChatGPT plan) | Desktop app check: Erik installs the plugin (D10); security contact for SECURITY.md; B1 raw-row names before going public |
+| 2026-10-08 (iter 4) | E11 #10 | Approved, waiting on CI (Actions blocked by the account billing limit): #11 E8 bench, #12 E8 src, #13 label-gated CI, #14 D11. Reviews running: #15 E8 Markdown. C1 seeds and expansion under way | Jev $0 / Claude: pr-reviewer rounds (subscription) / Codex: builds, reviews, C1 seed batches (ChatGPT plan) | CI billing (raise the limit or wait for the reset); desktop app check (D10); security contact; B1 raw-row names |
 | 2026-10-08 (iter 4, later) | — | C1 #16 (measured: recall holds, precision falls; reviews running). E12 found: codex exec cannot run tool-less on codex-cli 0.160.1 | Jev $0.60 (three C1 sweeps, one slowed by Jev) / Claude: judge $3.68 (C1) + $2.08 (control), pr-reviewer rounds / Codex: C1 seeds and expansion (55 batches), builds, reviews | As in iter 4 |
+| 2026-10-09 (iter 5) | #13 label-gated CI (`ci-full` label created), #11 and #12 E8 bench/src, #14 D11, #15 E8 docs, #16 C1 | — | Jev $0 / Claude: merges and conflict fixes / Codex: none | Actions runs again (GitHub Pro). Next work goes to a cloud session (Claude weekly usage at 96%) |
