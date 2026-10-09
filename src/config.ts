@@ -41,7 +41,10 @@ export interface Config {
   embeddings: boolean;
   /** Attach `loadout mcp` to launched sessions so the agent can search the library mid-session. */
   search: boolean;
-  /** Model (and optionally reasoning effort) per tier, per CLI. A bare string is a model. */
+  /**
+   * Model (and optionally reasoning effort) per tier, per CLI. A bare string is a model.
+   * Presets: whether each fits the work Jev assigns to its tier is unmeasured (C3).
+   */
   tiers: Record<'claude' | 'codex', Record<Tier, TierTarget>>;
 }
 

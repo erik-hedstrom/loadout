@@ -492,8 +492,8 @@ catch (err) { console.log(err.message); }
     writeFileSync(join(dir, 'refs', 'binary.bin'), Buffer.from([0, 1, 255]));
     writeFileSync(join(dir, 'refs', 'run.sh'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
     const session = materialize(decision, 'codex', config, tempDir('loadout-s-'));
-    expect(readFileSync(join(session.pluginDir!, 'skills', dir.split(/[\\/]/).at(-1)!, 'refs', 'binary.bin'))).toEqual(Buffer.from([0, 1, 255]));
-    if (process.platform !== 'win32') expect(statSync(join(session.pluginDir!, 'skills', dir.split(/[\\/]/).at(-1)!, 'refs', 'run.sh')).mode & 0o777).toBe(0o755);
+    expect(readFileSync(join(session.skillsDir!, dir.split(/[\\/]/).at(-1)!, 'refs', 'binary.bin'))).toEqual(Buffer.from([0, 1, 255]));
+    if (process.platform !== 'win32') expect(statSync(join(session.skillsDir!, dir.split(/[\\/]/).at(-1)!, 'refs', 'run.sh')).mode & 0o777).toBe(0o755);
     writeFileSync(join(dir, 'large.bin'), Buffer.alloc(20 * 1024 * 1024));
     expect(() => materialize(decision, 'codex', config, tempDir('loadout-s-'))).toThrow(/larger/);
     rmSync(join(dir, 'large.bin'));
@@ -818,6 +818,12 @@ describe('launch', () => {
     expect(args[5]).not.toContain('postgresql://localhost/dev');
     expect(args[5]).toContain('"mcp:postgres"');
     expect(args.at(-1)).toMatch(/webapp-testing \(.*SKILL\.md\)[\s\S]*Also available if needed:\n- gh-actions-debug/);
+    // Host-neutral copies: no Claude plugin metadata in a Codex session.
+    expect(session.pluginDir).toBeUndefined();
+    expect(session.skillsDir).toBe(join(session.dir, 'skills'));
+    expect(existsSync(join(session.skillsDir!, 'webapp-testing', 'SKILL.md'))).toBe(true);
+    expect(existsSync(join(session.dir, 'plugin'))).toBe(false);
+    expect(args.at(-1)).toContain(join(session.skillsDir!, 'webapp-testing', 'SKILL.md'));
   });
 
   it('serialises TOML inline values and rejects what TOML cannot hold', () => {

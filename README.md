@@ -138,7 +138,7 @@ Each launch writes its decision and generated plugin/MCP config to
 
 | | Claude Code | Codex |
 |---|---|---|
-| Model per tier (default) | `--model` haiku / sonnet / opus (+ `--effort high`) | `-m` gpt-5.6-luna (low) / gpt-6.1-sol (medium) / gpt-6.1-sol (high) |
+| Model and effort per tier (default presets, not yet validated: [C3](docs/loop/BACKLOG.md)) | `--model` haiku / sonnet / opus (+ `--effort high`) | `-m` gpt-5.6-luna (low) / gpt-6.1-sol (medium) / gpt-6.1-sol (high) |
 | Skills | generated plugin via `--plugin-dir` (`loadout:<skill>`) | listed in the prompt with their `SKILL.md` paths |
 | Injected skills | full SKILL.md in the user turn (+ a one-line trust note in the system prompt) | full SKILL.md in the prompt |
 | Relevance note | `--append-system-prompt` | in the prompt |
