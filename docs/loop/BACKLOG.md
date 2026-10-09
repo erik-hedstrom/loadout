@@ -455,8 +455,8 @@ and ChatGPT skills-only HTTP search. A non-Claude user notices.
 
 Acceptance:
 - `docs/hosts.md`: one table, hosts × {launch, tier, hook, search, gateway},
-  each cell "verified" (with the date and how), "generated, untested" or
-  "not supported".
+  each cell "verified" (with the date and how), "untested" (implemented,
+  not run in that host) or "not supported".
 - README and `setup` output claim no more than the table.
 
 Learnings (2026-10-09): every "verified" cell traces to a RESULTS section.
