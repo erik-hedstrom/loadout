@@ -118,7 +118,7 @@ describe('doctor', () => {
     writeFileSync(join(home, 'codex', 'config.toml'), hostSetup('codex', windows).snippet);
     const checks = byName(await doctor(config, () => okClient));
     expect(checks['Claude Code']!.detail).toMatch(/loadout: settings hook$/);
-    expect(checks['Codex']!.detail).toMatch(/loadout: hook and search server$/);
+    expect(checks['Codex']!.detail).toMatch(/loadout: hook \(trust not checked: approve it once in \/hooks\) and search server$/);
   });
 
   it('ignores loadout mentioned only in comments or strings', async () => {
@@ -131,7 +131,7 @@ describe('doctor', () => {
     expect(checks['Claude Code']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: not set up' });
   });
 
-  it.each(['startup_timeout_sec = 20', 'command = ""', 'url = " "', 'command = "loadout"\nurl = "http://127.0.0.1:1"'])('does not count a Codex server table that Codex cannot start (%s)', async (line) => {
+  it.each(['startup_timeout_sec = 20', 'command = ""', 'url = " "', 'command = "loadout"\nurl = "http://127.0.0.1:1"', 'command = "loadout"\nurl = ""'])('does not count a Codex server table that Codex cannot start (%s)', async (line) => {
     mkdirSync(join(home, 'codex'));
     writeFileSync(join(home, 'codex', 'config.toml'), `[mcp_servers.loadout]\n${line}\n`);
     const checks = byName(await doctor(config, () => okClient));
@@ -190,6 +190,13 @@ describe('doctor', () => {
     expect(Date.now() - started).toBeLessThan(15_000);
     expect(checks['Claude Code']!.detail).toMatch(/^version unknown;/);
   }, 30_000);
+
+  it('does not count a hook entry without type = "command"', async () => {
+    mkdirSync(join(home, 'codex'));
+    writeFileSync(join(home, 'codex', 'config.toml'), '[[hooks.UserPromptSubmit]]\n[[hooks.UserPromptSubmit.hooks]]\ncommand = "loadout hook codex"\n');
+    const checks = byName(await doctor(config, () => okClient));
+    expect(checks['Codex']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: not set up' });
+  });
 
   it('does not count another tool that has a hook subcommand', async () => {
     mkdirSync(join(home, 'codex'));

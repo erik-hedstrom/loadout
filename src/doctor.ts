@@ -50,7 +50,7 @@ function readConfig(file: string, parse: (text: string) => unknown): Record<stri
 function hasHook(config: Record<string, unknown>, agent: 'claude' | 'codex'): boolean {
   const groups = (config.hooks as { UserPromptSubmit?: unknown } | undefined)?.UserPromptSubmit;
   const command = new RegExp(`(^|[\\s'/])(loadout|cli\\.[jt]s)'? hook ${agent}($|[\\s'])`);
-  return Array.isArray(groups) && groups.some((g) => Array.isArray(g?.hooks) && g.hooks.some((h: { command?: unknown }) => typeof h?.command === 'string' && command.test(h.command)));
+  return Array.isArray(groups) && groups.some((g) => Array.isArray(g?.hooks) && g.hooks.some((h: { type?: unknown; command?: unknown }) => h?.type === 'command' && typeof h.command === 'string' && command.test(h.command)));
 }
 
 /** Read-only: reports what is set up and how to fix what is not. Only the Jev check makes a network call. */
@@ -143,10 +143,13 @@ export async function doctor(config: Config, client: (apiKey: string) => SystemO
       attached: () => {
         const config = readConfig(join(codexHome, 'config.toml'), parseToml);
         const hooksOff = (config.features as { hooks?: unknown } | undefined)?.hooks === false;
-        const server = (config.mcp_servers as Record<string, { enabled?: unknown; command?: unknown; url?: unknown }> | undefined)?.loadout;
-        // Codex starts a server from exactly one of command (stdio) or url (HTTP), and rejects a table with both.
-        const runnable = server && server.enabled !== false && [server.command, server.url].filter((t) => typeof t === 'string' && t.trim() !== '').length === 1;
-        const found = [!hooksOff && hasHook(config, 'codex') && 'hook', runnable && 'search server'].filter(Boolean);
+        const server = (config.mcp_servers as Record<string, Record<string, unknown>> | undefined)?.loadout;
+        // Codex starts a server from exactly one of command (stdio) or url (HTTP), and rejects a table with both keys.
+        const transports = server ? (['command', 'url'] as const).filter((k) => k in server) : [];
+        const t = server && transports.length === 1 ? server[transports[0]!] : undefined;
+        const runnable = server?.enabled !== false && typeof t === 'string' && t.trim() !== '';
+        // Codex runs a user hook only once it is trusted in /hooks, keyed by a hash of Codex's own serialization; doctor cannot see that.
+        const found = [!hooksOff && hasHook(config, 'codex') && 'hook (trust not checked: approve it once in /hooks)', runnable && 'search server'].filter(Boolean);
         if (found.length) return { on: found.join(' and ') };
         return hooksOff && hasHook(config, 'codex') ? { off: 'hook, but [features] hooks = false in config.toml turns hooks off' } : {};
       },
