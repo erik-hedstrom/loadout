@@ -10,12 +10,12 @@
  *   npx tsx bench/sweep.ts [--requests bench/data/requests.jsonl] [--limit 50] [--seed]
  */
 import { appendFileSync, mkdirSync } from 'node:fs';
-import { basename, join } from 'node:path';
+import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { loadConfig, paths, resolveApiKey } from '../src/config.js';
 import { libraryEmbeddings } from '../src/embed.js';
 import { jevClient } from '../src/jev.js';
-import { scanLibrary, skillExcerpt } from '../src/library.js';
+import { capabilityKey, scanLibrary, skillExcerpt } from '../src/library.js';
 import { NONE, route } from '../src/route.js';
 import type { RawRouting, ScoredCapability } from '../src/types.js';
 import { DATA, pool, readJsonl, RESULTS } from './lib.js';
@@ -41,10 +41,8 @@ export interface SweepRow {
 /** A capability as the judge sees it: its unique library key plus the router's numbers. */
 export interface Pick_ { key: string; fit: number; exact?: number; share?: number; inject?: string }
 
-/** Unique library key: the skill's folder (names can repeat across sources) or the MCP server name. */
-export const keyOf = (c: ScoredCapability['capability']) => (c.kind === 'skill' ? basename(c.source) : `mcp:${c.name}`);
 const pick = (s: ScoredCapability): Pick_ => ({
-  key: keyOf(s.capability),
+  key: capabilityKey(s.capability),
   fit: +s.p.toFixed(3),
   ...(s.exact !== undefined ? { exact: +s.exact.toFixed(3) } : {}),
   ...(s.share !== undefined ? { share: +s.share.toFixed(3) } : {}),

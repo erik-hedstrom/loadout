@@ -6,13 +6,13 @@
  *
  *   TYPESAFE_API_KEY=... npx tsx bench/need-probe.ts <route-bench results dir>
  */
-import { appendFileSync, mkdirSync, readFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadConfig, resolveApiKey } from '../src/config.js';
 import { jevClient, type Question } from '../src/jev.js';
-import { loadCorpus, loadTasks, pool, RESULTS, splitOf, type Row } from './lib.js';
+import { loadCorpus, loadTasks, pool, readJsonl, RESULTS, splitOf, type Row } from './lib.js';
 
-export const STATE_QUESTIONS: Record<string, string> = {
+const STATE_QUESTIONS: Record<string, string> = {
   // current
   need_procedure:
     'Would an expert doing this request follow a specific documented procedure, tool, or service workflow, rather than general programming knowledge alone?',
@@ -31,10 +31,7 @@ export const STATE_QUESTIONS: Record<string, string> = {
 
 const dir = process.argv[2];
 if (!dir) throw new Error('usage: need-probe.ts <route-bench results dir>');
-const rows = readFileSync(join(dir, 'rows.jsonl'), 'utf8')
-  .split('\n')
-  .filter(Boolean)
-  .map((l) => JSON.parse(l) as Row)
+const rows = readJsonl<Row>(join(dir, 'rows.jsonl'))
   .filter((r) => r.arm === 'loadout' && r.size === 20000 && r.raw);
 const byTask = new Map(rows.map((r) => [r.task, r]));
 const corpus = new Map(loadCorpus().map((s) => [s.name, s]));

@@ -22,7 +22,7 @@ import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { DEFAULT_CONFIG, loadConfig, resolveApiKey, type Config } from '../src/config.js';
 import { EmbeddingStore } from '../src/embed.js';
-import { JevError, jevClient, type SystemOneClient } from '../src/jev.js';
+import { jevClient } from '../src/jev.js';
 import { bm25 } from '../src/prefilter.js';
 import { hybridRank } from '../src/retrieve.js';
 import { retrievalQuery, route } from '../src/route.js';
@@ -65,22 +65,6 @@ const POPULAR_N = 50;
 
 const descTokens = (s: { name: string; description: string }) => approxTokens(`${s.name}: ${s.description}`);
 
-function withRetry(client: SystemOneClient): SystemOneClient {
-  return {
-    async ask(state, questions) {
-      for (let attempt = 1; ; attempt++) {
-        try {
-          return await client.ask(state, questions);
-        } catch (err) {
-          const retryable = err instanceof JevError ? [429, 500, 502, 503, 504].includes(err.status ?? 0) : true;
-          if (!retryable || attempt >= 6) throw err;
-          await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));
-        }
-      }
-    },
-  };
-}
-
 function scored(base: Omit<Row, 'hit' | 'top1'>, selectedNames: string[]): Row {
   const set = new Set(selectedNames);
   return {
@@ -117,7 +101,7 @@ const base = loadConfig();
 const config: Config = { ...DEFAULT_CONFIG, jev: base.jev, router: 'jev' };
 const apiKey = resolveApiKey(base);
 if (ARMS.has('loadout') && !apiKey) throw new Error('loadout arm needs TYPESAFE_API_KEY or jev.apiKeyFile in ~/.loadout/config.json');
-const client = apiKey ? withRetry(jevClient({ apiKey, baseUrl: config.jev.baseUrl, model: config.jev.model, timeoutMs: 30_000 })) : undefined;
+const client = apiKey ? jevClient({ apiKey, baseUrl: config.jev.baseUrl, model: config.jev.model, timeoutMs: 30_000, retries: 5 }) : undefined;
 
 const store = new EmbeddingStore(join(DATA, 'embeddings'));
 if (ARMS.has('hybrid') || ARMS.has('loadout')) {

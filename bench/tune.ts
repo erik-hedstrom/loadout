@@ -7,23 +7,18 @@
  *
  *   npx tsx bench/tune.ts <results dir> [--v1 <old results dir>]
  */
-import { readFileSync, writeFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { decide, type FitMeasure, type Policy } from '../src/route.js';
 import type { Capability } from '../src/types.js';
-import { splitOf, wilson, type Row } from './lib.js';
+import { readJsonl, splitOf, wilson, type Row } from './lib.js';
 
 const { values, positionals } = parseArgs({ allowPositionals: true, options: { v1: { type: 'string' } } });
 const dir = positionals[0];
 if (!dir) throw new Error('usage: tune.ts <results dir> [--v1 <dir>]');
 
-const read = (d: string) =>
-  readFileSync(join(d, 'rows.jsonl'), 'utf8')
-    .split('\n')
-    .filter(Boolean)
-    .map((l) => JSON.parse(l) as Row);
-const rows = read(dir);
+const rows = readJsonl<Row>(join(dir, 'rows.jsonl'));
 const loadout = rows.filter((r) => r.arm === 'loadout' && r.raw);
 const sizes = [...new Set(rows.map((r) => r.size))].sort((a, b) => a - b);
 
@@ -97,6 +92,7 @@ const chosen = BUDGETS.flatMap((budget) => {
   return ok[0] ? [{ budget, ...ok[0] }] : [];
 });
 if (!chosen.length) throw new Error(`no policy keeps needless loads ≤ ${MAX_NEEDLESS} on dev`);
+const pick = chosen.find((c) => c.budget === 3) ?? chosen.at(-1)!;
 
 const pct = (x: number) => (Number.isNaN(x) ? '—' : `${(x * 100).toFixed(0)}%`);
 const describePolicy = (p: Policy) =>
@@ -121,8 +117,7 @@ for (const c of chosen) {
 }
 
 {
-  const c = chosen.find((x) => x.budget === 3) ?? chosen.at(-1)!;
-  const t = evaluate(test, c.policy);
+  const t = evaluate(test, pick.policy);
   const gold = test.filter((r) => r.gold.length).length;
   const none = test.filter((r) => !r.gold.length).length;
   lines.push(
@@ -132,7 +127,6 @@ for (const c of chosen) {
 }
 
 // Per-size comparison on test, against every other arm.
-const pick = chosen.find((c) => c.budget === 3) ?? chosen.at(-1)!;
 lines.push('', `## Test split by library size (loadout at budget ≤ ${pick.budget}: ${describePolicy(pick.policy)})`, '');
 lines.push('| arm | library | recall | top-1 | skills shown | needless loads | router $/task | router ms |', '|---|---:|---:|---:|---:|---:|---:|---:|');
 const other = (arm: string, size: number) => rows.filter((r) => r.arm === arm && r.size === size && r.split === 'test');
@@ -144,7 +138,7 @@ for (const size of sizes) {
     lines.push(`| ${arm} | ${size.toLocaleString('en')} | ${pct(mean(g.map((r) => (r.hit ? 1 : 0))))} | ${pct(mean(g.map((r) => (r.top1 ? 1 : 0))))} | ${mean(g.map((r) => r.selected)).toFixed(1)} | 100% | — | ${Math.round(mean(rs.map((r) => r.routerMs)))} |`);
   }
   if (values.v1) {
-    const v1 = read(values.v1).filter((r) => r.arm === 'jev' && r.size === size && splitOf(r.task) === 'test') as (Row & { goldP?: number; ps?: number[] })[];
+    const v1 = readJsonl<Row>(join(values.v1, 'rows.jsonl')).filter((r) => r.arm === 'jev' && r.size === size && splitOf(r.task) === 'test') as (Row & { goldP?: number; ps?: number[] })[];
     if (v1.length) {
       const g = v1.filter((r) => r.gold.length);
       const sel = (r: (typeof v1)[number]) => Math.min(12, (r.ps ?? []).filter((p) => p >= 0.8).length);

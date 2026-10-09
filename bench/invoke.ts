@@ -20,17 +20,16 @@
  *
  *   npx tsx bench/invoke.ts <sweep dir> --agent claude|codex --mode routed|search --ids a,b,c [--max-turns 6]
  */
-import { execFileSync, spawn } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { appendFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { loadConfig, paths } from '../src/config.js';
 import { claudeArgs, claudeHookSettings, codexArgs, materialize, pathTranslator, which, type Agent } from '../src/launch.js';
-import { scanLibrary } from '../src/library.js';
-import type { RouteDecision, ScoredCapability } from '../src/types.js';
-import { readJsonl } from './lib.js';
-import { keyOf, type SweepRow } from './sweep.js';
+import { capabilityKey, scanLibrary } from '../src/library.js';
+import { decisionFor, readJsonl, run } from './lib.js';
+import type { SweepRow } from './sweep.js';
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
@@ -50,7 +49,7 @@ const mode = values.mode as 'routed' | 'search' | 'hook';
 if (mode === 'hook' && agent !== 'claude') throw new Error('hook mode is Claude Code only');
 const rows = new Map(readJsonl<SweepRow>(join(dir, 'decisions.jsonl')).map((r) => [r.id, r]));
 const library = scanLibrary(paths.library());
-const byKey = new Map(library.map((c) => [keyOf(c), c]));
+const byKey = new Map(library.map((c) => [capabilityKey(c), c]));
 const config = { ...loadConfig(), search: true };
 const bin = which(agent);
 if (!bin) throw new Error(`${agent} not on PATH`);
@@ -61,52 +60,8 @@ const workRoot = toPath('/') !== '/' ? execFileSync('wslpath', ['-u', execFileSy
 const NOTE = '\n\n(Test run: nothing is attached and the folder is empty. Where the request refers to files or data you do not have, create small realistic sample inputs and carry on.)';
 const out = join(dir, `invoke-${agent}-${mode}.jsonl`);
 
-/** Rebuild the sweep's decision (no new routing), or an empty one for search mode. */
-function decisionFor(row: SweepRow): RouteDecision {
-  const scored = (picks: SweepRow['loaded']): ScoredCapability[] =>
-    picks.flatMap((p) => {
-      const capability = byKey.get(p.key);
-      return capability ? [{ capability, p: p.fit, exact: p.exact, share: p.share, ...(p.inject ? { inject: p.inject as 'clear' | 'mentioned' } : {}) }] : [];
-    });
-  const empty = mode !== 'routed';
-  return {
-    tier: row.tier as RouteDecision['tier'],
-    selected: empty ? [] : scored(row.loaded),
-    suggested: empty ? [] : scored(row.offered),
-    scored: [],
-    // 'lexical' keeps the relevance note to the search hint alone in search mode.
-    router: empty ? 'lexical' : 'jev',
-    stats: { librarySize: library.length, candidates: 0, ms: 0 },
-  };
-}
-
 /** One tool call; `ok` is false when the call itself failed (a failed call is not an invocation). */
 interface Event { tool: string; detail: string; ok: boolean; id?: string }
-
-function run(bin: string, args: string[], cwd: string, timeoutMs: number): Promise<{ stdout: string; stderr: string; code: number | null; timedOut: boolean }> {
-  return new Promise((resolve) => {
-    // Its own process group, so a timeout also stops what the CLI started (Codex's native
-    // binary, the Windows process behind claude.exe), which would otherwise hold the pipes open.
-    const child = spawn(bin, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
-    let stdout = '';
-    let stderr = '';
-    let timedOut = false;
-    child.stdout.on('data', (d: Buffer) => (stdout += d));
-    child.stderr.on('data', (d: Buffer) => (stderr += d));
-    const timer = setTimeout(() => {
-      timedOut = true;
-      try {
-        process.kill(-child.pid!, 'SIGKILL');
-      } catch {
-        child.kill('SIGKILL');
-      }
-    }, timeoutMs);
-    child.on('close', (code) => {
-      clearTimeout(timer);
-      resolve({ stdout, stderr, code, timedOut });
-    });
-  });
-}
 
 /** Tool calls from Claude's stream-json or Codex's --json event stream. */
 function toolEvents(stream: string): { events: Event[]; costUsd?: number } {
@@ -143,7 +98,7 @@ function toolEvents(stream: string): { events: Event[]; costUsd?: number } {
 for (const id of values.ids.split(',')) {
   const row = rows.get(id);
   if (!row) throw new Error(`no sweep row ${id}`);
-  const decision = decisionFor(row);
+  const decision = decisionFor(row, library, mode !== 'routed');
   const session = materialize(decision, agent, config, sessions, toPath);
   if (values.model) session.model = values.model;
   // As installed by `loadout setup claude-code`: no launcher note, just the hook and the MCP server.
@@ -182,9 +137,9 @@ for (const id of values.ids.split(',')) {
     mode,
     model: session.model,
     // What the session actually carried (search mode carries nothing).
-    loaded: decision.selected.map((s) => keyOf(s.capability)),
-    injected: decision.selected.filter((s) => s.inject).map((s) => keyOf(s.capability)),
-    offered: decision.suggested.map((s) => keyOf(s.capability)),
+    loaded: decision.selected.map((s) => capabilityKey(s.capability)),
+    injected: decision.selected.filter((s) => s.inject).map((s) => capabilityKey(s.capability)),
+    offered: decision.suggested.map((s) => capabilityKey(s.capability)),
     invoked: [...invoked],
     searches,
     tools: events.map((e) => (e.ok ? e.tool : `${e.tool} (failed)`)),
