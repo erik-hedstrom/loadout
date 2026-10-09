@@ -52,6 +52,15 @@ describe('doctor', () => {
     expect(formatDoctor(Object.values(checks))).not.toContain(keyFile);
   });
 
+  it('reports an unreadable key file in fixed text and carries on', async () => {
+    const keyDir = join(home, 'secret-key-folder');
+    mkdirSync(keyDir);
+    const checks = byName(await doctor({ ...config, jev: { ...config.jev, apiKeyFile: keyDir } }, () => okClient));
+    expect(checks['Jev key']).toMatchObject({ ok: false, detail: 'not found; jev.apiKeyFile in the config cannot be read' });
+    expect(checks['library']).toBeDefined();
+    expect(formatDoctor(Object.values(checks))).not.toContain(keyDir);
+  });
+
   it.skipIf(process.platform === 'win32')('passes when everything is set up, and never prints the key', async () => {
     vi.stubEnv('TYPESAFE_API_KEY', KEY);
     vi.stubEnv('GITHUB_TOKEN', 'github-token-canary');

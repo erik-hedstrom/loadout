@@ -59,12 +59,25 @@ export async function doctor(config: Config, client: (apiKey: string) => SystemO
 
   if (config.router === 'lexical') checks.push({ name: 'Jev key', ok: true, detail: 'not needed (router: lexical)' });
   else {
-    const apiKey = resolveApiKey(config);
+    // An unreadable key file (a folder, no permission) throws an error naming the path: report it in fixed text.
+    let unreadable = false;
+    let apiKey: string | undefined;
+    try {
+      apiKey = resolveApiKey(config);
+    } catch {
+      unreadable = true;
+    }
     const missingFile = config.jev.apiKeyFile !== undefined && !existsSync(config.jev.apiKeyFile);
     checks.push({
       name: 'Jev key',
       ok: Boolean(apiKey),
-      detail: apiKey ? 'found' : missingFile ? 'not found; jev.apiKeyFile in the config names a missing file' : 'not found',
+      detail: apiKey
+        ? 'found'
+        : missingFile
+          ? 'not found; jev.apiKeyFile in the config names a missing file'
+          : unreadable
+            ? 'not found; jev.apiKeyFile in the config cannot be read'
+            : 'not found',
       fix: 'set TYPESAFE_API_KEY, or run `loadout init --key-file <path>`; until then routing uses keywords only',
     });
     if (apiKey) {
