@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 import { parse as parseToml } from 'smol-toml';
 import { paths, resolveApiKey, type Config } from './config.js';
 import { EmbeddingStore, hasTransformers } from './embed.js';
@@ -24,7 +24,7 @@ const VERSION_ENV = ['PATH', 'PATHEXT', 'HOME', 'USERPROFILE', 'APPDATA', 'LOCAL
 function version(bin: string): string | undefined {
   const env = Object.fromEntries(VERSION_ENV.flatMap((k) => (process.env[k] === undefined ? [] : [[k, process.env[k]]])));
   try {
-    return execFileSync(bin, ['--version'], { encoding: 'utf8', timeout: 10_000, stdio: ['ignore', 'pipe', 'ignore'], env }).trim().split('\n')[0];
+    return execFileSync(bin, ['--version'], { encoding: 'utf8', timeout: 10_000, killSignal: 'SIGKILL', stdio: ['ignore', 'pipe', 'ignore'], env }).trim().split('\n')[0];
   } catch {
     return undefined;
   }
@@ -127,8 +127,10 @@ export async function doctor(config: Config, client: (apiKey: string) => SystemO
       home: claudeHome,
       attached: () => {
         const settings = readConfig(join(claudeHome, 'settings.json'), JSON.parse);
-        if ((settings.enabledPlugins as Record<string, unknown> | undefined)?.['loadout@loadout'] === true) return 'plugin enabled';
-        return hasHook(settings, 'claude') ? 'settings hook' : undefined;
+        const plugin = (settings.enabledPlugins as Record<string, unknown> | undefined)?.['loadout@loadout'] === true;
+        const on = plugin ? 'plugin enabled' : hasHook(settings, 'claude') ? 'settings hook' : undefined;
+        if (on && settings.disableAllHooks === true) return { off: `${on}, but disableAllHooks in settings.json turns hooks off` };
+        return { on };
       },
       setup: 'claude-code',
     },
@@ -138,24 +140,28 @@ export async function doctor(config: Config, client: (apiKey: string) => SystemO
       home: codexHome,
       attached: () => {
         const config = readConfig(join(codexHome, 'config.toml'), parseToml);
+        const hooksOff = (config.features as { hooks?: unknown } | undefined)?.hooks === false;
         const server = (config.mcp_servers as Record<string, { enabled?: unknown; command?: unknown; url?: unknown }> | undefined)?.loadout;
         // Codex needs a command or url to start a server; a table without one launches nothing.
         const runnable = server && server.enabled !== false && (typeof server.command === 'string' || typeof server.url === 'string');
-        const found = [hasHook(config, 'codex') && 'hook', runnable && 'search server'].filter(Boolean);
-        return found.length ? found.join(' and ') : undefined;
+        const found = [!hooksOff && hasHook(config, 'codex') && 'hook', runnable && 'search server'].filter(Boolean);
+        if (found.length) return { on: found.join(' and ') };
+        return hooksOff && hasHook(config, 'codex') ? { off: 'hook, but [features] hooks = false in config.toml turns hooks off' } : {};
       },
       setup: 'codex',
     },
   ];
   for (const h of hosts) {
-    const bin = which(h.bin);
+    // An empty or relative PATH entry resolves in the current folder; doctor runs no binary found there.
+    const found = which(h.bin);
+    const bin = found && isAbsolute(found) ? found : undefined;
     if (!bin && !existsSync(h.home)) continue;
-    const attached = h.attached();
+    const { on, off }: { on?: string; off?: string } = h.attached();
     checks.push({
       name: h.name,
-      ok: Boolean(attached),
-      detail: `${bin ? (version(bin) ?? 'version unknown') : 'CLI not on PATH'}; loadout: ${attached ?? 'not set up'}`,
-      fix: `loadout setup ${h.setup}`,
+      ok: Boolean(on),
+      detail: `${bin ? (version(bin) ?? 'version unknown') : 'CLI not on PATH'}; loadout: ${on ?? off ?? 'not set up'}`,
+      fix: off ? 'turn hooks back on' : `loadout setup ${h.setup}`,
     });
   }
   return checks;

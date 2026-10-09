@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
-import { chmodSync, cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CONFIG, type Config } from '../src/config.js';
 import { doctor, formatDoctor } from '../src/doctor.js';
@@ -147,6 +147,36 @@ describe('doctor', () => {
     expect(result.stdout).toMatch(/library/);
     expect(result.stdout + result.stderr).not.toContain('/secret/path');
   });
+
+  it('reports a hook that the host has switched off', async () => {
+    mkdirSync(join(home, 'claude'));
+    writeFileSync(join(home, 'claude', 'settings.json'), JSON.stringify({ ...claudeHookSettings(false), disableAllHooks: true }));
+    mkdirSync(join(home, 'codex'));
+    writeFileSync(join(home, 'codex', 'config.toml'), '[[hooks.UserPromptSubmit]]\n[[hooks.UserPromptSubmit.hooks]]\ntype = "command"\ncommand = "loadout hook codex"\n\n[features]\nhooks = false\n');
+    const checks = byName(await doctor(config, () => okClient));
+    expect(checks['Claude Code']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: settings hook, but disableAllHooks in settings.json turns hooks off', fix: 'turn hooks back on' });
+    expect(checks['Codex']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: hook, but [features] hooks = false in config.toml turns hooks off' });
+  });
+
+  it.skipIf(process.platform === 'win32')('runs no host CLI found through a relative PATH entry', async () => {
+    const marker = join(home, 'ran');
+    writeFileSync(join(home, 'bin', 'claude'), `#!/bin/sh\ntouch '${marker}'\n`);
+    chmodSync(join(home, 'bin', 'claude'), 0o755);
+    vi.stubEnv('PATH', relative(process.cwd(), join(home, 'bin')));
+    mkdirSync(join(home, 'claude'));
+    const checks = byName(await doctor(config, () => okClient));
+    expect(existsSync(marker)).toBe(false);
+    expect(checks['Claude Code']!.detail).toMatch(/^CLI not on PATH;/);
+  });
+
+  it.skipIf(process.platform === 'win32')('stops a version check that ignores SIGTERM', async () => {
+    writeFileSync(join(home, 'bin', 'claude'), "#!/bin/sh\ntrap '' TERM\nwhile :; do sleep 1; done\n");
+    chmodSync(join(home, 'bin', 'claude'), 0o755);
+    const started = Date.now();
+    const checks = byName(await doctor(config, () => okClient));
+    expect(Date.now() - started).toBeLessThan(15_000);
+    expect(checks['Claude Code']!.detail).toMatch(/^version unknown;/);
+  }, 30_000);
 
   it('does not count another tool that has a hook subcommand', async () => {
     mkdirSync(join(home, 'codex'));
