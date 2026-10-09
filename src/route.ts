@@ -16,18 +16,9 @@ import {
 } from './types.js';
 
 /**
- * Routing in two Jev requests, following TypeSafe's skill-suggestion recipe:
- *
- *  1. wide:  one Choice over every candidate plus "no skill needed" ranks the
- *            library (probabilities are relative, so they separate lookalikes),
- *            and three Nouls ask whether the request needs a specialised skill
- *            at all (asked about the action, not the subject matter).
- *  2. close: the top picks are reread. A graded Score per candidate gives an
- *            absolute fit ("helps with part" or better is the number we
- *            threshold), and a Choice among them orders the result.
- *
- * Jev answers literal, atomic questions; everything else (gating, thresholds,
- * caps, ordering) is code in `decide`, so it can be tuned on stored answers.
+ * Two Jev requests rank candidates and reread the best matches.
+ * `decide()` applies policy to stored answers without new API calls.
+ * See [DESIGN.md](../DESIGN.md#router) for the questions and policy.
  */
 
 export const NONE = 'no_skill_needed';
@@ -56,15 +47,10 @@ const TIER_CRITERIA: Record<Tier, Text> = {
   },
 };
 
-/** Asked about the action the request wants, not its subject matter. Inverted ones point away from a skill. */
-const NEED_QUESTIONS: Record<string, { text: string; inverted?: boolean }> = {
-  need_procedure: {
-    text: 'Would an expert doing this request follow a specific documented procedure, tool, or service workflow, rather than general programming knowledge alone?',
-  },
-  general_enough: {
-    text: 'Could a strong general programmer complete this request well using only reading and editing code and running ordinary commands, without any special instructions?',
-    inverted: true,
-  },
+/** Asked about the action the request wants, not its subject matter. `needScore()` inverts `general_enough`. */
+const NEED_QUESTIONS: Record<string, string> = {
+  need_procedure: 'Would an expert doing this request follow a specific documented procedure, tool, or service workflow, rather than general programming knowledge alone?',
+  general_enough: 'Could a strong general programmer complete this request well using only reading and editing code and running ordinary commands, without any special instructions?',
 };
 
 /**
@@ -141,7 +127,6 @@ export interface RouteInput {
 
 const clip = (text: string, n: number) => (text.length > n ? `${text.slice(0, n - 1)}…` : text) || '(no description)';
 
-/** Choice option keys: the name, disambiguated if a skill and an MCP server share one. */
 /**
  * Choice option keys. Jev sees the key, so it stays the capability's own name
  * where possible; same-named capabilities are told apart by source or kind,
@@ -194,7 +179,7 @@ export function wideQuestions(keys: Map<string, Capability>): Record<string, Que
       criteria: TIER_CRITERIA,
     },
   };
-  for (const [id, q] of Object.entries(NEED_QUESTIONS)) questions[id] = { type: 'noul', instructions: q.text };
+  for (const [id, q] of Object.entries(NEED_QUESTIONS)) questions[id] = { type: 'noul', instructions: q };
   return questions;
 }
 
@@ -241,8 +226,6 @@ export function closeOrder(raw: Pick<RawRouting, 'shortlist' | 'close'>): string
     .map(({ k }) => k);
 }
 
-export const closeTop = (raw: Pick<RawRouting, 'shortlist' | 'close'>): string | undefined => closeOrder(raw)[0];
-
 /**
  * How strongly the request calls for a specialised skill: the mean of "follows
  * a documented procedure", "not doable by a general programmer alone" and "the
@@ -252,7 +235,7 @@ export function needScore(raw: Pick<RawRouting, 'wide' | 'shortlist' | 'close'>)
   const need = raw.wide.need;
   const procedure = num(need.need_procedure) ?? 0.5;
   const special = 1 - (num(need.general_enough) ?? 0.5);
-  const top = closeTop(raw);
+  const top = closeOrder(raw)[0];
   const specific = top !== undefined ? num(raw.close.specific?.[top]) : undefined;
   if (specific !== undefined) return (procedure + special + specific) / 3;
   // Answers recorded before the per-candidate question existed used a request-level one.

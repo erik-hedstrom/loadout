@@ -38,7 +38,6 @@ const LIMITS = {
   discoveryEntries: 200_000,
 };
 
-/** A regular file (not a symlink) no larger than `max` bytes. */
 /**
  * Read a regular file inside `root` through a single descriptor. The last path
  * component is never a symlink (O_NOFOLLOW), and what was actually opened is

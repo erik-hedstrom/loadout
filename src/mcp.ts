@@ -28,9 +28,7 @@ import type { EmbeddingStore } from './embed.js';
 import type { SystemOneClient } from './jev.js';
 import { diagnostic } from './diagnostic.js';
 import { capabilityKey, readConfined, skillExcerpt } from './library.js';
-
-export { capabilityKey };
-import { attr, escapeSkillTags, injectionBlock } from './launch.js';
+import { attr, escapeSkillTags, injectionBlock, oneLine } from './launch.js';
 import { route } from './route.js';
 import type { Capability, RepoSignals } from './types.js';
 
@@ -60,12 +58,6 @@ const SCHEMA_MAX_CHARS = 3000;
 const EMBEDDINGS_WAIT_MS = 3000;
 const MAX_HTTP_IN_FLIGHT = 4;
 const delay = (ms: number) => sleep(ms, undefined, { ref: false });
-
-
-const oneLine = (s: string, n: number) => {
-  const t = s.replace(/\s+/g, ' ').trim();
-  return t.length > n ? `${t.slice(0, n - 1)}…` : t;
-};
 
 export async function findSkills(deps: SearchDeps, goal: string, keywords: string[] = []): Promise<string> {
   const task = keywords.length ? `${goal}\nKeywords: ${keywords.join(', ')}` : goal;
@@ -270,6 +262,14 @@ export class Gateway {
 const text = (t: string) => ({ content: [{ type: 'text' as const, text: t }] });
 const failure = (err: unknown) => ({ content: [{ type: 'text' as const, text: err instanceof Error ? err.message : String(err) }], isError: true });
 
+const textTool = async (run: () => string | Promise<string>) => {
+  try {
+    return text(await run());
+  } catch (err) {
+    return failure(err);
+  }
+};
+
 export function createServer(deps: SearchDeps): { server: McpServer; gateway: Gateway } {
   const server = new McpServer(
     { name: 'loadout', version: '0.1.0' },
@@ -294,13 +294,7 @@ export function createServer(deps: SearchDeps): { server: McpServer; gateway: Ga
       },
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
-    async ({ goal, keywords }) => {
-      try {
-        return text(await findSkills(deps, goal, keywords));
-      } catch (err) {
-        return failure(err);
-      }
-    },
+    ({ goal, keywords }) => textTool(() => findSkills(deps, goal, keywords)),
   );
 
   server.registerTool(
@@ -313,13 +307,7 @@ export function createServer(deps: SearchDeps): { server: McpServer; gateway: Ga
       },
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
-    async ({ skill, file }) => {
-      try {
-        return text(loadSkill(deps, skill, file));
-      } catch (err) {
-        return failure(err);
-      }
-    },
+    ({ skill, file }) => textTool(() => loadSkill(deps, skill, file)),
   );
 
   if (servers.length > 0) {
@@ -333,13 +321,7 @@ export function createServer(deps: SearchDeps): { server: McpServer; gateway: Ga
         },
         annotations: { readOnlyHint: true },
       },
-      async ({ server: name, tool }) => {
-        try {
-          return text(await gateway.tools(name.replace(/^mcp:/, ''), tool));
-        } catch (err) {
-          return failure(err);
-        }
-      },
+      ({ server: name, tool }) => textTool(() => gateway.tools(name.replace(/^mcp:/, ''), tool)),
     );
     server.registerTool(
       'call_server_tool',

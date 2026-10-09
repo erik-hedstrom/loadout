@@ -8,8 +8,6 @@ const RRF_K = 60;
 export interface Retrieved {
   capability: Capability;
   score: number;
-  bm25Rank?: number;
-  embedRank?: number;
 }
 
 /**
@@ -31,7 +29,6 @@ export function hybridRank(
 
   bm25(query, library).forEach((r, i) => {
     const e = entry(r.capability);
-    e.bm25Rank = i + 1;
     e.score += 1 / (RRF_K + i + 1);
   });
 
@@ -43,7 +40,6 @@ export function hybridRank(
       .sort((a, b) => b.sim - a.sim)
       .forEach(({ c }, i) => {
         const e = entry(c);
-        e.embedRank = i + 1;
         e.score += 1 / (RRF_K + i + 1);
       });
   }

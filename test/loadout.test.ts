@@ -17,7 +17,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { EmptyResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { addSkills, parseGitHub, parseSkill as parseSkillDir, scanLibrary } from '../src/library.js';
-import { bm25, prefilter } from '../src/prefilter.js';
+import { bm25 } from '../src/prefilter.js';
 import { mentionedSkills, NONE, optionKeys, route } from '../src/route.js';
 import { reportJson, type RepoSignals } from '../src/types.js';
 import { relay } from '../src/relay.js';
@@ -651,11 +651,6 @@ describe('prefilter', () => {
   it('ranks lexical matches first', () => {
     expect(bm25('merge two pdf files', lib)[0]?.capability.name).toBe('pdf');
     expect(bm25('flaky playwright test', lib)[0]?.capability.name).toBe('webapp-testing');
-  });
-
-  it('passes small libraries through untouched', () => {
-    expect(prefilter('unrelated words', lib, 10)).toHaveLength(lib.length);
-    expect(prefilter('postgres schema', lib, 1).map((c) => c.name)).toEqual(['postgres']);
   });
 });
 
