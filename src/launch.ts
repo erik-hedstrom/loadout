@@ -314,8 +314,8 @@ export function hostSetup(host: Host, windows: boolean): { where: string; snippe
 }
 
 /** Locate an executable on PATH. */
-export function which(bin: string): string | undefined {
-  for (const dir of (process.env.PATH ?? '').split(delimiter)) {
+export function which(bin: string, dirs = (process.env.PATH ?? '').split(delimiter)): string | undefined {
+  for (const dir of dirs) {
     const candidate = join(dir, bin);
     try {
       accessSync(candidate, constants.X_OK);
