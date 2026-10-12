@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CONFIG, type Config } from '../src/config.js';
@@ -1336,6 +1336,10 @@ describe('claude hook', () => {
     // The state dir itself is a file: mkdir's EEXIST is not the marker's.
     const fileDir = { ...noKey, stateDir: blocked };
     expect(noKeyWarning({ session_id: 'f', prompt: TASK }, fileDir)).toBe(NO_KEY_WARNING);
+    // A relative state dir (relative LOADOUT_HOME) still warns only once.
+    const rel = { ...noKey, stateDir: relative(process.cwd(), tempDir('loadout-hook-')) };
+    expect(noKeyWarning({ session_id: 'g', prompt: TASK }, rel)).toBe(NO_KEY_WARNING);
+    expect(noKeyWarning({ session_id: 'g', prompt: TASK }, rel)).toBeUndefined();
   });
 
   describe('no-key warning through the hook process', () => {

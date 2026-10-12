@@ -93,14 +93,17 @@ export function noKeyWarning(input: HookInput, deps: Pick<HookDeps, 'config' | '
   if (deps.config.router !== 'jev' || deps.client) return undefined;
   const marker = sessionFile(deps.stateDir, input.session_id, 'warned');
   if (marker) {
-    // Exclusive create: of two hooks racing in one session, only one wins the warning.
-    // Any other failure warns anyway: repeating beats never telling the user.
+    // Any failure other than an existing marker warns anyway: repeating beats never telling the user.
     try {
       mkdirSync(deps.stateDir, { recursive: true });
+    } catch {
+      return NO_KEY_WARNING;
+    }
+    // Exclusive create: of two hooks racing in one session, only one wins the warning.
+    try {
       writeFileSync(marker, '', { flag: 'wx' });
     } catch (e) {
-      // Only the marker existing means warned; mkdir also throws EEXIST when the state dir is a file.
-      if ((e as NodeJS.ErrnoException).code === 'EEXIST' && (e as NodeJS.ErrnoException).path === marker) return undefined;
+      if ((e as NodeJS.ErrnoException).code === 'EEXIST') return undefined;
     }
   }
   return NO_KEY_WARNING;
