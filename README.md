@@ -179,6 +179,9 @@ Not hidden:
   still runs next to the launcher.
 - A `managed-mcp.json` (organization policy): Claude Code exits at startup
   when `--strict-mcp-config` meets one.
+- claude.ai connectors under managed settings: managed settings outrank
+  `--settings` ([precedence](https://code.claude.com/docs/en/settings)), so an
+  organization that keeps connectors on keeps them on.
 - Codex project config: the flag's help names only
   `$CODEX_HOME/config.toml`, so a project `.codex/config.toml` is presumably
   still read (not checked).
