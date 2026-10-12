@@ -100,10 +100,11 @@ function checkInventory(inventory: Inventory | undefined, hookInvocations: numbe
 }
 
 /** Tool calls from Claude's stream-json or Codex's --json event stream. */
-function toolEvents(stream: string): { events: Event[]; hooks: HookExecution[]; costUsd?: number; inventory?: Inventory } {
+function toolEvents(stream: string): { events: Event[]; hooks: HookExecution[]; costUsd?: number; inventory?: Inventory; failedBeforeModel: boolean } {
   const events: Event[] = [];
   const hooks = new Map<string, HookExecution>();
   let costUsd: number | undefined;
+  let failedBeforeModel = false;
   let inventory: Inventory | undefined;
   for (const line of stream.split('\n')) {
     let e: any;
@@ -135,6 +136,9 @@ function toolEvents(stream: string): { events: Event[]; hooks: HookExecution[]; 
       }
     } else if (e.type === 'result') {
       costUsd = e.total_cost_usd;
+      // An expired login ends as is_error at $0 (seen 2026-10-12). It would otherwise read as a miss.
+      // A run that used its turns has a cost, so it stays a valid miss as in the earlier arms.
+      failedBeforeModel = e.is_error === true && !(e.total_cost_usd > 0);
     } else if (e.type === 'item.completed') {
       const it = e.item ?? {};
       const toolError = it.result?.isError === true || it.result?.is_error === true;
@@ -143,7 +147,7 @@ function toolEvents(stream: string): { events: Event[]; hooks: HookExecution[]; 
       if (it.type === 'mcp_tool_call') events.push({ tool: `mcp__${it.server}__${it.tool}`, detail: JSON.stringify(it.arguments ?? {}), ok });
     }
   }
-  return { events, hooks: [...hooks.values()], costUsd, inventory };
+  return { events, hooks: [...hooks.values()], costUsd, inventory, failedBeforeModel };
 }
 
 let invalidRun: string | undefined;
@@ -175,12 +179,12 @@ for (const id of values.ids.split(',')) {
       : codexArgs(session, task, ['--json', '-s', 'workspace-write', '--skip-git-repo-check'], { headless: true });
   const started = Date.now();
   const proc = await run(bin, args, cwd, Number(values['timeout-s']) * 1000, childEnv);
-  const { events, hooks, costUsd, inventory } = toolEvents(proc.stdout);
+  const { events, hooks, costUsd, inventory, failedBeforeModel } = toolEvents(proc.stdout);
   const marks = shimDir ? readFileSync(marker, 'utf8').split('\n') : [];
   if (shimDir) rmSync(marker);
   const hookInvocations = marks.filter((l) => l === 'invoked').length;
   const contextResponses = hooks.filter((h) => h.additionalContext?.includes('<skill_relevance>')).length;
-  const invalid = agent === 'claude' ? checkInventory(inventory, hookInvocations, contextResponses - marks.filter((l) => l === 'context').length, session.pluginDir) : undefined;
+  const invalid = agent !== 'claude' ? undefined : failedBeforeModel ? 'agent failed before the model ran' : checkInventory(inventory, hookInvocations, contextResponses - marks.filter((l) => l === 'context').length, session.pluginDir);
 
   // Which library skills did the agent actually open?
   const folders = new Set(session.skills.map((c) => basename(c.source)));
