@@ -514,8 +514,8 @@ throwaway `CODEX_HOME`):
   reports the hook as `untrusted`: trusting it in `/hooks` is still one step.
 - Codex reads `.agents/plugins/marketplace.json` in preference to
   `.claude-plugin/marketplace.json`. The Codex plugin lives only there: in the
-  shared file, Claude Code installed it too (double routing, the MCP server
-  D10 left out, no TypeSafe notice).
+  shared file, Claude Code installed it too (verified). Expected from that,
+  not run: double routing, the MCP server D10 left out, no TypeSafe notice.
 - config.toml records `[plugins."loadout-codex@loadout"] enabled = true`, and a
   plugin-scoped `[plugins."…".mcp_servers.loadout] enabled = false` turns off
   its server. doctor reads both, plus `[features] hooks`.
