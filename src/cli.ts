@@ -10,7 +10,7 @@ import { repoSignals } from './repo.js';
 import { route } from './route.js';
 import { cachedEmbeddings, libraryEmbeddings } from './embed.js';
 import { doctor, formatDoctor, onPath } from './doctor.js';
-import { detectHosts, hasKey, PACKS, packSources, wizard } from './init.js';
+import { detectHosts, PACKS, packSources, wizard } from './init.js';
 import { HOOK_FAILURE_NOTE, hookOutput, isFollowUp, promptContext, type HookInput } from './hook.js';
 import { reportJson, type Capability, type RouteDecision } from './types.js';
 
@@ -226,9 +226,7 @@ async function main(): Promise<number> {
       const { values } = parseArgs({ args: rest, options: { 'key-file': { type: 'string' }, pack: { type: 'string', multiple: true } } });
       const index = () => embeddingsFor(scanLibrary(paths.library()), config).then(() => {});
       if (rest.length === 0 && process.stdin.isTTY && process.stdout.isTTY) {
-        return wizard(process.stdin, process.stdout, {
-          keyFound: () => hasKey(config),
-          writeConfig: () => writeDefaultConfig(),
+        return wizard(process.stdin, process.stdout, config, {
           add: addSources,
           index,
           hosts: detectHosts(onPath),

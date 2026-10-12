@@ -1,5 +1,5 @@
 import { createInterface } from 'node:readline';
-import { resolveApiKey, type Config } from './config.js';
+import { resolveApiKey, writeDefaultConfig, type Config } from './config.js';
 import { HOSTS, type Host } from './launch.js';
 
 /** Starter packs by topic. Each source is one `bench/data/library.sh` installs for the benchmark library. */
@@ -27,7 +27,7 @@ const HOST_BINS: [string, Host][] = [['claude', 'claude-code'], ['codex', 'codex
 export const detectHosts = (find: (bin: string) => string | undefined): Host[] => HOST_BINS.filter(([bin]) => find(bin)).map(([, host]) => host);
 
 /** Whether resolveApiKey() finds a key. */
-export function hasKey(config: Config): boolean {
+function hasKey(config: Config): boolean {
   try {
     return Boolean(resolveApiKey(config));
   } catch {
@@ -37,8 +37,6 @@ export function hasKey(config: Config): boolean {
 }
 
 export interface InitDeps {
-  keyFound(): boolean;
-  writeConfig(): string;
   /** `loadout add` for each source; returns how many failed. */
   add(sources: string[]): number;
   index(): Promise<void>;
@@ -50,7 +48,7 @@ export interface InitDeps {
  * The interactive `loadout init`. It never asks for the key or its file: the terminal echoes what is
  * typed, so a key pasted at a prompt would land in scrollback.
  */
-export async function wizard(input: NodeJS.ReadableStream, output: NodeJS.WritableStream, deps: InitDeps): Promise<number> {
+export async function wizard(input: NodeJS.ReadableStream, output: NodeJS.WritableStream, config: Config, deps: InitDeps): Promise<number> {
   const lines = createInterface({ input, crlfDelay: Infinity })[Symbol.asyncIterator]();
   const ask = async (question: string) => {
     output.write(question);
@@ -59,10 +57,10 @@ export async function wizard(input: NodeJS.ReadableStream, output: NodeJS.Writab
   };
   const say = (text: string) => output.write(`${text}\n`);
 
-  say('loadout init: sets up the key, starter packs and index in your loadout folder; it edits no host config.\n');
+  say('loadout init: checks the key, adds starter packs and builds the index in your loadout folder; it edits no host config.\n');
   say('TypeSafe key (Jev routing; without it, routing uses keywords only)');
-  say(deps.keyFound() ? '  found' : '  not found: set TYPESAFE_API_KEY in your shell, or run `loadout init --key-file <path>`');
-  say(`wrote ${deps.writeConfig()}\n`);
+  say(hasKey(config) ? '  found' : '  not found: set TYPESAFE_API_KEY in your shell, or run `loadout init --key-file <path>`');
+  say(`wrote ${writeDefaultConfig()}\n`);
 
   say('Starter packs: GitHub repos of third-party skills, copied into the library by `loadout add`');
   PACKS.forEach((p, i) => say(`  ${i + 1}. ${p.name.padEnd(10)} ${p.about}\n     ${p.source}`));

@@ -6,7 +6,7 @@ import { Readable, Writable } from 'node:stream';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadConfig, paths, writeDefaultConfig } from '../src/config.js';
 import { parseGitHub } from '../src/library.js';
-import { detectHosts, hasKey, PACKS, packSources, wizard, type InitDeps } from '../src/init.js';
+import { detectHosts, PACKS, packSources, wizard, type InitDeps } from '../src/init.js';
 
 const KEY = 'a3-key-canary-5519';
 const CLI = join(import.meta.dirname, '../src/cli.ts');
@@ -19,6 +19,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   vi.unstubAllEnvs();
+  vi.restoreAllMocks();
   rmSync(home, { recursive: true, force: true });
 });
 
@@ -28,15 +29,13 @@ async function run(lines: string[], overrides: Partial<InitDeps> = {}) {
   const sink = new Writable({ write: (chunk, _enc, done) => ((output += chunk), done()) });
   const added: string[][] = [];
   const deps: InitDeps = {
-    keyFound: () => hasKey(loadConfig()),
-    writeConfig: () => writeDefaultConfig(),
     add: (sources) => (added.push(sources), 0),
     index: vi.fn(async () => {}),
     hosts: ['claude-code'],
     setup: (host) => `# setup for ${host}`,
     ...overrides,
   };
-  const code = await wizard(Readable.from(lines.map((l) => `${l}\n`)), sink, deps);
+  const code = await wizard(Readable.from(lines.map((l) => `${l}\n`)), sink, loadConfig(), deps);
   return { code, output, added, deps };
 }
 
@@ -96,6 +95,13 @@ describe('init wizard', () => {
   });
 
   it('never asks for or prints the key: not from the env, the key file, or a key typed at a prompt', async () => {
+    // Also watch the process's own streams: a stray console.log or stderr write would bypass the wizard's output.
+    const streams = [
+      vi.spyOn(console, 'log').mockImplementation(() => {}),
+      vi.spyOn(console, 'error').mockImplementation(() => {}),
+      vi.spyOn(process.stdout, 'write').mockImplementation(() => true),
+      vi.spyOn(process.stderr, 'write').mockImplementation(() => true),
+    ];
     const { output } = await run([KEY, '']);
     // The typed key was taken as a pack choice, rejected without being echoed, and the pack prompt asked again.
     expect(output.split('Packs to add').length - 1).toBe(2);
@@ -115,6 +121,7 @@ describe('init wizard', () => {
 
     vi.stubEnv('TYPESAFE_API_KEY', KEY);
     expect((await run([''])).output).not.toContain(KEY);
+    for (const spy of streams) expect(spy.mock.calls.flat().map(String).join('\n')).not.toContain(KEY);
   });
 });
 
