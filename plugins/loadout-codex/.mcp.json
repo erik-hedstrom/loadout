@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "loadout": {
+      "command": "loadout",
+      "args": ["mcp"],
+      "env_vars": ["TYPESAFE_API_KEY"],
+      "tools": {
+        "find_skills": { "approval_mode": "approve" },
+        "load_skill": { "approval_mode": "approve" }
+      }
+    }
+  }
+}

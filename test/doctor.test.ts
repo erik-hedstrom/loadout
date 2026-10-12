@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CONFIG, type Config } from '../src/config.js';
 import { doctor, formatDoctor } from '../src/doctor.js';
 import { jevClient, type SystemOneClient } from '../src/jev.js';
-import { claudeHookSettings, hostSetup } from '../src/launch.js';
+import { claudeHookSettings, hookCommand, hostSetup } from '../src/launch.js';
 
 const KEY = 'doctor-key-canary-7731';
 const config: Config = { ...DEFAULT_CONFIG, embeddings: false };
@@ -111,11 +111,15 @@ describe('doctor', () => {
     vi.doUnmock('../src/embed.js');
   });
 
-  it.each([false, true])('recognises the hooks setup generates (WSL: %s)', async (windows) => {
+  it.each([false, true])('recognises manual native and generated WSL hook configs (WSL: %s)', async (windows) => {
     mkdirSync(join(home, 'claude'));
     writeFileSync(join(home, 'claude', 'settings.json'), JSON.stringify(claudeHookSettings(windows)));
     mkdirSync(join(home, 'codex'));
-    writeFileSync(join(home, 'codex', 'config.toml'), hostSetup('codex', windows).snippet);
+    writeFileSync(join(home, 'codex', 'config.toml'), windows ? hostSetup('codex', true).snippet : [
+      '[mcp_servers.loadout]', 'command = "loadout"', 'args = ["mcp"]',
+      '[[hooks.UserPromptSubmit]]', '[[hooks.UserPromptSubmit.hooks]]',
+      'type = "command"', `command = ${JSON.stringify(hookCommand('codex', false))}`,
+    ].join('\n'));
     const checks = byName(await doctor(config, () => okClient));
     expect(checks['Claude Code']!.detail).toMatch(/loadout: settings hook$/);
     expect(checks['Codex']!.detail).toMatch(/loadout: hook \(trust not checked: approve it once in \/hooks\) and search server$/);

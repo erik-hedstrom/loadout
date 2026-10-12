@@ -179,7 +179,8 @@ everything else, `loadout setup <host>` prints the config for this machine:
 | Host | How |
 |---|---|
 | Claude Code | `loadout setup claude-code` (a `claude mcp add` command) |
-| Codex CLI, the Codex tab of the ChatGPT desktop app, T3 Code (Codex provider) | `loadout setup codex` (`~/.codex/config.toml`) |
+| Codex CLI | `loadout setup codex` (plugin with hook and search); WSL behind Windows Codex: `--windows` prints TOML |
+| Codex tab of the ChatGPT desktop app, T3 Code (Codex provider) | Codex plugin support untested; see [hosts](docs/hosts.md) |
 | Claude Desktop | `loadout setup claude-desktop` |
 | Cursor | `loadout setup cursor` |
 | OpenCode | `loadout setup opencode` |
@@ -230,8 +231,21 @@ launcher get the right skills without relying on the agent to search. The
 raised Claude Code's skill use from 2 to 6 of 10 sessions; the hook-only
 plugin has not been measured. Each skill
 is offered once per session, and short follow-ups ("yes", "go on") are not
-routed. `loadout setup codex` prints a hook for Codex; trust a new hook there
-with `/hooks`.
+routed. For Codex CLI, `loadout setup codex` prints:
+
+```bash
+codex plugin marketplace add erik-hedstrom/loadout
+codex plugin add loadout-codex@loadout
+```
+
+The Codex plugin includes the prompt hook and MCP library search. Each
+routed prompt, with the repository's top-level file names and dependency
+names, goes to TypeSafe's Jev API; `"router": "lexical"` keeps prompts local.
+Trust the installed hook with `/hooks`. Installation and capability listing
+were checked offline with Codex 0.160.1; a live hook session, desktop and
+T3 Code plugin support remain untested. For WSL loadout behind Windows
+Codex, `loadout setup codex --windows` prints TOML instead: the fixed plugin
+commands cannot carry the required `wsl.exe` wrapper.
 
 For loadout running in WSL behind Windows Claude Code, use `loadout setup
 claude-code --windows` and merge its settings.json hook snippet into

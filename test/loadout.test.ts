@@ -918,11 +918,15 @@ describe('launch', () => {
   });
 
   it('prints host configs that attach the search server', () => {
-    const codex = hostSetup('codex', false).snippet;
-    expect(codex).toMatch(/^\[mcp_servers\.loadout\]\ncommand = ".+"\nargs = \[.*"mcp"\]\nenv_vars = \["TYPESAFE_API_KEY"\]/);
+    const codexWsl = hostSetup('codex', true);
+    const codex = codexWsl.snippet;
+    expect(codexWsl.where).toContain('WSL');
+    expect(codex).not.toContain('codex plugin add');
+    expect(codex).toMatch(/\[mcp_servers\.loadout\]\ncommand = "wsl\.exe"\nargs = \[.*"mcp", "--windows-paths"\]/);
+    expect(codex).toContain('env_vars = ["TYPESAFE_API_KEY"]');
     expect(codex).toContain('[mcp_servers.loadout.tools.find_skills]\napproval_mode = "approve"');
     expect(codex).not.toContain('call_server_tool');
-    expect(codex).toMatch(/\[\[hooks\.UserPromptSubmit\]\]\n\[\[hooks\.UserPromptSubmit\.hooks\]\]\ntype = "command"\ncommand = ".* hook codex"\ntimeout = 30$/);
+    expect(codex).toMatch(/\[\[hooks\.UserPromptSubmit\]\]\n\[\[hooks\.UserPromptSubmit\.hooks\]\]\ntype = "command"\ncommand = "wsl\.exe .* hook codex --windows-paths"\ntimeout = 30$/);
     expect(JSON.parse(hostSetup('opencode', false).snippet).mcp.loadout).toMatchObject({ type: 'local', enabled: true });
     expect(JSON.parse(hostSetup('claude-desktop', true).snippet).mcpServers.loadout.command).toBe('wsl.exe');
     const claudeCode = hostSetup('claude-code', false).snippet;
