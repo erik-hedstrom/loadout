@@ -21,7 +21,7 @@
 
 - Prompt-hook follow-ups skip hook start-up, and the relay loads on demand ([#14](https://github.com/erik-hedstrom/loadout/pull/14)).
 - Parsed library metadata is cached for routed prompts ([#24](https://github.com/erik-hedstrom/loadout/pull/24)).
-- Simplified `src/` ([#12](https://github.com/erik-hedstrom/loadout/pull/12)), `bench/` ([#11](https://github.com/erik-hedstrom/loadout/pull/11)) and the docs ([#15](https://github.com/erik-hedstrom/loadout/pull/15)); numbers in docs trace to RESULTS.
+- Simplified `src/` ([#12](https://github.com/erik-hedstrom/loadout/pull/12)), `bench/` ([#11](https://github.com/erik-hedstrom/loadout/pull/11)) and the docs ([#15](https://github.com/erik-hedstrom/loadout/pull/15)).
 - CI runs the full matrix only on PRs labelled `ci-full` ([#13](https://github.com/erik-hedstrom/loadout/pull/13)).
 - Contributor and agent docs: the stock `claude` and `codex` CLIs come first ([#22](https://github.com/erik-hedstrom/loadout/pull/22)).
 

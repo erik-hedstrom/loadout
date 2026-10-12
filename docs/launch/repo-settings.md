@@ -34,9 +34,9 @@ affects who finds loadout is not measured.
 | `developer-tools` | not checked | A general tag for a CLI people install. |
 | `typescript` | not checked | The implementation language. |
 
-11 topics, within GitHub's limit of 20. Skipped: `llm` and `claude`,
-which are too broad to help, and `codex` (39,141 repos), for which `codex-cli`
-is the narrower choice.
+11 topics, within GitHub's limit of 20. Skipped: the broader `llm`,
+`claude` and `codex` (39,141 repos); `codex-cli` is the narrower choice for
+Codex.
 
 ## Steps for Erik
 
