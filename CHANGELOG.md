@@ -12,7 +12,7 @@ to [bench/RESULTS.md](bench/RESULTS.md). PRs are on
 - Jev-routed selection of skills, MCP servers and model tier per session or
   prompt (`loadout route`, the launcher, `loadout mcp`, and a prompt hook for
   Claude Code and Codex). These came in direct commits before PRs were used.
-- `loadout audit`: what your installed skills cost per request ([#3](https://github.com/erik-hedstrom/loadout/pull/3)).
+- `loadout audit`: an inventory estimate of what your installed skills add to each request ([#3](https://github.com/erik-hedstrom/loadout/pull/3)).
 - `loadout doctor`, a read-only setup check ([#20](https://github.com/erik-hedstrom/loadout/pull/20)).
 - Claude Code plugin with the prompt hook ([#9](https://github.com/erik-hedstrom/loadout/pull/9)) and a one-step Codex plugin ([#23](https://github.com/erik-hedstrom/loadout/pull/23)).
 - Host capability matrix ([#18](https://github.com/erik-hedstrom/loadout/pull/18)) and host-neutral session skills ([#21](https://github.com/erik-hedstrom/loadout/pull/21)).

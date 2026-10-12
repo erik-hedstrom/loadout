@@ -6,10 +6,10 @@ preview image are Erik's ([AGENTS.md](../../AGENTS.md) hard rule 4).
 ## Description
 
 ```
-Picks skills, MCP servers and model tier for each Claude Code or Codex prompt, with a cheap router.
+Picks the skills, MCP servers and model tier for each Claude Code or Codex prompt, routed by Jev.
 ```
 
-99 characters (GitHub allows 350). It repeats the README's first sentence in
+97 characters (GitHub allows 350). It repeats the README's first sentence in
 fewer words and makes no claim a benchmark has to back. Leave the website
 field empty until there is a page to point to.
 
@@ -54,5 +54,6 @@ The image's one figure, `$0.0011 per routing decision`, is from
 315 realistic requests. On C1's 300 new requests the mean was $0.0012
 ([C1](../../bench/RESULTS.md#c1-2026-10-08-new-held-out-requests)), so edit
 both files if you would rather show a range. To change the image, edit the SVG
-and render it again, for example with headless Chromium:
-`chrome --headless --window-size=1280,640 --screenshot=social-preview.png social-preview.svg`.
+and render it again at an exact 1280 x 640 viewport, for example with
+Puppeteer's `page.setViewport` and `page.screenshot`; Chrome's
+`--window-size` flag leaves a blank strip at the bottom.

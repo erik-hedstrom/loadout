@@ -9,6 +9,6 @@
     <text x="128" y="372" font-size="40" fill="#cbd5e1">for each coding-agent session.</text>
     <text x="128" y="470" font-size="76" font-weight="700" fill="#38bdf8">$0.0011</text>
     <text x="440" y="470" font-size="36" fill="#f8fafc">per routing decision</text>
-    <text x="128" y="518" font-size="26" fill="#94a3b8">315 realistic requests, bench/RESULTS.md (v4)</text>
+    <text x="128" y="518" font-size="26" fill="#94a3b8">mean over 315 realistic requests, bench/RESULTS.md (v4)</text>
   </g>
 </svg>
