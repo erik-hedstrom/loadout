@@ -36,9 +36,10 @@ flowchart TB
     end
 
     LIB[("Library<br/>scanLibrary")]
+    LS["loadout mcp: load_skill<br/>reads one skill, no routing"]
 
     subgraph routing["Routing: route() in src/route.ts"]
-        RET["Retrieve: BM25 + embeddings<br/>top 200 candidates"]
+        RET["Retrieve: BM25, plus embeddings when available<br/>top maxCandidates (200 by default)"]
         JEV["Jev SystemOneClient<br/>wide request, then close request"]
         DEC["decide()<br/>load, offer, inject or stay quiet"]
         LEX["Lexical router<br/>BM25 score only; the hook adds nothing unless a skill is named"]
@@ -51,7 +52,7 @@ flowchart TB
     end
 
     subgraph out["Output"]
-        CTX["Context injection<br/>skill_relevance note; SKILL.md only for named or clear-winner skills"]
+        CTX["Context injection, hook and launcher<br/>skill_relevance note; SKILL.md only for named or clear-winner skills"]
         SKL["Skill loading, launcher only<br/>Claude: plugin<br/>Codex: paths in the prompt"]
         MCPS["Selected MCP servers, launcher only<br/>Claude: mcp.json<br/>Codex: -c mcp_servers"]
         TIER["Model tier, launcher only<br/>--model or -m"]
@@ -61,14 +62,12 @@ flowchart TB
     LIB --> RET
     LIB -->|"no key or lexical router"| LEX
     LIB -->|"skills named in the task"| MEN
-    LIB -->|"load_skill reads it directly"| MS
+    LIB --> LS
     MEN --> CTX
     MEN --> SKL
     MEN --> MCPS
     MEN --> TIER
 ```
-
-The hooks, the launcher and `find_skills` call the same `route()`; [Router](#router) step 6 says where the note and injected skills go.
 
 ### Integration layers
 
