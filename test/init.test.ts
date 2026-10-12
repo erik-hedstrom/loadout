@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import { Readable, Writable } from 'node:stream';
+import { format } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadConfig, paths, writeDefaultConfig } from '../src/config.js';
 import { parseGitHub } from '../src/library.js';
@@ -121,7 +122,8 @@ describe('init wizard', () => {
 
     vi.stubEnv('TYPESAFE_API_KEY', KEY);
     expect((await run([''])).output).not.toContain(KEY);
-    for (const spy of streams) expect(spy.mock.calls.flat().map(String).join('\n')).not.toContain(KEY);
+    // Formatted as Node prints them, so a key inside a logged object is caught too.
+    for (const spy of streams) expect(spy.mock.calls.map((args) => format(...args)).join('\n')).not.toContain(KEY);
   });
 });
 
