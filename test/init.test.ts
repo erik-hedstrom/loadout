@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadConfig, paths, withoutKey, writeDefaultConfig } from '../src/config.js';
 import { windowsPath } from '../src/launch.js';
 import { parseGitHub } from '../src/library.js';
-import { detectHosts, PACKS, packSources, wizard, type InitDeps } from '../src/init.js';
+import { detectHosts, interactive, PACKS, packSources, wizard, type InitDeps } from '../src/init.js';
 
 const KEY = 'a3-key-canary-5519';
 const CLI = join(import.meta.dirname, '../src/cli.ts');
@@ -169,16 +169,36 @@ describe('loadout init without a terminal', () => {
   });
 
   it.skipIf(process.platform === 'win32')('adds a pack given by flag through the add path', () => {
-    // A failing git: the pack's source reaches `loadout add` without downloading anything.
+    // A fake git: `clone` only makes the target folder and `rev-parse` fails, so the pack's source reaches
+    // `loadout add` without downloading anything. Each call records whether the TypeSafe key reached git.
     const bin = join(home, 'bin');
     mkdirSync(bin);
-    // It also records whether the TypeSafe key reached git's environment.
-    writeFileSync(join(bin, 'git'), '#!/bin/sh\necho "${TYPESAFE_API_KEY:-unset}" > "$HOME/git-env"\necho "fake git: $*" >&2\nexit 1\n', { mode: 0o755 });
+    const git = [
+      '#!/bin/sh',
+      'echo "$1 ${TYPESAFE_API_KEY:-unset}" >> "$HOME/git-env"',
+      'for a; do last="$a"; done',
+      'if [ "$1" = "-c" ]; then mkdir -p "$last"; exit 0; fi',
+      'echo "fake git: $*" >&2',
+      'exit 1',
+    ];
+    writeFileSync(join(bin, 'git'), `${git.join('\n')}\n`, { mode: 0o755 });
     const result = cli(['--pack', 'security'], { PATH: `${bin}${delimiter}${process.env.PATH}`, TYPESAFE_API_KEY: KEY });
     expect(result.status).toBe(1);
     expect(result.stdout).toContain('wrote ');
     expect(result.stderr).toContain(`${PACKS[1]!.source}: `);
-    expect(readFileSync(join(home, 'git-env'), 'utf8')).toBe('unset\n');
+    // Both the clone (`-c ...`) and the rev-parse (`-C ...`) ran without the key.
+    expect(readFileSync(join(home, 'git-env'), 'utf8')).toBe('-c unset\n-C unset\n');
+  });
+});
+
+describe('when the wizard runs', () => {
+  it('needs no arguments and a terminal on stdin and stdout', () => {
+    const tty = { isTTY: true };
+    const pipe = {};
+    expect(interactive([], tty, tty)).toBe(true);
+    expect(interactive([], pipe, tty)).toBe(false);
+    expect(interactive([], tty, pipe)).toBe(false);
+    expect(interactive(['--pack', 'security'], tty, tty)).toBe(false);
   });
 });
 

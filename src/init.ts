@@ -26,6 +26,10 @@ const HOST_BINS: [string, Host][] = [['claude', 'claude-code'], ['codex', 'codex
 /** Hosts whose CLI `find` locates. The Claude desktop app has no CLI to find. */
 export const detectHosts = (find: (bin: string) => string | undefined): Host[] => HOST_BINS.filter(([bin]) => find(bin)).map(([, host]) => host);
 
+/** The wizard only runs with no arguments and a terminal on both ends; a pipe either way gets the flag path. */
+export const interactive = (args: string[], stdin: { isTTY?: boolean }, stdout: { isTTY?: boolean }): boolean =>
+  args.length === 0 && stdin.isTTY === true && stdout.isTTY === true;
+
 /** Whether resolveApiKey() finds a key. */
 function hasKey(config: Config): boolean {
   try {

@@ -10,7 +10,7 @@ import { repoSignals } from './repo.js';
 import { route } from './route.js';
 import { cachedEmbeddings, libraryEmbeddings } from './embed.js';
 import { doctor, formatDoctor, onPath } from './doctor.js';
-import { detectHosts, PACKS, packSources, wizard } from './init.js';
+import { detectHosts, interactive, PACKS, packSources, wizard } from './init.js';
 import { HOOK_FAILURE_NOTE, hookOutput, isFollowUp, promptContext, type HookInput } from './hook.js';
 import { reportJson, type Capability, type RouteDecision } from './types.js';
 
@@ -89,7 +89,7 @@ function addSources(specs: string[]): number {
 function setupText(host: Host, windowsFlag?: boolean): string {
   // Desktop apps on a WSL machine are Windows apps; the CLIs follow where they are installed.
   const desktop = host === 'claude-desktop' || host === 'cursor';
-  const windows = windowsFlag ?? (Boolean(process.env.WSL_DISTRO_NAME) && (desktop || pathTranslator(which(host === 'claude-code' ? 'claude' : host))('/') !== '/'));
+  const windows = windowsFlag ?? (Boolean(process.env.WSL_DISTRO_NAME) && (desktop || pathTranslator(onPath(host === 'claude-code' ? 'claude' : host))('/') !== '/'));
   const { where, snippet } = hostSetup(host, windows);
   return `# ${where}\n${snippet}`;
 }
@@ -231,7 +231,7 @@ async function main(): Promise<number> {
         fail('usage: loadout init [--key-file <path>] [--pack <name>]...');
       }
       const index = () => embeddingsFor(scanLibrary(paths.library()), config).then(() => {});
-      if (rest.length === 0 && process.stdin.isTTY && process.stdout.isTTY) {
+      if (interactive(rest, process.stdin, process.stdout)) {
         return wizard(process.stdin, process.stdout, config, {
           add: addSources,
           index,
