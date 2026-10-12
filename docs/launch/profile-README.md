@@ -15,7 +15,7 @@
 - **Better work:** not shown. In an 8-request, nominally blind pilot with Codex (a skill's template can show in the output, so the judge may tell the arms apart), loadout was better in 4 (22-78%), worse in 3 and split in 1; two of the three losses hit the 6-minute cap ([pilot](https://github.com/erik-hedstrom/loadout/blob/main/bench/RESULTS.md#is-the-work-better-outcome-pilot-2026-10-07)).
 
 **Engineering**
-- **Split, held-out data, cross-family judge.** Requests split by hash into a third for tuning and two thirds for reporting. The original 315 requests were used for tuning twice, so C1 wrote 300 new ones with a model that never saw the library. Codex wrote them and Claude judged.
+- **Split, held-out data, cross-family judge.** Requests split by hash into a third for tuning and two thirds for reporting. The original 315 requests were used for tuning twice, so C1 wrote 300 new ones with a model that never saw the library: Codex (gpt-6.1-sol), as recorded, though the files backend leaves that provenance unverified. Claude judged.
 - **Two reviews before merge.** A read-only Claude `pr-reviewer` and a Codex adversarial review, with CI on Linux for each update to `main` or an open PR, and on Linux, macOS and Windows before merge. On the credential-hardening PR ([#4](https://github.com/erik-hedstrom/loadout/pull/4)), both reviewers found High or Medium issues in the first round, which were fixed before merge.
 - **Claude and Codex on one backlog.** Both build and review each other's PRs from [one backlog](https://github.com/erik-hedstrom/loadout/blob/main/docs/loop/BACKLOG.md); Claude judges.
 
