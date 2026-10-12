@@ -45,18 +45,29 @@ These commands send text to TypeSafe's Jev API through loadout's router:
 - the hook: each substantive prompt, in every project, since the plugin is
   user-scoped. Prompts under three words without a `/`, `@` or `$` skill
   mention ("yes", "go on") are skipped;
-- the [launcher](launcher.md) and `loadout route`: the task, once;
+- the [launcher](launcher.md) and `loadout route`: the task, once per
+  launch;
 - [`find_skills`](mcp.md): the agent's goal plus any keywords it passes.
 
-Each routed request carries:
+Each routing makes two Jev requests, and both carry:
 - that text;
 - the repository's directory name, top-level file names, dependency names and
-  language extensions;
-- the names and descriptions of up to 200 candidates (by default), drawn
-  from skills (hook), skills and library MCP servers (launcher, `loadout
-  route`), or skills and gateway MCP servers (`find_skills`; skills only over
-  HTTP);
-- the opening of the `SKILL.md` of up to 8 shortlisted skills (by default).
+  language extensions.
+
+The first (wide) request adds the names and descriptions of up to 200
+candidates (by default), drawn from skills (hook), skills and library MCP
+servers (launcher, `loadout route`), or skills and gateway MCP servers
+(`find_skills`; skills only over HTTP). The second (close) request repeats
+the names and descriptions of up to 8 shortlisted candidates (by default) and
+is the only one that adds the opening of their `SKILL.md`.
+
+A candidate's name normally goes as is. When two candidates share a name, it
+is qualified by where the skill came from: a GitHub `owner/repo`, or, for a
+skill added from a local folder, that folder's absolute path, which can
+include your username.
+
+The launcher, `loadout route` and `find_skills` send a request again, once,
+after a network error, a timeout, a 429 or a 5xx; the hook does not retry.
 
 `loadout doctor` also makes one Jev call with fixed text, to check the key.
 Code-level detail: [SECURITY.md](../SECURITY.md#prompt-hook).

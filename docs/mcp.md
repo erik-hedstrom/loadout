@@ -15,13 +15,10 @@ know-how when the work drifts away from what the session started with:
 
 ## Cost and privacy
 
-With a skills-only library, its tool definitions add **546 input tokens** to
-a fresh Claude Code session's first request. A native listing of 50 skills
-added 477, so below about 57 skills the search server costs more than the
-listing it replaces (an interpolation, with generated skill names;
-[B1](../bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request)).
-Agents also search less often than they should
-([DESIGN.md](../DESIGN.md#search-server-loadout-mcp)), so the
+Its tool definitions are sent with every request. For a small library they
+cost more than the native skill listing they replace; the measured figures and
+crossover are in [DESIGN.md](../DESIGN.md#search-server-loadout-mcp). Agents
+also search less often than they should (same section), so the
 [hook plugins](hook.md) are the main path and search is the supplement.
 
 Privacy: [what `find_skills` sends to TypeSafe](hook.md#privacy).
@@ -54,7 +51,7 @@ serves the same search, skills only, on `http://127.0.0.1:8787/mcp`. Its
 token, Host and gateway safeguards: [SECURITY.md](../SECURITY.md#http-mcp).
 
 ```bash
-openssl rand -hex 32 > ~/.loadout/mcp-token
+(umask 077; openssl rand -hex 32 > ~/.loadout/mcp-token)
 loadout mcp --http --token-file ~/.loadout/mcp-token --allowed-host <your-tunnel-domain>
 ```
 

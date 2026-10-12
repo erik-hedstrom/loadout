@@ -1,8 +1,8 @@
 # The launcher: `loadout claude|codex`
 
-The [plugins](hook.md) route each prompt inside the agent you already run. The
-launcher instead starts Claude Code or Codex with one decision made up front,
-including the model tier. The benchmarks use it; so can you, if you prefer a
+The [plugins](hook.md) route each substantive prompt inside the agent you
+already run. The launcher instead starts Claude Code or Codex with one
+decision made up front, including the model tier. The benchmarks use it; so can you, if you prefer a
 command per session.
 
 ```bash

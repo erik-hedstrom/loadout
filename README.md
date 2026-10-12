@@ -4,10 +4,8 @@
 Agents list your installed skills in their requests, needed or not. In
 Claude Code, 1,232 skills under generated names added **12,283 input tokens**
 to a fresh session's first request, about 10 per skill; with real names, and
-in later turns: not shown
-([B1](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request)).
-Codex caps its listing instead: of 1,262 installed skills, it showed 424 in an
-offline render
+in later turns: not shown. Codex caps its listing instead: of 1,262 installed
+skills, it showed 424 in an offline render
 ([B1](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request)).
 
 loadout keeps your skills in a separate library, and a prompt hook in Claude
@@ -77,11 +75,9 @@ All numbers, caveats and negative results: [bench/RESULTS.md](bench/RESULTS.md).
 - **Better work: not shown.** In an 8-request blind pilot with Codex,
   loadout's version won 4, lost 3 and split 1
   ([pilot](bench/RESULTS.md#is-the-work-better-outcome-pilot-2026-10-07)).
-- **Small libraries:** below about 57 skills (interpolated), the MCP search
-  tools cost more tokens than a native listing
-  ([B1](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request);
-  [details](docs/mcp.md#cost-and-privacy)).
-  The Claude Code plugin adds only the hook, not these tools.
+- **Small libraries:** for a small library, the MCP search tools cost more
+  tokens than a native listing ([details](docs/mcp.md#cost-and-privacy)). The
+  Claude Code plugin adds only the hook, not these tools.
 
 How it decides: [DESIGN.md](DESIGN.md). Security model: [SECURITY.md](SECURITY.md).
 It works only through official extension points (plugins, hooks, MCP, CLI
@@ -97,7 +93,8 @@ loadout route "<task>"           # show the decision for a task
 loadout setup <host>             # print setup for claude-code, codex, claude-desktop, cursor, opencode
 loadout doctor                   # check key, library, index and hosts, with fixes
 loadout mcp [--http]             # the library as an MCP server
-loadout claude|codex "<task>"    # launch the agent with one up-front decision
+loadout claude "<task>"          # launch Claude Code with one up-front decision
+loadout codex "<task>"           # launch Codex with one up-front decision
 ```
 
 - [The library](docs/library.md): adding skills and MCP servers, configuration.
