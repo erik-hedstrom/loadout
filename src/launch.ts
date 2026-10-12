@@ -375,6 +375,8 @@ export function claudeArgs(session: Session, task: string, extra: string[], opts
   const prompt = [task, ...session.injected].join('\n\n');
   const args = [...(opts.headless ? ['-p'] : []), prompt, '--model', session.model];
   if (session.effort) args.push('--effort', session.effort);
+  // Ahead of the passthrough: a value-taking flag or a `--` at its end must not swallow these.
+  if (session.settings) args.push('--strict-mcp-config', '--no-chrome', '--settings', toPath(session.settings));
   if (session.pluginDir) args.push('--plugin-dir', toPath(session.pluginDir));
   const appended = [session.relevance, session.injected.length ? TRUST_NOTE : undefined].filter(Boolean).join('\n\n');
   if (appended) args.push('--append-system-prompt', appended);
@@ -386,7 +388,6 @@ export function claudeArgs(session: Session, task: string, extra: string[], opts
   ];
   if (trusted.length) args.push('--allowedTools', ...trusted);
   if (session.mcpConfig) args.push('--mcp-config', toPath(session.mcpConfig));
-  if (session.settings) args.push('--strict-mcp-config', '--no-chrome', '--settings', toPath(session.settings));
   return args;
 }
 
@@ -431,23 +432,26 @@ export function codexPrompt(session: Session, task: string): string {
 }
 
 /**
- * The first argument after `--` that would undo `--isolate`: one that adds MCP servers or integrations
- * (Claude's --mcp-config, --agents, --plugin-dir, --plugin-url, --chrome, --ide; Codex's mcp_servers or features overrides, --enable), or a
- * --settings that would replace loadout's. Anything else passes through unchanged.
+ * The first argument after `--` that would undo `--isolate`. Claude: one that adds MCP servers, channels or
+ * integrations, moves the session to the cloud, or replaces loadout's --settings; a bare `--`, which would turn
+ * later flags into the prompt. Codex: --enable, and any config override, since keys such as `projects` trust
+ * re-enable config layers that can carry servers. Anything else passes through unchanged.
  */
 export function isolateConflict(agent: Agent, args: string[]): string | undefined {
   const is = (a: string, flag: string) => a === flag || a.startsWith(`${flag}=`);
-  if (agent === 'claude') return args.find((a) => ['--settings', '--mcp-config', '--agents', '--plugin-dir', '--plugin-url', '--chrome', '--ide'].some((f) => is(a, f)));
-  return args.find((a, i) => {
-    if (is(a, '--enable')) return true;
-    const override = a === '-c' || a === '--config' ? args[i + 1] : a.startsWith('--config=') ? a.slice(9) : /^-c./.test(a) ? a.slice(2).replace(/^=/, '') : undefined;
-    return override !== undefined && /^\s*(mcp_servers|features)\b/.test(override);
-  });
+  if (agent === 'claude') return args.find((a) => a === '--' || CLAUDE_REFUSED.some((f) => is(a, f)));
+  return args.find((a) => is(a, '--enable') || is(a, '--config') || /^-c/.test(a));
 }
 
+const CLAUDE_REFUSED = [
+  '--settings', '--mcp-config', '--agents', '--plugin-dir', '--plugin-url', '--chrome', '--ide',
+  '--channels', '--dangerously-load-development-channels', '--cloud', '--remote', '--environment', '--teleport',
+];
+
 export function codexArgs(session: Session, task: string, extra: string[], opts: LaunchOptions = {}): string[] {
-  // Apps (ChatGPT connectors) are a host-owned MCP server that --ignore-user-config leaves on.
-  const args = [...(opts.headless ? ['exec'] : []), ...(opts.isolate ? ['--ignore-user-config', '--disable', 'apps'] : []), '-m', session.model];
+  // --ignore-user-config leaves on Apps (ChatGPT connectors, a host-owned MCP server), plugins and installing a skill's MCP dependencies.
+  const isolation = ['--ignore-user-config', '--disable', 'apps', '--disable', 'plugins', '--disable', 'skill_mcp_dependency_install'];
+  const args = [...(opts.headless ? ['exec'] : []), ...(opts.isolate ? isolation : []), '-m', session.model];
   if (session.effort) args.push('-c', `model_reasoning_effort=${toToml(session.effort)}`);
   const used = new Set<string>();
   if (session.search) {

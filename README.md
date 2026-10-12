@@ -172,39 +172,46 @@ adding official flags to the agent's command line only. It writes nothing to
   [settings reference](https://code.claude.com/docs/en/settings-reference#disableclaudeaiconnectors)
   and [environment variables](https://code.claude.com/docs/en/env-vars).
 - Codex: `codex exec --ignore-user-config` skips `$CODEX_HOME/config.toml`
-  (auth still uses `CODEX_HOME`), and `--disable apps` turns off the ChatGPT
-  Apps server, which is on by default for ChatGPT sign-ins
-  ([features](https://github.com/openai/codex/blob/main/codex-rs/features/src/lib.rs)).
-  Only `exec` defines `--ignore-user-config`
-  ([source](https://github.com/openai/codex/blob/main/codex-rs/exec/src/cli.rs)),
-  so `loadout codex --isolate` requires `--headless` and refuses otherwise.
+  (auth still uses `CODEX_HOME`). `--disable apps`, `--disable plugins` and
+  `--disable skill_mcp_dependency_install` turn off the ChatGPT Apps server,
+  plugins, and installing a skill's missing MCP servers, all on by default
+  ([features](https://github.com/openai/codex/blob/4a93bd249a4e73e24c3cc889053c947c6986362a/codex-rs/features/src/lib.rs)). A Codex too old to know one of these
+  feature names refuses to start. Only `exec` defines `--ignore-user-config`
+  ([source](https://github.com/openai/codex/blob/4a93bd249a4e73e24c3cc889053c947c6986362a/codex-rs/exec/src/cli.rs)), so `loadout codex --isolate` requires
+  `--headless` and refuses otherwise.
 
 Arguments after `--` pass through unchanged, except those that would undo
-the isolation, which `--isolate` refuses before routing: Claude Code's
-`--settings`, `--mcp-config`, `--agents` (inline agents can define MCP
-servers), `--plugin-dir`, `--plugin-url`, `--chrome` and `--ide`, and
-Codex's `--enable` and `-c`/`--config` overrides of `mcp_servers` or
-`features`.
+the isolation, which `--isolate` refuses before routing:
+
+- Claude Code: `--settings`, `--mcp-config`, `--agents` (inline agents can
+  define MCP servers), `--plugin-dir`, `--plugin-url`, `--chrome`, `--ide`,
+  `--channels` and `--dangerously-load-development-channels` (channel servers
+  push messages and can relay permission prompts), `--cloud`, `--remote`,
+  `--environment` and `--teleport` (cloud sessions bring their own
+  servers), and a second `--`, which would turn the isolation flags into
+  prompt text.
+- Codex: `--enable`, and every `-c`/`--config` override. A `projects` trust
+  entry alone would turn project config files, and their servers, back on.
 
 Not hidden:
 
-- **Claude Code plugins and their servers.** No per-session flag hides
-  installed plugins or their servers (nor those from
-  `CLAUDE_CODE_PLUGIN_DIRS`), and an installed loadout hook plugin still runs
-  next to the launcher.
-- Claude Code subagents from `~/.claude/agents/` or `.claude/agents/`: their
-  `mcpServers` field can add servers when the subagent runs.
+- **Claude Code plugins.** `--bare` and `--safe-mode` hide installed plugins
+  (and those from `CLAUDE_CODE_PLUGIN_DIRS`), but also your hooks, skills and
+  CLAUDE.md, so `--isolate` uses neither. Whether `--strict-mcp-config` drops
+  plugin servers is not documented (not checked). An installed loadout hook
+  plugin still runs next to the launcher.
 - Claude Code settings files (user, project, local): their hooks, permissions
   and other settings still apply. `--setting-sources` could drop them, but it
   also drops your permissions and model, so `--isolate` does not use it.
 - A `managed-mcp.json` (organization policy): Claude Code exits at startup
   when `--strict-mcp-config` meets one.
-- Codex config layers other than `$CODEX_HOME/config.toml`: the flag's help
-  names only that file, so a project `.codex/config.toml` or root
-  `config.toml` in a trusted folder, a system
-  `/etc/codex/config.toml` and managed configuration are presumably still
-  read (not checked), and any of them can add MCP servers.
-- Interactive Codex, and Codex plugins and skills: no flag found.
+- Codex config layers other than `$CODEX_HOME/config.toml`
+  ([loader](https://github.com/openai/codex/blob/4a93bd249a4e73e24c3cc889053c947c6986362a/codex-rs/config/src/loader/mod.rs)): the system
+  `/etc/codex/config.toml`, managed and cloud configuration, and, in a folder
+  trusted by one of those, a project `.codex/config.toml` or root
+  `config.toml`. Any of them can add MCP servers. Trust recorded in
+  `~/.codex/config.toml` is skipped with the rest of that file.
+- Interactive Codex: no `--ignore-user-config`. Codex skills: no flag found.
 
 Checked against the sources above on 2026-10-12; no live run (not shown).
 
