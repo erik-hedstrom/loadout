@@ -14,9 +14,9 @@ loadout list --sources                            # the add commands that rebuil
 `add` finds every `SKILL.md` recursively and copies each skill into
 `skills/`, then indexes new skills for retrieval (local embeddings when the
 optional `@huggingface/transformers` is installed; the first run downloads a
-35 MB model).
-- It records where each skill came from (repo and commit), so re-adding updates
-  it in place.
+small model).
+- It records where each skill came from (the GitHub repo and commit, or the
+  local folder's path), so re-adding updates it in place.
 - Same-named skills from different sources are kept side by side.
 - Nothing from the repo is executed.
 - Symlinks are never followed; repos are cloned with `core.symlinks=false`.

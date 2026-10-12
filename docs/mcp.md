@@ -10,8 +10,9 @@ know-how when the work drifts away from what the session started with:
   access, like Claude Desktop, can still use scripts and references);
 - `server_tools` / `call_server_tool`: a gateway to the library's MCP
   servers marked `"gateway": true` ([library](library.md#mcp-servers)),
-  registered only when there are some. Each call goes through the host's
-  approval prompt, which shows the server, tool and arguments.
+  registered only when there are some. loadout leaves `call_server_tool`
+  unapproved, so a call prompts with the server, tool and arguments, unless
+  the host already has a rule allowing it.
 
 ## Cost and privacy
 
