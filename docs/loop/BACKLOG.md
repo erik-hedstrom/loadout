@@ -184,6 +184,7 @@ cross-vendor agents). Erik publishes.
 | C6 | P2 | Multi-intent requests | Claude | cloud | todo |
 | C7 | P1 | Recommended packs with measured upside (first: frontend with Impeccable) | Codex (harness) + Claude (runs) | cloud (fixtures) + local (runs) | todo (after B1, C2) |
 | C8 | P0 | Skill use with the hook-only plugin | Claude | local | todo |
+| C9 | P1 | Host-model fallback router when there is no TypeSafe key | Claude (design) | cloud (code) + local (bench) | todo |
 
 **C1. New held-out requests.**
 
@@ -303,6 +304,32 @@ users install has the hook only. Add a plugin arm (`--plugin-dir`) to
 Acceptance: a third row in that RESULTS table, with raw results. The README's
 "has not been measured" is then replaced by the number.
 
+**C9. Host-model fallback router when there is no TypeSafe key.**
+
+Why: Erik (2026-10-12) wants routing to keep working without a TypeSafe key,
+using a small host model (Claude Haiku 5.5, or Codex's small Luna model), with
+a warning that loadout is not fully set up (D13).
+
+Constraints:
+- Official CLIs only (`claude -p`, `codex exec`), never proxying (hard rule 1).
+- It costs the user's subscription quota and adds a CLI start to every prompt,
+  so it is off by default.
+- The nested `claude -p` must not trigger loadout's own hook again: strip
+  settings and plugins as `claudeJson()` in `bench/lib.ts` does. It gets no
+  tools.
+- Skill names and descriptions sent to it go through `escapeSkillTags`, with
+  third-party framing.
+
+Design note: Jev returns probability distributions, and the thresholds were
+tuned on those. A host model returns picks, so it needs its own selection
+rule, not Jev's thresholds.
+
+Acceptance:
+- A `router: "host"` (or similar) backend behind an explicit config switch.
+- Measured against the lexical router on the dev split (choose by quota cost,
+  report on test), with Wilson intervals, and the hook's latency measured.
+- README and docs claim nothing until RESULTS has the numbers.
+
 ## D. Integrations and robustness
 
 | ID | P | Task | Agent | Lane | Status |
@@ -318,6 +345,7 @@ Acceptance: a third row in that RESULTS table, with raw results. The README's
 | D6 | P2 | HTTP: cancellation reaches Jev | Claude | cloud | done ([#19](https://github.com/erik-hedstrom/loadout/pull/19)) |
 | D8 | P1 | Host capability matrix (verified vs generated) | Claude | cloud | done ([#18](https://github.com/erik-hedstrom/loadout/pull/18)) |
 | D9 | P1 | Codex parity: neutral session skill dir, tier presets | Claude | cloud | done ([#21](https://github.com/erik-hedstrom/loadout/pull/21)); Codex launch not re-run live |
+| D13 | P1 | Warn when the hook runs without a TypeSafe key | Claude | cloud | in progress (PR pending): once per session, `systemMessage` for Claude Code, stderr for Codex (unverified) |
 | D12 | P0 | Codex: install the hook and search as one step, if Codex allows it | Codex | local | done ([#23](https://github.com/erik-hedstrom/loadout/pull/23)): `plugins/loadout-codex` through `.agents/plugins/marketplace.json`; install checked offline; the hook still needs `/hooks` trust; the live run is D2 |
 
 **D10. In-host first: loadout as a Claude Code plugin.**
@@ -504,6 +532,33 @@ Learnings (2026-10-09): Claude sessions keep `<session>/plugin/skills/`,
 because `--plugin-dir` needs that layout. The Codex launch path was not re-run
 live (no `codex` in the cloud session); run `loadout codex --dry-run` before
 relying on it.
+
+**D13. Warn when the hook runs without a TypeSafe key.**
+
+Why: with `router: "jev"` and no key, the hook falls back to keyword routing
+and adds nothing unless a skill is named. The user, in a host CLI or app,
+never learned why. `loadout route`, the launcher and `loadout doctor` already
+say so.
+
+Acceptance:
+- One fixed-text warning per agent session, in the channel each host shows;
+  never the key, the key file's path or config contents (hard rule 2).
+- No warning with `router: "lexical"`, set on purpose, or with a key.
+
+Learnings:
+- Claude Code: `loadout hook claude` prints `{"systemMessage": ...}`, which
+  Claude Code shows to the user (its hook JSON output contract; not run
+  against a live session here). Plain stderr on exit 0 is not shown outside
+  verbose mode.
+- Codex: stderr only. Unverified whether Codex shows hook stderr or a
+  `systemMessage`; check in D2's live run and switch if it does.
+- "Once" is the `warned` flag in the hook's per-session state file. Without a
+  `session_id` there is no state, so it warns on every prompt.
+- An unreadable `jev.apiKeyFile` (for example a directory) makes
+  `resolveApiKey` throw, so the hook ends with the existing fixed failure note
+  and no warning. Not changed here; Erik decides whether that should read as
+  "no key".
+- Cost: $0 (no Jev or agent CLI calls).
 
 **D12. A one-step Codex install.**
 

@@ -7,7 +7,7 @@ import { afterAll, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CONFIG, type Config } from '../src/config.js';
 import { jevClient, JevError, validateResponse, type Question, type SystemOneClient } from '../src/jev.js';
 import { claudeArgs, claudeHookSettings, codexArgs, hookCommand, hostSetup, launch, loaderArgs, materialize, searchServer, toToml } from '../src/launch.js';
-import { hookOutput, isFollowUp, HOOK_FAILURE_NOTE, JEV_FALLBACK_NOTE, promptContext } from '../src/hook.js';
+import { hookOutput, isFollowUp, HOOK_FAILURE_NOTE, JEV_FALLBACK_NOTE, noKeyWarning, NO_KEY_WARNING, promptContext } from '../src/hook.js';
 import { createServer, readSkillFile, serveHttp } from '../src/mcp.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
@@ -1313,5 +1313,69 @@ describe('claude hook', () => {
     expect(await promptContext({ session_id: 'g', prompt: TASK }, { library, config: DEFAULT_CONFIG, stateDir })).toBeUndefined();
     expect(isFollowUp('continue')).toBe(true);
     expect(isFollowUp('/pdf')).toBe(false);
+  });
+
+  it('warns once per session that there is no key, only when the Jev router is configured', () => {
+    const stateDir = tempDir('loadout-hook-');
+    const { client } = fakeClient({});
+    const noKey = { config: DEFAULT_CONFIG, stateDir };
+    expect(noKeyWarning({ session_id: 'a', prompt: TASK }, noKey)).toBe(NO_KEY_WARNING);
+    expect(noKeyWarning({ session_id: 'a', prompt: TASK }, noKey)).toBeUndefined();
+    expect(noKeyWarning({ session_id: 'b', prompt: TASK }, noKey)).toBe(NO_KEY_WARNING);
+    expect(noKeyWarning({ session_id: 'c', prompt: TASK }, { ...noKey, client })).toBeUndefined();
+    expect(noKeyWarning({ session_id: 'd', prompt: TASK }, { ...noKey, config: { ...DEFAULT_CONFIG, router: 'lexical' } })).toBeUndefined();
+  });
+
+  it('keeps the warning flag when routing rewrites the session state', async () => {
+    const stateDir = tempDir('loadout-hook-');
+    const lib = tempDir('loadout-evil-lib-');
+    mkdirSync(join(lib, 'skills', 'pdf'), { recursive: true });
+    writeFileSync(join(lib, 'skills', 'pdf', 'SKILL.md'), '---\nname: pdf\ndescription: Work with PDF files\n---\nBody');
+    const deps = { library: scanLibrary(lib), config: DEFAULT_CONFIG, stateDir };
+    const input = { session_id: 'k', prompt: 'use the pdf skill for this please' };
+    expect(await promptContext(input, deps)).toContain('<skill name="pdf"');
+    expect(noKeyWarning(input, deps)).toBe(NO_KEY_WARNING);
+    expect(await promptContext({ ...input, prompt: 'use the pdf skill for this too' }, deps)).toBeUndefined();
+    expect(noKeyWarning(input, deps)).toBeUndefined();
+  });
+
+  describe('no-key warning through the hook process', () => {
+    const run = (host: 'claude' | 'codex', home: string, session: string) =>
+      spawnSync(process.execPath, ['--import', 'tsx', join(import.meta.dirname, '../src/cli.ts'), 'hook', host], {
+        encoding: 'utf8', timeout: 10_000,
+        env: { ...process.env, TYPESAFE_API_KEY: '', LOADOUT_HOME: home },
+        input: JSON.stringify({ session_id: session, prompt: 'fix the flaky login test on CI', cwd: home }),
+      });
+    const homeWith = (jev: Record<string, unknown>) => {
+      const home = tempDir('loadout-nokey-');
+      writeFileSync(join(home, 'config.json'), JSON.stringify({ ...DEFAULT_CONFIG, embeddings: false, jev: { ...DEFAULT_CONFIG.jev, ...jev } }));
+      return home;
+    };
+
+    it('shows Claude Code a systemMessage once and Codex a stderr line', () => {
+      const home = homeWith({});
+      const first = run('claude', home, 's1');
+      expect(first.status, first.stderr).toBe(0);
+      expect(JSON.parse(first.stdout)).toEqual({ systemMessage: NO_KEY_WARNING });
+      const again = run('claude', home, 's1');
+      expect(again.stdout).toBe('');
+      expect(again.stderr).toBe('');
+      const codex = run('codex', home, 's2');
+      expect(codex.status).toBe(0);
+      expect(codex.stdout).toBe('');
+      expect(codex.stderr).toBe(`${NO_KEY_WARNING}\n`);
+    });
+
+    it('never names the key file, whether it is missing or unreadable', () => {
+      const missing = join(tempDir('loadout-keydir-'), 'KEYFILE-CANARY-missing');
+      const unreadable = join(tempDir('loadout-keydir-'), 'KEYFILE-CANARY-dir');
+      mkdirSync(unreadable);
+      for (const [apiKeyFile, session] of [[missing, 'm'], [unreadable, 'u']] as const) {
+        const result = run('claude', homeWith({ apiKeyFile }), session);
+        expect(result.status).toBe(0);
+        expect(result.stdout + result.stderr).not.toMatch(/CANARY|loadout-keydir|config\.json/);
+      }
+      expect(JSON.parse(run('claude', homeWith({ apiKeyFile: missing }), 'm2').stdout)).toEqual({ systemMessage: NO_KEY_WARNING });
+    });
   });
 });

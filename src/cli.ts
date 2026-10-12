@@ -10,7 +10,7 @@ import { repoSignals } from './repo.js';
 import { route } from './route.js';
 import { cachedEmbeddings, libraryEmbeddings } from './embed.js';
 import { doctor, formatDoctor } from './doctor.js';
-import { HOOK_FAILURE_NOTE, hookOutput, isFollowUp, promptContext, type HookInput } from './hook.js';
+import { HOOK_FAILURE_NOTE, hookOutput, isFollowUp, noKeyWarning, promptContext, type HookInput } from './hook.js';
 import { reportJson, type Capability, type RouteDecision } from './types.js';
 
 const USAGE = `loadout — pick the model, skills and MCP servers for each agent session
@@ -143,16 +143,20 @@ async function runHook(rest: string[]): Promise<number> {
     const apiKey = config.router === 'jev' ? resolveApiKey(config) : undefined;
     // No retries and a short timeout: two Jev requests must fit well inside the deadline.
     const client = apiKey ? jevClient({ apiKey, baseUrl: config.jev.baseUrl, model: config.jev.model, timeoutMs: 8_000, retries: 0 }) : undefined;
+    const stateDir = join(paths.sessions(), 'hook');
     const context = await promptContext(input, {
       library: scanLibrary(paths.library(), { cache: true }),
       config,
       client,
       embeddings: client && config.embeddings ? await cachedEmbeddings(paths.embeddings()) : undefined,
       repo: repoSignals(input.cwd && existsSync(input.cwd) ? input.cwd : process.cwd()),
-      stateDir: join(paths.sessions(), 'hook'),
+      stateDir,
       ...(values['windows-paths'] ? { toPath: windowsPath } : {}),
     });
-    if (context) console.log(hookOutput(context));
+    const warning = noKeyWarning(input, { config, client, stateDir });
+    // Claude Code shows `systemMessage` to the user. Whether Codex does is unverified, so it gets stderr.
+    if (warning && positionals[0] === 'codex') console.error(warning);
+    if (context || (warning && positionals[0] === 'claude')) console.log(hookOutput(context, positionals[0] === 'claude' ? warning : undefined));
   } catch {
     console.error(HOOK_FAILURE_NOTE);
   } finally {
