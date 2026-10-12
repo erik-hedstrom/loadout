@@ -112,7 +112,7 @@ Acceptance:
 | B1 | P0 | Token-waste study: measured per-request overhead of popular skill packs | Claude | local (measure) + cloud (analysis) | done ([PR #6](https://github.com/erik-hedstrom/loadout/pull/6); follow-ups under "Left" in its learnings) |
 | B3 | P1 | Fact-checked comparison with alternatives | Codex | cloud | todo |
 | B2 | P1 | Launch kit drafts | Claude | cloud | todo (after A1, B1) |
-| B4 | P1 | Repo polish: description, topics, social preview, badges | Claude | cloud + erik | todo |
+| B4 | P1 | Repo polish: description, topics, social preview, badges | Claude | cloud + erik | in progress (drafts; Erik applies settings and uploads the preview) |
 | B6 | P2 | GitHub profile README draft | Claude | cloud | todo |
 | B5 | P2 | Awesome-list and directory submissions (drafts) | Codex | erik | todo (repo public since 2026-10-12; agents draft, Erik submits) |
 
@@ -165,6 +165,22 @@ Acceptance:
 - A social preview image (an SVG source in `docs/brand/`).
 - CI and license badges.
 - A CHANGELOG.
+
+Status: drafts in `docs/launch/repo-settings.md` (description, topics,
+Settings steps), `docs/brand/social-preview.{svg,png}`, one badge line in the
+README and `CHANGELOG.md` (Unreleased only). Left for Erik: apply the settings
+and upload the preview.
+
+Learnings:
+- The README already had a CI badge above the H1. It now sits with the
+  license badge under the H1, as one line, so the badges are not split.
+- The preview's one figure is v4's $0.0011 per decision. C1's mean is $0.0012,
+  so the image shows v4 and says so.
+- Topic counts come from GitHub search on 2026-10-12; `llm-routing` (547
+  repos) is the small, specific one, the rest are broad.
+- The PNG is a headless Chromium screenshot of the SVG; no dependency added.
+- The CHANGELOG has no version or release section while A4 (npm) and E5
+  (release automation) are open.
 
 **B6. Profile README.**
 

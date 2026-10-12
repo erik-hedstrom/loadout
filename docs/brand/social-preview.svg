@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="t d">
+  <title id="t">loadout</title>
+  <desc id="d">Pick the skills, MCP servers and model for each coding-agent session. Routing costs $0.0011 per decision.</desc>
+  <rect width="1280" height="640" fill="#0f172a"/>
+  <rect x="80" y="96" width="8" height="448" fill="#38bdf8"/>
+  <g font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" fill="#f8fafc">
+    <text x="128" y="230" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="140" font-weight="700">loadout</text>
+    <text x="128" y="318" font-size="40" fill="#cbd5e1">Pick the skills, MCP servers and model</text>
+    <text x="128" y="372" font-size="40" fill="#cbd5e1">for each coding-agent session.</text>
+    <text x="128" y="470" font-size="76" font-weight="700" fill="#38bdf8">$0.0011</text>
+    <text x="440" y="470" font-size="36" fill="#f8fafc">per routing decision</text>
+    <text x="128" y="518" font-size="26" fill="#94a3b8">315 realistic requests, bench/RESULTS.md (v4)</text>
+  </g>
+</svg>
