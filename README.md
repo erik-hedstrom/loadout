@@ -2,16 +2,17 @@
 # loadout
 
 Agents list your installed skills in their requests, needed or not. In
-Claude Code, 1,232 skills under generated names added **12,283 input tokens**
-to a fresh session's first request, about 10 per skill; with real names, and
-in later turns: not shown. Codex caps its listing instead: of 1,262 installed
-skills, it showed 424 in an offline render
+Claude Code (Haiku, isolated config), 1,232 skills under generated names added
+**12,283 input tokens** to a fresh session's first request, about 10 per
+skill; with real names, and in later turns: not shown. Codex 0.160.1 caps its
+listing instead: of 1,262 installed skills, it showed 424 in an offline render
 ([B1](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request)).
 
 loadout keeps your skills in a separate library, and a prompt hook in Claude
 Code or Codex adds the ones predicted to fit each prompt. A cheap model
 (TypeSafe's [Jev](https://typesafe.ai/blog/introducing-system-one-models-and-jev))
-makes the prediction, for about $0.001 per routed prompt
+makes the prediction, for about $0.001 per routing decision on the v4
+benchmark
 ([RESULTS](bench/RESULTS.md#v4-2026-10-06-realistic-requests-on-the-real-library-judged)).
 
 ## Quickstart
@@ -48,39 +49,45 @@ costing tokens, until you move them out of the agents' own folders;
 Then start `claude` or `codex` as usual. Latency and setup details:
 [the hook plugins](docs/hook.md).
 
-**Privacy:** the hook sends each routed prompt, in every project, to
-TypeSafe's Jev API with repository and skill details. `"router": "lexical"`
-in `~/.loadout/config.json` keeps prompts local; the hook then adds context
-only for prompts that name a skill. What is sent, and from where:
+**Privacy:** the hook sends the text of each prompt event, in every project,
+to TypeSafe's Jev API with repository and skill details. In Claude Code that
+includes scheduled tasks, background subagent reports and messages from other
+sessions. `"router": "lexical"` in `~/.loadout/config.json` (under
+`$LOADOUT_HOME` when set) keeps prompts local; the hook then adds context only
+for prompts that name a skill. What is sent, and from where:
 [privacy](docs/hook.md#privacy).
 
-**Tested so far:** the Claude Code CLI hook in one run; the Codex plugin
-install offline only ([hosts](docs/hosts.md)).
+**Tested so far:** the Claude Code plugin in one headless run, and the same
+hook from settings.json in 10 sessions; the Codex plugin install offline
+only, with no live hook ([hosts](docs/hosts.md)).
 
 ## What is measured
 
 All numbers, caveats and negative results: [bench/RESULTS.md](bench/RESULTS.md).
 
-- **Choices, on new held-out requests** (201 in the test split) against a
-  1,262-skill library, judged by Claude Opus: a useful skill was loaded
-  for 73% (62–81) of the requests that need one; 64% (55–72) of loaded skills
-  were useful and 7% (4–13) would mislead
+- **Choices, on new held-out requests** (201 in the test split, written by
+  gpt-6.1-sol; provenance unverified) against a 1,262-skill library, judged
+  by Claude Opus: a useful skill was loaded for 73% (62–81) of the requests
+  that need one; 64% (55–72) of loaded skills were useful and 7% (4–13) would
+  mislead; these two intervals ignore within-request correlation
   ([C1](bench/RESULTS.md#c1-2026-10-08-new-held-out-requests)). It loads too
   readily on general business requests.
-- **Agents use what they get:** when the launcher loaded a skill, Claude Code
-  opened it in 9 of 10 headless sessions (Wilson 95%: 60–98%) and Codex in 11
-  of 11 (74–100%). Adding the prompt hook to the search tool raised
-  useful-skill use in Claude Code from 2 of 10 (6–51%) to 6 of 10 (31–83%)
-  sessions
+- **Agents use what they get,** in headless runs capped at 4 minutes
+  (Claude Code on Sonnet 5.5, also capped at 8 turns; Codex on gpt-6.1-sol):
+  when the launcher loaded a skill, Claude Code opened it in 9 of 10 sessions
+  (Wilson 95%: 60–98%) and Codex in 11 of 11 (74–100%). Adding the prompt
+  hook, from settings.json, to the search tool raised useful-skill use in
+  Claude Code from 2 of 10 (6–51%) to 6 of 10 (31–83%) sessions
   ([RESULTS](bench/RESULTS.md#do-agents-use-what-they-are-given)).
 - **Better work: not shown.** In an 8-request, nominally blind pilot with
-  Codex, loadout's version won 4 (22–78%), lost 3 (14–69%) and split 1
-  (2–47%)
+  Codex (gpt-6.1-sol, 6-minute cap), where the loadout arm got the judge's
+  top skill, it won 4 (22–78%), lost 3 (14–69%) and split 1 (2–47%)
   ([pilot](bench/RESULTS.md#is-the-work-better-outcome-pilot-2026-10-07)).
-- **Small libraries:** in Claude Code, the one host measured, the MCP search
-  tools cost more tokens than a native listing
-  ([details](docs/mcp.md#cost-and-privacy)). The Claude Code plugin
-  adds only the hook, not these tools.
+- **Small libraries:** in a fresh Claude Code session's first request, the
+  MCP search tools cost more tokens than a native listing of 50 skills
+  ([details](docs/mcp.md#cost-and-privacy)). The Claude Code plugin adds only
+  the hook; the Codex plugin also attaches the search tools, whose cost in
+  Codex is not measured.
 
 How it decides: [DESIGN.md](DESIGN.md). Security model: [SECURITY.md](SECURITY.md).
 It works only through official extension points (plugins, hooks, MCP, CLI
@@ -104,7 +111,8 @@ loadout codex "<task>"           # launch Codex with one up-front decision
 - [The hook plugins](docs/hook.md): Claude Code and Codex, WSL, latency, privacy.
 - [Library search over MCP](docs/mcp.md): `find_skills` and `load_skill`
   mid-session, in Claude Code, Codex, Claude Desktop, Cursor, OpenCode and
-  ChatGPT.
+  ChatGPT. Search was checked only in the Claude Code and Codex CLIs
+  ([hosts](docs/hosts.md)).
 - [The launcher](docs/launcher.md): `loadout claude|codex`, one decision up
   front, including a model tier; used by the benchmarks.
 - [Hosts](docs/hosts.md): what was checked in which host.

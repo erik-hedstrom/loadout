@@ -529,8 +529,8 @@ specific skill exists:
 | UV-Vis calculation review | `uncertainty-and-units` | bare | loadout timed out before writing the review document |
 | Threat model for uploads | `security-threat-model` | bare | loadout timed out; bare's sample code was more realistic |
 
-**Loadout better in 4, bare in 3, 1 split. No overall quality gain shows at
-this size.**
+**Loadout better in 4, bare in 3, 1 split** (Wilson 95%: 22–78%, 14–69%,
+2–47%). **No overall quality gain shows at this size.**
 - The verdicts are consistent: 7 of 8 held in both orders.
 - The wins are where a skill encodes conventions a strong agent would not
   apply unprompted: MCP best practices, runbook safety, Obsidian specifics.

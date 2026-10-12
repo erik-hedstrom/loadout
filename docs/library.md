@@ -1,7 +1,8 @@
 # The library
 
-loadout picks from its own library, `~/.loadout/library` (override with
-`LOADOUT_HOME`), a folder no agent loads by itself.
+loadout picks from its own library, `~/.loadout/library` (or
+`$LOADOUT_HOME/library` when `LOADOUT_HOME` is set), a folder no agent loads
+by itself.
 
 ## Skills
 
@@ -11,10 +12,11 @@ loadout audit --adopt                             # copy the skills your agents 
 loadout list --sources                            # where the skills came from, as add commands
 ```
 
-`add` finds every `SKILL.md` recursively and copies each skill into
-`skills/`, then indexes new skills for retrieval (local embeddings when the
-optional `@huggingface/transformers` is installed; the first run downloads a
-small model).
+`add` searches up to 8 folders deep for `SKILL.md`, skipping `node_modules`,
+`dist`, `build` and similar, and copies each skill into `skills/`. It then
+indexes new skills for retrieval (local embeddings when the optional
+`@huggingface/transformers` is installed; the first run downloads a small
+model).
 - It records where each skill came from (the GitHub repo and commit, or the
   local folder's path), so re-adding updates it in place.
 - `list --sources` prints one `add` command per repo or folder, with the
@@ -31,8 +33,8 @@ agents' own folders stay listed by the agents.
 
 ## MCP servers
 
-MCP servers go in `mcp.json` in the usual `{"mcpServers": {...}}` shape, plus
-three optional loadout-only fields:
+MCP servers go in the library's `mcp.json` in the usual
+`{"mcpServers": {...}}` shape, plus three optional loadout-only fields:
 - `"description"`: used for routing;
 - `"autoApprove": true`: let this server's tools run without approval prompts
   when the [launcher](launcher.md) loads it into a session;
@@ -42,7 +44,8 @@ three optional loadout-only fields:
 
 ## Configuration
 
-`~/.loadout/config.json` holds the key file location, the router
-(`"jev"` or `"lexical"`), the tier-to-model mapping, thresholds and caps. Only
+`~/.loadout/config.json` (`$LOADOUT_HOME/config.json` when set) holds the
+key file location, the router (`"jev"` or `"lexical"`), the tier-to-model
+mapping, thresholds and caps. Only
 your overrides are stored; everything else follows the defaults in
 [config.ts](../src/config.ts).

@@ -22,7 +22,7 @@ The columns:
 - **Tier:** the launch also sets the model for the chosen tier. Hosts without
   a launch keep the user's model.
 - **Hook:** a prompt hook routes each substantive prompt and adds the skills
-  that fit as context.
+  predicted to fit as context.
 - **Search:** `find_skills` and `load_skill` over MCP.
 - **Gateway:** `server_tools` and `call_server_tool`, for library servers
   marked `"gateway": true`.

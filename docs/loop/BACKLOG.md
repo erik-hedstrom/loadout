@@ -85,9 +85,8 @@ hook and MCP details moved to `docs/launcher.md`, `docs/library.md`,
 SECURITY.md and DESIGN.md. The quickstart ran in a container from a fresh
 clone through `npm link` into a temp prefix, `init`, `add`, `route
 --lexical`, `setup` and `doctor`, with `LOADOUT_HOME`, `CLAUDE_CONFIG_DIR`
-and `CODEX_HOME` in temp dirs. `loadout audit` was not run there: it reads
-`~/.claude/skills`, `~/.agents` and `~/.cursor` under `HOME`, which the
-agent sandbox would not redirect; its fake-home tests cover it. Left: the
+and `CODEX_HOME` in temp dirs. `loadout audit` was not run there; its fake-home
+tests cover it. Left: the
 GIF (A5), the plugin installs on a machine with the CLIs, and the npm
 install line once A4 picks a name.
 

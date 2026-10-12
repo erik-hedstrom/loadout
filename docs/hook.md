@@ -2,7 +2,7 @@
 
 Each plugin carries a `UserPromptSubmit` hook that runs `loadout hook claude`
 or `loadout hook codex`. The hook routes each substantive prompt and adds the
-skills that fit as context, so you keep starting your agent as usual. Both
+skills predicted to fit as context, so you keep starting your agent as usual. Both
 need `loadout` on PATH and Node 22.12+. What was checked in which host:
 [hosts.md](hosts.md).
 
@@ -13,7 +13,8 @@ claude plugin marketplace add erik-hedstrom/loadout
 claude plugin install loadout@loadout
 ```
 
-You can also use `/plugin` inside a session.
+You can also use `/plugin` inside a session. Checked in the CLI; the desktop
+app's Code tab: untested.
 
 For loadout running in WSL behind Windows Claude Code, use `loadout setup
 claude-code --windows` and merge its settings.json hook snippet into
@@ -35,24 +36,34 @@ What the hook adds, and when: [DESIGN.md](../DESIGN.md#prompt-hook).
 
 ## Latency
 
-Each routed prompt waits about 1.5 s before the agent starts (p50 of 20, one
-machine,
-[RESULTS](../bench/RESULTS.md#routed-prompts-with-the-library-scan-cache-d11-2026-10-12)).
+Each routed prompt waits before the agent starts: a median 2.6 s on
+2026-10-08
+([RESULTS](../bench/RESULTS.md#the-hook-plugin-in-the-claude-code-cli-2026-10-08)),
+and 1.5 s on 2026-10-12 after the library scan cache
+([RESULTS](../bench/RESULTS.md#routed-prompts-with-the-library-scan-cache-d11-2026-10-12)).
+Both: one WSL machine, the 1,262-skill library, 20 prompts each. Only
+`loadout hook claude` was timed; the Codex hook is not measured.
 
 ## Privacy
 
 These commands send text to TypeSafe's Jev API through loadout's router:
-- the hook: each substantive prompt, in every project, since the plugin is
-  user-scoped. Prompts under three words without a `/`, `@` or `$` skill
-  mention ("yes", "go on") are skipped;
+- the hook: the text of each prompt event, in every project, since the
+  plugin is user-scoped. In Claude Code these events include scheduled tasks
+  and `/loop` iterations, background subagents reporting back and messages
+  from other sessions, and pasted text arrives expanded
+  ([UserPromptSubmit](https://code.claude.com/docs/en/hooks#userpromptsubmit)).
+  Events under three words without a `/`, `@` or `$` skill mention ("yes",
+  "go on") are skipped;
 - the [launcher](launcher.md) and `loadout route`: the task, once per
   launch;
 - [`find_skills`](mcp.md): the agent's goal plus any keywords it passes.
 
 Each routing makes two Jev requests, and both carry:
 - that text;
-- the repository's directory name, top-level file names, dependency names and
-  language extensions.
+- the name, top-level file names, dependency names and language extensions
+  of the folder the command runs in: the session's folder for the hook, the
+  current folder for the launcher and `loadout route`, and wherever the host
+  starts `loadout mcp` for `find_skills`, which can be your home folder.
 
 The first (wide) request adds the names and descriptions of up to 200
 candidates (by default), drawn from skills (hook), skills and library MCP
@@ -61,10 +72,10 @@ servers (launcher, `loadout route`), or skills and gateway MCP servers
 the names and descriptions of up to 8 shortlisted candidates (by default) and
 is the only one that adds the opening of their `SKILL.md`.
 
-A candidate's name normally goes as is. When two candidates share a name, it
-is qualified by where the skill came from: a GitHub `owner/repo`, or, for a
-skill added from a local folder, that folder's absolute path, which can
-include your username.
+A candidate's name normally goes as is. When candidates share a name, the
+first keeps it and the duplicates are qualified by where they came from: a
+GitHub `owner/repo`, or, for a skill added from a local folder, that folder's
+absolute path, which can include your username.
 
 The launcher, `loadout route` and `find_skills` send a request again, once,
 after a network error, a timeout, a 429 or a 5xx; the hook does not retry.
