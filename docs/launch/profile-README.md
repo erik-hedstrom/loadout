@@ -4,7 +4,7 @@
 
 ## loadout
 
-[loadout](https://github.com/erik-hedstrom/loadout) picks the skills, MCP servers and model tier for each coding-agent session or prompt, out of a library of any size. A very cheap model (TypeSafe's Jev) makes the call: $0.0012 and 1.92 s on average over 300 decisions ([C1](https://github.com/erik-hedstrom/loadout/blob/main/bench/RESULTS.md#c1-2026-10-08-new-held-out-requests)). It plugs into the stock `claude` and `codex` CLIs through plugins, hooks and MCP. The Claude Code CLI hook is checked in headless sessions; the Codex hook is not ([hosts](https://github.com/erik-hedstrom/loadout/blob/main/docs/hosts.md)).
+[loadout](https://github.com/erik-hedstrom/loadout) picks the skills, MCP servers and model tier for each coding-agent session or prompt, out of a large library (1,262 skills in the realistic benchmark). A small model (TypeSafe's Jev) makes the call: $0.0012 and 1.92 s per decision, the mean of 300 routing calls run in-process, without the hook's start-up ([C1](https://github.com/erik-hedstrom/loadout/blob/main/bench/RESULTS.md#c1-2026-10-08-new-held-out-requests)). It plugs into the stock `claude` and `codex` CLIs through plugins, hooks and MCP. The Claude Code CLI hook is checked in headless sessions; the Codex hook is not ([hosts](https://github.com/erik-hedstrom/loadout/blob/main/docs/hosts.md)).
 
 **Measured** (95% Wilson intervals)
 - **C1:** on 201 test-split requests (of 300 new ones, untuned), a useful skill was loaded for 73% (62-81%) of the 84 that need one ([C1](https://github.com/erik-hedstrom/loadout/blob/main/bench/RESULTS.md#c1-2026-10-08-new-held-out-requests)).
@@ -16,7 +16,7 @@
 
 **Engineering**
 - **Split, held-out data, cross-family judge.** Requests split by hash into a third for tuning and two thirds for reporting. The original 315 requests were used for tuning twice, so C1 wrote 300 new ones with a model that never saw the library. Codex wrote them and Claude judged.
-- **Two reviews before merge.** A read-only Claude `pr-reviewer` and a Codex adversarial review, with CI on Linux for every push and on Linux, macOS and Windows before merge. The first round on the credential-hardening PR ([#4](https://github.com/erik-hedstrom/loadout/pull/4)) found 2 High and 1 Medium from Codex and 3 Medium from `pr-reviewer`.
+- **Two reviews before merge.** A read-only Claude `pr-reviewer` and a Codex adversarial review, with CI on Linux for every push and on Linux, macOS and Windows before merge. On the credential-hardening PR ([#4](https://github.com/erik-hedstrom/loadout/pull/4)), both reviewers found High or Medium issues in the first round, which were fixed before merge.
 - **Claude and Codex on one backlog.** Both build and review each other's PRs from [one backlog](https://github.com/erik-hedstrom/loadout/blob/main/docs/loop/BACKLOG.md); Claude judges.
 
 More: the [README](https://github.com/erik-hedstrom/loadout#readme) and [all results](https://github.com/erik-hedstrom/loadout/blob/main/bench/RESULTS.md).
