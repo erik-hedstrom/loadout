@@ -75,9 +75,9 @@ All numbers, caveats and negative results: [bench/RESULTS.md](bench/RESULTS.md).
 - **Better work: not shown.** In an 8-request blind pilot with Codex,
   loadout's version won 4, lost 3 and split 1
   ([pilot](bench/RESULTS.md#is-the-work-better-outcome-pilot-2026-10-07)).
-- **Small libraries:** for a small library, the MCP search tools cost more
-  tokens than a native listing ([details](docs/mcp.md#cost-and-privacy)). The
-  Claude Code plugin adds only the hook, not these tools.
+- **Small libraries:** the MCP search tools cost more tokens than a native
+  listing ([details](docs/mcp.md#cost-and-privacy)). The Claude Code plugin
+  adds only the hook, not these tools.
 
 How it decides: [DESIGN.md](DESIGN.md). Security model: [SECURITY.md](SECURITY.md).
 It works only through official extension points (plugins, hooks, MCP, CLI
