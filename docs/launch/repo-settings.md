@@ -6,12 +6,13 @@ preview image are Erik's ([AGENTS.md](../../AGENTS.md) hard rule 4).
 ## Description
 
 ```
-Picks skills for each Claude Code or Codex prompt, and MCP servers and model tier per launched session, routed by Jev.
+Picks skills for each Claude Code prompt, and skills, MCP servers and model tier for each session it launches, using Jev.
 ```
 
-118 characters (GitHub allows 350). The prompt hook routes skills only; MCP
-servers and the model tier apply when the launcher starts a session
-([docs/hosts.md](../hosts.md)). It makes no claim a benchmark has to back.
+121 characters (GitHub allows 350). The prompt hook routes skills only; MCP
+servers and the model tier are chosen when the launcher starts a session, and
+the tier reaching the agent is untested ([docs/hosts.md](../hosts.md), note 2).
+The Codex hook is left out until a live run checks it (backlog D2). It makes no claim a benchmark has to back.
 Leave the website field empty until there is a page to point to.
 
 ## Topics
@@ -34,9 +35,9 @@ affects who finds loadout is not measured.
 | `developer-tools` | not checked | A general tag for a CLI people install. |
 | `typescript` | not checked | The implementation language. |
 
-11 topics, within GitHub's limit of 20. Skipped: the broader `llm`,
-`claude` and `codex` (39,141 repos); `codex-cli` is the narrower choice for
-Codex.
+11 topics, within GitHub's limit of 20. Skipped: the broader `llm` and
+`claude` (not counted), and `codex` (39,141 repos), where `codex-cli` is the
+narrower choice.
 
 ## Steps for Erik
 
@@ -53,8 +54,8 @@ Codex.
 The image's one figure, `$0.0011 per routing decision`, is from
 [v4](../../bench/RESULTS.md#v4-2026-10-06-realistic-requests-on-the-real-library-judged),
 315 realistic requests. On C1's 300 new requests the mean was $0.0012
-([C1](../../bench/RESULTS.md#c1-2026-10-08-new-held-out-requests)), so edit
-both files if you would rather show a range. To change the image, edit the SVG
-and render it again at an exact 1280 x 640 viewport, for example with
+([C1](../../bench/RESULTS.md#c1-2026-10-08-new-held-out-requests)); change
+the figure if you would rather show a range. To change the image, edit the SVG
+and render the PNG again at an exact 1280 x 640 viewport, for example with
 Puppeteer's `page.setViewport` and `page.screenshot`; Chrome's
 `--window-size` flag leaves a blank strip at the bottom.

@@ -172,8 +172,6 @@ README and `CHANGELOG.md` (Unreleased only). Left for Erik: apply the settings
 and upload the preview.
 
 Learnings:
-- The preview's one figure is v4's $0.0011 per decision. C1's mean is $0.0012,
-  so the image shows v4 and says so.
 - The CHANGELOG has no version section while A4 (npm) and E5 (release
   automation) are open.
 
