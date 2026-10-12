@@ -152,8 +152,6 @@ native machine:
 
 ## Known issues and debt
 
-- **HTTP searches:** cancellation does not reach Jev when a client
-  disconnects. A concurrency cap bounds it.
 - **Gateway approvals:** the gateway exposes library servers through one
   generic `call_server_tool`. Native per-tool approvals need `tools/list_changed`.
 - **Codex hook:** not tested live, because trusting it needs `/hooks`
