@@ -224,8 +224,11 @@ export function materialize(
 
   if (agent === 'claude' && isolate) {
     // `--strict-mcp-config` is not documented to drop the claude.ai connectors the CLI fetches itself; this setting does.
+    // Inside an IDE terminal Claude Code connects to the IDE on its own. The variable turns that off, and set here it
+    // outranks the shell and the user, project and local settings files.
     session.settings = join(dir, 'settings.json');
-    writeFileSync(session.settings, JSON.stringify({ disableClaudeAiConnectors: true }), { mode: 0o600 });
+    const settings = { disableClaudeAiConnectors: true, env: { CLAUDE_CODE_AUTO_CONNECT_IDE: 'false' } };
+    writeFileSync(session.settings, JSON.stringify(settings), { mode: 0o600 });
   }
 
   return session;
@@ -360,7 +363,7 @@ export const windowsPath = (p: string) => execFileSync('wslpath', ['-w', p], { e
 export interface LaunchOptions {
   /** Run once and exit (`claude -p`, `codex exec`) instead of an interactive session. */
   headless?: boolean;
-  /** Codex: skip the user's config.toml. Claude: no automatic IDE connection; the rest comes from `materialize(..., isolate)`. */
+  /** Codex: skip the user's config.toml. Claude's isolation comes from `materialize(..., isolate)`. */
   isolate?: boolean;
   toPath?: (p: string) => string;
 }
@@ -479,12 +482,7 @@ export function codexArgs(session: Session, task: string, extra: string[], opts:
 export function launch(bin: string, args: string[], opts: LaunchOptions = {}): Promise<number> {
   return new Promise((resolve, reject) => {
     // Headless runs get no stdin: `codex exec` otherwise waits for more prompt text on a non-TTY stdin.
-    // Inside an IDE terminal Claude Code connects to the IDE on its own; only this variable turns that off for one
-    // session. WSLENV carries it to a Windows-side claude.exe.
-    const env = opts.isolate
-      ? { ...process.env, CLAUDE_CODE_AUTO_CONNECT_IDE: 'false', WSLENV: [process.env.WSLENV, 'CLAUDE_CODE_AUTO_CONNECT_IDE'].filter(Boolean).join(':') }
-      : undefined;
-    const child = spawn(bin, args, { stdio: opts.headless ? ['ignore', 'inherit', 'inherit'] : 'inherit', env });
+    const child = spawn(bin, args, { stdio: opts.headless ? ['ignore', 'inherit', 'inherit'] : 'inherit' });
     child.on('error', reject);
     child.on('exit', (code, signal) => resolve(code ?? (signal ? 1 : 0)));
   });

@@ -887,7 +887,8 @@ describe('launch', () => {
     const claude = materialize(decision, 'claude', DEFAULT_CONFIG, tempDir('loadout-s-'), (p) => p, true);
     const isolated = claudeArgs(claude, TASK, ['--permission-mode', 'plan']);
     expect(isolated.slice(-4)).toEqual(['--strict-mcp-config', '--no-chrome', '--settings', claude.settings]);
-    expect(JSON.parse(readFileSync(claude.settings!, 'utf8'))).toEqual({ disableClaudeAiConnectors: true });
+    // In the session's --settings file, the IDE opt-out outranks a user, project or local settings `env` that turns it on.
+    expect(JSON.parse(readFileSync(claude.settings!, 'utf8'))).toEqual({ disableClaudeAiConnectors: true, env: { CLAUDE_CODE_AUTO_CONNECT_IDE: 'false' } });
     // loadout's own servers still load; the flag only drops the others.
     expect(isolated).toContain('--mcp-config');
     expect(isolated).toContain('--plugin-dir');
@@ -921,17 +922,6 @@ describe('launch', () => {
       expect(refused.result.stderr).toMatch(/^loadout: --isolate refuses (--mcp-config|--settings|-c) after --: it would undo the isolation\n$/);
       expect(refused.sessions).toBe(false);
     }
-  });
-
-  it('launches an isolated agent with IDE auto-connect off, and leaves the environment alone otherwise', async () => {
-    const dir = tempDir('loadout-isolate-env-');
-    const dump = (file: string) => ['-e', "require('node:fs').writeFileSync(process.argv[1], JSON.stringify(process.env))", file];
-    vi.stubEnv('CLAUDE_CODE_AUTO_CONNECT_IDE', 'true');
-    expect(await launch(process.execPath, dump(join(dir, 'iso.json')), { headless: true, isolate: true })).toBe(0);
-    expect(JSON.parse(readFileSync(join(dir, 'iso.json'), 'utf8'))).toMatchObject({ CLAUDE_CODE_AUTO_CONNECT_IDE: 'false', WSLENV: expect.stringContaining('CLAUDE_CODE_AUTO_CONNECT_IDE') });
-    expect(await launch(process.execPath, dump(join(dir, 'plain.json')), { headless: true })).toBe(0);
-    expect(JSON.parse(readFileSync(join(dir, 'plain.json'), 'utf8')).CLAUDE_CODE_AUTO_CONNECT_IDE).toBe('true');
-    vi.unstubAllEnvs();
   });
 
   it('finds passthrough arguments that would undo --isolate, in every spelling', () => {

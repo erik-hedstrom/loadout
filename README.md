@@ -163,10 +163,11 @@ adding official flags to the agent's command line only. It writes nothing to
 `~/.claude` or `~/.codex`.
 
 - Claude Code: `--strict-mcp-config` (loadout's own servers still load),
-  `--settings <file>` with `disableClaudeAiConnectors` for the claude.ai
-  connectors, written to the session folder, `--no-chrome`, and
-  `CLAUDE_CODE_AUTO_CONNECT_IDE=false` in the agent's environment so an IDE
-  terminal does not connect it to the IDE. All are in the
+  `--no-chrome`, and `--settings <file>`, written to the session folder,
+  with `disableClaudeAiConnectors` for the claude.ai connectors and
+  `env.CLAUDE_CODE_AUTO_CONNECT_IDE=false` so an IDE terminal does not
+  connect it to the IDE. That file outranks your user, project and local
+  settings, but not managed settings. All are in the
   [CLI reference](https://code.claude.com/docs/en/cli-reference),
   [settings reference](https://code.claude.com/docs/en/settings-reference#disableclaudeaiconnectors)
   and [environment variables](https://code.claude.com/docs/en/env-vars).
@@ -181,8 +182,9 @@ adding official flags to the agent's command line only. It writes nothing to
 Arguments after `--` pass through unchanged, except those that would undo
 the isolation, which `--isolate` refuses before routing: Claude Code's
 `--settings`, `--mcp-config`, `--agents` (inline agents can define MCP
-servers), `--plugin-dir`, `--plugin-url`, `--chrome` and `--ide`, and Codex's `--enable` and `-c`/`--config`
-overrides of `mcp_servers` or `features`.
+servers), `--plugin-dir`, `--plugin-url`, `--chrome` and `--ide`, and
+Codex's `--enable` and `-c`/`--config` overrides of `mcp_servers` or
+`features`.
 
 Not hidden:
 
@@ -190,6 +192,8 @@ Not hidden:
   installed plugins or their servers (nor those from
   `CLAUDE_CODE_PLUGIN_DIRS`), and an installed loadout hook plugin still runs
   next to the launcher.
+- Claude Code subagents from `~/.claude/agents/` or `.claude/agents/`: their
+  `mcpServers` field can add servers when the subagent runs.
 - Claude Code settings files (user, project, local): their hooks, permissions
   and other settings still apply. `--setting-sources` could drop them, but it
   also drops your permissions and model, so `--isolate` does not use it.
