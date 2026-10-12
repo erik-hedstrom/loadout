@@ -222,24 +222,20 @@ function readScanCache(dir: string, root: string): ScanCache | undefined {
 
 function writeScanCache(dir: string, cache: ScanCache): void {
   const tmp = join(dir, `${SCAN_CACHE_FILE}.${randomUUID()}.tmp`);
-  const report = (err: unknown) => {
-    const code = (err as NodeJS.ErrnoException)?.code;
-    // Another Windows hook may still hold the destination open; a later scan can retry quietly.
-    if (code !== 'EPERM' && code !== 'EBUSY') console.error('loadout: library metadata cache could not be saved');
-  };
   try {
     mkdirSync(dir, { recursive: true });
     writeFileSync(tmp, JSON.stringify(cache), { flag: 'wx' });
     renameSync(tmp, join(dir, SCAN_CACHE_FILE));
   } catch (err) {
     // Cache persistence cannot prevent routing, and errors may quote untrusted paths or contents.
-    report(err);
-  } finally {
+    const code = (err as NodeJS.ErrnoException).code;
+    // Another Windows hook may still hold the destination open; a later scan can retry quietly.
+    if (code !== 'EPERM' && code !== 'EBUSY') console.error('loadout: library metadata cache could not be saved');
+    // The failure is reported once above. A cleanup error (ENOTDIR on Linux when the index
+    // path is a file) adds nothing, and a leftover temp file has a unique name.
     try {
       rmSync(tmp, { force: true });
-    } catch (err) {
-      report(err);
-    }
+    } catch {}
   }
 }
 

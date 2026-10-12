@@ -100,7 +100,8 @@ describe('library metadata cache', () => {
     expect(JSON.parse(readFileSync(file, 'utf8')).skills).toHaveLength(2);
   });
 
-  it('contains cleanup failures so they cannot abort routing', () => {
+  it('contains cleanup failures so they cannot abort routing or report twice', () => {
+    writeFileSync(join(home, 'index'), 'CACHE-CANARY');
     const remove = vi.spyOn(fs, 'rmSync').mockImplementation(() => { throw Object.assign(new Error('CACHE-CANARY'), { code: 'EACCES' }); });
     const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
     syncBuiltinESMExports();
