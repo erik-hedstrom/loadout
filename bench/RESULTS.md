@@ -474,28 +474,27 @@ Cost: $0, with no Jev calls.
 
 ### Routed prompts with the library scan cache (D11, 2026-10-12)
 
-**A routed prompt starts 238 ms sooner (p50).** The routing paths now read
+**The library scan fell from 136 to 22 ms (p50), and the hook's new process
+from 1,781 to 1,543 ms.** The routing paths now read
 parsed skill metadata from a cache under `LOADOUT_HOME/index` and re-parse
 only changed manifests ([#24](https://github.com/erik-hedstrom/loadout/pull/24)).
 [hook-latency.ts](hook-latency.ts) ran on main (741f85a), then on the branch
 (6e5969a). WSL, Node 24.15, the 1,262-skill library, real Jev, 20 dev prompts
 each:
 
-| Step (ms), p50 / p95 | main | cache |
+| ms, p50 / p95 | main | cache |
 |---|---:|---:|
-| scanLibrary | 136 / 205 | 22 / 28 |
-| Jev wide | 509 / 651 | 514 / 629 |
-| Jev close | 367 / 421 | 375 / 414 |
+| scanLibrary, in process | 136 / 205 | 22 / 28 |
+| Jev wide, in process | 509 / 651 | 514 / 629 |
+| Jev close, in process | 367 / 421 | 375 / 414 |
 | `loadout hook claude`, new process | 1,781 / 1,894 | 1,543 / 1,645 |
 
-- The Jev steps match across the two runs, so the difference in the new
-  process is not Jev's. Each arm still made its own Jev requests.
-- The step rows come from the bench process, where the cache is warm after
-  the first prompt. The new process was timed only as a whole, so its 238 ms
-  is not split by step.
-- An earlier pair at 10 prompts gave 1,798 vs 1,613 ms (p50). Its p95 went
-  the other way (2,014 vs 2,342): at that size, a single slow Jev call
-  decides the p95.
+- The in-process rows come from the bench process, where the cache is warm
+  after the first prompt. The new process makes its own Jev requests and was
+  timed only as a whole, so how much of its 238 ms comes from the scan, and
+  how much from its Jev calls: not shown.
+- An earlier pair at 10 prompts gave 1,798 vs 1,613 ms (p50); its p95 went
+  the other way (2,014 vs 2,342). The cause of that reversal: not shown.
 - Left: the query-embedding model load. Cutting it per process would need a
   long-lived process.
 - One machine, one evening, runs in sequence.
