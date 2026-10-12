@@ -18,9 +18,10 @@ The orchestrator keeps this file current. Statuses: `todo`, `in progress (PR #)`
 
 New router tuning only happens on new held-out requests (C1).
 
-In-host first (Erik, 2026-10-07): loadout works inside Claude Code, in the
-CLI and the desktop app, through a plugin and its prompt hook (D10). The
-launcher is for power users and benchmarks.
+In-host first (Erik, 2026-10-07): loadout runs inside Claude Code, in the
+CLI and the desktop app, through a plugin and its prompt hook (D10). Shown
+for the CLI only so far ([docs/hosts.md](../hosts.md)). The launcher is for
+power users and benchmarks.
 
 ## A. Adoption and ease of use
 
@@ -173,7 +174,7 @@ cross-vendor agents). Erik publishes.
 
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
-| C1 | P0 | New held-out request set + re-measure v4 | Codex (seeds, expand) + Claude (judge) | local | review ([#16](https://github.com/erik-hedstrom/loadout/pull/16)): precision falls on new requests (64% vs 82%) |
+| C1 | P0 | New held-out request set + re-measure v4 | Codex (seeds, expand) + Claude (judge) | local | done ([#16](https://github.com/erik-hedstrom/loadout/pull/16)): precision falls on new requests (64% vs 82%); judged through local `claude -p`, not the API (see Learnings) |
 | C2 | P1 | Outcome eval on the small tier with fixed fixtures | Claude (design) | cloud (fixtures) + local (runs) | todo |
 | C3 | P1 | Does Jev pick a sensible model tier? | Claude | cloud | todo (after E7) |
 | C4 | P1 | Demote generic "fits everything" skills | Codex | cloud | todo (next: C1 shows over-loading on general business requests) |
@@ -304,17 +305,17 @@ Acceptance: a third row in that RESULTS table, with raw results. The README's
 
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
-| D10 | P0 | In-host first: loadout as a Claude Code plugin (hook), CLI then desktop app | Codex | cloud + local + erik | review (plugin, CLI check, latency); desktop app check pending (Erik) |
-| D11 | P1 | Cut the hook's per-prompt start cost | Codex | cloud + local | in progress ([#14](https://github.com/erik-hedstrom/loadout/pull/14): follow-ups skip start-up, relay loads on demand) |
+| D10 | P0 | In-host first: loadout as a Claude Code plugin (hook), CLI then desktop app | Codex | cloud + local + erik | blocked: desktop app check (Erik). Plugin merged in [#9](https://github.com/erik-hedstrom/loadout/pull/9) |
+| D11 | P1 | Cut the hook's per-prompt start cost | Codex | cloud + local | in progress ([#14](https://github.com/erik-hedstrom/loadout/pull/14) merged: follow-ups skip start-up, relay loads on demand); left: cut the library scan and model load for routed prompts, then the real-Jev `hook-latency.ts` run (needs `TYPESAFE_API_KEY` and `api.typesafe.ai` in the cloud environment) |
 | D1 | P0 | Validate on the new native Linux machine | Claude | local | todo (machine pending) |
 | D7 | P1 | `loadout doctor` | Claude | cloud | review |
 | D2 | P1 | Live Codex hook test | Claude | local + erik | todo |
 | D3 | P1 | Desktop and IDE hosts end to end | Claude | local | todo |
 | D5 | P2 | Isolation mode | Codex | cloud | todo |
 | D4 | P2 | Gateway: native tools via `tools/list_changed` | Codex | cloud | todo |
-| D6 | P2 | HTTP: cancellation reaches Jev | Codex | cloud | todo |
-| D8 | P1 | Host capability matrix (verified vs generated) | Codex | cloud | todo |
-| D9 | P1 | Codex parity: neutral session skill dir, tier presets | Codex | cloud | todo (after E9) |
+| D6 | P2 | HTTP: cancellation reaches Jev | Claude | cloud | done ([#19](https://github.com/erik-hedstrom/loadout/pull/19)) |
+| D8 | P1 | Host capability matrix (verified vs generated) | Claude | cloud | done ([#18](https://github.com/erik-hedstrom/loadout/pull/18)) |
+| D9 | P1 | Codex parity: neutral session skill dir, tier presets | Claude | cloud | done ([#21](https://github.com/erik-hedstrom/loadout/pull/21)); Codex launch not re-run live |
 
 **D10. In-host first: loadout as a Claude Code plugin.**
 
@@ -445,6 +446,12 @@ Acceptance:
   to `fetch`.
 - A test shows a disconnected client stops the Jev call.
 
+Learnings (2026-10-09): no new plumbing on the server side. The MCP SDK
+already aborts a handler's `extra.signal` when the transport closes, and
+`serveHttp` closes it when the response closes. The same signal handles a
+stdio host's `notifications/cancelled`. A cancelled request is not retried,
+and its error is fixed text like the other Jev diagnostics.
+
 **D8. Host capability matrix.**
 
 Why (Sol review, 2026-10-07): the README promises model, skill and MCP
@@ -454,9 +461,16 @@ and ChatGPT skills-only HTTP search. A non-Claude user notices.
 
 Acceptance:
 - `docs/hosts.md`: one table, hosts × {launch, tier, hook, search, gateway},
-  each cell "verified" (with the date and how), "generated, untested" or
-  "not supported".
+  each cell "verified" (with the date and how), "untested" (implemented,
+  not run in that host) or "not supported".
 - README and `setup` output claim no more than the table.
+
+Learnings (2026-10-09): every "verified" cell traces to a RESULTS section.
+Tier stays untested: no recorded run shows a tier choice reaching the agent.
+The README and `setup` output already claimed no more than the table, so
+they only gained a link; HANDOFF's untested-hosts note now points to it.
+Gateway is untested in every host: only the unit tests' canary server has
+exercised it.
 
 **D9. Codex parity.**
 
@@ -469,6 +483,12 @@ Acceptance:
   only for Claude.
 - Tier mappings are documented as model/effort presets, labelled
   unvalidated until C3 measures them.
+
+Learnings (2026-10-09): Codex sessions now copy skills to
+`<session>/skills/` with no `.claude-plugin/`; Claude sessions keep
+`<session>/plugin/skills/`, which `--plugin-dir` needs. `Session.skillsDir`
+names the copies for both. The README table and the `tiers` config comment
+call the mappings unvalidated presets.
 
 **D7. `loadout doctor`.**
 
@@ -499,7 +519,7 @@ Learnings (2026-10-09):
 | E1 | P0 | GitHub Actions CI | Codex | cloud | done ([PR #2](https://github.com/erik-hedstrom/loadout/pull/2)) |
 | E2 | P0 | LICENSE, CONTRIBUTING, SECURITY.md, templates | Claude | cloud + erik | done ([PR #1](https://github.com/erik-hedstrom/loadout/pull/1)) |
 | E7 | P0 | Vendor-independent bench judges and expander | Codex | cloud | done ([PR #5](https://github.com/erik-hedstrom/loadout/pull/5)) |
-| E8 | P0 | Repo-wide simplification pass | Claude (pr-reviewer finds, worker fixes) + Codex review | cloud | in progress (bench/ in [PR #11](https://github.com/erik-hedstrom/loadout/pull/11), src/ in [PR #12](https://github.com/erik-hedstrom/loadout/pull/12); Markdown in [PR #15](https://github.com/erik-hedstrom/loadout/pull/15)) |
+| E8 | P0 | Repo-wide simplification pass | Claude (pr-reviewer finds, worker fixes) + Codex review | cloud | in progress (merged: bench/ [#11](https://github.com/erik-hedstrom/loadout/pull/11), src/ [#12](https://github.com/erik-hedstrom/loadout/pull/12), Markdown [#15](https://github.com/erik-hedstrom/loadout/pull/15)); left: the Markdown #15 did not cover (listed under E8) and the WSL-only `bench.test.ts` failure |
 | E9 | P0 | Security hardening from the read-only Sol review | Codex | cloud | done ([PR #4](https://github.com/erik-hedstrom/loadout/pull/4), re-measure [PR #7](https://github.com/erik-hedstrom/loadout/pull/7)) |
 | E3 | P1 | Split the test file per module | Codex | cloud | todo |
 | E5 | P1 | Changelog and release automation | Codex | cloud | todo (with A4) |
@@ -642,6 +662,12 @@ Area 2 (`src/`): done in [PR #12](https://github.com/erik-hedstrom/loadout/pull/
 tests changed only where they tested something deleted (`prefilter()`, A2's
 `toolTokens > 0`).
 
+Markdown left after [PR #15](https://github.com/erik-hedstrom/loadout/pull/15):
+`docs/loop/BACKLOG.md`, `docs/loop/ORCHESTRATOR.md`, `bench/RESULTS.md`,
+`AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md`, `SECURITY.md`,
+`.claude/agents/*.md` and `.github/pull_request_template.md`. Out of scope:
+`bench/results/**` (recorded output, kept as run) and `test/fixtures/`.
+
 Starting points from Sol's review (2026-10-07):
 - `src/`, ≈ 40–60 lines: `prefilter()` is used only by tests
   (production uses `hybridRank()`); the `inverted` metadata in route.ts is
@@ -711,3 +737,4 @@ integration layers, readable in both light and dark themes.
 | 2026-10-08 (iter 4) | E11 #10 | Approved, waiting on CI (Actions blocked by the account billing limit): #11 E8 bench, #12 E8 src, #13 label-gated CI, #14 D11. Reviews running: #15 E8 Markdown. C1 seeds and expansion under way | Jev $0 / Claude: pr-reviewer rounds (subscription) / Codex: builds, reviews, C1 seed batches (ChatGPT plan) | CI billing (raise the limit or wait for the reset); desktop app check (D10); security contact; B1 raw-row names |
 | 2026-10-08 (iter 4, later) | — | C1 #16 (measured: recall holds, precision falls; reviews running). E12 found: codex exec cannot run tool-less on codex-cli 0.160.1 | Jev $0.60 (three C1 sweeps, one slowed by Jev) / Claude: judge $3.68 (C1) + $2.08 (control), pr-reviewer rounds / Codex: C1 seeds and expansion (55 batches), builds, reviews | As in iter 4 |
 | 2026-10-09 (iter 5) | #13 label-gated CI (`ci-full` label created), #11 and #12 E8 bench/src, #14 D11, #15 E8 docs, #16 C1 | — | Jev $0 / Claude: merges and conflict fixes / Codex: none | Actions runs again (GitHub Pro). Next work goes to a cloud session (Claude weekly usage at 96%) |
+| 2026-10-09 (iter 6, cloud) | — | Open PRs, each updating its own row: [#17](https://github.com/erik-hedstrom/loadout/pull/17) backlog statuses, [#18](https://github.com/erik-hedstrom/loadout/pull/18) D8, [#19](https://github.com/erik-hedstrom/loadout/pull/19) D6, [#20](https://github.com/erik-hedstrom/loadout/pull/20) D7, [#21](https://github.com/erik-hedstrom/loadout/pull/21) D9 | Jev $0 (no key in the cloud environment) / Claude: cloud-session credit / Codex: reviews on GitHub | Add `TYPESAFE_API_KEY` and `api.typesafe.ai` (and `huggingface.co`) to the cloud environment for D11's real-Jev run and C4 |

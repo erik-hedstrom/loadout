@@ -29,7 +29,9 @@ export interface Session {
   injected: string[];
   /** Translate a local path for the agent binary (identity unless a Windows binary under WSL). */
   toPath: (p: string) => string;
-  /** Generated Claude Code plugin holding the selected skills. */
+  /** Copies of the session's skills, one folder each. For Claude it sits inside `pluginDir`. */
+  skillsDir?: string;
+  /** Generated Claude Code plugin holding `skillsDir` (Claude only). */
   pluginDir?: string;
   /** Generated MCP config in Claude Code's `--mcp-config` format. */
   mcpConfig?: string;
@@ -185,20 +187,24 @@ export function materialize(
   };
 
   if (skills.length > 0) {
-    session.pluginDir = join(dir, 'plugin');
-    mkdirSync(join(session.pluginDir, '.claude-plugin'), { recursive: true });
-    writeFileSync(
-      join(session.pluginDir, '.claude-plugin', 'plugin.json'),
-      JSON.stringify({ name: PLUGIN_NAME, version: '0.1.0', description: 'Skills selected by loadout for this session', author: { name: 'loadout' } }, null, 2),
-    );
+    // Codex reads the skills by path from its prompt, so only Claude gets plugin metadata around them.
+    if (agent === 'claude') {
+      session.pluginDir = join(dir, 'plugin');
+      mkdirSync(join(session.pluginDir, '.claude-plugin'), { recursive: true });
+      writeFileSync(
+        join(session.pluginDir, '.claude-plugin', 'plugin.json'),
+        JSON.stringify({ name: PLUGIN_NAME, version: '0.1.0', description: 'Skills selected by loadout for this session', author: { name: 'loadout' } }, null, 2),
+      );
+    }
+    session.skillsDir = join(session.pluginDir ?? dir, 'skills');
     for (const skill of skills) {
-      copySkillConfined(skill.source, join(session.pluginDir, 'skills', basename(skill.source)));
+      copySkillConfined(skill.source, join(session.skillsDir, basename(skill.source)));
     }
   }
 
   for (const s of decision.selected) {
-    if (!s.inject || !config.inject.enabled || s.capability.kind !== 'skill' || !session.pluginDir) continue;
-    const block = injectionBlock(s.capability, s.inject, toPath(join(session.pluginDir, 'skills', basename(s.capability.source))), prefix + s.capability.name);
+    if (!s.inject || !config.inject.enabled || s.capability.kind !== 'skill' || !session.skillsDir) continue;
+    const block = injectionBlock(s.capability, s.inject, toPath(join(session.skillsDir, basename(s.capability.source))), prefix + s.capability.name);
     if (block) session.injected.push(block);
   }
 
@@ -387,7 +393,7 @@ export function codexPrompt(session: Session, task: string): string {
   if (session.skills.length === 0) return [task, ...(session.relevance ? ['', session.relevance] : []), ...injected].join('\n');
   // Names and descriptions are third-party text: they cannot open or close loadout's tags.
   const line = (s: Capability) =>
-    `- ${escapeSkillTags(s.name)} (${escapeSkillTags(session.toPath(join(session.pluginDir!, 'skills', basename(s.source), 'SKILL.md')))}): ${escapeSkillTags(s.description)}`;
+    `- ${escapeSkillTags(s.name)} (${escapeSkillTags(session.toPath(join(session.skillsDir!, basename(s.source), 'SKILL.md')))}): ${escapeSkillTags(s.description)}`;
   const optional = session.skills.filter((s) => !session.primary.includes(s));
   return [
     task,

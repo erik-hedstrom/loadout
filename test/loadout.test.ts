@@ -492,8 +492,8 @@ catch (err) { console.log(err.message); }
     writeFileSync(join(dir, 'refs', 'binary.bin'), Buffer.from([0, 1, 255]));
     writeFileSync(join(dir, 'refs', 'run.sh'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
     const session = materialize(decision, 'codex', config, tempDir('loadout-s-'));
-    expect(readFileSync(join(session.pluginDir!, 'skills', dir.split(/[\\/]/).at(-1)!, 'refs', 'binary.bin'))).toEqual(Buffer.from([0, 1, 255]));
-    if (process.platform !== 'win32') expect(statSync(join(session.pluginDir!, 'skills', dir.split(/[\\/]/).at(-1)!, 'refs', 'run.sh')).mode & 0o777).toBe(0o755);
+    expect(readFileSync(join(session.skillsDir!, dir.split(/[\\/]/).at(-1)!, 'refs', 'binary.bin'))).toEqual(Buffer.from([0, 1, 255]));
+    if (process.platform !== 'win32') expect(statSync(join(session.skillsDir!, dir.split(/[\\/]/).at(-1)!, 'refs', 'run.sh')).mode & 0o777).toBe(0o755);
     writeFileSync(join(dir, 'large.bin'), Buffer.alloc(20 * 1024 * 1024));
     expect(() => materialize(decision, 'codex', config, tempDir('loadout-s-'))).toThrow(/larger/);
     rmSync(join(dir, 'large.bin'));
@@ -592,6 +592,34 @@ catch (err) { console.log(err.message); }
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockRejectedValue(error);
     try {
       await expect(jevClient({ apiKey: 'fake', baseUrl: 'https://example.invalid', model: 'fake', retries: 0 }).ask({}, {})).rejects.toMatchObject({ message: expected });
+    } finally { fetchMock.mockRestore(); }
+  });
+
+  it('stops and does not retry when the caller cancels', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(
+      (_url, init) => new Promise((_resolve, reject) => init!.signal!.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))),
+    );
+    try {
+      const cancel = new AbortController();
+      const asked = jevClient({ apiKey: 'fake', baseUrl: 'https://example.invalid', model: 'fake', retries: 2 }).ask({}, {}, cancel.signal);
+      cancel.abort();
+      await expect(asked).rejects.toMatchObject({ message: 'Jev request cancelled' });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally { fetchMock.mockRestore(); }
+  });
+
+  it('stops during the retry backoff when the caller cancels', async () => {
+    const cancel = new AbortController();
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+      setTimeout(() => cancel.abort(), 20);
+      throw new TypeError('network down');
+    });
+    try {
+      const started = Date.now();
+      await expect(jevClient({ apiKey: 'fake', baseUrl: 'https://example.invalid', model: 'fake', retries: 2 }).ask({}, {}, cancel.signal)).rejects.toMatchObject({ message: 'Jev request cancelled' });
+      // The first backoff is 500 ms; a cancel ends it early and no second request goes out.
+      expect(Date.now() - started).toBeLessThan(400);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
     } finally { fetchMock.mockRestore(); }
   });
 
@@ -732,6 +760,25 @@ describe('route', () => {
     expect(decision.selected[0]?.capability.name).toBe('webapp-testing');
   });
 
+  it('rejects instead of falling back when the caller cancels', async () => {
+    const cancel = new AbortController();
+    const cancelling: SystemOneClient = {
+      ask: async () => {
+        cancel.abort();
+        throw new Error('Jev request cancelled');
+      },
+    };
+    await expect(route({ task: TASK, repo: REPO, library, config, client: cancelling, signal: cancel.signal })).rejects.toThrow('Jev request cancelled');
+  });
+
+  it('makes no Jev call when the caller cancels while the query is embedded', async () => {
+    const cancel = new AbortController();
+    const ask = vi.fn(fakeClient({}).client.ask);
+    const embeddings = { size: 1, query: async () => (cancel.abort(), undefined), vector: () => undefined } as unknown as NonNullable<Parameters<typeof route>[0]['embeddings']>;
+    await expect(route({ task: TASK, repo: REPO, library, config, client: { ask }, embeddings, signal: cancel.signal })).rejects.toThrow();
+    expect(ask).not.toHaveBeenCalled();
+  });
+
   it('rejects malformed Jev responses', () => {
     const q: Record<string, Question> = { a: { type: 'noul', instructions: 'x' } };
     expect(() => validateResponse({}, q)).toThrow('Jev response did not match the schema');
@@ -818,6 +865,10 @@ describe('launch', () => {
     expect(args[5]).not.toContain('postgresql://localhost/dev');
     expect(args[5]).toContain('"mcp:postgres"');
     expect(args.at(-1)).toMatch(/webapp-testing \(.*SKILL\.md\)[\s\S]*Also available if needed:\n- gh-actions-debug/);
+    expect(session.pluginDir).toBeUndefined();
+    expect(session.skillsDir).toBe(join(session.dir, 'skills'));
+    expect(existsSync(join(session.skillsDir!, 'webapp-testing', 'SKILL.md'))).toBe(true);
+    expect(args.at(-1)).toContain(join(session.skillsDir!, 'webapp-testing', 'SKILL.md'));
   });
 
   it('serialises TOML inline values and rejects what TOML cannot hold', () => {
@@ -1037,6 +1088,32 @@ describe('mcp server', () => {
       const loaded = (await client.callTool({ name: 'load_skill', arguments: { skill: 'pdf' } })) as { content: { text: string }[] };
       expect(loaded.content[0]!.text).toContain('<skill name="pdf"');
       await client.close();
+    } finally {
+      await http.close();
+    }
+  });
+
+  it('cancels the Jev call when an HTTP client disconnects mid-search', async () => {
+    let asked!: () => void;
+    const started = new Promise<void>((r) => (asked = r));
+    let cancelled!: () => void;
+    const aborted = new Promise<void>((r) => (cancelled = r));
+    const client: SystemOneClient = {
+      ask: (_state, _questions, signal) => {
+        asked();
+        signal?.addEventListener('abort', () => cancelled());
+        return new Promise(() => {});
+      },
+    };
+    const http = await serveHttp({ library: skills, config: DEFAULT_CONFIG, client }, { port: 0, host: '127.0.0.1' });
+    try {
+      const url = new URL(http.url);
+      const req = request({ host: url.hostname, port: url.port, path: '/mcp', method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream' } });
+      req.on('error', () => {});
+      req.end(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'find_skills', arguments: { goal: 'fill in a PDF form' } } }));
+      await started;
+      req.destroy();
+      await aborted;
     } finally {
       await http.close();
     }

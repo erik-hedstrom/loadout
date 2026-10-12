@@ -59,14 +59,14 @@ const EMBEDDINGS_WAIT_MS = 3000;
 const MAX_HTTP_IN_FLIGHT = 4;
 const delay = (ms: number) => sleep(ms, undefined, { ref: false });
 
-export async function findSkills(deps: SearchDeps, goal: string, keywords: string[] = []): Promise<string> {
+export async function findSkills(deps: SearchDeps, goal: string, keywords: string[] = [], signal?: AbortSignal): Promise<string> {
   const task = keywords.length ? `${goal}\nKeywords: ${keywords.join(', ')}` : goal;
   const repo = deps.repo ?? { name: 'project', files: [], dependencies: [], languages: {} };
   // Only what the agent can use from here: skills, and servers opted into the gateway.
   const library = deps.library.filter((c) => c.kind === 'skill' || c.gateway);
   // A search never waits long for the index (e.g. a first-run model download); keywords alone still work.
   const embeddings = deps.embeddings ? await Promise.race([deps.embeddings, delay(EMBEDDINGS_WAIT_MS)]) : undefined;
-  const d = await route({ task, repo, library, config: deps.config, client: deps.client, excerpt: skillExcerpt, embeddings });
+  const d = await route({ task, repo, library, config: deps.config, client: deps.client, excerpt: skillExcerpt, embeddings, signal });
   const best = new Set(d.selected.map((s) => s.capability));
   const lexical = d.router === 'lexical';
   // The agent asked, so the need gate does not hide good matches. But when Jev judges the goal to be
@@ -294,7 +294,8 @@ export function createServer(deps: SearchDeps): { server: McpServer; gateway: Ga
       },
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
-    ({ goal, keywords }) => textTool(() => findSkills(deps, goal, keywords)),
+    // The SDK aborts `signal` on a cancel notification and when the transport closes (an HTTP client gone).
+    ({ goal, keywords }, { signal }) => textTool(() => findSkills(deps, goal, keywords, signal)),
   );
 
   server.registerTool(
@@ -383,7 +384,7 @@ export async function serveHttp(deps: SearchDeps, opts: HttpOptions): Promise<{ 
     try {
       if (new URL(req.url ?? '/', 'http://localhost').pathname !== '/mcp') return void res.writeHead(404).end();
       if (!authorized(req.headers.authorization)) return void res.writeHead(401, { 'WWW-Authenticate': 'Bearer' }).end();
-      // Each search costs a Jev call and keeps running if the client goes away: cap how many run at once.
+      // Each search costs Jev calls: cap how many run at once. A client that goes away cancels its own.
       if (inFlight >= MAX_HTTP_IN_FLIGHT) return void res.writeHead(429, { 'Retry-After': '2' }).end();
       inFlight++;
       res.on('close', () => inFlight--);
