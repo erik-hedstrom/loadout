@@ -173,8 +173,8 @@ presenting loadout and the engineering behind it (benchmarks, reviews,
 cross-vendor agents). Erik publishes.
 
 Learnings: every number links to RESULTS with an absolute URL, because the
-file is copied into another repo. Anchors were checked against GitHub's slug
-rules. The cross-family judging claim covers C1 only: v4's requests were
+file is copied into another repo. Headline numbers are C1's untuned ones,
+with Wilson intervals. The cross-family judging claim covers C1 only: v4's requests were
 expanded by Sonnet and judged by Opus. Left: Erik writes the personal line and
 publishes.
 
