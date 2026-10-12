@@ -31,7 +31,7 @@ flowchart TB
     subgraph host["Host integration"]
         CH["Claude Code plugin<br/>loadout hook claude"]
         XH["Codex plugin<br/>loadout hook codex"]
-        MS["Search server<br/>loadout mcp"]
+        MS["Search server<br/>loadout mcp: find_skills"]
         LA["Launcher<br/>loadout claude / codex"]
     end
 
@@ -51,7 +51,7 @@ flowchart TB
     end
 
     subgraph out["Output"]
-        CTX["Context injection<br/>skill_relevance note; injected SKILL.md in the user turn"]
+        CTX["Context injection<br/>skill_relevance note; SKILL.md only for named or clear-winner skills"]
         SKL["Skill loading<br/>generated plugin and mcp.json, or load_skill"]
         TIER["Model tier, launcher only<br/>--model or -m"]
     end
@@ -64,7 +64,7 @@ flowchart TB
     MEN --> TIER
 ```
 
-Every host path calls the same `route()`.
+The hooks, the launcher and `find_skills` call the same `route()`; [Router](#router) step 6 says where the note and injected skills go.
 
 ### Integration layers
 
