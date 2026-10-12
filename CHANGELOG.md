@@ -12,7 +12,7 @@
 - `loadout doctor`, a read-only setup check ([#20](https://github.com/erik-hedstrom/loadout/pull/20)).
 - Claude Code plugin with the prompt hook ([#9](https://github.com/erik-hedstrom/loadout/pull/9)) and a Codex plugin carrying the hook and search server, installed offline, with a live run pending under D2 ([#23](https://github.com/erik-hedstrom/loadout/pull/23)).
 - Host capability matrix ([#18](https://github.com/erik-hedstrom/loadout/pull/18)) and host-neutral session skills ([#21](https://github.com/erik-hedstrom/loadout/pull/21)).
-- Judge backends for Claude, Codex and offline files ([#5](https://github.com/erik-hedstrom/loadout/pull/5)).
+- Judge backends for Claude and offline files, and a Codex backend that refuses to run while the Codex CLI keeps its exec tools on, as codex-cli 0.160.1 does (backlog E12) ([#5](https://github.com/erik-hedstrom/loadout/pull/5)).
 - Measurements: what installed skills cost per request ([#6](https://github.com/erik-hedstrom/loadout/pull/6); [B1 results](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request)), routing re-measured after the Jev framing change ([#7](https://github.com/erik-hedstrom/loadout/pull/7)), and 300 new held-out requests where recall holds and precision falls ([#16](https://github.com/erik-hedstrom/loadout/pull/16); [C1](bench/RESULTS.md#c1-2026-10-08-new-held-out-requests)).
 - Apache-2.0 license, NOTICE, CONTRIBUTING, SECURITY and issue templates ([#1](https://github.com/erik-hedstrom/loadout/pull/1)).
 - GitHub Actions CI on Ubuntu, macOS and Windows, Node 22 and 24 ([#2](https://github.com/erik-hedstrom/loadout/pull/2)).
