@@ -56,6 +56,7 @@ flowchart TB
         SKL["Skill loading, launcher only<br/>Claude: plugin<br/>Codex: paths in the prompt"]
         MCPS["Selected MCP servers, launcher only<br/>Claude: mcp.json<br/>Codex: -c mcp_servers"]
         TIER["Model tier, launcher only<br/>--model or -m"]
+        FSR["find_skills result<br/>ranked matches with fit, returned to the agent"]
     end
 
     host -->|"task + repo signals"| routing
@@ -67,6 +68,7 @@ flowchart TB
     MEN --> SKL
     MEN --> MCPS
     MEN --> TIER
+    MEN --> FSR
 ```
 
 ### Integration layers
