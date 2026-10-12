@@ -7,8 +7,8 @@ Codex reads this file directly; Claude Code reads it through CLAUDE.md. Read
 ## What this is
 
 loadout picks the skills, MCP servers and model tier for each coding-agent
-session or prompt, out of a library of any size, using a very cheap System One
-model (TypeSafe's Jev). TypeScript, Node ≥ 22.12, ESM, strict.
+session or prompt, using TypeSafe's Jev, a cheap System One model.
+TypeScript, Node ≥ 22.12, ESM, strict.
 
 It runs inside the stock `claude` and `codex` CLIs, through the plugin, hooks
 and MCP. New work targets that path first. The `loadout claude|codex`
@@ -59,8 +59,6 @@ npm run dev -- route "<task>"   # needs a TypeSafe key (TYPESAFE_API_KEY or `loa
 
 ## Evaluation discipline
 
-These rules are why the numbers can be trusted. Keep it that way.
-
 - **Split.** Requests split by hash into dev (1/3) and test (2/3)
   (`splitOf`). Tune on dev, report on test, and never tune on test.
 - **Overfitting.** The 315 realistic requests in `bench/data/requests.jsonl`
@@ -79,12 +77,12 @@ These rules are why the numbers can be trusted. Keep it that way.
 ## Engineering conventions
 
 - **Code style:** match the surrounding code. Small modules, pure functions
-  where possible (`decide()` is pure on purpose).
-- **Comments** explain *why*, not what.
+  where possible (`decide()` is pure on purpose). Comments explain *why*, not
+  what.
 - **Dependencies:** no new runtime dependency without a reason in the PR.
   `@huggingface/transformers` stays optional.
 - **Tests:** in `test/` with vitest, using the fake Jev client (`fakeClient`).
-  - Every bug fix gets a test.
+  - New behavior and every bug fix get a test.
   - Every security-relevant path (file reads, escaping, auth) gets an
     adversarial test.
 - **Third-party text:** escape it with `escapeSkillTags` before it goes into
@@ -161,3 +159,5 @@ violations with file:line and a concrete fix.
 - `claude -p` and `codex exec` cost subscription quota. Cloud tasks cannot
   run them, so agent-in-the-loop benchmarks (`bench/invoke.ts`,
   `bench/outcome.ts`) run on a machine where those CLIs are logged in.
+- Do not run `bench/judge.ts` in a cloud session
+  ([why](docs/loop/ORCHESTRATOR.md#cloud-fallback)).
