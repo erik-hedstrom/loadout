@@ -56,7 +56,7 @@ flowchart TB
         SKL["Skill loading, launcher only<br/>Claude: plugin<br/>Codex: paths in the prompt"]
         MCPS["Selected MCP servers, launcher only<br/>Claude: mcp.json<br/>Codex: -c mcp_servers"]
         TIER["Model tier, launcher only<br/>--model or -m"]
-        FSR["find_skills result<br/>ranked matches, returned to the agent:<br/>a fit score from Jev, or keyword matches when lexical"]
+        FSR["find_skills result<br/>returned to the agent: ranked matches<br/>(a fit score from Jev, or keyword matches when lexical),<br/>or a note that nothing fits"]
     end
 
     host -->|"task + repo signals"| routing
