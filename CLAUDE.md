@@ -7,5 +7,3 @@
   through `--system-prompt-file`.
 - Subagents (`worker`, `pr-reviewer`) and the loop:
   [docs/loop/ORCHESTRATOR.md](docs/loop/ORCHESTRATOR.md).
-- When you finish a task, leave the repo with `npm test` and
-  `npm run typecheck` green and the backlog item updated.

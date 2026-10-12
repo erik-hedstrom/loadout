@@ -727,7 +727,9 @@ line (`.claude/settings.json` owns it). The rule "never run judges in a cloud
 session" moved from `CLAUDE.md` to `AGENTS.md` "Environment notes", so Codex
 and cloud workers read it too (pr-reviewer caught the first draft dropping
 it). `worker.md` points to `AGENTS.md` instead of restating its hard rules and
-PR list. `AGENTS.md` lost two filler sentences. `CONTRIBUTING.md` and the PR
+PR list, and its steps point to `AGENTS.md`'s bars (tests, cost, backlog,
+commits) instead of copying them; `CLAUDE.md` lost its copy of the same bars.
+`AGENTS.md` lost two filler sentences. `CONTRIBUTING.md` and the PR
 template were checked against the code and the loop and left as they are.
 `SECURITY.md` points reporters to GitHub private vulnerability reporting,
 which was off on 2026-10-12; it is correct once Erik turns it on (HANDOFF
