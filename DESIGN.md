@@ -52,7 +52,8 @@ flowchart TB
 
     subgraph out["Output"]
         CTX["Context injection<br/>skill_relevance note; SKILL.md only for named or clear-winner skills"]
-        SKL["Skill loading<br/>Claude launcher: plugin + mcp.json<br/>Codex launcher: skill paths in the prompt + -c mcp_servers<br/>search server: load_skill"]
+        SKL["Skill loading<br/>Claude launcher: plugin<br/>Codex launcher: paths in the prompt<br/>search server: load_skill"]
+        MCPS["MCP servers and search, launcher only<br/>Claude: mcp.json<br/>Codex: -c mcp_servers"]
         TIER["Model tier, launcher only<br/>--model or -m"]
     end
 
@@ -61,6 +62,7 @@ flowchart TB
     LIB -->|"no key or lexical router"| LEX
     MEN --> CTX
     MEN --> SKL
+    MEN --> MCPS
     MEN --> TIER
 ```
 
