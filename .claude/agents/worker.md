@@ -11,13 +11,7 @@ item ID, its acceptance criteria and any constraints.
 
 ## Before you start
 
-Read `AGENTS.md` and follow it exactly. Most of all:
-- never print or commit secrets;
-- never edit the user's agent configs;
-- nothing public;
-- evaluation discipline.
-
-Then read the item in `docs/loop/BACKLOG.md` and only the code it touches.
+Read `AGENTS.md` and follow it exactly. Then read the item in `docs/loop/BACKLOG.md` and only the code it touches.
 
 ## Do the work
 
@@ -36,13 +30,8 @@ Then read the item in `docs/loop/BACKLOG.md` and only the code it touches.
 7. Make small commits whose messages say what and why, ending with the
    `Co-Authored-By` line from `AGENTS.md`.
 8. Push the branch. Open a PR with `gh pr create` if `gh` is authenticated.
-   Title: `<ID>: <title>`. The body says:
-   - what changed;
-   - how it was tested (commands and their output);
-   - the cost incurred;
-   - what is left.
-
-   If `gh` is not available, push the branch and put the PR text in your
+   Title: `<ID>: <title>`. The body covers the list under "PRs must cover" in
+   `AGENTS.md`. If `gh` is not available, push the branch and put the PR text in your
    report.
 
 ## Report back

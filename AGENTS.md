@@ -159,3 +159,5 @@ violations with file:line and a concrete fix.
 - `claude -p` and `codex exec` cost subscription quota. Cloud tasks cannot
   run them, so agent-in-the-loop benchmarks (`bench/invoke.ts`,
   `bench/outcome.ts`) run on a machine where those CLIs are logged in.
+- Do not run `bench/judge.ts` in a cloud session
+  ([why](docs/loop/ORCHESTRATOR.md#cloud-fallback)).

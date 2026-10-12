@@ -721,13 +721,15 @@ tests changed only where they tested something deleted (`prefilter()`, A2's
 
 Markdown rest (`agent/e8-markdown-rest`): `AGENTS.md`, `CLAUDE.md`,
 `CONTRIBUTING.md`, `SECURITY.md`, `.claude/agents/*.md` and
-`.github/pull_request_template.md`: 10 insertions, 17 deletions (7 net).
-`CLAUDE.md` lost a stale statement (E7 is done, and ORCHESTRATOR forbids
-judging in a cloud session), the auto-compact line (`.claude/settings.json`
-owns it) and cost figures that `bench/README.md` owns; `AGENTS.md` lost two
-filler sentences. No rule changed. `CONTRIBUTING.md`, `SECURITY.md`, the
-agents and the PR template were checked against the code and the loop and
-left as they are: each statement is a rule or matches `src/`.
+`.github/pull_request_template.md`. `CLAUDE.md` lost the judge-concurrency and
+cost lines (`AGENTS.md` and `bench/README.md` own them) and the auto-compact
+line (`.claude/settings.json` owns it). The rule "never run judges in a cloud
+session" moved from `CLAUDE.md` to `AGENTS.md` "Environment notes", so Codex
+and cloud workers read it too (pr-reviewer caught the first draft dropping
+it). `worker.md` points to `AGENTS.md` instead of restating its hard rules and
+PR list. `AGENTS.md` lost two filler sentences. `CONTRIBUTING.md`,
+`SECURITY.md` and the PR template were checked against the code and the loop
+and left as they are.
 Left: `docs/loop/BACKLOG.md`, `docs/loop/ORCHESTRATOR.md`, `bench/RESULTS.md`.
 Out of scope: `bench/results/**` (recorded output, kept as run) and
 `test/fixtures/`.
