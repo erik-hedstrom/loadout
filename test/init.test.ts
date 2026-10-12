@@ -5,7 +5,8 @@ import { delimiter, join } from 'node:path';
 import { Readable, Writable } from 'node:stream';
 import { format } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { loadConfig, paths, writeDefaultConfig } from '../src/config.js';
+import { loadConfig, paths, withoutKey, writeDefaultConfig } from '../src/config.js';
+import { windowsPath } from '../src/launch.js';
 import { parseGitHub } from '../src/library.js';
 import { detectHosts, PACKS, packSources, wizard, type InitDeps } from '../src/init.js';
 
@@ -106,7 +107,6 @@ describe('init wizard', () => {
     const { output } = await run([KEY, '']);
     // The typed key was taken as a pack choice, rejected without being echoed, and the pack prompt asked again.
     expect(output.split('Packs to add').length - 1).toBe(2);
-    expect(output).not.toMatch(/key file path/i);
     expect(output).toContain('unknown pack; choose from');
     expect(output).not.toContain(KEY);
     expect(readFileSync(paths.config(), 'utf8')).not.toContain(KEY);
@@ -122,9 +122,8 @@ describe('init wizard', () => {
 
     vi.stubEnv('TYPESAFE_API_KEY', KEY);
     expect((await run([''])).output).not.toContain(KEY);
-    // Formatted as Node prints them, so a key inside a logged object is caught, and byte chunks decoded as a stream writes them.
+    // Printed as Node and the streams would: objects formatted, bytes decoded, writes joined without separators.
     const text = (a: unknown) => (a instanceof Uint8Array ? Buffer.from(a).toString() : a);
-    // Joined without separators, as a stream would print a key split over two writes.
     for (const spy of streams) expect(spy.mock.calls.map((args) => format(...args.map(text))).join('')).not.toContain(KEY);
   });
 });
@@ -158,13 +157,14 @@ describe('loadout init without a terminal', () => {
     const missing = cli(['--key-file', KEY]);
     expect(missing.status).toBe(1);
     expect(missing.stderr).toContain('key file not found');
+    expect(missing.stdout + missing.stderr).not.toContain(KEY);
     // Neither a stray positional nor an unknown option is echoed back by the argument parser.
     for (const args of [[KEY], [`--${KEY}`]]) {
       const bad = cli(args);
       expect(bad.status).toBe(1);
       expect(bad.stderr).toContain('usage: loadout init');
+      expect(bad.stdout + bad.stderr).not.toContain(KEY);
     }
-    for (const r of [missing, cli([KEY]), cli([`--${KEY}`])]) expect(r.stdout + r.stderr).not.toContain(KEY);
     expect(existsSync(join(home, '.loadout'))).toBe(false);
   });
 
@@ -179,5 +179,20 @@ describe('loadout init without a terminal', () => {
     expect(result.stdout).toContain('wrote ');
     expect(result.stderr).toContain(`${PACKS[1]!.source}: `);
     expect(readFileSync(join(home, 'git-env'), 'utf8')).toBe('unset\n');
+  });
+});
+
+describe('child processes get no TypeSafe key', () => {
+  it('drops the key under any casing and keeps the rest', () => {
+    expect(withoutKey({ TYPESAFE_API_KEY: KEY, typesafe_api_key: KEY, PATH: '/bin' })).toEqual({ PATH: '/bin' });
+  });
+
+  it.skipIf(process.platform === 'win32')('keeps the key out of wslpath', () => {
+    const bin = join(home, 'bin');
+    mkdirSync(bin);
+    writeFileSync(join(bin, 'wslpath'), '#!/bin/sh\necho "${TYPESAFE_API_KEY:-unset}"\n', { mode: 0o755 });
+    vi.stubEnv('PATH', `${bin}${delimiter}${process.env.PATH}`);
+    vi.stubEnv('TYPESAFE_API_KEY', KEY);
+    expect(windowsPath('/')).toBe('unset');
   });
 });

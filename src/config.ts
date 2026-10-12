@@ -166,6 +166,11 @@ export function writeDefaultConfig(overrides: Partial<Config['jev']> = {}): stri
   return file;
 }
 
+/** The environment for a child process that needs no loadout credential. Windows matches env names in any case. */
+export function withoutKey(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  return Object.fromEntries(Object.entries(env).filter(([name]) => name.toUpperCase() !== 'TYPESAFE_API_KEY'));
+}
+
 export function resolveApiKey(config: Config): string | undefined {
   const fromEnv = process.env.TYPESAFE_API_KEY?.trim();
   if (fromEnv) return fromEnv;

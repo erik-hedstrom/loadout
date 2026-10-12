@@ -23,7 +23,7 @@ import {
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { parse as parseYaml } from 'yaml';
-import { loadoutHome } from './config.js';
+import { loadoutHome, withoutKey } from './config.js';
 import type { Capability, McpServerConfig } from './types.js';
 
 const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---/;
@@ -489,9 +489,7 @@ export function addFromGitHub(spec: string, libraryDir: string): AddResult {
   const gh = parseGitHub(spec);
   if (!gh) throw new Error(`not a GitHub URL: ${spec}`);
   const tmp = mkdtempSync(join(tmpdir(), 'loadout-src-'));
-  // git needs no loadout credential, so the key stays out of its environment.
-  const env: NodeJS.ProcessEnv = { ...process.env, GIT_TERMINAL_PROMPT: '0' };
-  delete env.TYPESAFE_API_KEY;
+  const env = { ...withoutKey(), GIT_TERMINAL_PROMPT: '0' };
   try {
     const repoDir = join(tmp, 'repo');
     const args = ['-c', 'core.symlinks=false', 'clone', '--depth', '1', '--quiet', ...(gh.ref ? ['--branch', gh.ref] : []), `https://github.com/${gh.owner}/${gh.repo}.git`, repoDir];
