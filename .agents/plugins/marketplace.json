@@ -1,0 +1,8 @@
+{
+  "name": "loadout",
+  "description": "loadout for Codex CLI: per-prompt skill routing and library search. Routed prompts go to TypeSafe's Jev API.",
+  "owner": { "name": "Erik Hedström" },
+  "plugins": [
+    { "name": "loadout-codex", "source": "./plugins/loadout-codex" }
+  ]
+}

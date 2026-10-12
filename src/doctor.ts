@@ -161,14 +161,24 @@ export async function doctor(config: Config, client: (apiKey: string) => SystemO
       attached: () => {
         const config = readConfig(join(codexHome, 'config.toml'), parseToml);
         if (!config) return { broken: join(codexHome, 'config.toml') };
-        const hooksOff = (config.features as { hooks?: unknown } | undefined)?.hooks === false;
+        const features = config.features as { hooks?: unknown; plugins?: unknown } | undefined;
+        const hooksOff = features?.hooks === false;
+        const pluginConfig = (config.plugins as Record<string, Record<string, unknown>> | undefined)?.['loadout-codex@loadout'];
+        const plugin = features?.plugins !== false && pluginConfig?.enabled === true;
+        const searchOff = (pluginConfig?.mcp_servers as Record<string, { enabled?: unknown }> | undefined)?.loadout?.enabled === false;
+        if (plugin && hooksOff) return { off: `plugin enabled, but [features] hooks = false in config.toml turns hooks off${searchOff ? '; search off (plugin policy)' : ''}` };
         const server = (config.mcp_servers as Record<string, Record<string, unknown>> | undefined)?.loadout;
         // Codex starts a server from exactly one of command (stdio) or url (HTTP), and rejects a table with both keys.
         const transports = server && typeof server === 'object' ? (['command', 'url'] as const).filter((k) => k in server) : [];
         const t = server && transports.length === 1 ? server[transports[0]!] : undefined;
         const runnable = server?.enabled !== false && typeof t === 'string' && t.trim() !== '';
-        // Codex runs a user hook only once it is trusted in /hooks, keyed by a hash of Codex's own serialization; doctor cannot see that.
-        const found = [!hooksOff && hasHook(config, 'codex') && 'hook (trust not checked: approve it once in /hooks)', runnable && 'search server'].filter(Boolean);
+        // Config records enabled plugins and hooks; /hooks trust is keyed by Codex's own content hash, which doctor cannot verify.
+        const found = [
+          plugin && 'plugin enabled (hook trust not verifiable from config: approve it in /hooks)',
+          plugin && searchOff && 'search off (plugin policy)',
+          !hooksOff && hasHook(config, 'codex') && 'hook (trust not checked: approve it once in /hooks)',
+          runnable && 'search server',
+        ].filter(Boolean);
         if (found.length) return { on: found.join(' and ') };
         return hooksOff && hasHook(config, 'codex') ? { off: 'hook, but [features] hooks = false in config.toml turns hooks off' } : {};
       },

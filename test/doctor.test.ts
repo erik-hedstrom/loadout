@@ -1,12 +1,12 @@
 import { spawnSync } from 'node:child_process';
-import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, join, relative } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CONFIG, type Config } from '../src/config.js';
 import { doctor, formatDoctor } from '../src/doctor.js';
 import { jevClient, type SystemOneClient } from '../src/jev.js';
-import { claudeHookSettings, hostSetup } from '../src/launch.js';
+import { claudeHookSettings, hookCommand, hostSetup } from '../src/launch.js';
 
 const KEY = 'doctor-key-canary-7731';
 const config: Config = { ...DEFAULT_CONFIG, embeddings: false };
@@ -111,14 +111,71 @@ describe('doctor', () => {
     vi.doUnmock('../src/embed.js');
   });
 
-  it.each([false, true])('recognises the hooks setup generates (WSL: %s)', async (windows) => {
+  it.each([false, true])('recognises manual native and generated WSL hook configs (WSL: %s)', async (windows) => {
     mkdirSync(join(home, 'claude'));
     writeFileSync(join(home, 'claude', 'settings.json'), JSON.stringify(claudeHookSettings(windows)));
     mkdirSync(join(home, 'codex'));
-    writeFileSync(join(home, 'codex', 'config.toml'), hostSetup('codex', windows).snippet);
+    writeFileSync(join(home, 'codex', 'config.toml'), windows ? hostSetup('codex', true).snippet : [
+      '[mcp_servers.loadout]', 'command = "loadout"', 'args = ["mcp"]',
+      '[[hooks.UserPromptSubmit]]', '[[hooks.UserPromptSubmit.hooks]]',
+      'type = "command"', `command = ${JSON.stringify(hookCommand('codex', false))}`,
+    ].join('\n'));
     const checks = byName(await doctor(config, () => okClient));
     expect(checks['Claude Code']!.detail).toMatch(/loadout: settings hook$/);
     expect(checks['Codex']!.detail).toMatch(/loadout: hook \(trust not checked: approve it once in \/hooks\) and search server$/);
+  });
+
+  it('recognises a plugin-only Codex install without exposing or editing config contents', async () => {
+    mkdirSync(join(home, 'codex'));
+    const file = join(home, 'codex', 'config.toml');
+    const content = `[plugins."loadout-codex@loadout"]\nenabled = true\nprivate = "${KEY}"\n`;
+    writeFileSync(file, content);
+    const checks = await doctor(config, () => okClient);
+    expect(byName(checks)['Codex']).toMatchObject({
+      ok: true,
+      detail: 'CLI not on PATH; loadout: plugin enabled (hook trust not verifiable from config: approve it in /hooks)',
+    });
+    expect(formatDoctor(checks)).not.toContain(KEY);
+    expect(readFileSync(file, 'utf8')).toBe(content);
+  });
+
+  it.each([
+    '[plugins."loadout-codex@loadout"]\nenabled = false\n',
+    '[plugins."loadout@loadout"]\nenabled = true\n',
+    '[plugins."loadout-codex@loadout"]\nenabled = true\n[features]\nplugins = false\n',
+  ])('does not count a disabled or invalid Codex plugin config (%s)', async (content) => {
+    mkdirSync(join(home, 'codex'));
+    writeFileSync(join(home, 'codex', 'config.toml'), content);
+    expect(byName(await doctor(config, () => okClient))['Codex']).toMatchObject({
+      ok: false, detail: 'CLI not on PATH; loadout: not set up',
+    });
+  });
+
+  it.each([false, true])('fails a Codex plugin with hooks disabled (search disabled: %s)', async (searchOff) => {
+    mkdirSync(join(home, 'codex'));
+    const file = join(home, 'codex', 'config.toml');
+    const content = `[plugins."loadout-codex@loadout"]\nenabled = true\n[plugins."loadout-codex@loadout".mcp_servers.loadout]\nenabled = ${!searchOff}\n[features]\nhooks = false\n[mcp_servers.loadout]\ncommand = "loadout"\n`;
+    writeFileSync(file, content);
+    expect(byName(await doctor(config, () => okClient))['Codex']).toMatchObject({
+      ok: false,
+      detail: `CLI not on PATH; loadout: plugin enabled, but [features] hooks = false in config.toml turns hooks off${searchOff ? '; search off (plugin policy)' : ''}`,
+      fix: 'turn hooks back on',
+    });
+    expect(readFileSync(file, 'utf8')).toBe(content);
+  });
+
+  it('reports disabled plugin search without failing Codex routing', async () => {
+    mkdirSync(join(home, 'codex'));
+    const file = join(home, 'codex', 'config.toml');
+    const content = `[plugins."loadout-codex@loadout"]\nenabled = true\n[plugins."loadout-codex@loadout".mcp_servers.loadout]\nenabled = false\nprivate = "${KEY}"\n`;
+    writeFileSync(file, content);
+    const checks = await doctor(config, () => okClient);
+    expect(byName(checks)['Codex']).toMatchObject({
+      ok: true,
+      detail: 'CLI not on PATH; loadout: plugin enabled (hook trust not verifiable from config: approve it in /hooks) and search off (plugin policy)',
+    });
+    expect(formatDoctor(checks)).not.toContain(KEY);
+    expect(readFileSync(file, 'utf8')).toBe(content);
   });
 
   it.each([

@@ -41,11 +41,23 @@ Notes:
 4. 10 headless sessions per host with `find_skills` attached, 2026-10-06
    ([RESULTS](../bench/RESULTS.md#do-agents-use-what-they-are-given)).
 5. The same plugin as the CLI. Erik's check is backlog D10.
-6. Codex runs a new hook only after the user trusts it with `/hooks`, which
-   needs an interactive session. The live test is backlog D2.
-7. The launcher attached the server with `-c mcp_servers.…` (2026-10-06, as
-   in note 1). The
-   `~/.codex/config.toml` snippet from `loadout setup codex`: untested.
+6. `loadout setup codex` prints marketplace and plugin install commands for
+   Codex CLI. The `loadout-codex` plugin carries `loadout hook codex` and
+   `loadout mcp`. Offline installation in a throwaway `CODEX_HOME`,
+   `plugin/read`, `hooks/list` and `codex mcp list` were checked with Codex
+   0.160.1 on 2026-10-12. `hooks/list` reported the installed hook as
+   `untrusted`: trust it with `/hooks` before routing prompts. A live hook
+   session is untested (backlog D2). There is no tested setup path for the
+   Codex tab of the ChatGPT desktop app or T3 Code yet: plugin support is
+   untested, and setup no longer prints native TOML for these hosts.
+7. The launcher attached the server with `-c mcp_servers.…` (2026-10-06,
+   as in note 1). The plugin's search server was listed as enabled, without
+   starting it.
+   The Codex plugin attaches search on every request; its per-request token
+   cost in Codex is not measured.
+   WSL loadout behind Windows Codex needs `loadout setup codex --windows`:
+   its TOML supplies the machine-specific `wsl.exe` wrapper the plugin's
+   fixed PATH commands cannot carry. This fallback is untested in a host.
 8. `loadout mcp --http`; see the [README](../README.md#search-mid-session-from-any-mcp-host).
 
 Backlog D3 tests the desktop and IDE hosts by hand and updates this table.
