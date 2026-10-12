@@ -33,7 +33,19 @@ function disputedFixture() {
 }
 
 describe('benchmark backends', () => {
-  it.each([false, true])('runs the shipped plugin with only this build on the child PATH (Windows agent under WSL: %s)', async (windowsAgent) => {
+  it.each([
+    { mode: 'plugin', windowsAgent: false },
+    { mode: 'plugin', windowsAgent: true },
+    { mode: 'plugin', windowsAgent: false, listedHooks: true },
+    { mode: 'hook', windowsAgent: false },
+    { mode: 'search', windowsAgent: false },
+    { mode: 'routed', windowsAgent: false },
+    { mode: 'plugin', windowsAgent: false, ambient: 'plugin' },
+    { mode: 'plugin', windowsAgent: false, listedHooks: true, ambient: 'hook' },
+    { mode: 'hook', windowsAgent: false, ambient: 'hook' },
+    { mode: 'search', windowsAgent: false, ambient: 'plugin' },
+    { mode: 'routed', windowsAgent: false, ambient: 'hook' },
+  ])('records startup inventory and rejects ambient loadout in $mode (WSL: $windowsAgent, ambient: $ambient)', async ({ mode, windowsAgent, listedHooks, ambient }) => {
     const dir = join(temp(), "sweep ' $value"), binDir = temp();
     mkdirSync(dir);
     const repo = join(import.meta.dirname, '..');
@@ -50,20 +62,29 @@ describe('benchmark backends', () => {
     vi.stubEnv('WSLENV', 'KEEP/p:PATH/up');
     const translate = (p: string) => windowsAgent ? `C:\\translated${p.replace(/\\/g, '/')}` : p;
     vi.doMock('../src/launch.js', async (original) => ({ ...await original<typeof import('../src/launch.js')>(), pathTranslator: () => translate }));
-    vi.mocked(execFileSync).mockImplementation((command) => {
-      if (command === 'cmd.exe') return 'C:\\Temp\n';
-      if (command === 'wslpath') return tmpdir() + '\n';
+    const windowsPath = 'C:\\Windows\\System32;C:\\tools';
+    vi.mocked(execFileSync).mockImplementation((command, args) => {
+      if (command === 'cmd.exe') return args?.includes('echo %PATH%') ? windowsPath + '\n' : 'C:\\Temp\n';
+      if (command === 'wslpath') return args?.includes('-w') ? translate(args[1]!) + '\n' : tmpdir() + '\n';
       throw new Error(`unexpected command ${command}`);
     });
-    const calls: { args: string[]; env: NodeJS.ProcessEnv; shim: string }[] = [];
+    const calls: { args: string[]; env?: NodeJS.ProcessEnv }[] = [];
+    const inventories: { plugins: { name: string; path: string }[]; hooks?: { command: string }[] }[] = [];
     vi.mocked(spawn).mockImplementation((_command, argv, options) => {
-      const env = options!.env!;
-      const shimDir = env.PATH!.split(delimiter)[0]!;
-      calls.push({ args: argv as string[], env, shim: readFileSync(join(shimDir, 'loadout'), 'utf8') });
+      const args = argv as string[];
+      calls.push({ args, env: options!.env });
+      const inventory: typeof inventories[number] = { plugins: [{ name: 'other-plugin', path: '/ambient/other' }] };
+      if (args.includes('--plugin-dir')) inventory.plugins.push({ name: 'loadout', path: args[args.indexOf('--plugin-dir') + 1]! });
+      if (mode === 'hook') inventory.hooks = [{ command: JSON.parse(args[args.indexOf('--settings') + 1]!).hooks.UserPromptSubmit[0].hooks[0].command }];
+      if (listedHooks) inventory.hooks = [{ command: 'loadout hook claude' }];
+      if (ambient === 'plugin') inventory.plugins.push({ name: 'loadout', path: '/ambient/loadout' });
+      if (ambient === 'hook') inventory.hooks = [...inventory.hooks ?? [], { command: 'loadout hook claude' }];
+      inventories.push(inventory);
       const child = new EventEmitter() as ChildProcess;
       child.stdout = new PassThrough(); child.stderr = new PassThrough();
       queueMicrotask(() => {
         child.stdout!.emit('data', Buffer.from([
+          { type: 'system', subtype: 'init', ...inventory },
           { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Read', id: 'read-a', input: { file_path: '/library/skills/skill-a/SKILL.md' } }] } },
           { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'read-a' }] } },
           { type: 'result', total_cost_usd: 0 },
@@ -75,32 +96,33 @@ describe('benchmark backends', () => {
     const argv = process.argv;
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
     try {
-      process.argv = [process.execPath, 'bench/invoke.ts', dir, '--agent', 'claude', '--mode', 'plugin', '--ids', 'a,b'];
+      process.argv = [process.execPath, 'bench/invoke.ts', dir, '--agent', 'claude', '--mode', mode, '--ids', 'a,b'];
       vi.resetModules();
+      if (ambient) {
+        await expect(import('../bench/invoke.js')).rejects.toThrow('ambient loadout');
+        expect(existsSync(join(dir, `invoke-claude-${mode}.jsonl`))).toBe(false);
+        return;
+      }
       await import('../bench/invoke.js');
       expect(calls).toHaveLength(2);
       for (const [i, call] of calls.entries()) {
-        expect(call.args).toEqual(['-p', `Request ${i ? 'b' : 'a'}\n\n(Test run: nothing is attached and the folder is empty. Where the request refers to files or data you do not have, create small realistic sample inputs and carry on.)`, '--model', 'sonnet', '--plugin-dir', translate(join(repo, 'plugins', 'loadout')), '--output-format', 'stream-json', '--verbose', '--max-turns', '6', '--strict-mcp-config', '--permission-mode', 'acceptEdits']);
-        expect(call.env.PATH!.slice(call.env.PATH!.indexOf(delimiter))).toBe(delimiter + fakePath);
-        expect(call.env.LOADOUT_HOME).toBe(dir);
-        expect(call.shim).toContain(join(repo, 'dist', 'cli.js').replace(/\\/g, '/'));
-        expect(call.shim).not.toContain('src/cli.ts');
-        expect(call.shim).toContain('"$@"');
-        if (windowsAgent) {
-          expect(call.shim).toContain("'wsl.exe' '-d' 'bench-distro' '--exec'");
-          expect(call.shim).toContain('"$@" \'--windows-paths\'\n');
-          expect(call.shim).toContain('MSYS_NO_PATHCONV=1');
-          expect(call.shim).toContain(String.raw`sweep '\'' $value'`);
-          expect(call.env.WSLENV).toBe('KEEP/p:PATH/l');
-        } else {
-          expect(call.shim).toContain(process.execPath.replace(/\\/g, '/'));
-          expect(call.shim).not.toContain('wsl.exe');
+        expect(call.args).toContain('--no-session-persistence');
+        if (mode === 'plugin') {
+          expect(call.args).toEqual(['-p', `Request ${i ? 'b' : 'a'}\n\n(Test run: nothing is attached and the folder is empty. Where the request refers to files or data you do not have, create small realistic sample inputs and carry on.)`, '--model', 'sonnet', '--plugin-dir', translate(join(repo, 'plugins', 'loadout')), '--output-format', 'stream-json', '--verbose', '--no-session-persistence', '--max-turns', '6', '--strict-mcp-config', '--permission-mode', 'acceptEdits']);
+          const sep = windowsAgent ? ';' : delimiter;
+          expect(call.env!.PATH!.slice(call.env!.PATH!.indexOf(sep))).toBe(sep + (windowsAgent ? windowsPath : fakePath));
+          expect(call.env!.PATH!.split(sep)[0]).toContain('loadout-bin-');
+          if (windowsAgent) expect(call.env!.PATH!.split(sep)[0]).toMatch(/^C:\\translated/);
+          expect(call.env!.LOADOUT_HOME).toBe(dir);
+          expect(call.env!.WSLENV).toBe(windowsAgent ? 'KEEP/p:PATH' : 'KEEP/p:PATH/up');
         }
       }
-      const rows = readFileSync(join(dir, 'invoke-claude-plugin.jsonl'), 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+      const rows = readFileSync(join(dir, `invoke-claude-${mode}.jsonl`), 'utf8').trim().split('\n').map((line) => JSON.parse(line));
       expect(rows.map((row) => row.id)).toEqual(['a', 'b']);
-      for (const row of rows) {
-        expect(row).toMatchObject({ agent: 'claude', mode: 'plugin', model: 'sonnet', loaded: [], injected: [], offered: [], invoked: ['skill-a'], searches: [], tools: ['Read'], exit: 0, timedOut: false, costUsd: 0 });
+      for (const [i, row] of rows.entries()) {
+        expect(row).toMatchObject({ agent: 'claude', mode, model: 'sonnet', invoked: ['skill-a'], searches: [], tools: ['Read'], exit: 0, timedOut: false, costUsd: 0 });
+        if (mode !== 'routed') expect(row).toMatchObject({ loaded: [], injected: [], offered: [] });
+        expect(row.inventory).toEqual(inventories[i]);
         expect(row.ms).toBeGreaterThanOrEqual(0);
       }
       expect(process.env.PATH).toBe(fakePath);
@@ -114,20 +136,6 @@ describe('benchmark backends', () => {
       vi.resetModules();
     }
     expect(process.env.PATH).toBe(parentPath);
-  });
-
-  it('rejects plugin mode for Codex before starting an agent', async () => {
-    const argv = process.argv;
-    vi.mocked(spawn).mockClear();
-    try {
-      process.argv = [process.execPath, 'bench/invoke.ts', temp(), '--agent', 'codex', '--mode', 'plugin', '--ids', 'a'];
-      vi.resetModules();
-      await expect(import('../bench/invoke.js')).rejects.toThrow('plugin mode is Claude Code only');
-      expect(spawn).not.toHaveBeenCalled();
-    } finally {
-      process.argv = argv;
-      vi.resetModules();
-    }
   });
 
   it('generates 300 seeds through pending files and resumes with IDs and provenance', () => {

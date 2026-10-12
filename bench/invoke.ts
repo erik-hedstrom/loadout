@@ -23,12 +23,12 @@
  *   npx tsx bench/invoke.ts <sweep dir> --agent claude|codex --mode routed|search|hook|plugin --ids a,b,c [--max-turns 6]
  */
 import { execFileSync } from 'node:child_process';
-import { appendFileSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, delimiter, join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { loadConfig, paths } from '../src/config.js';
-import { claudeArgs, claudeHookSettings, codexArgs, materialize, pathTranslator, which, type Agent } from '../src/launch.js';
+import { claudeArgs, claudeHookSettings, codexArgs, hookCommand, materialize, pathTranslator, which, type Agent } from '../src/launch.js';
 import { capabilityKey, scanLibrary } from '../src/library.js';
 import { decisionFor, readJsonl, run } from './lib.js';
 import type { SweepRow } from './sweep.js';
@@ -63,30 +63,54 @@ const repo = join(import.meta.dirname, '..');
 let shimDir: string | undefined;
 let childEnv: NodeJS.ProcessEnv | undefined;
 if (mode === 'plugin') {
-  const entry = join(repo, 'dist', 'cli.js');
-  if (!existsSync(entry)) throw new Error('plugin mode needs this checkout built: npm run build');
   const windowsAgent = toPath('/') !== '/';
-  const cli = [process.execPath, entry].map((p) => process.platform === 'win32' ? p.replace(/\\/g, '/') : p);
-  const command = windowsAgent
-    ? ['wsl.exe', ...(process.env.WSL_DISTRO_NAME ? ['-d', process.env.WSL_DISTRO_NAME] : []), '--exec', ...(process.env.LOADOUT_HOME ? ['/usr/bin/env', `LOADOUT_HOME=${process.env.LOADOUT_HOME}`] : []), ...cli]
-    : cli;
-  const quote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
   shimDir = mkdtempSync(join(workRoot, 'loadout-bin-'));
-  writeFileSync(join(shimDir, 'loadout'), `#!/bin/sh\n${windowsAgent ? 'export MSYS_NO_PATHCONV=1\n' : ''}exec ${command.map(quote).join(' ')} "$@"${windowsAgent ? " '--windows-paths'" : ''}\n`, { mode: 0o700 });
+  writeFileSync(join(shimDir, 'loadout'), `#!/bin/sh\n${hookCommand('claude', windowsAgent)}\n`, { mode: 0o700 });
   childEnv = { ...process.env, PATH: `${shimDir}${delimiter}${process.env.PATH ?? ''}` };
-  // WSL must translate the shim's PATH entry for the Windows child to find it.
-  if (windowsAgent) childEnv.WSLENV = [...(process.env.WSLENV ?? '').split(':').filter((s) => s && !/^PATH(?:\/.*)?$/.test(s)), 'PATH/l'].join(':');
+  if (windowsAgent) {
+    const windowsPath = execFileSync('cmd.exe', ['/c', 'echo %PATH%'], { encoding: 'utf8' }).trim();
+    childEnv.PATH = `${execFileSync('wslpath', ['-w', shimDir], { encoding: 'utf8' }).trim()};${windowsPath}`;
+    childEnv.WSLENV = [...(process.env.WSLENV ?? '').split(':').filter((s) => s && !/^PATH(?:\/.*)?$/.test(s)), 'PATH'].join(':');
+  }
 }
 const NOTE = '\n\n(Test run: nothing is attached and the folder is empty. Where the request refers to files or data you do not have, create small realistic sample inputs and carry on.)';
 const out = join(dir, `invoke-${agent}-${mode}.jsonl`);
 
 /** One tool call; `ok` is false when the call itself failed (a failed call is not an invocation). */
 interface Event { tool: string; detail: string; ok: boolean; id?: string }
+interface Inventory { plugins: { name: string; path?: string }[]; hooks?: unknown }
+
+function checkInventory(inventory: Inventory | undefined, pluginDir?: string): void {
+  if (!inventory || !Array.isArray(inventory.plugins)) throw new Error('missing Claude startup inventory');
+  const normalize = (p: string) => {
+    const path = p.replace(/\\/g, '/').replace(/\/$/, '');
+    return toPath('/') !== '/' || process.platform === 'win32' ? path.toLowerCase() : path;
+  };
+  let ownPlugins = 0;
+  for (const plugin of inventory.plugins) {
+    if (typeof plugin.name !== 'string') throw new Error('invalid Claude plugin inventory');
+    if (!/^loadout(?:@|$)/i.test(plugin.name)) continue;
+    if (!pluginDir || typeof plugin.path !== 'string' || normalize(plugin.path) !== normalize(toPath(pluginDir)) || ++ownPlugins > 1) throw new Error('ambient loadout plugin; measurement invalid');
+  }
+  const ownHook = mode === 'hook' ? hookCommand('claude', toPath('/') !== '/') : mode === 'plugin' ? 'loadout hook claude' : undefined;
+  let ownHooks = 0;
+  const checkHooks = (value: unknown): void => {
+    if (typeof value === 'string') {
+      if (value === ownHook || /(?:\bloadout|[/\\]cli\.(?:ts|js))['"]?\s+['"]?hook['"]?\s+['"]?claude\b/.test(value)) {
+        if (value !== ownHook || ++ownHooks > 1) throw new Error('ambient loadout hook; measurement invalid');
+      }
+    } else if (value && typeof value === 'object') {
+      for (const item of Object.values(value)) checkHooks(item);
+    }
+  };
+  checkHooks(inventory.hooks);
+}
 
 /** Tool calls from Claude's stream-json or Codex's --json event stream. */
-function toolEvents(stream: string): { events: Event[]; costUsd?: number } {
+function toolEvents(stream: string): { events: Event[]; costUsd?: number; inventory?: Inventory } {
   const events: Event[] = [];
   let costUsd: number | undefined;
+  let inventory: Inventory | undefined;
   for (const line of stream.split('\n')) {
     let e: any;
     try {
@@ -94,7 +118,10 @@ function toolEvents(stream: string): { events: Event[]; costUsd?: number } {
     } catch {
       continue;
     }
-    if (e.type === 'assistant') {
+    if (e.type === 'system' && e.subtype === 'init') {
+      if (inventory) throw new Error('duplicate Claude startup inventory');
+      inventory = { plugins: e.plugins, ...(e.hooks !== undefined ? { hooks: e.hooks } : {}) };
+    } else if (e.type === 'assistant') {
       // A call only counts once its result arrives without an error.
       for (const b of e.message?.content ?? []) if (b.type === 'tool_use') events.push({ tool: b.name, detail: JSON.stringify(b.input), ok: false, id: b.id });
     } else if (e.type === 'user') {
@@ -112,7 +139,7 @@ function toolEvents(stream: string): { events: Event[]; costUsd?: number } {
       if (it.type === 'mcp_tool_call') events.push({ tool: `mcp__${it.server}__${it.tool}`, detail: JSON.stringify(it.arguments ?? {}), ok });
     }
   }
-  return { events, costUsd };
+  return { events, costUsd, inventory };
 }
 
 for (const id of values.ids.split(',')) {
@@ -128,11 +155,12 @@ for (const id of values.ids.split(',')) {
   const task = row.request + NOTE;
   const args =
     agent === 'claude'
-      ? claudeArgs(session, task, ['--output-format', 'stream-json', '--verbose', '--max-turns', values['max-turns']!, '--strict-mcp-config', '--permission-mode', 'acceptEdits', ...hookArgs], { headless: true, toPath })
+      ? claudeArgs(session, task, ['--output-format', 'stream-json', '--verbose', '--no-session-persistence', '--max-turns', values['max-turns']!, '--strict-mcp-config', '--permission-mode', 'acceptEdits', ...hookArgs], { headless: true, toPath })
       : codexArgs(session, task, ['--json', '-s', 'workspace-write', '--skip-git-repo-check'], { headless: true });
   const started = Date.now();
   const proc = await run(bin, args, cwd, Number(values['timeout-s']) * 1000, childEnv);
-  const { events, costUsd } = toolEvents(proc.stdout);
+  const { events, costUsd, inventory } = toolEvents(proc.stdout);
+  if (agent === 'claude') checkInventory(inventory, session.pluginDir);
 
   // Which library skills did the agent actually open?
   const folders = new Set(session.skills.map((c) => basename(c.source)));
@@ -156,6 +184,7 @@ for (const id of values.ids.split(',')) {
     agent,
     mode,
     model: session.model,
+    inventory: inventory ?? null,
     // What the session actually carried (search mode carries nothing).
     loaded: decision.selected.map((s) => capabilityKey(s.capability)),
     injected: decision.selected.filter((s) => s.inject).map((s) => capabilityKey(s.capability)),
