@@ -177,8 +177,9 @@ adding official flags to the agent's command line only. It writes nothing to
 
 Arguments after `--` pass through unchanged, except those that would undo
 the isolation, which `--isolate` refuses before routing: Claude Code's
-`--settings`, `--mcp-config`, `--chrome` and `--ide`, and Codex's `--enable`
-and `-c`/`--config` overrides of `mcp_servers` or `features`.
+`--settings`, `--mcp-config`, `--agents` (inline agents can define MCP
+servers), `--chrome` and `--ide`, and Codex's `--enable` and `-c`/`--config`
+overrides of `mcp_servers` or `features`.
 
 Not hidden:
 
@@ -193,9 +194,10 @@ Not hidden:
 - claude.ai connectors under managed settings: managed settings outrank
   `--settings` ([precedence](https://code.claude.com/docs/en/settings)), so an
   organization that keeps connectors on keeps them on.
-- Codex project config: the flag's help names only
-  `$CODEX_HOME/config.toml`, so a project `.codex/config.toml` is presumably
-  still read (not checked).
+- Codex config layers other than `$CODEX_HOME/config.toml`: the flag's help
+  names only that file, so a project `.codex/config.toml`, a system
+  `/etc/codex/config.toml` and managed configuration are presumably still
+  read (not checked), and any of them can add MCP servers.
 - Interactive Codex, and Codex plugins and skills: no flag found.
 
 Checked against the sources above on 2026-10-12; no live run (not shown).

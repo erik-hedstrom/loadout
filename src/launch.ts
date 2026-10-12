@@ -429,15 +429,15 @@ export function codexPrompt(session: Session, task: string): string {
 
 /**
  * The first argument after `--` that would undo `--isolate`: one that adds MCP servers or integrations
- * (Claude's --mcp-config, --chrome, --ide; Codex's mcp_servers or features overrides, --enable), or a
+ * (Claude's --mcp-config, --agents, --chrome, --ide; Codex's mcp_servers or features overrides, --enable), or a
  * --settings that would replace loadout's. Anything else passes through unchanged.
  */
 export function isolateConflict(agent: Agent, args: string[]): string | undefined {
   const is = (a: string, flag: string) => a === flag || a.startsWith(`${flag}=`);
-  if (agent === 'claude') return args.find((a) => ['--settings', '--mcp-config', '--chrome', '--ide'].some((f) => is(a, f)));
+  if (agent === 'claude') return args.find((a) => ['--settings', '--mcp-config', '--agents', '--chrome', '--ide'].some((f) => is(a, f)));
   return args.find((a, i) => {
     if (is(a, '--enable')) return true;
-    const override = a === '-c' || a === '--config' ? args[i + 1] : a.startsWith('--config=') ? a.slice(9) : /^-c./.test(a) ? a.slice(2) : undefined;
+    const override = a === '-c' || a === '--config' ? args[i + 1] : a.startsWith('--config=') ? a.slice(9) : /^-c./.test(a) ? a.slice(2).replace(/^=/, '') : undefined;
     return override !== undefined && /^\s*(mcp_servers|features)\b/.test(override);
   });
 }

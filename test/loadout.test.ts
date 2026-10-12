@@ -924,11 +924,11 @@ describe('launch', () => {
   });
 
   it('finds passthrough arguments that would undo --isolate, in every spelling', () => {
-    for (const args of [['--settings', '{}'], ['--settings={}'], ['--mcp-config', 'a.json'], ['--mcp-config=a.json'], ['--chrome'], ['--ide']]) {
+    for (const args of [['--settings', '{}'], ['--settings={}'], ['--mcp-config', 'a.json'], ['--mcp-config=a.json'], ['--agents', '{}'], ['--agents={}'], ['--chrome'], ['--ide']]) {
       expect(isolateConflict('claude', ['--permission-mode', 'plan', ...args])).toBe(args[0]);
     }
     expect(isolateConflict('claude', ['--permission-mode', 'plan', '--model', 'opus'])).toBeUndefined();
-    for (const args of [['-c', 'mcp_servers.x.command="x"'], ['-cmcp_servers.x.url="u"'], ['--config', 'features.apps=true'], ['--config=mcp_servers.x.url="u"'], ['--enable', 'apps'], ['--enable=apps']]) {
+    for (const args of [['-c', 'mcp_servers.x.command="x"'], ['-cmcp_servers.x.url="u"'], ['-c=mcp_servers.x.url="u"'], ['-c=features.apps=true'], ['--config', 'features.apps=true'], ['--config=mcp_servers.x.url="u"'], ['--enable', 'apps'], ['--enable=apps']]) {
       expect(isolateConflict('codex', ['--skip-git-repo-check', ...args])).toBe(args[0]);
     }
     expect(isolateConflict('codex', ['--skip-git-repo-check', '-c', 'model_reasoning_effort="high"', '--disable', 'apps'])).toBeUndefined();
