@@ -36,19 +36,24 @@ describe('benchmark backends', () => {
   it.each([
     { mode: 'plugin', windowsAgent: false },
     { mode: 'plugin', windowsAgent: true },
-    { mode: 'plugin', windowsAgent: false, listedHooks: true },
     { mode: 'hook', windowsAgent: false },
     { mode: 'search', windowsAgent: false },
     { mode: 'routed', windowsAgent: false },
     { mode: 'plugin', windowsAgent: false, ambient: 'plugin' },
-    { mode: 'plugin', windowsAgent: false, listedHooks: true, ambient: 'hook' },
+    { mode: 'plugin', windowsAgent: false, ambient: 'hook' },
     { mode: 'hook', windowsAgent: false, ambient: 'hook' },
     { mode: 'search', windowsAgent: false, ambient: 'plugin' },
+    { mode: 'search', windowsAgent: false, ambient: 'hook' },
     { mode: 'routed', windowsAgent: false, ambient: 'hook' },
-  ])('records startup inventory and rejects ambient loadout in $mode (WSL: $windowsAgent, ambient: $ambient)', async ({ mode, windowsAgent, listedHooks, ambient }) => {
+    { mode: 'plugin', windowsAgent: false, problem: 'missing plugin' },
+    { mode: 'plugin', windowsAgent: false, problem: 'missing hook' },
+    { mode: 'hook', windowsAgent: false, problem: 'missing hook' },
+    { mode: 'plugin', windowsAgent: false, problem: 'no init' },
+  ])('records hook evidence and paid rows in $mode (WSL: $windowsAgent, ambient: $ambient, problem: $problem)', async ({ mode, windowsAgent, ambient, problem }) => {
     const dir = join(temp(), "sweep ' $value"), binDir = temp();
     mkdirSync(dir);
     const repo = join(import.meta.dirname, '..');
+    const probe = JSON.parse(readFileSync(join(repo, 'bench', 'results', '2026-10-08-hook-plugin-probe', 'probe.json'), 'utf8'));
     const parentPath = process.env.PATH;
     const fakePath = [binDir, 'installed-loadout'].join(delimiter);
     writeFileSync(join(binDir, 'claude'), '', { mode: 0o755 });
@@ -69,27 +74,37 @@ describe('benchmark backends', () => {
       throw new Error(`unexpected command ${command}`);
     });
     const calls: { args: string[]; env?: NodeJS.ProcessEnv }[] = [];
-    const inventories: { plugins: { name: string; path: string }[]; hooks?: { command: string }[] }[] = [];
+    const inventories: { plugins: { name: string; path: string }[] }[] = [];
+    const hookCounts: number[] = [];
     vi.mocked(spawn).mockImplementation((_command, argv, options) => {
       const args = argv as string[];
       calls.push({ args, env: options!.env });
       const inventory: typeof inventories[number] = { plugins: [{ name: 'other-plugin', path: '/ambient/other' }] };
       if (args.includes('--plugin-dir')) inventory.plugins.push({ name: 'loadout', path: args[args.indexOf('--plugin-dir') + 1]! });
-      if (mode === 'hook') inventory.hooks = [{ command: JSON.parse(args[args.indexOf('--settings') + 1]!).hooks.UserPromptSubmit[0].hooks[0].command }];
-      if (listedHooks) inventory.hooks = [{ command: 'loadout hook claude' }];
+      if (problem === 'missing plugin') inventory.plugins = [];
       if (ambient === 'plugin') inventory.plugins.push({ name: 'loadout', path: '/ambient/loadout' });
-      if (ambient === 'hook') inventory.hooks = [...inventory.hooks ?? [], { command: 'loadout hook claude' }];
       inventories.push(inventory);
+      const count = (mode === 'plugin' || mode === 'hook' ? 1 : 0) + (ambient === 'hook' ? 1 : 0);
+      hookCounts.push(problem === 'missing hook' ? 0 : count);
+      const hooks = Array.from({ length: hookCounts.at(-1)! }, (_, i) => {
+        const fields = { hook_id: `hook-${i}`, hook_name: 'UserPromptSubmit', hook_event: probe.hook.event };
+        const stdout = JSON.stringify({ hookSpecificOutput: { hookEventName: probe.hook.event, additionalContext: probe.hook.additionalContext } });
+        return [
+          { type: 'system', subtype: 'hook_started', ...fields },
+          { type: 'system', subtype: 'hook_response', ...fields, stdout, output: stdout, stderr: probe.hook.stderr, exit_code: probe.hook.exit_code, outcome: probe.hook.outcome },
+        ];
+      }).flat();
       const child = new EventEmitter() as ChildProcess;
       child.stdout = new PassThrough(); child.stderr = new PassThrough();
       queueMicrotask(() => {
         child.stdout!.emit('data', Buffer.from([
-          { type: 'system', subtype: 'init', ...inventory },
+          ...(problem === 'no init' ? [] : [{ type: 'system', subtype: 'init', ...inventory }]),
+          ...hooks,
           { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Read', id: 'read-a', input: { file_path: '/library/skills/skill-a/SKILL.md' } }] } },
           { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'read-a' }] } },
-          { type: 'result', total_cost_usd: 0 },
+          { type: 'result', total_cost_usd: 0.05 },
         ].map((e) => JSON.stringify(e)).join('\n')));
-        child.emit('close', 0);
+        child.emit('close', problem === 'no init' ? 1 : 0);
       });
       return child;
     });
@@ -98,17 +113,23 @@ describe('benchmark backends', () => {
     try {
       process.argv = [process.execPath, 'bench/invoke.ts', dir, '--agent', 'claude', '--mode', mode, '--ids', 'a,b'];
       vi.resetModules();
-      if (ambient) {
-        await expect(import('../bench/invoke.js')).rejects.toThrow('ambient loadout');
-        expect(existsSync(join(dir, `invoke-claude-${mode}.jsonl`))).toBe(false);
+      if (ambient || problem === 'missing plugin' || problem === 'missing hook') {
+        const reason = ambient === 'plugin' ? 'ambient loadout plugin; measurement invalid' : problem === 'missing plugin' ? 'missing loadout plugin; measurement invalid' : mode === 'routed' || mode === 'search' ? 'unexpected loadout UserPromptSubmit hook; measurement invalid' : 'expected exactly one loadout UserPromptSubmit hook; measurement invalid';
+        await expect(import('../bench/invoke.js')).rejects.toThrow(reason);
+        const rows = readFileSync(join(dir, `invoke-claude-${mode}.jsonl`), 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+        expect(rows).toHaveLength(1);
+        expect(calls).toHaveLength(1);
+        expect(rows[0]).toMatchObject({ id: 'a', invalid: reason, costUsd: 0.05, exit: 0, timedOut: false, invoked: ['skill-a'], tools: ['Read'], inventory: inventories[0] });
+        expect(rows[0].hooks).toHaveLength(hookCounts[0]!);
         return;
       }
       await import('../bench/invoke.js');
       expect(calls).toHaveLength(2);
       for (const [i, call] of calls.entries()) {
         expect(call.args).toContain('--no-session-persistence');
+        expect(call.args).toContain('--include-hook-events');
         if (mode === 'plugin') {
-          expect(call.args).toEqual(['-p', `Request ${i ? 'b' : 'a'}\n\n(Test run: nothing is attached and the folder is empty. Where the request refers to files or data you do not have, create small realistic sample inputs and carry on.)`, '--model', 'sonnet', '--plugin-dir', translate(join(repo, 'plugins', 'loadout')), '--output-format', 'stream-json', '--verbose', '--no-session-persistence', '--max-turns', '6', '--strict-mcp-config', '--permission-mode', 'acceptEdits']);
+          expect(call.args).toEqual(['-p', `Request ${i ? 'b' : 'a'}\n\n(Test run: nothing is attached and the folder is empty. Where the request refers to files or data you do not have, create small realistic sample inputs and carry on.)`, '--model', 'sonnet', '--plugin-dir', translate(join(repo, 'plugins', 'loadout')), '--output-format', 'stream-json', '--verbose', '--include-hook-events', '--no-session-persistence', '--max-turns', '6', '--strict-mcp-config', '--permission-mode', 'acceptEdits']);
           const sep = windowsAgent ? ';' : delimiter;
           expect(call.env!.PATH!.slice(call.env!.PATH!.indexOf(sep))).toBe(sep + (windowsAgent ? windowsPath : fakePath));
           expect(call.env!.PATH!.split(sep)[0]).toContain('loadout-bin-');
@@ -120,9 +141,12 @@ describe('benchmark backends', () => {
       const rows = readFileSync(join(dir, `invoke-claude-${mode}.jsonl`), 'utf8').trim().split('\n').map((line) => JSON.parse(line));
       expect(rows.map((row) => row.id)).toEqual(['a', 'b']);
       for (const [i, row] of rows.entries()) {
-        expect(row).toMatchObject({ agent: 'claude', mode, model: 'sonnet', invoked: ['skill-a'], searches: [], tools: ['Read'], exit: 0, timedOut: false, costUsd: 0 });
+        expect(row).toMatchObject({ agent: 'claude', mode, model: 'sonnet', invoked: ['skill-a'], searches: [], tools: ['Read'], exit: problem === 'no init' ? 1 : 0, timedOut: false, costUsd: 0.05 });
         if (mode !== 'routed') expect(row).toMatchObject({ loaded: [], injected: [], offered: [] });
-        expect(row.inventory).toEqual(inventories[i]);
+        expect(row.inventory).toEqual(problem === 'no init' ? null : inventories[i]);
+        expect(row).not.toHaveProperty('invalid');
+        expect(row.hooks).toHaveLength(hookCounts[i]!);
+        for (const hook of row.hooks) expect(hook).toMatchObject({ event: probe.hook.event, exit_code: probe.hook.exit_code, outcome: probe.hook.outcome, additionalContext: probe.hook.additionalContext });
         expect(row.ms).toBeGreaterThanOrEqual(0);
       }
       expect(process.env.PATH).toBe(fakePath);

@@ -78,37 +78,33 @@ const out = join(dir, `invoke-${agent}-${mode}.jsonl`);
 
 /** One tool call; `ok` is false when the call itself failed (a failed call is not an invocation). */
 interface Event { tool: string; detail: string; ok: boolean; id?: string }
-interface Inventory { plugins: { name: string; path?: string }[]; hooks?: unknown }
+interface Inventory { plugins: { name: string; path?: string }[] }
+interface HookExecution { id: string; name: string; event: string; exit_code?: number; outcome?: string; additionalContext?: string }
 
-function checkInventory(inventory: Inventory | undefined, pluginDir?: string): void {
-  if (!inventory || !Array.isArray(inventory.plugins)) throw new Error('missing Claude startup inventory');
+function checkInventory(inventory: Inventory | undefined, hooks: HookExecution[], pluginDir?: string): string | undefined {
+  if (!inventory) return undefined;
   const normalize = (p: string) => {
     const path = p.replace(/\\/g, '/').replace(/\/$/, '');
     return toPath('/') !== '/' || process.platform === 'win32' ? path.toLowerCase() : path;
   };
   let ownPlugins = 0;
   for (const plugin of inventory.plugins) {
-    if (typeof plugin.name !== 'string') throw new Error('invalid Claude plugin inventory');
     if (!/^loadout(?:@|$)/i.test(plugin.name)) continue;
-    if (!pluginDir || typeof plugin.path !== 'string' || normalize(plugin.path) !== normalize(toPath(pluginDir)) || ++ownPlugins > 1) throw new Error('ambient loadout plugin; measurement invalid');
+    if (!pluginDir || typeof plugin.path !== 'string' || normalize(plugin.path) !== normalize(toPath(pluginDir)) || ++ownPlugins > 1) return 'ambient loadout plugin; measurement invalid';
   }
-  const ownHook = mode === 'hook' ? hookCommand('claude', toPath('/') !== '/') : mode === 'plugin' ? 'loadout hook claude' : undefined;
-  let ownHooks = 0;
-  const checkHooks = (value: unknown): void => {
-    if (typeof value === 'string') {
-      if (value === ownHook || /(?:\bloadout|[/\\]cli\.(?:ts|js))['"]?\s+['"]?hook['"]?\s+['"]?claude\b/.test(value)) {
-        if (value !== ownHook || ++ownHooks > 1) throw new Error('ambient loadout hook; measurement invalid');
-      }
-    } else if (value && typeof value === 'object') {
-      for (const item of Object.values(value)) checkHooks(item);
-    }
-  };
-  checkHooks(inventory.hooks);
+  if (mode === 'plugin' && ownPlugins !== 1) return 'missing loadout plugin; measurement invalid';
+  // The lifecycle events omit command/source; context identifies loadout, not its origin.
+  const loadoutHooks = hooks.filter((h) => h.additionalContext?.includes('<skill_relevance>'));
+  if (mode === 'plugin' || mode === 'hook') {
+    if (loadoutHooks.length !== 1) return 'expected exactly one loadout UserPromptSubmit hook; measurement invalid';
+  } else if (loadoutHooks.length) return 'unexpected loadout UserPromptSubmit hook; measurement invalid';
+  return undefined;
 }
 
 /** Tool calls from Claude's stream-json or Codex's --json event stream. */
-function toolEvents(stream: string): { events: Event[]; costUsd?: number; inventory?: Inventory } {
+function toolEvents(stream: string): { events: Event[]; hooks: HookExecution[]; costUsd?: number; inventory?: Inventory } {
   const events: Event[] = [];
+  const hooks = new Map<string, HookExecution>();
   let costUsd: number | undefined;
   let inventory: Inventory | undefined;
   for (const line of stream.split('\n')) {
@@ -119,8 +115,18 @@ function toolEvents(stream: string): { events: Event[]; costUsd?: number; invent
       continue;
     }
     if (e.type === 'system' && e.subtype === 'init') {
-      if (inventory) throw new Error('duplicate Claude startup inventory');
-      inventory = { plugins: e.plugins, ...(e.hooks !== undefined ? { hooks: e.hooks } : {}) };
+      inventory = { plugins: e.plugins };
+    } else if (e.type === 'system' && e.hook_event === 'UserPromptSubmit' && (e.subtype === 'hook_started' || e.subtype === 'hook_response')) {
+      const hook: HookExecution = hooks.get(e.hook_id) ?? { id: e.hook_id, name: e.hook_name, event: e.hook_event };
+      if (e.subtype === 'hook_response') {
+        hook.exit_code = e.exit_code;
+        hook.outcome = e.outcome;
+        // Other hooks need not return JSON, and absent context cannot establish loadout's execution.
+        let context: unknown;
+        try { context = JSON.parse(e.stdout).hookSpecificOutput?.additionalContext; } catch { context = undefined; }
+        if (typeof context === 'string') hook.additionalContext = context;
+      }
+      hooks.set(e.hook_id, hook);
     } else if (e.type === 'assistant') {
       // A call only counts once its result arrives without an error.
       for (const b of e.message?.content ?? []) if (b.type === 'tool_use') events.push({ tool: b.name, detail: JSON.stringify(b.input), ok: false, id: b.id });
@@ -139,9 +145,10 @@ function toolEvents(stream: string): { events: Event[]; costUsd?: number; invent
       if (it.type === 'mcp_tool_call') events.push({ tool: `mcp__${it.server}__${it.tool}`, detail: JSON.stringify(it.arguments ?? {}), ok });
     }
   }
-  return { events, costUsd, inventory };
+  return { events, hooks: [...hooks.values()], costUsd, inventory };
 }
 
+let invalidRun: string | undefined;
 for (const id of values.ids.split(',')) {
   const row = rows.get(id);
   if (!row) throw new Error(`no sweep row ${id}`);
@@ -155,12 +162,12 @@ for (const id of values.ids.split(',')) {
   const task = row.request + NOTE;
   const args =
     agent === 'claude'
-      ? claudeArgs(session, task, ['--output-format', 'stream-json', '--verbose', '--no-session-persistence', '--max-turns', values['max-turns']!, '--strict-mcp-config', '--permission-mode', 'acceptEdits', ...hookArgs], { headless: true, toPath })
+      ? claudeArgs(session, task, ['--output-format', 'stream-json', '--verbose', '--include-hook-events', '--no-session-persistence', '--max-turns', values['max-turns']!, '--strict-mcp-config', '--permission-mode', 'acceptEdits', ...hookArgs], { headless: true, toPath })
       : codexArgs(session, task, ['--json', '-s', 'workspace-write', '--skip-git-repo-check'], { headless: true });
   const started = Date.now();
   const proc = await run(bin, args, cwd, Number(values['timeout-s']) * 1000, childEnv);
-  const { events, costUsd, inventory } = toolEvents(proc.stdout);
-  if (agent === 'claude') checkInventory(inventory, session.pluginDir);
+  const { events, hooks, costUsd, inventory } = toolEvents(proc.stdout);
+  const invalid = agent === 'claude' ? checkInventory(inventory, hooks, session.pluginDir) : undefined;
 
   // Which library skills did the agent actually open?
   const folders = new Set(session.skills.map((c) => basename(c.source)));
@@ -185,6 +192,8 @@ for (const id of values.ids.split(',')) {
     mode,
     model: session.model,
     inventory: inventory ?? null,
+    hooks,
+    ...(invalid ? { invalid } : {}),
     // What the session actually carried (search mode carries nothing).
     loaded: decision.selected.map((s) => capabilityKey(s.capability)),
     injected: decision.selected.filter((s) => s.inject).map((s) => capabilityKey(s.capability)),
@@ -199,7 +208,7 @@ for (const id of values.ids.split(',')) {
     ms: Date.now() - started,
   };
   appendFileSync(out, JSON.stringify(result) + '\n');
-  const status = proc.timedOut ? 'timed out' : proc.code === 0 ? 'ok' : `exit ${proc.code}`;
+  const status = invalid ?? (proc.timedOut ? 'timed out' : proc.code === 0 ? 'ok' : `exit ${proc.code}`);
   console.log(`${id}: invoked ${result.invoked.join(', ') || '—'}; searched ${searches.length}×; ${events.length} tool calls; ${(result.ms / 1000).toFixed(0)} s, ${status}`);
   // Best effort: a Windows process killed on timeout can hold files for a moment.
   try {
@@ -207,6 +216,11 @@ for (const id of values.ids.split(',')) {
   } catch {
     console.error(`  could not remove ${cwd}`);
   }
+  if (invalid) {
+    invalidRun = invalid;
+    break;
+  }
 }
 rmSync(sessions, { recursive: true, force: true });
 if (shimDir) rmSync(shimDir, { recursive: true, force: true });
+if (invalidRun) throw new Error(invalidRun);
