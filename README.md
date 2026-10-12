@@ -9,9 +9,9 @@ skills, it showed 424 in an offline render
 ([B1](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request)).
 
 loadout keeps your skills in a separate library, and a prompt hook in Claude
-Code or Codex adds only the ones that fit each prompt, chosen by a cheap model
+Code or Codex adds the ones predicted to fit each prompt. A cheap model
 (TypeSafe's [Jev](https://typesafe.ai/blog/introducing-system-one-models-and-jev))
-for about $0.001 per routed prompt
+makes the prediction, for about $0.001 per routed prompt
 ([RESULTS](bench/RESULTS.md#v4-2026-10-06-realistic-requests-on-the-real-library-judged)).
 
 ## Quickstart
@@ -73,8 +73,9 @@ All numbers, caveats and negative results: [bench/RESULTS.md](bench/RESULTS.md).
   useful-skill use in Claude Code from 2 of 10 (6–51%) to 6 of 10 (31–83%)
   sessions
   ([RESULTS](bench/RESULTS.md#do-agents-use-what-they-are-given)).
-- **Better work: not shown.** In an 8-request blind pilot with Codex,
-  loadout's version won 4, lost 3 and split 1
+- **Better work: not shown.** In an 8-request, nominally blind pilot with
+  Codex, loadout's version won 4 (22–78%), lost 3 (14–69%) and split 1
+  (2–47%)
   ([pilot](bench/RESULTS.md#is-the-work-better-outcome-pilot-2026-10-07)).
 - **Small libraries:** in Claude Code, the one host measured, the MCP search
   tools cost more tokens than a native listing
