@@ -110,7 +110,7 @@ Acceptance:
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
 | B1 | P0 | Token-waste study: measured per-request overhead of popular skill packs | Claude | local (measure) + cloud (analysis) | done ([PR #6](https://github.com/erik-hedstrom/loadout/pull/6); follow-ups under "Left" in its learnings) |
-| B3 | P1 | Fact-checked comparison with alternatives | Codex | cloud | todo |
+| B3 | P1 | Fact-checked comparison with alternatives | Codex | cloud | in progress (branch `agent/b3-comparison`; [docs/comparison.md](../comparison.md)) |
 | B2 | P1 | Launch kit drafts | Claude | cloud | todo (after A1, B1) |
 | B4 | P1 | Repo polish: description, topics, social preview, badges | Claude | cloud + erik | todo |
 | B6 | P2 | GitHub profile README draft | Claude | cloud | todo |
@@ -157,6 +157,20 @@ Acceptance: a table with sources and access dates covering:
 - skills directories.
 
 State what each solves and what loadout adds.
+
+Learnings:
+- 8 rows in `docs/comparison.md`, read 2026-10-12. No head-to-head was run;
+  loadout's own numbers are quoted from RESULTS and B1's native-listing costs.
+- `developers.openai.com` and `skills.sh` were blocked from the cloud session.
+  Codex's budget (2% of the window, 8,000 characters otherwise) comes from
+  `codex-rs/ext/skills/src/render.rs` at commit 0c329ad plus a search excerpt of
+  the docs. Not found: Codex `tool_search` docs and enabling conditions,
+  skills.sh counts and vetting policy.
+- "toolsift" is `abdulmunimjemal/toolsift` (1 star); other searches return
+  unrelated review sites.
+- Left: Erik or a local session re-reads the Codex docs and skills.sh in a
+  browser; a measured comparison against Claude Code tool search and toolsift
+  on the same MCP set.
 
 **B4. Repo polish.**
 
