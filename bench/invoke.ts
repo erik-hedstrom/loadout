@@ -12,6 +12,7 @@
  *           claude-code`: does the agent open what the hook suggests?
  *   plugin  (Claude) the shipped hook-only plugin; nothing preloaded and no
  *           MCP server: does the agent open what the hook suggests?
+ * Ambient hooks that call loadout by absolute path bypass PATH and are not counted.
  *
  * Each run is capped (Claude --max-turns, a timeout), since only the agent's
  * first moves matter here. It starts in an empty folder where the agent may
@@ -23,12 +24,12 @@
  *   npx tsx bench/invoke.ts <sweep dir> --agent claude|codex --mode routed|search|hook|plugin --ids a,b,c [--max-turns 6]
  */
 import { execFileSync } from 'node:child_process';
-import { appendFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, delimiter, join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { loadConfig, paths } from '../src/config.js';
-import { claudeArgs, claudeHookSettings, codexArgs, hookCommand, materialize, pathTranslator, which, type Agent } from '../src/launch.js';
+import { claudeArgs, claudeHookBlock, codexArgs, hookCommand, materialize, pathTranslator, which, type Agent } from '../src/launch.js';
 import { capabilityKey, scanLibrary } from '../src/library.js';
 import { decisionFor, readJsonl, run } from './lib.js';
 import type { SweepRow } from './sweep.js';
@@ -56,16 +57,15 @@ const config = { ...loadConfig(), search: mode !== 'plugin' };
 const bin = which(agent);
 if (!bin) throw new Error(`${agent} not on PATH`);
 const toPath = pathTranslator(bin);
+const windowsAgent = toPath('/') !== '/';
 const sessions = mkdtempSync(join(tmpdir(), 'loadout-invoke-'));
 // A Windows agent under WSL needs its working folder on the Windows side (its shell cannot use \\wsl.localhost paths).
-const workRoot = toPath('/') !== '/' ? execFileSync('wslpath', ['-u', execFileSync('cmd.exe', ['/c', 'echo %TEMP%'], { encoding: 'utf8' }).trim()], { encoding: 'utf8' }).trim() : tmpdir();
+const workRoot = windowsAgent ? execFileSync('wslpath', ['-u', execFileSync('cmd.exe', ['/c', 'echo %TEMP%'], { encoding: 'utf8' }).trim()], { encoding: 'utf8' }).trim() : tmpdir();
 const repo = join(import.meta.dirname, '..');
 let shimDir: string | undefined;
 let childEnv: NodeJS.ProcessEnv | undefined;
-if (mode === 'plugin') {
-  const windowsAgent = toPath('/') !== '/';
+if (agent === 'claude') {
   shimDir = mkdtempSync(join(workRoot, 'loadout-bin-'));
-  writeFileSync(join(shimDir, 'loadout'), `#!/bin/sh\n${hookCommand('claude', windowsAgent)}\n`, { mode: 0o700 });
   childEnv = { ...process.env, PATH: `${shimDir}${delimiter}${process.env.PATH ?? ''}` };
   if (windowsAgent) {
     const windowsPath = execFileSync('cmd.exe', ['/c', 'echo %PATH%'], { encoding: 'utf8' }).trim();
@@ -81,8 +81,8 @@ interface Event { tool: string; detail: string; ok: boolean; id?: string }
 interface Inventory { plugins: { name: string; path?: string }[] }
 interface HookExecution { id: string; name: string; event: string; exit_code?: number; outcome?: string; additionalContext?: string }
 
-function checkInventory(inventory: Inventory | undefined, hooks: HookExecution[], pluginDir?: string): string | undefined {
-  if (!inventory) return undefined;
+function checkInventory(inventory: Inventory | undefined, hookInvocations: number, pluginDir?: string): string | undefined {
+  if (!inventory || !Array.isArray(inventory.plugins)) return 'no startup inventory';
   const normalize = (p: string) => {
     const path = p.replace(/\\/g, '/').replace(/\/$/, '');
     return toPath('/') !== '/' || process.platform === 'win32' ? path.toLowerCase() : path;
@@ -93,11 +93,9 @@ function checkInventory(inventory: Inventory | undefined, hooks: HookExecution[]
     if (!pluginDir || typeof plugin.path !== 'string' || normalize(plugin.path) !== normalize(toPath(pluginDir)) || ++ownPlugins > 1) return 'ambient loadout plugin; measurement invalid';
   }
   if (mode === 'plugin' && ownPlugins !== 1) return 'missing loadout plugin; measurement invalid';
-  // The lifecycle events omit command/source; context identifies loadout, not its origin.
-  const loadoutHooks = hooks.filter((h) => h.additionalContext?.includes('<skill_relevance>'));
   if (mode === 'plugin' || mode === 'hook') {
-    if (loadoutHooks.length !== 1) return 'expected exactly one loadout UserPromptSubmit hook; measurement invalid';
-  } else if (loadoutHooks.length) return 'unexpected loadout UserPromptSubmit hook; measurement invalid';
+    if (hookInvocations !== 1) return 'expected exactly one loadout UserPromptSubmit hook; measurement invalid';
+  } else if (hookInvocations) return 'unexpected loadout UserPromptSubmit hook; measurement invalid';
   return undefined;
 }
 
@@ -121,7 +119,7 @@ function toolEvents(stream: string): { events: Event[]; hooks: HookExecution[]; 
       if (e.subtype === 'hook_response') {
         hook.exit_code = e.exit_code;
         hook.outcome = e.outcome;
-        // Other hooks need not return JSON, and absent context cannot establish loadout's execution.
+        // Silent hooks and other hooks need not return JSON.
         let context: unknown;
         try { context = JSON.parse(e.stdout).hookSpecificOutput?.additionalContext; } catch { context = undefined; }
         if (typeof context === 'string') hook.additionalContext = context;
@@ -157,8 +155,15 @@ for (const id of values.ids.split(',')) {
   if (values.model) session.model = values.model;
   if (mode === 'hook' || mode === 'plugin') session.relevance = undefined;
   if (mode === 'plugin') session.pluginDir = join(repo, 'plugins', 'loadout');
-  const hookArgs = mode === 'hook' ? ['--settings', JSON.stringify(claudeHookSettings(toPath('/') !== '/'))] : [];
+  const hookArgs = mode === 'hook' ? ['--settings', JSON.stringify(claudeHookBlock('loadout hook claude'))] : [];
   const cwd = mkdtempSync(join(workRoot, 'loadout-work-'));
+  const marker = join(cwd, 'loadout-hook-invocations');
+  if (shimDir) {
+    writeFileSync(marker, '');
+    const quote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
+    const markerPath = windowsAgent || process.platform === 'win32' ? toPath(marker).replace(/\\/g, '/') : marker;
+    writeFileSync(join(shimDir, 'loadout'), `#!/bin/sh\nprintf '%s\\n' 'loadout hook claude' >> ${quote(markerPath)}\nexec /bin/sh -c ${quote(hookCommand('claude', windowsAgent))}\n`, { mode: 0o700 });
+  }
   const task = row.request + NOTE;
   const args =
     agent === 'claude'
@@ -167,7 +172,8 @@ for (const id of values.ids.split(',')) {
   const started = Date.now();
   const proc = await run(bin, args, cwd, Number(values['timeout-s']) * 1000, childEnv);
   const { events, hooks, costUsd, inventory } = toolEvents(proc.stdout);
-  const invalid = agent === 'claude' ? checkInventory(inventory, hooks, session.pluginDir) : undefined;
+  const hookInvocations = shimDir ? readFileSync(marker, 'utf8').split('\n').filter(Boolean).length : 0;
+  const invalid = agent === 'claude' ? checkInventory(inventory, hookInvocations, session.pluginDir) : undefined;
 
   // Which library skills did the agent actually open?
   const folders = new Set(session.skills.map((c) => basename(c.source)));
@@ -193,6 +199,9 @@ for (const id of values.ids.split(',')) {
     model: session.model,
     inventory: inventory ?? null,
     hooks,
+    hookInvocations,
+    hookEventCount: hooks.length,
+    hookContext: hooks.some((h) => h.additionalContext?.includes('<skill_relevance>')),
     ...(invalid ? { invalid } : {}),
     // What the session actually carried (search mode carries nothing).
     loaded: decision.selected.map((s) => capabilityKey(s.capability)),
