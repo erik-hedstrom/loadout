@@ -1,11 +1,6 @@
 # Changelog
 
-All notable changes to loadout are listed here, in the
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format. Numbers link
-to [bench/RESULTS.md](bench/RESULTS.md). PRs are on
-[GitHub](https://github.com/erik-hedstrom/loadout/pulls?q=is%3Apr+is%3Amerged).
-
-## [Unreleased]
+## Unreleased
 
 ### Added
 
@@ -14,7 +9,7 @@ to [bench/RESULTS.md](bench/RESULTS.md). PRs are on
   Claude Code and Codex). These came in direct commits before PRs were used.
 - `loadout audit`: an inventory estimate of what your installed skills add to each request ([#3](https://github.com/erik-hedstrom/loadout/pull/3)).
 - `loadout doctor`, a read-only setup check ([#20](https://github.com/erik-hedstrom/loadout/pull/20)).
-- Claude Code plugin with the prompt hook ([#9](https://github.com/erik-hedstrom/loadout/pull/9)) and a one-step Codex plugin ([#23](https://github.com/erik-hedstrom/loadout/pull/23)).
+- Claude Code plugin with the prompt hook ([#9](https://github.com/erik-hedstrom/loadout/pull/9)) and a Codex plugin carrying the hook and search server, installed offline, with a live run pending under D2 ([#23](https://github.com/erik-hedstrom/loadout/pull/23)).
 - Host capability matrix ([#18](https://github.com/erik-hedstrom/loadout/pull/18)) and host-neutral session skills ([#21](https://github.com/erik-hedstrom/loadout/pull/21)).
 - Judge backends for Claude, Codex and offline files ([#5](https://github.com/erik-hedstrom/loadout/pull/5)).
 - Measurements: what installed skills cost per request ([#6](https://github.com/erik-hedstrom/loadout/pull/6); [B1 results](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request)), routing re-measured after the Jev framing change ([#7](https://github.com/erik-hedstrom/loadout/pull/7)), and 300 new held-out requests where recall holds and precision falls ([#16](https://github.com/erik-hedstrom/loadout/pull/16); [C1](bench/RESULTS.md#c1-2026-10-08-new-held-out-requests)).

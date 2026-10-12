@@ -33,15 +33,15 @@ people browse it.
 | `developer-tools` | not checked | A general tag for a CLI people install. |
 | `typescript` | not checked | The implementation language. |
 
-11 topics, within GitHub's limit of 20. Skipped: `llm`, `claude` and
-`codex` (39,141 repos), which are too broad to help; `codex-cli` is the
-narrower choice.
+11 topics, within GitHub's limit of 20. Skipped: `llm` and `claude`,
+which are too broad to help, and `codex` (39,141 repos), for which `codex-cli`
+is the narrower choice.
 
 ## Steps for Erik
 
 1. Open https://github.com/erik-hedstrom/loadout and click the gear next to
    "About" (top right of the code tab).
-2. Paste the description. Add the topics, one per line, then **Save changes**.
+2. Paste the description. Type each topic and press Enter, then **Save changes**.
 3. Social preview: **Settings**, **General**, scroll to **Social preview**,
    **Edit**, **Upload an image**, and choose
    [docs/brand/social-preview.png](../brand/social-preview.png) (1280 x 640).
