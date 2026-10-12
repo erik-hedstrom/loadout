@@ -360,7 +360,7 @@ export const windowsPath = (p: string) => execFileSync('wslpath', ['-w', p], { e
 export interface LaunchOptions {
   /** Run once and exit (`claude -p`, `codex exec`) instead of an interactive session. */
   headless?: boolean;
-  /** Codex only: skip the user's config.toml. Claude isolation comes from `materialize(..., isolate)`. */
+  /** Codex: skip the user's config.toml. Claude: no automatic IDE connection; the rest comes from `materialize(..., isolate)`. */
   isolate?: boolean;
   toPath?: (p: string) => string;
 }
@@ -383,7 +383,7 @@ export function claudeArgs(session: Session, task: string, extra: string[], opts
   ];
   if (trusted.length) args.push('--allowedTools', ...trusted);
   if (session.mcpConfig) args.push('--mcp-config', toPath(session.mcpConfig));
-  if (session.settings) args.push('--strict-mcp-config', '--settings', toPath(session.settings));
+  if (session.settings) args.push('--strict-mcp-config', '--no-chrome', '--settings', toPath(session.settings));
   return args;
 }
 
@@ -429,12 +429,12 @@ export function codexPrompt(session: Session, task: string): string {
 
 /**
  * The first argument after `--` that would undo `--isolate`: one that adds MCP servers or integrations
- * (Claude's --mcp-config, --agents, --chrome, --ide; Codex's mcp_servers or features overrides, --enable), or a
+ * (Claude's --mcp-config, --agents, --plugin-dir, --plugin-url, --chrome, --ide; Codex's mcp_servers or features overrides, --enable), or a
  * --settings that would replace loadout's. Anything else passes through unchanged.
  */
 export function isolateConflict(agent: Agent, args: string[]): string | undefined {
   const is = (a: string, flag: string) => a === flag || a.startsWith(`${flag}=`);
-  if (agent === 'claude') return args.find((a) => ['--settings', '--mcp-config', '--agents', '--chrome', '--ide'].some((f) => is(a, f)));
+  if (agent === 'claude') return args.find((a) => ['--settings', '--mcp-config', '--agents', '--plugin-dir', '--plugin-url', '--chrome', '--ide'].some((f) => is(a, f)));
   return args.find((a, i) => {
     if (is(a, '--enable')) return true;
     const override = a === '-c' || a === '--config' ? args[i + 1] : a.startsWith('--config=') ? a.slice(9) : /^-c./.test(a) ? a.slice(2).replace(/^=/, '') : undefined;
@@ -479,7 +479,12 @@ export function codexArgs(session: Session, task: string, extra: string[], opts:
 export function launch(bin: string, args: string[], opts: LaunchOptions = {}): Promise<number> {
   return new Promise((resolve, reject) => {
     // Headless runs get no stdin: `codex exec` otherwise waits for more prompt text on a non-TTY stdin.
-    const child = spawn(bin, args, { stdio: opts.headless ? ['ignore', 'inherit', 'inherit'] : 'inherit' });
+    // Inside an IDE terminal Claude Code connects to the IDE on its own; only this variable turns that off for one
+    // session. WSLENV carries it to a Windows-side claude.exe.
+    const env = opts.isolate
+      ? { ...process.env, CLAUDE_CODE_AUTO_CONNECT_IDE: 'false', WSLENV: [process.env.WSLENV, 'CLAUDE_CODE_AUTO_CONNECT_IDE'].filter(Boolean).join(':') }
+      : undefined;
+    const child = spawn(bin, args, { stdio: opts.headless ? ['ignore', 'inherit', 'inherit'] : 'inherit', env });
     child.on('error', reject);
     child.on('exit', (code, signal) => resolve(code ?? (signal ? 1 : 0)));
   });
