@@ -558,7 +558,12 @@ Learnings:
   state, so two hooks racing in one session cannot both warn. A test that
   starts concurrent hook processes passed against a non-atomic version too
   (process start jitter hides the race), so it was not kept. Without a
-  `session_id` there is no marker, so it warns on every prompt.
+  `session_id`, or when the marker cannot be written, it warns on every
+  non-follow-up prompt rather than never.
+- Markers are empty files swept by the hook state's 7-day TTL, which runs
+  only when routing writes state. Without a key that is rare, so markers pile
+  up (one per session), and a session longer than 7 days can be warned twice.
+  Both accepted.
 - An unreadable `jev.apiKeyFile` (for example a directory) makes
   `resolveApiKey` throw, so the hook ends with the existing fixed failure note
   and no warning. Not changed here; Erik decides whether that should read as

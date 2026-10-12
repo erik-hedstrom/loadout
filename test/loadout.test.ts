@@ -1325,6 +1325,14 @@ describe('claude hook', () => {
     expect(noKeyWarning({ session_id: 'b', prompt: TASK }, noKey)).toBe(NO_KEY_WARNING);
     expect(noKeyWarning({ session_id: 'c', prompt: TASK }, { ...noKey, client })).toBeUndefined();
     expect(noKeyWarning({ session_id: 'd', prompt: TASK }, { ...noKey, config: { ...DEFAULT_CONFIG, router: 'lexical' } })).toBeUndefined();
+    expect(noKeyWarning({ prompt: TASK }, noKey)).toBe(NO_KEY_WARNING);
+    expect(noKeyWarning({ prompt: TASK }, noKey)).toBe(NO_KEY_WARNING);
+    // A state dir that cannot be created (its parent is a file) still warns, every time.
+    const blocked = join(tempDir('loadout-hook-'), 'file');
+    writeFileSync(blocked, '');
+    const unwritable = { ...noKey, stateDir: join(blocked, 'hook') };
+    expect(noKeyWarning({ session_id: 'e', prompt: TASK }, unwritable)).toBe(NO_KEY_WARNING);
+    expect(noKeyWarning({ session_id: 'e', prompt: TASK }, unwritable)).toBe(NO_KEY_WARNING);
   });
 
   describe('no-key warning through the hook process', () => {
