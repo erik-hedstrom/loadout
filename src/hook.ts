@@ -99,7 +99,8 @@ export function noKeyWarning(input: HookInput, deps: Pick<HookDeps, 'config' | '
       mkdirSync(deps.stateDir, { recursive: true });
       writeFileSync(marker, '', { flag: 'wx' });
     } catch (e) {
-      if ((e as NodeJS.ErrnoException).code === 'EEXIST') return undefined;
+      // Only the marker existing means warned; mkdir also throws EEXIST when the state dir is a file.
+      if ((e as NodeJS.ErrnoException).code === 'EEXIST' && (e as NodeJS.ErrnoException).path === marker) return undefined;
     }
   }
   return NO_KEY_WARNING;
