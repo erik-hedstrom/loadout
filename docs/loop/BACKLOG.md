@@ -345,8 +345,8 @@ Acceptance:
 | D6 | P2 | HTTP: cancellation reaches Jev | Claude | cloud | done ([#19](https://github.com/erik-hedstrom/loadout/pull/19)) |
 | D8 | P1 | Host capability matrix (verified vs generated) | Claude | cloud | done ([#18](https://github.com/erik-hedstrom/loadout/pull/18)) |
 | D9 | P1 | Codex parity: neutral session skill dir, tier presets | Claude | cloud | done ([#21](https://github.com/erik-hedstrom/loadout/pull/21)); Codex launch not re-run live |
-| D13 | P1 | Warn when the hook runs without a TypeSafe key | Claude | cloud | in progress (PR pending): once per session, `systemMessage` for Claude Code, stderr for Codex (unverified) |
 | D12 | P0 | Codex: install the hook and search as one step, if Codex allows it | Codex | local | done ([#23](https://github.com/erik-hedstrom/loadout/pull/23)): `plugins/loadout-codex` through `.agents/plugins/marketplace.json`; install checked offline; the hook still needs `/hooks` trust; the live run is D2 |
+| D13 | P1 | Warn when the hook runs without a TypeSafe key | Claude | cloud | in progress ([#27](https://github.com/erik-hedstrom/loadout/pull/27)): once per session, as a `systemMessage`, which Claude Code and Codex both show |
 
 **D10. In-host first: loadout as a Claude Code plugin.**
 
@@ -550,10 +550,15 @@ Learnings:
   Claude Code shows to the user (its hook JSON output contract; not run
   against a live session here). Plain stderr on exit 0 is not shown outside
   verbose mode.
-- Codex: stderr only. Unverified whether Codex shows hook stderr or a
-  `systemMessage`; check in D2's live run and switch if it does.
-- "Once" is the `warned` flag in the hook's per-session state file. Without a
-  `session_id` there is no state, so it warns on every prompt.
+- Codex: the same JSON. Codex's UserPromptSubmit handler reads only stdout
+  on exit 0 and shows `systemMessage` as a warning
+  (`codex-rs/hooks/src/events/user_prompt_submit.rs`, found by Codex's review
+  on #27); the first draft's stderr line was dropped. Not run live here (D2).
+- "Once" is an exclusive-create marker file per session next to the hook's
+  state, so two hooks racing in one session cannot both warn. A test that
+  starts concurrent hook processes passed against a non-atomic version too
+  (process start jitter hides the race), so it was not kept. Without a
+  `session_id` there is no marker, so it warns on every prompt.
 - An unreadable `jev.apiKeyFile` (for example a directory) makes
   `resolveApiKey` throw, so the hook ends with the existing fixed failure note
   and no warning. Not changed here; Erik decides whether that should read as

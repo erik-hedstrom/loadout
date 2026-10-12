@@ -1268,6 +1268,7 @@ describe('claude hook', () => {
     expect(await promptContext({ session_id: 's2', prompt: TASK }, deps)).toContain('webapp-testing');
 
     expect(JSON.parse(hookOutput('x'))).toEqual({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: 'x' } });
+    expect(JSON.parse(hookOutput('x', 'w'))).toEqual({ systemMessage: 'w', hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: 'x' } });
   });
 
   it('stores skill IDs without prompt text in hook state', async () => {
@@ -1326,19 +1327,6 @@ describe('claude hook', () => {
     expect(noKeyWarning({ session_id: 'd', prompt: TASK }, { ...noKey, config: { ...DEFAULT_CONFIG, router: 'lexical' } })).toBeUndefined();
   });
 
-  it('keeps the warning flag when routing rewrites the session state', async () => {
-    const stateDir = tempDir('loadout-hook-');
-    const lib = tempDir('loadout-evil-lib-');
-    mkdirSync(join(lib, 'skills', 'pdf'), { recursive: true });
-    writeFileSync(join(lib, 'skills', 'pdf', 'SKILL.md'), '---\nname: pdf\ndescription: Work with PDF files\n---\nBody');
-    const deps = { library: scanLibrary(lib), config: DEFAULT_CONFIG, stateDir };
-    const input = { session_id: 'k', prompt: 'use the pdf skill for this please' };
-    expect(await promptContext(input, deps)).toContain('<skill name="pdf"');
-    expect(noKeyWarning(input, deps)).toBe(NO_KEY_WARNING);
-    expect(await promptContext({ ...input, prompt: 'use the pdf skill for this too' }, deps)).toBeUndefined();
-    expect(noKeyWarning(input, deps)).toBeUndefined();
-  });
-
   describe('no-key warning through the hook process', () => {
     const run = (host: 'claude' | 'codex', home: string, session: string) =>
       spawnSync(process.execPath, ['--import', 'tsx', join(import.meta.dirname, '../src/cli.ts'), 'hook', host], {
@@ -1352,18 +1340,16 @@ describe('claude hook', () => {
       return home;
     };
 
-    it('shows Claude Code a systemMessage once and Codex a stderr line', () => {
+    it('shows the warning once per session as a systemMessage, to Claude Code and Codex alike', () => {
       const home = homeWith({});
-      const first = run('claude', home, 's1');
-      expect(first.status, first.stderr).toBe(0);
-      expect(JSON.parse(first.stdout)).toEqual({ systemMessage: NO_KEY_WARNING });
-      const again = run('claude', home, 's1');
-      expect(again.stdout).toBe('');
-      expect(again.stderr).toBe('');
-      const codex = run('codex', home, 's2');
-      expect(codex.status).toBe(0);
-      expect(codex.stdout).toBe('');
-      expect(codex.stderr).toBe(`${NO_KEY_WARNING}\n`);
+      for (const host of ['claude', 'codex'] as const) {
+        const first = run(host, home, host);
+        expect(first.status, first.stderr).toBe(0);
+        expect(JSON.parse(first.stdout)).toEqual({ systemMessage: NO_KEY_WARNING });
+        const again = run(host, home, host);
+        expect(again.stdout).toBe('');
+        expect(again.stderr).toBe('');
+      }
     });
 
     it('never names the key file, whether it is missing or unreadable', () => {

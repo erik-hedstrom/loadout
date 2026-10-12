@@ -154,9 +154,7 @@ async function runHook(rest: string[]): Promise<number> {
       ...(values['windows-paths'] ? { toPath: windowsPath } : {}),
     });
     const warning = noKeyWarning(input, { config, client, stateDir });
-    // Claude Code shows `systemMessage` to the user. Whether Codex does is unverified, so it gets stderr.
-    if (warning && positionals[0] === 'codex') console.error(warning);
-    if (context || (warning && positionals[0] === 'claude')) console.log(hookOutput(context, positionals[0] === 'claude' ? warning : undefined));
+    if (context || warning) console.log(hookOutput(context, warning));
   } catch {
     console.error(HOOK_FAILURE_NOTE);
   } finally {

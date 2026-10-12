@@ -47,16 +47,14 @@ interface SessionState {
   offered: Set<string>;
   /** Skills whose instructions were already injected. */
   injected: Set<string>;
-  /** The no-key warning was already shown in this session. */
-  warned: boolean;
 }
 
 function readState(file: string | undefined): SessionState {
   try {
-    const raw = JSON.parse(readFileSync(file!, 'utf8')) as { offered?: string[]; injected?: string[]; warned?: boolean };
-    return { offered: new Set(raw.offered ?? []), injected: new Set(raw.injected ?? []), warned: raw.warned === true };
+    const raw = JSON.parse(readFileSync(file!, 'utf8')) as { offered?: string[]; injected?: string[] };
+    return { offered: new Set(raw.offered ?? []), injected: new Set(raw.injected ?? []) };
   } catch {
-    return { offered: new Set(), injected: new Set(), warned: false };
+    return { offered: new Set(), injected: new Set() };
   }
 }
 
@@ -67,7 +65,7 @@ function writeState(dir: string, file: string, state: SessionState): void {
   mkdirSync(dir, { recursive: true });
   // Write then rename, so a concurrent reader never sees half a file.
   const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
-  writeFileSync(tmp, JSON.stringify({ offered: [...state.offered], injected: [...state.injected], warned: state.warned, updatedAt: new Date().toISOString() }));
+  writeFileSync(tmp, JSON.stringify({ offered: [...state.offered], injected: [...state.injected], updatedAt: new Date().toISOString() }));
   renameSync(tmp, file);
   for (const f of readdirSync(dir)) {
     const p = join(dir, f);
@@ -86,19 +84,23 @@ export const HOOK_FAILURE_NOTE = 'loadout: hook failed; added nothing (`loadout 
 /** Fixed text: it must never carry the key file's path or any config content. */
 export const NO_KEY_WARNING = 'loadout: no TypeSafe API key, so prompts are routed by keyword only and skills are rarely suggested. Run `loadout doctor` to fix this.';
 
-const stateFileOf = (stateDir: string, sessionId: string | undefined) =>
-  sessionId ? join(stateDir, `${createHash('sha256').update(sessionId).digest('hex').slice(0, 32)}.json`) : undefined;
+// Hashed, so ids that differ only in punctuation never share state; no id means no state at all.
+const sessionFile = (stateDir: string, sessionId: string | undefined, ext: string) =>
+  sessionId ? join(stateDir, `${createHash('sha256').update(sessionId).digest('hex').slice(0, 32)}.${ext}`) : undefined;
 
-/**
- * The warning for the user when the Jev router is configured but no client exists (no key), once per session.
- * Call it after promptContext, which rewrites the same state file.
- */
+/** The warning for the user when the Jev router is configured but no client exists (no key), once per session. */
 export function noKeyWarning(input: HookInput, deps: Pick<HookDeps, 'config' | 'client' | 'stateDir'>): string | undefined {
   if (deps.config.router !== 'jev' || deps.client) return undefined;
-  const stateFile = stateFileOf(deps.stateDir, input.session_id);
-  const state = readState(stateFile);
-  if (state.warned) return undefined;
-  if (stateFile) writeState(deps.stateDir, stateFile, { ...state, warned: true });
+  const marker = sessionFile(deps.stateDir, input.session_id, 'warned');
+  if (marker) {
+    mkdirSync(deps.stateDir, { recursive: true });
+    // Exclusive create: of two hooks racing in one session, only one wins the warning.
+    try {
+      writeFileSync(marker, '', { flag: 'wx' });
+    } catch {
+      return undefined;
+    }
+  }
   return NO_KEY_WARNING;
 }
 
@@ -106,8 +108,7 @@ export function noKeyWarning(input: HookInput, deps: Pick<HookDeps, 'config' | '
 export async function promptContext(input: HookInput, deps: HookDeps): Promise<string | undefined> {
   const prompt = input.prompt?.trim();
   if (!prompt || isFollowUp(prompt)) return undefined;
-  // Hashed, so ids that differ only in punctuation never share state; no id means no state at all.
-  const stateFile = stateFileOf(deps.stateDir, input.session_id);
+  const stateFile = sessionFile(deps.stateDir, input.session_id, 'json');
   const state = readState(stateFile);
   const toPath = deps.toPath ?? ((p: string) => p);
 
@@ -158,7 +159,7 @@ export async function promptContext(input: HookInput, deps: HookDeps): Promise<s
   return [...parts, ...injected].join('\n') || undefined;
 }
 
-/** Claude Code's JSON hook output for UserPromptSubmit; `systemMessage` is shown to the user, not the model. */
+/** JSON hook output for UserPromptSubmit, read by Claude Code and Codex; `systemMessage` is shown to the user, not the model. */
 export const hookOutput = (context?: string, warning?: string) =>
   JSON.stringify({
     ...(context ? { hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: context } } : {}),
