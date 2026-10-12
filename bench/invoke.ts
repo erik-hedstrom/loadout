@@ -81,7 +81,7 @@ interface Event { tool: string; detail: string; ok: boolean; id?: string }
 interface Inventory { plugins: { name: string; path?: string }[] }
 interface HookExecution { id: string; name: string; event: string; exit_code?: number; outcome?: string; additionalContext?: string }
 
-function checkInventory(inventory: Inventory | undefined, hookInvocations: number, contextExecutions: number, pluginDir?: string): string | undefined {
+function checkInventory(inventory: Inventory | undefined, hookInvocations: number, uncountedContext: number, pluginDir?: string): string | undefined {
   if (!inventory || !Array.isArray(inventory.plugins)) return 'no startup inventory';
   const normalize = (p: string) => {
     const path = p.replace(/\\/g, '/').replace(/\/$/, '');
@@ -97,7 +97,7 @@ function checkInventory(inventory: Inventory | undefined, hookInvocations: numbe
     if (hookInvocations !== 1) return 'expected exactly one loadout UserPromptSubmit hook; measurement invalid';
   } else if (hookInvocations) return 'unexpected loadout UserPromptSubmit hook; measurement invalid';
   // A hook that calls loadout by absolute path bypasses the shim; its context is still visible.
-  if (contextExecutions > hookInvocations) return 'uncounted loadout hook context; measurement invalid';
+  if (uncountedContext > 0) return 'uncounted loadout hook context; measurement invalid';
   return undefined;
 }
 
@@ -165,7 +165,10 @@ for (const id of values.ids.split(',')) {
     writeFileSync(marker, '');
     const quote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
     const markerPath = windowsAgent || process.platform === 'win32' ? toPath(marker).replace(/\\/g, '/') : marker;
-    writeFileSync(join(shimDir, 'loadout'), `#!/bin/sh\nprintf '%s\\n' 'loadout hook claude' >> ${quote(markerPath)}\nexec /bin/sh -c ${quote(hookCommand('claude', windowsAgent))}\n`, { mode: 0o700 });
+    // "invoked" before the hook runs (a killed hook still counts); "context" after, so silent
+    // invocations cannot cover for context that an uncounted hook supplied.
+    const m = quote(markerPath);
+    writeFileSync(join(shimDir, 'loadout'), `#!/bin/sh\nprintf 'invoked\\n' >> ${m}\nout=$(/bin/sh -c ${quote(hookCommand('claude', windowsAgent))}); status=$?\ncase $out in *'<skill_relevance>'*) printf 'context\\n' >> ${m};; esac\nprintf '%s' "$out"\nexit $status\n`, { mode: 0o700 });
   }
   const task = row.request + NOTE;
   const args =
@@ -175,9 +178,11 @@ for (const id of values.ids.split(',')) {
   const started = Date.now();
   const proc = await run(bin, args, cwd, Number(values['timeout-s']) * 1000, childEnv);
   const { events, hooks, costUsd, inventory } = toolEvents(proc.stdout);
-  const hookInvocations = shimDir ? readFileSync(marker, 'utf8').split('\n').filter(Boolean).length : 0;
+  const marks = shimDir ? readFileSync(marker, 'utf8').split('\n') : [];
   if (shimDir) rmSync(marker);
-  const invalid = agent === 'claude' ? checkInventory(inventory, hookInvocations, hooks.filter((h) => h.additionalContext?.includes('<skill_relevance>')).length, session.pluginDir) : undefined;
+  const hookInvocations = marks.filter((l) => l === 'invoked').length;
+  const contextResponses = hooks.filter((h) => h.additionalContext?.includes('<skill_relevance>')).length;
+  const invalid = agent === 'claude' ? checkInventory(inventory, hookInvocations, contextResponses - marks.filter((l) => l === 'context').length, session.pluginDir) : undefined;
 
   // Which library skills did the agent actually open?
   const folders = new Set(session.skills.map((c) => basename(c.source)));

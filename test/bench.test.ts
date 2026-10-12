@@ -49,6 +49,8 @@ describe('benchmark backends', () => {
     { mode: 'routed', windowsAgent: false, ambient: 'hook' },
     { mode: 'search', windowsAgent: false, ambient: 'absolute' },
     { mode: 'plugin', windowsAgent: false, ambient: 'absolute' },
+    { mode: 'plugin', windowsAgent: false, ambient: 'absolute', problem: 'silent hook' },
+    { mode: 'plugin', windowsAgent: true, ambient: 'absolute', problem: 'silent hook' },
     { mode: 'plugin', windowsAgent: false, problem: 'missing plugin' },
     { mode: 'plugin', windowsAgent: false, problem: 'missing hook' },
     { mode: 'hook', windowsAgent: false, problem: 'missing hook' },
@@ -71,7 +73,7 @@ describe('benchmark backends', () => {
     vi.stubEnv('WSL_DISTRO_NAME', 'bench-distro');
     vi.stubEnv('WSLENV', 'KEEP/p:PATH/up');
     const translate = (p: string) => windowsAgent ? `C:\\translated${p.replace(/\\/g, '/')}` : p;
-    vi.doMock('../src/launch.js', async (original) => ({ ...await original<typeof import('../src/launch.js')>(), pathTranslator: () => translate, hookCommand: () => 'printf hook-out; printf hook-err >&2; exit 7' }));
+    vi.doMock('../src/launch.js', async (original) => ({ ...await original<typeof import('../src/launch.js')>(), pathTranslator: () => translate, hookCommand: () => 'printf "%s" "$HOOK_OUT"; printf hook-err >&2; exit 7' }));
     const windowsPath = 'C:\\Windows\\System32;C:\\tools';
     vi.mocked(execFileSync).mockImplementation((command, args) => {
       if (command === 'cmd.exe') return args?.includes('echo %PATH%') ? windowsPath + '\n' : 'C:\\Temp\n';
@@ -99,20 +101,22 @@ describe('benchmark backends', () => {
       const shim = join(shimDir, 'loadout');
       const marker = join(shimDir, readdirSync(shimDir).find((f) => f.endsWith('.invocations'))!);
       if (mode === 'hook') expect(JSON.parse(args[args.indexOf('--settings') + 1]!).hooks.UserPromptSubmit[0].hooks[0].command).toBe('loadout hook claude');
+      // An 'absolute' ambient hook (index hookCounts) bypasses the shim and always adds context.
+      const hasContext = (i: number) => i === hookCounts.at(-1)! || !(problem === 'silent hook' || ambient === 'hook' && i === count - 1);
       for (let i = 0; i < hookCounts.at(-1)!; i++) {
         if (!windowsAgent && process.platform !== 'win32') {
-          const result = spawnSync('/bin/sh', [shim, 'hook', 'claude'], { encoding: 'utf8' });
-          expect(result).toMatchObject({ status: 7, stdout: 'hook-out', stderr: 'hook-err' });
+          const out = hasContext(i) ? '<skill_relevance>hook-out' : 'hook-out';
+          const result = spawnSync('/bin/sh', [shim, 'hook', 'claude'], { encoding: 'utf8', env: { ...process.env, HOOK_OUT: out } });
+          expect(result).toMatchObject({ status: 7, stdout: out, stderr: 'hook-err' });
         } else {
           const markerPath = translate(marker).replace(/\\/g, '/');
           expect(readFileSync(shim, 'utf8')).toContain(`>> '${markerPath}'`);
-          appendFileSync(marker, 'loadout hook claude\n');
+          appendFileSync(marker, hasContext(i) ? 'invoked\ncontext\n' : 'invoked\n');
         }
       }
-      // An 'absolute' ambient hook bypasses the shim: it shows in hook events but not in the marker.
       const hooks = Array.from({ length: hookCounts.at(-1)! + (ambient === 'absolute' ? 1 : 0) }, (_, i) => {
         const fields = { hook_id: `hook-${i}`, hook_name: 'UserPromptSubmit', hook_event: probe.hook.event };
-        const stdout = problem === 'silent hook' || ambient === 'hook' && i === count - 1 ? '' : JSON.stringify({ hookSpecificOutput: { hookEventName: probe.hook.event, additionalContext: probe.hook.additionalContext } });
+        const stdout = !hasContext(i) ? '' : JSON.stringify({ hookSpecificOutput: { hookEventName: probe.hook.event, additionalContext: probe.hook.additionalContext } });
         return [
           { type: 'system', subtype: 'hook_started', ...fields },
           { type: 'system', subtype: 'hook_response', ...fields, stdout, output: stdout, stderr: probe.hook.stderr, exit_code: probe.hook.exit_code, outcome: probe.hook.outcome },
