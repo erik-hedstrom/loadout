@@ -728,7 +728,8 @@ session" moved from `CLAUDE.md` to `AGENTS.md` "Environment notes", so Codex
 and cloud workers read it too (pr-reviewer caught the first draft dropping
 it). `worker.md` points to `AGENTS.md` instead of restating its hard rules and
 PR list, and its steps point to `AGENTS.md`'s bars (tests, cost, backlog,
-commits) instead of copying them; `CLAUDE.md` lost its copy of the same bars.
+commits) instead of copying them (its "tests for new behavior" moved into
+`AGENTS.md`); `CLAUDE.md` lost its copy of the same bars.
 `AGENTS.md` lost two filler sentences. `CONTRIBUTING.md` and the PR
 template were checked against the code and the loop and left as they are.
 `SECURITY.md` points reporters to GitHub private vulnerability reporting,

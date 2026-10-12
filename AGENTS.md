@@ -82,7 +82,7 @@ npm run dev -- route "<task>"   # needs a TypeSafe key (TYPESAFE_API_KEY or `loa
 - **Dependencies:** no new runtime dependency without a reason in the PR.
   `@huggingface/transformers` stays optional.
 - **Tests:** in `test/` with vitest, using the fake Jev client (`fakeClient`).
-  - Every bug fix gets a test.
+  - New behavior and every bug fix get a test.
   - Every security-relevant path (file reads, escaping, auth) gets an
     adversarial test.
 - **Third-party text:** escape it with `escapeSkillTags` before it goes into
