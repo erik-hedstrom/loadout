@@ -163,7 +163,7 @@ Learnings:
   loadout's own numbers are quoted from RESULTS and B1's native-listing costs.
 - `developers.openai.com` and `skills.sh` were blocked from the cloud session;
   the table marks what that left unconfirmed.
-- "toolsift" is `abdulmunimjemal/toolsift` (1 star); other searches return
+- "toolsift" is `abdulmunimjemal/toolsift`; other searches return
   unrelated review sites.
 - Left: Erik or a local session re-reads the Codex docs and skills.sh in a
   browser; a measured comparison against Claude Code tool search and toolsift
