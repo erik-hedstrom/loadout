@@ -121,6 +121,79 @@ describe('doctor', () => {
     expect(checks['Codex']!.detail).toMatch(/loadout: hook \(trust not checked: approve it once in \/hooks\) and search server$/);
   });
 
+  it.each([
+    String.raw`C:\x\dist\cli.js`,
+    String.raw`'C:\Program Files\x\dist\cli.js'`,
+    String.raw`C:\x\dist\cli.ts`,
+    String.raw`'C:\Program Files\x\dist\cli.ts'`,
+  ])('recognises a literal Windows hook path (%s)', async (path) => {
+    mkdirSync(join(home, 'claude'));
+    writeFileSync(join(home, 'claude', 'settings.json'), JSON.stringify({ hooks: { UserPromptSubmit: [{ hooks: [{ type: 'command', command: `${path} hook claude` }] }] } }));
+    mkdirSync(join(home, 'codex'));
+    writeFileSync(join(home, 'codex', 'config.toml'), `[[hooks.UserPromptSubmit]]\n[[hooks.UserPromptSubmit.hooks]]\ntype = "command"\ncommand = ${JSON.stringify(`${path} hook codex`)}\n`);
+    const checks = byName(await doctor(config, () => okClient));
+    expect(checks['Claude Code']).toMatchObject({ ok: true, detail: 'CLI not on PATH; loadout: settings hook' });
+    expect(checks['Codex']).toMatchObject({ ok: true, detail: 'CLI not on PATH; loadout: hook (trust not checked: approve it once in /hooks)' });
+  });
+
+  it.each([false, true])('counts a Claude user search server without settings (default config directory: %s)', async (defaultDir) => {
+    if (defaultDir) vi.stubEnv('CLAUDE_CONFIG_DIR', '');
+    const dir = defaultDir ? home : join(home, 'claude');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, '.claude.json'), JSON.stringify({ mcpServers: { loadout: { command: 'loadout' } } }));
+    const checks = byName(await doctor(config, () => okClient));
+    expect(checks['Claude Code']).toMatchObject({ ok: true, detail: 'CLI not on PATH; loadout: search server' });
+  });
+
+  it('counts a Claude user search server using a URL', async () => {
+    mkdirSync(join(home, 'claude'));
+    writeFileSync(join(home, 'claude', '.claude.json'), JSON.stringify({ mcpServers: { loadout: { url: 'https://example.invalid/mcp' } } }));
+    const checks = byName(await doctor(config, () => okClient));
+    expect(checks['Claude Code']).toMatchObject({ ok: true, detail: 'CLI not on PATH; loadout: search server' });
+  });
+
+  it.each([{ type: 'stdio' }, 'wrong', null, [], { command: '' }, { url: ' ' }, { command: 42, url: false }].map((server) => ({ server })))('does not count an unusable Claude user search server (%j)', async ({ server }) => {
+    mkdirSync(join(home, 'claude'));
+    writeFileSync(join(home, 'claude', '.claude.json'), JSON.stringify({ mcpServers: { loadout: server } }));
+    const checks = byName(await doctor(config, () => okClient));
+    expect(checks['Claude Code']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: not set up' });
+  });
+
+  it('ignores project-scoped Claude search servers', async () => {
+    mkdirSync(join(home, 'claude'));
+    writeFileSync(join(home, 'claude', '.claude.json'), JSON.stringify({ projects: { [home]: { mcpServers: { loadout: { command: 'loadout' } } } } }));
+    const checks = byName(await doctor(config, () => okClient));
+    expect(checks['Claude Code']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: not set up' });
+  });
+
+  it('reports a malformed Claude user MCP config without exposing its contents', async () => {
+    const secret = 'claude-broken-config-canary';
+    mkdirSync(join(home, 'claude'));
+    const file = join(home, 'claude', '.claude.json');
+    writeFileSync(join(home, 'claude', 'settings.json'), JSON.stringify({ enabledPlugins: { 'loadout@loadout': true } }));
+    writeFileSync(file, `{ "account": "${secret}", "mcpServers": `);
+    const checks = await doctor(config, () => okClient);
+    expect(byName(checks)['Claude Code']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: config cannot be read or parsed', fix: `repair ${file}` });
+    expect(formatDoctor(checks)).not.toContain(secret);
+  });
+
+  it('never prints credentials from Claude user MCP config', async () => {
+    const secret = 'claude-config-secret-canary';
+    mkdirSync(join(home, 'claude'));
+    writeFileSync(join(home, 'claude', '.claude.json'), JSON.stringify({ account: secret, mcpServers: { loadout: { command: 'loadout', env: { TOKEN: secret } } } }));
+    const checks = await doctor(config, () => okClient);
+    expect(byName(checks)['Claude Code']).toMatchObject({ ok: true, detail: 'CLI not on PATH; loadout: search server' });
+    expect(formatDoctor(checks)).not.toContain(secret);
+  });
+
+  it.each([false, true])('lists active Claude attachments with a search server (hooks disabled: %s)', async (disableAllHooks) => {
+    mkdirSync(join(home, 'claude'));
+    writeFileSync(join(home, 'claude', 'settings.json'), JSON.stringify({ enabledPlugins: { 'loadout@loadout': true }, hooks: { UserPromptSubmit: [{ hooks: [{ type: 'command', command: 'loadout hook claude' }] }] }, disableAllHooks }));
+    writeFileSync(join(home, 'claude', '.claude.json'), JSON.stringify({ mcpServers: { loadout: { command: 'loadout' } } }));
+    const checks = byName(await doctor(config, () => okClient));
+    expect(checks['Claude Code']).toMatchObject({ ok: true, detail: `CLI not on PATH; loadout: ${disableAllHooks ? 'search server' : 'plugin enabled and settings hook and search server'}` });
+  });
+
   it('ignores loadout mentioned only in comments or strings', async () => {
     mkdirSync(join(home, 'codex'));
     writeFileSync(join(home, 'codex', 'config.toml'), '# [mcp_servers.loadout]\n# command = "loadout hook codex"\nnotes = """\n[mcp_servers.loadout]\n"""\n');
@@ -237,10 +310,14 @@ describe('doctor', () => {
     expect(checks['Codex']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: not set up' });
   });
 
-  it('does not count another tool that has a hook subcommand', async () => {
+  it.each(['other-tool', 'othercli.js', String.raw`C:\x\dist\othercli.js`])('does not count another tool that has a hook subcommand (%s)', async (tool) => {
+    mkdirSync(join(home, 'claude'));
+    writeFileSync(join(home, 'claude', 'settings.json'), JSON.stringify({ hooks: { UserPromptSubmit: [{ hooks: [{ type: 'command', command: `${tool} hook claude` }] }] } }));
     mkdirSync(join(home, 'codex'));
-    writeFileSync(join(home, 'codex', 'config.toml'), '[[hooks.UserPromptSubmit]]\n[[hooks.UserPromptSubmit.hooks]]\ntype = "command"\ncommand = "other-tool hook codex"\n');
-    expect(byName(await doctor(config, () => okClient))['Codex']!.detail).toBe('CLI not on PATH; loadout: not set up');
+    writeFileSync(join(home, 'codex', 'config.toml'), `[[hooks.UserPromptSubmit]]\n[[hooks.UserPromptSubmit.hooks]]\ntype = "command"\ncommand = ${JSON.stringify(`${tool} hook codex`)}\n`);
+    const checks = byName(await doctor(config, () => okClient));
+    expect(checks['Claude Code']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: not set up' });
+    expect(checks['Codex']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: not set up' });
   });
 
   it('finishes with a malformed jev.baseUrl', async () => {

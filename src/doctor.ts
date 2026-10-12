@@ -56,7 +56,7 @@ function readConfig(file: string, parse: (text: string) => unknown): Record<stri
  */
 function hasHook(config: Record<string, unknown>, agent: 'claude' | 'codex'): boolean {
   const groups = (config.hooks as { UserPromptSubmit?: unknown } | undefined)?.UserPromptSubmit;
-  const command = new RegExp(`(^|[\\s'/])(loadout|cli\\.[jt]s)'? hook ${agent}($|[\\s'])`);
+  const command = new RegExp(`(^|[\\s'/\\\\])(loadout|cli\\.[jt]s)'? hook ${agent}($|[\\s'])`);
   return Array.isArray(groups) && groups.some((g) => Array.isArray(g?.hooks) && g.hooks.some((h: { type?: unknown; command?: unknown }) => h?.type === 'command' && typeof h.command === 'string' && command.test(h.command)));
 }
 
@@ -128,26 +128,35 @@ export async function doctor(config: Config, client: (apiKey: string) => SystemO
   }
 
   const claudeHome = process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude');
+  const claudeConfig = join(process.env.CLAUDE_CONFIG_DIR || homedir(), '.claude.json');
   const codexHome = process.env.CODEX_HOME || join(homedir(), '.codex');
   const hosts = [
     {
       name: 'Claude Code',
       bin: 'claude',
-      home: claudeHome,
+      present: existsSync(claudeHome) || existsSync(claudeConfig),
       attached: () => {
         const settings = readConfig(join(claudeHome, 'settings.json'), JSON.parse);
         if (!settings) return { broken: join(claudeHome, 'settings.json') };
+        const config = readConfig(claudeConfig, JSON.parse);
+        if (!config) return { broken: claudeConfig };
         const plugin = (settings.enabledPlugins as Record<string, unknown> | undefined)?.['loadout@loadout'] === true;
-        const on = plugin ? 'plugin enabled' : hasHook(settings, 'claude') ? 'settings hook' : undefined;
-        if (on && settings.disableAllHooks === true) return { off: `${on}, but disableAllHooks in settings.json turns hooks off` };
-        return { on };
+        const hook = hasHook(settings, 'claude');
+        const hooksOff = settings.disableAllHooks === true;
+        // setup adds the server in user scope; project entries do not establish attachment for this session.
+        const server = (config.mcpServers as Record<string, Record<string, unknown>> | undefined)?.loadout;
+        const runnable = server && typeof server === 'object' && !Array.isArray(server) && ['command', 'url'].some((k) => typeof server[k] === 'string' && server[k].trim() !== '');
+        const found = [!hooksOff && plugin && 'plugin enabled', !hooksOff && hook && 'settings hook', runnable && 'search server'].filter(Boolean);
+        if (found.length) return { on: found.join(' and ') };
+        const off = plugin ? 'plugin enabled' : hook ? 'settings hook' : undefined;
+        return off && hooksOff ? { off: `${off}, but disableAllHooks in settings.json turns hooks off` } : {};
       },
       setup: 'claude-code',
     },
     {
       name: 'Codex',
       bin: 'codex',
-      home: codexHome,
+      present: existsSync(codexHome),
       attached: () => {
         const config = readConfig(join(codexHome, 'config.toml'), parseToml);
         if (!config) return { broken: join(codexHome, 'config.toml') };
@@ -168,7 +177,7 @@ export async function doctor(config: Config, client: (apiKey: string) => SystemO
   for (const h of hosts) {
     // doctor runs no binary found through an empty or relative PATH entry.
     const bin = onPath(h.bin);
-    if (!bin && !existsSync(h.home)) continue;
+    if (!bin && !h.present) continue;
     const { on, off, broken }: { on?: string; off?: string; broken?: string } = h.attached();
     checks.push({
       name: h.name,
