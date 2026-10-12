@@ -490,6 +490,9 @@ each:
 
 - The Jev steps match across the two runs, so the difference in the new
   process is not Jev's. Each arm still made its own Jev requests.
+- The step rows come from the bench process, where the cache is warm after
+  the first prompt. The new process was timed only as a whole, so its 238 ms
+  is not split by step.
 - An earlier pair at 10 prompts gave 1,798 vs 1,613 ms (p50). Its p95 went
   the other way (2,014 vs 2,342): at that size, a single slow Jev call
   decides the p95.
