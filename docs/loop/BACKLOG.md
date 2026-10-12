@@ -308,7 +308,7 @@ Acceptance: a third row in that RESULTS table, with raw results. The README's
 | D10 | P0 | In-host first: loadout as a Claude Code plugin (hook), CLI then desktop app | Codex | cloud + local + erik | blocked: desktop app check (Erik). Plugin merged in [#9](https://github.com/erik-hedstrom/loadout/pull/9) |
 | D11 | P1 | Cut the hook's per-prompt start cost | Codex | cloud + local | in progress ([#14](https://github.com/erik-hedstrom/loadout/pull/14) merged: follow-ups skip start-up, relay loads on demand); left: cut the library scan and model load for routed prompts, then the real-Jev `hook-latency.ts` run (needs `TYPESAFE_API_KEY` and `api.typesafe.ai` in the cloud environment) |
 | D1 | P0 | Validate on the new native Linux machine | Claude | local | todo (machine pending) |
-| D7 | P1 | `loadout doctor` | Claude | cloud | review |
+| D7 | P1 | `loadout doctor` | Claude | cloud | done ([#20](https://github.com/erik-hedstrom/loadout/pull/20)) |
 | D2 | P1 | Live Codex hook test | Claude | local + erik | todo |
 | D3 | P1 | Desktop and IDE hosts end to end | Claude | local | todo |
 | D5 | P2 | Isolation mode | Codex | cloud | todo |

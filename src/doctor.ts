@@ -138,16 +138,17 @@ export async function doctor(config: Config, client: (apiKey: string) => SystemO
       attached: () => {
         const settings = readConfig(join(claudeHome, 'settings.json'), JSON.parse);
         if (!settings) return { broken: join(claudeHome, 'settings.json') };
-        const config = readConfig(claudeConfig, JSON.parse);
-        if (!config) return { broken: claudeConfig };
+        const userConfig = readConfig(claudeConfig, JSON.parse);
         const plugin = (settings.enabledPlugins as Record<string, unknown> | undefined)?.['loadout@loadout'] === true;
         const hook = hasHook(settings, 'claude');
         const hooksOff = settings.disableAllHooks === true;
-        // setup adds the server in user scope; project entries do not establish attachment for this session.
-        const server = (config.mcpServers as Record<string, Record<string, unknown>> | undefined)?.loadout;
+        // setup adds the server in user scope; project-scoped entries apply only inside their project.
+        const server = (userConfig?.mcpServers as Record<string, Record<string, unknown>> | undefined)?.loadout;
         const runnable = server && typeof server === 'object' && !Array.isArray(server) && ['command', 'url'].some((k) => typeof server[k] === 'string' && server[k].trim() !== '');
         const found = [!hooksOff && plugin && 'plugin enabled', !hooksOff && hook && 'settings hook', runnable && 'search server'].filter(Boolean);
         if (found.length) return { on: found.join(' and ') };
+        // Claude Code rewrites .claude.json often, so a read can catch it half-written: call it broken only when nothing else is attached.
+        if (!userConfig) return { broken: claudeConfig };
         const off = plugin ? 'plugin enabled' : hook ? 'settings hook' : undefined;
         return off && hooksOff ? { off: `${off}, but disableAllHooks in settings.json turns hooks off` } : {};
       },

@@ -170,11 +170,15 @@ describe('doctor', () => {
     const secret = 'claude-broken-config-canary';
     mkdirSync(join(home, 'claude'));
     const file = join(home, 'claude', '.claude.json');
-    writeFileSync(join(home, 'claude', 'settings.json'), JSON.stringify({ enabledPlugins: { 'loadout@loadout': true } }));
     writeFileSync(file, `{ "account": "${secret}", "mcpServers": `);
     const checks = await doctor(config, () => okClient);
     expect(byName(checks)['Claude Code']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: config cannot be read or parsed', fix: `repair ${file}` });
     expect(formatDoctor(checks)).not.toContain(secret);
+    // A half-written .claude.json does not hide a plugin that works.
+    writeFileSync(join(home, 'claude', 'settings.json'), JSON.stringify({ enabledPlugins: { 'loadout@loadout': true } }));
+    const withPlugin = await doctor(config, () => okClient);
+    expect(byName(withPlugin)['Claude Code']).toMatchObject({ ok: true, detail: 'CLI not on PATH; loadout: plugin enabled' });
+    expect(formatDoctor(withPlugin)).not.toContain(secret);
   });
 
   it('never prints credentials from Claude user MCP config', async () => {
