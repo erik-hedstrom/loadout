@@ -23,8 +23,8 @@ usage and [DESIGN.md](DESIGN.md) for the architecture.
 
 ### What exists
 
-Commands and integration: [README.md](README.md#use) and
-[search and hook setup](README.md#search-mid-session-from-any-mcp-host).
+Commands and integration: [README.md](README.md#use),
+[hook setup](docs/hook.md) and [search setup](docs/mcp.md).
 Router steps: [DESIGN.md](DESIGN.md#router).
 
 ### Evidence so far

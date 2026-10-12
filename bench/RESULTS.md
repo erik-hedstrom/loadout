@@ -353,10 +353,11 @@ Measured with [invoke.ts](invoke.ts) on requests from the sweep:
 
 A skill counts as opened when the agent invoked it (Claude's Skill tool),
 read its SKILL.md, or loaded it through `load_skill`, and the call succeeded.
+Parentheses: Wilson 95% intervals, computed from the counts.
 
 | | Claude Code | Codex |
 |---|---:|---:|
-| **Routed** (loadout's selection preloaded): opened a loaded skill | 9 of 10 | 11 of 11 |
+| **Routed** (loadout's selection preloaded): opened a loaded skill | 9 of 10 (60–98) | 11 of 11 (74–100) |
 | …and also searched the library for more | 4 of 10 | 3 of 11 |
 | **Search only** (nothing preloaded; `find_skills` attached): searched on its own | 2 of 10 | 5 of 10 |
 | …and loaded a skill the judge lists as useful | 2 of 2 | 5 of 5 |
@@ -383,8 +384,8 @@ hook, which routes the prompt and adds the skills that fit as context:
 
 | Claude Code, same 10 requests | Opened a skill the judge rates useful |
 |---|---:|
-| Search tool only | 2 of 10 |
-| Search tool + prompt hook | **6 of 10** |
+| Search tool only | 2 of 10 (6–51) |
+| Search tool + prompt hook | **6 of 10** (31–83) |
 
 In the 4 misses the hook did offer the right skill, and Claude still did not
 open it:

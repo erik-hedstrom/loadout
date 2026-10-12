@@ -2,11 +2,10 @@
 # loadout
 
 Installed skills are listed in every request your agent sends, needed or
-not. In Claude Code, listing 1,232 skills added **12,283 input tokens to each
-request**, about 10 per skill. Codex caps its listing instead: of 1,262
-installed skills it showed 424
-([B1](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request),
-with generated skill names).
+not. In Claude Code, listing 1,232 skills under generated names added
+**12,283 input tokens** to a fresh session's first request, about 10 per
+skill; with real names, and later turns: not shown. Codex caps its listing instead: of 1,262 installed skills it showed
+424 ([B1](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request)).
 
 loadout keeps your skills in a separate library, and a prompt hook in Claude
 Code or Codex adds only the ones that fit each prompt, chosen by a cheap model
@@ -33,23 +32,28 @@ claude plugin marketplace add erik-hedstrom/loadout && claude plugin install loa
 codex plugin marketplace add erik-hedstrom/loadout && codex plugin add loadout-codex@loadout   # then trust the hook in /hooks
 ```
 
-- **Before step 2,** `loadout audit` shows what the skills and MCP servers
-  you already have cost per request, per host. It only reads.
+- **Before step 2,** `loadout audit` estimates, per host, the tokens your
+  installed skills' descriptions add (about 4 characters per token, before
+  host caps) and lists your MCP servers without counting their schemas. It
+  only reads.
 - **After step 3,** `loadout doctor` checks the key (one Jev call), library,
   index and hosts, and prints a fix for each gap.
 
-Then start `claude` or `codex` as usual. Each routed prompt waits about 1.5 s
-for the hook (p50, one machine,
-[RESULTS](bench/RESULTS.md#routed-prompts-with-the-library-scan-cache-d11-2026-10-12)).
+Skills copied with `audit --adopt` stay listed in every request, and keep
+costing tokens, until you move them out of the agents' own folders;
+`audit --adopt` prints how for each host.
 
-**Privacy:** the hook runs in every project. Every routed prompt goes to
-TypeSafe's Jev API, with the repository's top-level file names and dependency
-names. `"router": "lexical"` in `~/.loadout/config.json` keeps prompts local.
+Then start `claude` or `codex` as usual. Latency and setup details:
+[the hook plugins](docs/hook.md).
 
-**Tested so far:** the Claude Code plugin's hook in one CLI run, loaded from
-a local folder rather than the marketplace; the Codex plugin install offline,
-with a live hook session untested. Desktop apps and other
-hosts are untested ([hosts](docs/hosts.md)). Details: [the hook plugins](docs/hook.md).
+**Privacy:** the hook sends each routed prompt, in every project, to
+TypeSafe's Jev API with repository and skill details. `"router": "lexical"`
+in `~/.loadout/config.json` keeps prompts local; the hook then adds context
+only for prompts that name a skill. What is sent, and from where:
+[privacy](docs/hook.md#privacy).
+
+**Tested so far:** the Claude Code CLI hook in one run; the Codex plugin
+install offline only ([hosts](docs/hosts.md)).
 
 ## What is measured
 
@@ -62,17 +66,18 @@ All numbers, caveats and negative results: [bench/RESULTS.md](bench/RESULTS.md).
   ([C1](bench/RESULTS.md#c1-2026-10-08-new-held-out-requests)). It loads too
   readily on general business requests.
 - **Agents use what they get:** when the launcher loaded a skill, Claude Code
-  opened it in 9 of 10 headless sessions and Codex in 11 of 11. With the search
-  tool plus the prompt hook, 6 of 10 Claude Code sessions opened a useful
-  skill, against 2 of 10 with search alone
+  opened it in 9 of 10 headless sessions (Wilson 95%: 60–98%) and Codex in 11
+  of 11 (74–100%). Adding the prompt hook to the search tool raised
+  useful-skill use in Claude Code from 2 of 10 (6–51%) to 6 of 10 (31–83%)
+  sessions
   ([RESULTS](bench/RESULTS.md#do-agents-use-what-they-are-given)).
 - **Better work: not shown.** In an 8-request blind pilot with Codex,
   loadout's version won 4, lost 3 and split 1
   ([pilot](bench/RESULTS.md#is-the-work-better-outcome-pilot-2026-10-07)).
-- **Small libraries:** loadout's search tools add 546 tokens per request in
-  Claude Code, more than a native listing of 50 skills (477); the crossover is
-  interpolated near 57 skills
-  ([B1](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request)).
+- **Small libraries:** below about 57 skills (interpolated), the MCP search
+  tools cost more tokens than a native listing
+  ([B1](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request);
+  [details](docs/mcp.md#cost-and-privacy)).
   The Claude Code plugin adds only the hook, not these tools.
 
 How it decides: [DESIGN.md](DESIGN.md). Security model: [SECURITY.md](SECURITY.md).
@@ -82,7 +87,7 @@ flags) and never proxies an agent's API traffic.
 ## Use
 
 ```bash
-loadout audit [--adopt]          # what installed skills cost per request; --adopt copies them to the library
+loadout audit [--adopt]          # estimate installed skills' listing tokens; --adopt copies them to the library
 loadout add <dir|github-url>     # add skills to the library
 loadout list [--sources]         # show the library
 loadout route "<task>"           # show the decision for a task
@@ -94,19 +99,12 @@ loadout claude|codex "<task>"    # launch the agent with one up-front decision
 
 - [The library](docs/library.md): adding skills and MCP servers, configuration.
 - [The hook plugins](docs/hook.md): Claude Code and Codex, WSL, latency, privacy.
+- [Library search over MCP](docs/mcp.md): `find_skills` and `load_skill`
+  mid-session, in Claude Code, Codex, Claude Desktop, Cursor, OpenCode and
+  ChatGPT.
+- [The launcher](docs/launcher.md): `loadout claude|codex`, one decision up
+  front, including a model tier; used by the benchmarks.
 - [Hosts](docs/hosts.md): what was checked in which host.
-
-## Search mid-session, from any MCP host
-
-`loadout mcp` gives an agent `find_skills` and `load_skill`, for when the work
-drifts. The Codex plugin attaches it; for Claude Code, Claude Desktop, Cursor,
-OpenCode and ChatGPT, see [library search over MCP](docs/mcp.md).
-
-## The launcher
-
-`loadout claude "<task>"` and `loadout codex "<task>"` start the agent with one
-decision made up front, including a model tier. The benchmarks use them; the
-plugins are the everyday path. See [the launcher](docs/launcher.md).
 
 ## Development
 

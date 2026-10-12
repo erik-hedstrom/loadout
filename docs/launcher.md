@@ -47,4 +47,8 @@ search with `"search": false` in the config.
 
 **loadout adds to your session; it does not isolate it.** Skills, plugins and
 MCP servers you have configured in Claude Code or Codex stay active alongside
-the selection, as do your approval policies.
+the selection, as do your approval policies. To get the full benefit, move the
+skills you don't need everywhere out of the agents' own folders and into the
+loadout library ([library](library.md#skills)).
+
+Privacy: [what the launcher sends to TypeSafe](hook.md#privacy).

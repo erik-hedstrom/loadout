@@ -27,7 +27,7 @@ launcher-only work is P2.
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
 | A2 | P0 | `loadout audit`: what your installed skills cost you | Claude | cloud | done ([PR #3](https://github.com/erik-hedstrom/loadout/pull/3)) |
-| A1 | P0 | README rewrite around the problem, 3-command quickstart, GIF | Claude | cloud | in progress (`agent/a1-readme`; GIF waits on A5; clean-machine check done in a container, the plugin install itself untested here) |
+| A1 | P0 | README rewrite around the problem, 3-command quickstart, GIF | Claude | cloud | in progress ([PR #28](https://github.com/erik-hedstrom/loadout/pull/28); GIF waits on A5; clean-machine check done in a container, the plugin install itself untested here) |
 | A3 | P1 | `loadout init` wizard + starter packs | Codex | cloud | todo |
 | A4 | P1 | npm package under an available name + release workflow | Codex | cloud + erik | blocked: npm name decision |
 | A5 | P1 | Demo recording (route, launch, hook) | Claude | local | todo (after A1) |

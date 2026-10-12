@@ -4,7 +4,7 @@
 know-how when the work drifts away from what the session started with:
 
 - `find_skills(goal, keywords?)`: a Jev-ranked handful of matches with their
-  fit, about a second and $0.001 per search; "nothing fits" when nothing does;
+  fit; "nothing fits" when nothing does;
 - `load_skill(skill, file?)`: the skill's instructions as attributed
   third-party reference material, or one of its files (so hosts without file
   access, like Claude Desktop, can still use scripts and references);
@@ -13,15 +13,18 @@ know-how when the work drifts away from what the session started with:
   registered only when there are some. Each call goes through the host's
   approval prompt, which shows the server, tool and arguments.
 
-Its tool definitions add **546 input tokens** to every request in Claude Code.
-A native listing of 50 skills added 477, so below about 57 skills the search
-server costs more than the listing it replaces (an interpolation, with
-generated skill names;
+## Cost and privacy
+
+With a skills-only library, its tool definitions add **546 input tokens** to
+a fresh Claude Code session's first request. A native listing of 50 skills added 477, so
+below about 57 skills the search server costs more than the listing it
+replaces (an interpolation, with generated skill names;
 [B1](../bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request)).
-Agents also search less often than they should: search alone led to a useful
-skill in 2 of 10 Claude Code sessions
-([RESULTS](../bench/RESULTS.md#do-agents-use-what-they-are-given)). The
-[hook plugins](hook.md) are the main path; search is the supplement.
+Agents also search less often than they should
+([DESIGN.md](../DESIGN.md#search-server-loadout-mcp)), so the
+[hook plugins](hook.md) are the main path and search is the supplement.
+
+Privacy: [what `find_skills` sends to TypeSafe](hook.md#privacy).
 
 ## Setup
 
@@ -47,15 +50,8 @@ variables do not cross from a Windows app into WSL).
 ## ChatGPT, over HTTP
 
 ChatGPT only connects to remote HTTPS MCP servers. `loadout mcp --http`
-serves the same search on `http://127.0.0.1:8787/mcp`:
-- it serves skills only, never the MCP gateway, so a remote client cannot
-  start or call your local servers;
-- `--token-file` requires a bearer token on every request. It is mandatory as
-  soon as the server is reachable from elsewhere (a non-loopback `--host`, or
-  any `--allowed-host`);
-- requests whose Host header is not localhost or an `--allowed-host` are
-  refused;
-- at most 4 searches run at once.
+serves the same search, skills only, on `http://127.0.0.1:8787/mcp`. Its
+token, Host and gateway safeguards: [SECURITY.md](../SECURITY.md#http-mcp).
 
 ```bash
 openssl rand -hex 32 > ~/.loadout/mcp-token
@@ -64,4 +60,4 @@ loadout mcp --http --token-file ~/.loadout/mcp-token --allowed-host <your-tunnel
 
 Put OpenAI's Secure MCP Tunnel, or another HTTPS tunnel, in front of it.
 Pass the tunnel's domain as `--allowed-host`, then add the tunnel URL as a
-connector in ChatGPT's developer mode. Security model: [SECURITY.md](../SECURITY.md#http-mcp).
+connector in ChatGPT's developer mode.
