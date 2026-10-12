@@ -27,7 +27,7 @@ launcher-only work is P2.
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
 | A2 | P0 | `loadout audit`: what your installed skills cost you | Claude | cloud | done ([PR #3](https://github.com/erik-hedstrom/loadout/pull/3)) |
-| A1 | P0 | README rewrite around the problem, 3-command quickstart, GIF | Claude | cloud | todo (leads with the plugin and the Codex hook; the launcher moves down) |
+| A1 | P0 | README rewrite around the problem, 3-command quickstart, GIF | Claude | cloud | in progress (`agent/a1-readme`; GIF waits on A5; clean-machine check done in a container, the plugin install itself untested here) |
 | A3 | P1 | `loadout init` wizard + starter packs | Codex | cloud | todo |
 | A4 | P1 | npm package under an available name + release workflow | Codex | cloud + erik | blocked: npm name decision |
 | A5 | P1 | Demo recording (route, launch, hook) | Claude | local | todo (after A1) |
@@ -77,6 +77,19 @@ Acceptance:
 
 Note (E8 find pass, 2026-10-08): README still leads with the launcher; the
 plugin appears only under "Search mid-session".
+
+A1 learnings (2026-10-12): the README now leads with B1's number, the
+plugins and a from-source install (no npm name yet, A4); launcher, library,
+hook and MCP details moved to `docs/launcher.md`, `docs/library.md`,
+`docs/hook.md` and `docs/mcp.md`, and the security model and router stay in
+SECURITY.md and DESIGN.md. The quickstart ran in a container from a fresh
+clone through `npm link` into a temp prefix, `init`, `add`, `route
+--lexical`, `setup` and `doctor`, with `LOADOUT_HOME`, `CLAUDE_CONFIG_DIR`
+and `CODEX_HOME` in temp dirs. `loadout audit` was not run there: it reads
+`~/.claude/skills`, `~/.agents` and `~/.cursor` under `HOME`, which the
+agent sandbox would not redirect; its fake-home tests cover it. Left: the
+GIF (A5), the plugin installs on a machine with the CLIs, and the npm
+install line once A4 picks a name.
 
 **A3. `loadout init` wizard and starter packs.**
 

@@ -58,6 +58,6 @@ Notes:
    WSL loadout behind Windows Codex needs `loadout setup codex --windows`:
    its TOML supplies the machine-specific `wsl.exe` wrapper the plugin's
    fixed PATH commands cannot carry. This fallback is untested in a host.
-8. `loadout mcp --http`; see the [README](../README.md#search-mid-session-from-any-mcp-host).
+8. `loadout mcp --http`; see [library search over MCP](mcp.md#chatgpt-over-http).
 
 Backlog D3 tests the desktop and IDE hosts by hand and updates this table.
