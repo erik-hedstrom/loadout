@@ -16,9 +16,9 @@ know-how when the work drifts away from what the session started with:
 
 ## Cost and privacy
 
-Its tool definitions are sent with every request. For a small library they
-cost more than the native skill listing they replace; the measured figures and
-crossover are in [DESIGN.md](../DESIGN.md#search-server-loadout-mcp). Agents
+Its tool definitions are sent with every request. In Claude Code, for a small
+library, they cost more than the native skill listing they replace; other
+hosts are not measured. The figures and crossover are in [DESIGN.md](../DESIGN.md#search-server-loadout-mcp). Agents
 also search less often than they should (same section), so the
 [hook plugins](hook.md) are the main path and search is the supplement.
 

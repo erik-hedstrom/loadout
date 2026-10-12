@@ -8,7 +8,7 @@ loadout picks from its own library, `~/.loadout/library` (override with
 ```bash
 loadout add https://github.com/obra/superpowers   # GitHub repos, subpaths, or local dirs
 loadout audit --adopt                             # copy the skills your agents already have
-loadout list --sources                            # the add commands that rebuild the library
+loadout list --sources                            # where the skills came from, as add commands
 ```
 
 `add` finds every `SKILL.md` recursively and copies each skill into
@@ -17,6 +17,9 @@ optional `@huggingface/transformers` is installed; the first run downloads a
 small model).
 - It records where each skill came from (the GitHub repo and commit, or the
   local folder's path), so re-adding updates it in place.
+- `list --sources` prints one `add` command per repo or folder, with the
+  commits seen as a comment. It does not keep a branch or subpath, so
+  re-running it adds the whole repo at its default branch.
 - Same-named skills from different sources are kept side by side.
 - Nothing from the repo is executed.
 - Symlinks are never followed; repos are cloned with `core.symlinks=false`.
