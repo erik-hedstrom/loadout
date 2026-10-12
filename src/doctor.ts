@@ -163,7 +163,10 @@ export async function doctor(config: Config, client: (apiKey: string) => SystemO
         if (!config) return { broken: join(codexHome, 'config.toml') };
         const features = config.features as { hooks?: unknown; plugins?: unknown } | undefined;
         const hooksOff = features?.hooks === false;
-        const plugin = features?.plugins !== false && (config.plugins as Record<string, { enabled?: unknown }> | undefined)?.['loadout-codex@loadout']?.enabled === true;
+        const pluginConfig = (config.plugins as Record<string, Record<string, unknown>> | undefined)?.['loadout-codex@loadout'];
+        const plugin = features?.plugins !== false && pluginConfig?.enabled === true;
+        const searchOff = (pluginConfig?.mcp_servers as Record<string, { enabled?: unknown }> | undefined)?.loadout?.enabled === false;
+        if (plugin && hooksOff) return { off: `plugin enabled, but [features] hooks = false in config.toml turns hooks off${searchOff ? '; search off (plugin policy)' : ''}` };
         const server = (config.mcp_servers as Record<string, Record<string, unknown>> | undefined)?.loadout;
         // Codex starts a server from exactly one of command (stdio) or url (HTTP), and rejects a table with both keys.
         const transports = server && typeof server === 'object' ? (['command', 'url'] as const).filter((k) => k in server) : [];
@@ -172,6 +175,7 @@ export async function doctor(config: Config, client: (apiKey: string) => SystemO
         // Config records enabled plugins and hooks; /hooks trust is keyed by Codex's own content hash, which doctor cannot verify.
         const found = [
           plugin && 'plugin enabled (hook trust not verifiable from config: approve it in /hooks)',
+          plugin && searchOff && 'search off (plugin policy)',
           !hooksOff && hasHook(config, 'codex') && 'hook (trust not checked: approve it once in /hooks)',
           runnable && 'search server',
         ].filter(Boolean);

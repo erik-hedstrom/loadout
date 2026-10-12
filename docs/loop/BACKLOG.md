@@ -318,7 +318,7 @@ Acceptance: a third row in that RESULTS table, with raw results. The README's
 | D6 | P2 | HTTP: cancellation reaches Jev | Claude | cloud | done ([#19](https://github.com/erik-hedstrom/loadout/pull/19)) |
 | D8 | P1 | Host capability matrix (verified vs generated) | Claude | cloud | done ([#18](https://github.com/erik-hedstrom/loadout/pull/18)) |
 | D9 | P1 | Codex parity: neutral session skill dir, tier presets | Claude | cloud | done ([#21](https://github.com/erik-hedstrom/loadout/pull/21)); Codex launch not re-run live |
-| D12 | P0 | Codex: install the hook and search as one step, if Codex allows it | Codex | local | todo (codex-cli 0.160.1 has `codex plugin`; left: what a plugin may carry) |
+| D12 | P0 | Codex: install the hook and search as one step, if Codex allows it | Codex | local | done ([#23](https://github.com/erik-hedstrom/loadout/pull/23)): `plugins/loadout-codex` through `.agents/plugins/marketplace.json`; install checked offline; the hook still needs `/hooks` trust; the live run is D2 |
 
 **D10. In-host first: loadout as a Claude Code plugin.**
 
@@ -505,8 +505,24 @@ Acceptance:
 
 Learnings (2026-10-12, `codex --help` on 0.160.1): `codex plugin` exists, with
 `marketplace add` (a local or Git marketplace) and `add PLUGIN@MARKETPLACE`,
-like Claude Code's. Left: whether a Codex plugin can carry a hook and an MCP
-server, and whether its hook still needs trusting in `/hooks`.
+like Claude Code's.
+
+Learnings ([#23](https://github.com/erik-hedstrom/loadout/pull/23), all in a
+throwaway `CODEX_HOME`):
+- A Codex plugin carries `hooks/hooks.json` and `.mcp.json`, with a
+  `.codex-plugin/plugin.json` manifest. After `codex plugin add`, `hooks/list`
+  reports the hook as `untrusted`: trusting it in `/hooks` is still one step.
+- Codex reads `.agents/plugins/marketplace.json` in preference to
+  `.claude-plugin/marketplace.json`. The Codex plugin lives only there: in the
+  shared file, Claude Code installed it too (double routing, the MCP server
+  D10 left out, no TypeSafe notice).
+- config.toml records `[plugins."loadout-codex@loadout"] enabled = true`, and a
+  plugin-scoped `[plugins."…".mcp_servers.loadout] enabled = false` turns off
+  its server. doctor reads both, plus `[features] hooks`.
+- WSL loadout behind Windows Codex keeps the TOML snippet: plugin commands
+  cannot carry the `wsl.exe` wrapper.
+- Left: `marketplace add erik-hedstrom/loadout` from GitHub (after merge); the
+  live hook (D2); desktop and T3 Code.
 
 **D7. `loadout doctor`.**
 

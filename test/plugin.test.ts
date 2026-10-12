@@ -18,8 +18,6 @@ describe('Claude Code plugin', () => {
     expect(marketplace.name).toBe('loadout');
     expect(marketplace.plugins).toEqual([{ name: 'loadout', source: './plugins/loadout' }]);
     const entry = marketplace.plugins[0];
-    expect(entry.name).toBe('loadout');
-    expect(entry.source).toBe('./plugins/loadout');
     const dir = join(ROOT, entry.source);
     const plugin = JSON.parse(readFileSync(join(dir, '.claude-plugin/plugin.json'), 'utf8'));
     expect(plugin.name).toBe('loadout');

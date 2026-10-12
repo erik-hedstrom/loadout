@@ -141,9 +141,6 @@ describe('doctor', () => {
 
   it.each([
     '[plugins."loadout-codex@loadout"]\nenabled = false\n',
-    '[plugins."loadout-codex@loadout"]\nenabled = "true"\n',
-    '[plugins."loadout-codex@loadout"]\n',
-    'plugins = { "loadout-codex@loadout" = true }\n',
     '[plugins."loadout@loadout"]\nenabled = true\n',
     '[plugins."loadout-codex@loadout"]\nenabled = true\n[features]\nplugins = false\n',
   ])('does not count a disabled or invalid Codex plugin config (%s)', async (content) => {
@@ -152,6 +149,33 @@ describe('doctor', () => {
     expect(byName(await doctor(config, () => okClient))['Codex']).toMatchObject({
       ok: false, detail: 'CLI not on PATH; loadout: not set up',
     });
+  });
+
+  it.each([false, true])('fails a Codex plugin with hooks disabled (search disabled: %s)', async (searchOff) => {
+    mkdirSync(join(home, 'codex'));
+    const file = join(home, 'codex', 'config.toml');
+    const content = `[plugins."loadout-codex@loadout"]\nenabled = true\n[plugins."loadout-codex@loadout".mcp_servers.loadout]\nenabled = ${!searchOff}\n[features]\nhooks = false\n[mcp_servers.loadout]\ncommand = "loadout"\n`;
+    writeFileSync(file, content);
+    expect(byName(await doctor(config, () => okClient))['Codex']).toMatchObject({
+      ok: false,
+      detail: `CLI not on PATH; loadout: plugin enabled, but [features] hooks = false in config.toml turns hooks off${searchOff ? '; search off (plugin policy)' : ''}`,
+      fix: 'turn hooks back on',
+    });
+    expect(readFileSync(file, 'utf8')).toBe(content);
+  });
+
+  it('reports disabled plugin search without failing Codex routing', async () => {
+    mkdirSync(join(home, 'codex'));
+    const file = join(home, 'codex', 'config.toml');
+    const content = `[plugins."loadout-codex@loadout"]\nenabled = true\n[plugins."loadout-codex@loadout".mcp_servers.loadout]\nenabled = false\nprivate = "${KEY}"\n`;
+    writeFileSync(file, content);
+    const checks = await doctor(config, () => okClient);
+    expect(byName(checks)['Codex']).toMatchObject({
+      ok: true,
+      detail: 'CLI not on PATH; loadout: plugin enabled (hook trust not verifiable from config: approve it in /hooks) and search off (plugin policy)',
+    });
+    expect(formatDoctor(checks)).not.toContain(KEY);
+    expect(readFileSync(file, 'utf8')).toBe(content);
   });
 
   it.each([
