@@ -1,9 +1,9 @@
 # The prompt hook plugins
 
 Each plugin carries a `UserPromptSubmit` hook that runs `loadout hook claude`
-or `loadout hook codex`. The hook routes every prompt and adds the skills that
-fit as context, so you keep starting your agent as usual. Both need `loadout`
-on PATH and Node 22.12+. What was checked in which host:
+or `loadout hook codex`. The hook routes each substantive prompt and adds the
+skills that fit as context, so you keep starting your agent as usual. Both
+need `loadout` on PATH and Node 22.12+. What was checked in which host:
 [hosts.md](hosts.md).
 
 ## Claude Code
@@ -41,16 +41,25 @@ machine,
 
 ## Privacy
 
-Three paths send text to TypeSafe's Jev API, all through the same router call:
-- the hook: every substantive prompt, in every project, since the plugin is
-  user-scoped;
-- the [launcher](launcher.md): the task, its first prompt only;
-- [`find_skills`](mcp.md): the goal the agent searches for.
+These commands send text to TypeSafe's Jev API through loadout's router:
+- the hook: each substantive prompt, in every project, since the plugin is
+  user-scoped. Prompts under three words without a `/`, `@` or `$` skill
+  mention ("yes", "go on") are skipped;
+- the [launcher](launcher.md) and `loadout route`: the task, once;
+- [`find_skills`](mcp.md): the agent's goal plus any keywords it passes.
 
-Each request carries that text, the repository's name, top-level file names,
-dependency names and language extensions, and the names, descriptions and
-instruction excerpts of candidate skills
-([SECURITY.md](../SECURITY.md#prompt-hook)).
+Each routed request carries:
+- that text;
+- the repository's directory name, top-level file names, dependency names and
+  language extensions;
+- the names and descriptions of up to 200 candidates (by default), drawn
+  from skills (hook), skills and library MCP servers (launcher, `loadout
+  route`), or skills and gateway MCP servers (`find_skills`; skills only over
+  HTTP);
+- the opening of the `SKILL.md` of up to 8 shortlisted skills (by default).
+
+`loadout doctor` also makes one Jev call with fixed text, to check the key.
+Code-level detail: [SECURITY.md](../SECURITY.md#prompt-hook).
 
 To keep prompts local, set `"router": "lexical"` in loadout's config; the hook
 then adds context only for prompts that name a skill. Or leave the hook out.

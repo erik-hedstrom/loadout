@@ -3,8 +3,8 @@
 `loadout mcp` serves the library as an MCP server, so an agent can look for
 know-how when the work drifts away from what the session started with:
 
-- `find_skills(goal, keywords?)`: a Jev-ranked handful of matches with their
-  fit; "nothing fits" when nothing does;
+- `find_skills(goal, keywords?)`: a Jev-ranked handful of matching skills, and
+  gateway MCP servers, with their fit; "nothing fits" when nothing does;
 - `load_skill(skill, file?)`: the skill's instructions as attributed
   third-party reference material, or one of its files (so hosts without file
   access, like Claude Desktop, can still use scripts and references);
@@ -16,9 +16,9 @@ know-how when the work drifts away from what the session started with:
 ## Cost and privacy
 
 With a skills-only library, its tool definitions add **546 input tokens** to
-a fresh Claude Code session's first request. A native listing of 50 skills added 477, so
-below about 57 skills the search server costs more than the listing it
-replaces (an interpolation, with generated skill names;
+a fresh Claude Code session's first request. A native listing of 50 skills
+added 477, so below about 57 skills the search server costs more than the
+listing it replaces (an interpolation, with generated skill names;
 [B1](../bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request)).
 Agents also search less often than they should
 ([DESIGN.md](../DESIGN.md#search-server-loadout-mcp)), so the

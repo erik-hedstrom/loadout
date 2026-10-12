@@ -24,7 +24,7 @@ optional `@huggingface/transformers` is installed; the first run downloads a
 
 `audit --adopt` copies the skills it finds into the library and prints how to
 turn them off in each host. It never edits host configs: skills left in the
-agents' own folders stay listed in every request.
+agents' own folders stay listed by the agents.
 
 ## MCP servers
 

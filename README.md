@@ -1,11 +1,14 @@
 [![CI](https://github.com/erik-hedstrom/loadout/actions/workflows/ci.yml/badge.svg)](https://github.com/erik-hedstrom/loadout/actions/workflows/ci.yml)
 # loadout
 
-Installed skills are listed in every request your agent sends, needed or
-not. In Claude Code, listing 1,232 skills under generated names added
-**12,283 input tokens** to a fresh session's first request, about 10 per
-skill; with real names, and later turns: not shown. Codex caps its listing instead: of 1,262 installed skills it showed
-424 ([B1](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request)).
+Agents list your installed skills in their requests, needed or not. In
+Claude Code, 1,232 skills under generated names added **12,283 input tokens**
+to a fresh session's first request, about 10 per skill; with real names, and
+in later turns: not shown
+([B1](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request)).
+Codex caps its listing instead: of 1,262 installed skills, it showed 424 in an
+offline render
+([B1](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request)).
 
 loadout keeps your skills in a separate library, and a prompt hook in Claude
 Code or Codex adds only the ones that fit each prompt, chosen by a cheap model
@@ -39,7 +42,7 @@ codex plugin marketplace add erik-hedstrom/loadout && codex plugin add loadout-c
 - **After step 3,** `loadout doctor` checks the key (one Jev call), library,
   index and hosts, and prints a fix for each gap.
 
-Skills copied with `audit --adopt` stay listed in every request, and keep
+Skills copied with `audit --adopt` stay listed by the agents, and keep
 costing tokens, until you move them out of the agents' own folders;
 `audit --adopt` prints how for each host.
 
