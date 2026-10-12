@@ -503,8 +503,14 @@ Learnings (2026-10-09):
   path. The live call is one Noul question with no retries; its failure text
   comes from `jevClient`'s fixed diagnostics.
 - Hosts appear only when their CLI is on PATH or their config folder
-  exists. A host counts as set up when the plugin is enabled or a `loadout
-  hook` / `[mcp_servers.loadout]` entry is present.
+  exists. A host counts as set up when the plugin is enabled, a `loadout
+  hook` entry is present, or a search server is configured
+  (`[mcp_servers.loadout]`, or `mcpServers.loadout` in Claude's user-scope
+  `.claude.json`).
+- Local Codex adversarial review (2026-10-11): doctor rejected its own
+  generated hooks on native Windows (the `\` separator), which Ubuntu-only CI
+  could not show. Declined: failing a host whose CLI is missing (desktop-only
+  setups have none) and anchoring the hook match against `echo loadout hook`.
 - Also checks `loadout` on PATH, which the plugin's hook needs. A missing
   optional embedding package is reported, not failed.
 - Left: native Windows. `which()` probes bare names without PATHEXT, so an
