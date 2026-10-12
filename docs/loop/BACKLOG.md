@@ -308,7 +308,7 @@ Acceptance: a third row in that RESULTS table, with raw results. The README's
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
 | D10 | P0 | In-host first: loadout as a Claude Code plugin (hook), CLI then desktop app | Codex | cloud + local + erik | blocked: desktop app check (Erik). Plugin merged in [#9](https://github.com/erik-hedstrom/loadout/pull/9) |
-| D11 | P0 | Cut the hook's per-prompt start cost | Codex | cloud + local | done ([#14](https://github.com/erik-hedstrom/loadout/pull/14), [#24](https://github.com/erik-hedstrom/loadout/pull/24)): the hook's new process p50 1,781 → 1,543 ms, scan 136 → 22 ms ([RESULTS](../../bench/RESULTS.md#routed-prompts-with-the-library-scan-cache-d11-2026-10-12)); the embedding model load is left |
+| D11 | P0 | Cut the hook's per-prompt start cost | Codex | cloud + local | in progress ([#14](https://github.com/erik-hedstrom/loadout/pull/14), [#24](https://github.com/erik-hedstrom/loadout/pull/24) merged: the hook's new process p50 1,781 → 1,543 ms, scan 136 → 22 ms, [RESULTS](../../bench/RESULTS.md#routed-prompts-with-the-library-scan-cache-d11-2026-10-12)); left: time the new process's own Jev steps, and the embedding model load (needs a long-lived process: Erik decides) |
 | D1 | P0 | Validate on the new native Linux machine | Claude | local | todo (machine pending) |
 | D7 | P1 | `loadout doctor` | Claude | cloud | done ([#20](https://github.com/erik-hedstrom/loadout/pull/20)) |
 | D2 | P0 | Live Codex hook test | Claude | local + erik | todo (needs Erik to trust the hook in `/hooks`) |
