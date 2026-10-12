@@ -30,45 +30,51 @@ arbitrarily large. The agent still makes the final call from the shortlist.
 flowchart TB
     subgraph host["Host integration"]
         CH["Claude Code plugin<br/>loadout hook claude"]
-        XH["Codex plugin<br/>loadout hook codex"]
-        MS["Search server<br/>loadout mcp: find_skills"]
+        XH["Codex plugin<br/>loadout hook codex + loadout mcp"]
+        MS["Search server: loadout mcp<br/>find_skills, load_skill, gateway"]
         LA["Launcher<br/>loadout claude / codex"]
+        RT["loadout route<br/>prints the decision, launches nothing"]
     end
 
     LIB[("Library<br/>scanLibrary")]
-    LS["loadout mcp: load_skill<br/>reads one skill, no routing"]
 
     subgraph routing["Routing: route() in src/route.ts"]
         RET["Retrieve: BM25, plus embeddings when available<br/>top maxCandidates (200 by default)"]
-        JEV["Jev SystemOneClient<br/>wide request, then close request"]
+        JEV["Jev SystemOneClient<br/>wide request: pick, need, model tier<br/>close request: top shortlist (8 by default)"]
         DEC["decide()<br/>load, offer, inject or stay quiet"]
-        LEX["Lexical router<br/>BM25 score only; the hook adds nothing unless a skill is named"]
-        MEN["Named skills override"]
+        LEX["Lexical router<br/>loads matches at least half the top BM25 score<br/>no offers; tier = defaultTier"]
+        MEN["Named skills override<br/>up to 3, injected"]
         RET --> JEV
-        JEV -->|"Jev fails"| LEX
+        JEV -->|"Jev fails, not cancelled"| LEX
         JEV --> DEC
         DEC --> MEN
         LEX --> MEN
     end
 
     subgraph out["Output"]
-        CTX["Context injection, hook and launcher<br/>skill_relevance note; SKILL.md only for named or clear-winner skills"]
-        SKL["Skill loading, launcher only<br/>Claude: plugin<br/>Codex: paths in the prompt"]
+        CTX["Context, hook and launcher<br/>hook: skill_relevance list with fit, once per skill per session;<br/>lexical: only when a skill is named<br/>Claude launcher: skill_relevance in the system prompt, skills named with Jev only<br/>Codex launcher: skill list in the prompt<br/>SKILL.md text for named or clear-winner skills, if inject.enabled (default)"]
+        SKL["Skill loading, launcher only<br/>loaded and offered skills<br/>Claude: generated plugin<br/>Codex: paths in the prompt"]
         MCPS["Selected MCP servers, launcher only<br/>Claude: mcp.json<br/>Codex: -c mcp_servers"]
-        TIER["Model tier, launcher only<br/>--model or -m"]
+        TIER["Model tier, launcher only<br/>Claude: --model, --effort<br/>Codex: -m, model_reasoning_effort"]
         FSR["find_skills result<br/>returned to the agent: Jev-ranked matches with a fit score,<br/>or keyword matches when lexical (skills, then servers),<br/>or a note that nothing fits"]
+        LS["load_skill result<br/>one skill's SKILL.md and file list, or one file; no routing"]
+        GW["Gateway: server_tools, call_server_tool<br/>library servers marked gateway: true; not over --http"]
+        WARN["Warning, on stderr or before the find_skills result<br/>no key, Jev fell back to keywords, or more than 3 skills named"]
     end
 
-    host -->|"task + repo signals"| routing
-    LIB --> RET
-    LIB -->|"no key or lexical router"| LEX
+    host -->|"prompt, task or find_skills goal, + repo signals"| routing
+    LIB -->|"hook: skills; find_skills: skills + gateway servers;<br/>launcher and route: everything"| RET
+    LIB -->|"no key, router: lexical, or --lexical"| LEX
     LIB -->|"skills named in the task"| MEN
     LIB --> LS
+    LIB --> GW
     MEN --> CTX
     MEN --> SKL
     MEN --> MCPS
     MEN --> TIER
-    MEN --> FSR
+    DEC -->|"Jev: rated candidates, fit at least 0.5, at most 5"| FSR
+    MEN -->|"lexical: the final selection"| FSR
+    routing --> WARN
 ```
 
 ### Integration layers
@@ -165,8 +171,9 @@ literal, atomic questions; every decision rule is code (`decide()` in
    - If several installed skills share the name, the one the router rated best
      is used, and it replaces the other copies.
 6. **Tell the agent where to look**, without forcing it (TypeSafe's measured
-   wording), via `--append-system-prompt` for Claude Code and the prompt for
-   Codex:
+   wording), via `--append-system-prompt` for Claude Code, and for Codex in
+   the prompt when no skill is selected (otherwise the prompt lists the
+   selected skills):
 
    ```
    <skill_relevance>
@@ -233,7 +240,8 @@ library itself, in its own words, through MCP:
   absolute paths, no links, no binaries, 256 KB at most.
 - **Gateway**: `server_tools` / `call_server_tool` reach the library's MCP
   servers, started on first use and kept for the session. Registered only when
-  the library has servers, so a skills-only library costs two tool definitions.
+  the library has servers marked `"gateway": true`, so otherwise the search
+  server costs two tool definitions.
 
 The search tools add **546 input tokens** per request in Claude Code. A
 native listing of 50 skills with generated names adds about 477; B1
