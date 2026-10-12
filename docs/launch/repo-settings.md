@@ -6,30 +6,31 @@ preview image are Erik's ([AGENTS.md](../../AGENTS.md) hard rule 4).
 ## Description
 
 ```
-Picks the skills, MCP servers and model tier for each Claude Code or Codex prompt, routed by Jev.
+Picks skills for each Claude Code or Codex prompt, and MCP servers and model tier per launched session, routed by Jev.
 ```
 
-97 characters (GitHub allows 350). It repeats the README's first sentence in
-fewer words and makes no claim a benchmark has to back. Leave the website
-field empty until there is a page to point to.
+118 characters (GitHub allows 350). The prompt hook routes skills only; MCP
+servers and the model tier apply when the launcher starts a session
+([docs/hosts.md](../hosts.md)). It makes no claim a benchmark has to back.
+Leave the website field empty until there is a page to point to.
 
 ## Topics
 
 Repository counts come from GitHub search on 2026-10-12 (`topic:<name>`), so
-each topic is one people use. They show how crowded a topic is, not how many
-people browse it.
+each topic is one people use. They show how crowded a topic is; how a topic
+affects who finds loadout is not measured.
 
 | Topic | Repos | Why |
 |---|---:|---|
 | `claude-code` | 89,773 | The main host loadout plugs into. |
-| `codex-cli` | 3,033 | The other host; smaller, so loadout is easier to find. |
+| `codex-cli` | 3,033 | The other host. |
 | `agent-skills` | 31,496 | What loadout selects among. |
 | `model-context-protocol` | 35,844 | loadout is an MCP server and selects MCP servers. |
-| `mcp-server` | 35,112 | The tag people filter on when they want servers to install. |
+| `mcp-server` | 35,112 | loadout ships an MCP server (`loadout mcp`). |
 | `claude-code-plugin` | 9,683 | The install path (plugin plus hook). |
-| `ai-agents` | 112,718 | The broad category; large, so low visibility alone. |
+| `ai-agents` | 112,718 | The broad category. |
 | `coding-agent` | 6,731 | The narrower category loadout is in. |
-| `llm-routing` | 547 | The routing idea; few repos, so it stands out. |
+| `llm-routing` | 547 | The routing idea. |
 | `developer-tools` | not checked | A general tag for a CLI people install. |
 | `typescript` | not checked | The implementation language. |
 

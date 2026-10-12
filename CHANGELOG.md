@@ -4,10 +4,11 @@
 
 ### Added
 
-- Jev-routed selection of skills, MCP servers and model tier per session or
-  prompt (`loadout route`, the launcher, `loadout mcp`, and a prompt hook for
-  Claude Code and Codex). These came in direct commits before PRs were used.
-- `loadout audit`: an inventory estimate of what your installed skills add to each request ([#3](https://github.com/erik-hedstrom/loadout/pull/3)).
+- Jev-routed selection: skills, MCP servers and model tier per launched session
+  (`loadout route`, the launcher), skills per prompt (a prompt hook for Claude
+  Code and Codex), and skill search (`loadout mcp`). These came in direct
+  commits before PRs were used.
+- `loadout audit`: an inventory estimate of your installed skill listings, before host caps ([#3](https://github.com/erik-hedstrom/loadout/pull/3)).
 - `loadout doctor`, a read-only setup check ([#20](https://github.com/erik-hedstrom/loadout/pull/20)).
 - Claude Code plugin with the prompt hook ([#9](https://github.com/erik-hedstrom/loadout/pull/9)) and a Codex plugin carrying the hook and search server, installed offline, with a live run pending under D2 ([#23](https://github.com/erik-hedstrom/loadout/pull/23)).
 - Host capability matrix ([#18](https://github.com/erik-hedstrom/loadout/pull/18)) and host-neutral session skills ([#21](https://github.com/erik-hedstrom/loadout/pull/21)).
@@ -21,7 +22,7 @@
 - Prompt-hook follow-ups skip hook start-up, and the relay loads on demand ([#14](https://github.com/erik-hedstrom/loadout/pull/14)).
 - Parsed library metadata is cached for routed prompts ([#24](https://github.com/erik-hedstrom/loadout/pull/24)).
 - Simplified `src/` ([#12](https://github.com/erik-hedstrom/loadout/pull/12)), `bench/` ([#11](https://github.com/erik-hedstrom/loadout/pull/11)) and the docs ([#15](https://github.com/erik-hedstrom/loadout/pull/15)); numbers in docs trace to RESULTS.
-- CI runs the full matrix once per PR, behind the `ci-full` label ([#13](https://github.com/erik-hedstrom/loadout/pull/13)).
+- CI runs the full matrix only on PRs labelled `ci-full` ([#13](https://github.com/erik-hedstrom/loadout/pull/13)).
 - Contributor and agent docs: the stock `claude` and `codex` CLIs come first ([#22](https://github.com/erik-hedstrom/loadout/pull/22)).
 
 ### Fixed
