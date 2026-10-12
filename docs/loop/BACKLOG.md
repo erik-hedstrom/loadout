@@ -173,7 +173,7 @@ cross-vendor agents). Erik publishes.
 
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
-| C1 | P0 | New held-out request set + re-measure v4 | Codex (seeds, expand) + Claude (judge) | local | in progress (measured in [#16](https://github.com/erik-hedstrom/loadout/pull/16): precision falls on new requests, 64% vs 82%); left: the blind judge through the API that acceptance names, since #16 judged through local `claude -p` (E7 has no Anthropic API backend) |
+| C1 | P0 | New held-out request set + re-measure v4 | Codex (seeds, expand) + Claude (judge) | local | done ([#16](https://github.com/erik-hedstrom/loadout/pull/16)): precision falls on new requests (64% vs 82%); judged through local `claude -p`, not the API (see Learnings) |
 | C2 | P1 | Outcome eval on the small tier with fixed fixtures | Claude (design) | cloud (fixtures) + local (runs) | todo |
 | C3 | P1 | Does Jev pick a sensible model tier? | Claude | cloud | todo (after E7) |
 | C4 | P1 | Demote generic "fits everything" skills | Codex | cloud | todo (next: C1 shows over-loading on general business requests) |
@@ -304,7 +304,7 @@ Acceptance: a third row in that RESULTS table, with raw results. The README's
 
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
-| D10 | P0 | In-host first: loadout as a Claude Code plugin (hook), CLI then desktop app | Codex | cloud + local + erik | blocked: desktop app check (Erik). Plugin merged in [#9](https://github.com/erik-hedstrom/loadout/pull/9); also left: the 10-request CLI comparison (one run so far; C8 covers it) and real-Jev latency on a native install (WSL only so far) |
+| D10 | P0 | In-host first: loadout as a Claude Code plugin (hook), CLI then desktop app | Codex | cloud + local + erik | blocked: desktop app check (Erik). Plugin merged in [#9](https://github.com/erik-hedstrom/loadout/pull/9) |
 | D11 | P1 | Cut the hook's per-prompt start cost | Codex | cloud + local | in progress ([#14](https://github.com/erik-hedstrom/loadout/pull/14) merged: follow-ups skip start-up, relay loads on demand); left: cut the library scan and model load for routed prompts, then the real-Jev `hook-latency.ts` run (needs `TYPESAFE_API_KEY` and `api.typesafe.ai` in the cloud environment) |
 | D1 | P0 | Validate on the new native Linux machine | Claude | local | todo (machine pending) |
 | D7 | P1 | `loadout doctor` | Codex | cloud | todo |
@@ -340,7 +340,7 @@ Acceptance:
 - Desktop app: Erik installs the plugin, and one Code-tab session shows the
   hook context. Record what differs from the CLI.
 
-Learnings (PR #9; left: the desktop app check, the 10-request CLI comparison and a native latency run):
+Learnings (PR #9; only the desktop app check is still to do):
 - `claude plugin validate` passes for the plugin and the marketplace. Its one
   warning is the missing version, which is deliberate until E5.
 - The plugin and the settings snippet share `claudeHookBlock(command)`. An
@@ -485,7 +485,7 @@ Acceptance:
 | E1 | P0 | GitHub Actions CI | Codex | cloud | done ([PR #2](https://github.com/erik-hedstrom/loadout/pull/2)) |
 | E2 | P0 | LICENSE, CONTRIBUTING, SECURITY.md, templates | Claude | cloud + erik | done ([PR #1](https://github.com/erik-hedstrom/loadout/pull/1)) |
 | E7 | P0 | Vendor-independent bench judges and expander | Codex | cloud | done ([PR #5](https://github.com/erik-hedstrom/loadout/pull/5)) |
-| E8 | P0 | Repo-wide simplification pass | Claude (pr-reviewer finds, worker fixes) + Codex review | cloud | in progress (merged: bench/ [#11](https://github.com/erik-hedstrom/loadout/pull/11), src/ [#12](https://github.com/erik-hedstrom/loadout/pull/12), Markdown [#15](https://github.com/erik-hedstrom/loadout/pull/15)); left: the Markdown #15 did not cover (`docs/loop/BACKLOG.md`, `docs/loop/ORCHESTRATOR.md`, `bench/RESULTS.md`, `AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md`, `SECURITY.md`, `.claude/agents/*.md`, `.github/pull_request_template.md`), and the WSL-only `bench.test.ts` failure. Out of scope: `bench/results/**`, which is recorded output kept as run, and the test fixtures under `test/fixtures/` |
+| E8 | P0 | Repo-wide simplification pass | Claude (pr-reviewer finds, worker fixes) + Codex review | cloud | in progress (merged: bench/ [#11](https://github.com/erik-hedstrom/loadout/pull/11), src/ [#12](https://github.com/erik-hedstrom/loadout/pull/12), Markdown [#15](https://github.com/erik-hedstrom/loadout/pull/15)); left: the Markdown #15 did not cover (listed under E8) and the WSL-only `bench.test.ts` failure |
 | E9 | P0 | Security hardening from the read-only Sol review | Codex | cloud | done ([PR #4](https://github.com/erik-hedstrom/loadout/pull/4), re-measure [PR #7](https://github.com/erik-hedstrom/loadout/pull/7)) |
 | E3 | P1 | Split the test file per module | Codex | cloud | todo |
 | E5 | P1 | Changelog and release automation | Codex | cloud | todo (with A4) |
@@ -627,6 +627,12 @@ Area 2 (`src/`): done in [PR #12](https://github.com/erik-hedstrom/loadout/pull/
 69 net lines removed. Security code and fixed-text diagnostics unchanged;
 tests changed only where they tested something deleted (`prefilter()`, A2's
 `toolTokens > 0`).
+
+Markdown left after [PR #15](https://github.com/erik-hedstrom/loadout/pull/15):
+`docs/loop/BACKLOG.md`, `docs/loop/ORCHESTRATOR.md`, `bench/RESULTS.md`,
+`AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md`, `SECURITY.md`,
+`.claude/agents/*.md` and `.github/pull_request_template.md`. Out of scope:
+`bench/results/**` (recorded output, kept as run) and `test/fixtures/`.
 
 Starting points from Sol's review (2026-10-07):
 - `src/`, ≈ 40–60 lines: `prefilter()` is used only by tests
