@@ -35,10 +35,14 @@ reviews. GitHub is the shared bus: `agent/*` branches, PRs, CI and
 - **Claude reviews.** `pr-reviewer` runs on every PR. Resume the same
   subagent for re-reviews, so it keeps its context.
 - **The Codex review** is a fresh Sol pass:
-  `adversarial-review --base origin/main --model gpt-6.1-sol --effort high "<focus>"`.
-  Read the verdict with `sed -n '/^# Codex Adversarial Review/,$p'`. After a
-  fix round, pr-reviewer reviews the delta. A new Sol pass is needed when the
-  fix goes beyond what the finding asked for.
+  `adversarial-review --base origin/main --model gpt-6.1-sol "<focus>"`.
+  - Companion 1.0.6 takes `--base`, `--scope`, `--model` and `--cwd` for
+    reviews, but not `--effort`, which would end up in the focus text.
+  - Read the verdict with `sed -n '/^# Codex Adversarial Review/,$p'`.
+  - The final head needs a Codex review. After a fix round, a delta review
+    is enough: `--base <the head Codex last reviewed>`. pr-reviewer reviews
+    the delta too.
+  - Record each reviewed SHA in the PR.
 - **Tests on both platforms.**
   - Windows: `npm test` and `npm run typecheck` in the worktree.
   - Linux: the same in WSL, in a clone that fetches the branch from the
@@ -54,8 +58,10 @@ when his local Claude usage runs out.
 - **What it lacks.** It has no TypeSafe key, no `codex` CLI and no companion,
   and it cannot run `claude -p` (AGENTS.md). Real-Jev runs, agent benchmarks
   and Sol builds wait for the local loop.
-- **No judging there.** Do not run `bench/judge.ts` in a cloud session: judge
-  prompts carry the third-party catalog, and the session can push to GitHub.
+- **No judging there.** Do not run `bench/judge.ts` in a cloud session.
+  Without `claude -p`, the session itself would answer the batches (the
+  `files` backend): an agent with tools and push access, reading third-party
+  catalog text. Locally, `claude -p` judges with no tools.
 - **Building and review.** Claude `worker` subagents build, and `pr-reviewer`
   reviews. The Codex review is `@codex review` on the PR, using the
   adversarial request below, repeated on each new head. Erik may also run a
@@ -76,12 +82,11 @@ when his local Claude usage runs out.
     `gh run rerun <id> --failed`.
   - A job that fails with no steps never started. Read its check-run
     annotation: it is usually the Actions spending limit.
-- **Minutes.** Pro includes 3,000 Actions minutes a month. Windows counts
-  double and macOS ten times, so add `ci-full` once, on the head you mean to
-  merge.
+  - Add `ci-full` once, on the head you mean to merge: the matrix is what
+    uses up the Actions minutes (HANDOFF, Spend).
 - **`pr-reviewer` APPROVE.**
-- **Codex review.** A Codex review with no open High or Medium finding, from
-  Sol through the companion or from Codex on GitHub.
+- **Codex review** of the final head, with no open High or Medium finding,
+  from Sol through the companion or from Codex on GitHub.
 - **Acceptance criteria met**, with the backlog row updated in the PR.
 
 Squash-merge with `--delete-branch`, one PR at a time. After each merge, wait
@@ -107,14 +112,15 @@ both sides.
   - Cloud credit: $100 until 2026-11-05.
   - Jev: about $5 left, so ≤ $1 per iteration.
   - Codex: by plan.
-  - Actions: 3,000 minutes a month.
+  - Actions: see HANDOFF, Spend.
 
 ## Iteration protocol
 
 The orchestrator repeats this until it hits a stop condition.
 
 1. **Sync.**
-   - `git fetch`.
+   - `git pull --ff-only` on a clean main checkout, so the backlog you read
+     and the worktrees you create are current.
    - Read the backlog's status table and the iteration log, not the whole
      repo.
    - `gh pr list`. For each open PR, read its review state from the PR body
@@ -127,11 +133,13 @@ The orchestrator repeats this until it hits a stop condition.
      non-overlapping files.
    - Work that makes loadout run in the default CLIs comes first (see the
      BACKLOG preamble).
-   - Skip `lane: local` and `lane: erik` unless Erik is present.
+   - In a cloud session, skip `lane: local`. Skip `lane: erik` unless Erik is
+     present.
    - Respect `depends`.
 4. **Dispatch.**
    - Code goes to Sol. The brief gives the item ID, its acceptance criteria,
-     the files to stay within, the constraints, and "do not commit".
+     the files to stay within, the constraints, a budget, and "do not
+     commit".
    - Claude-side items (judging, docs, bench analysis) go to `worker`
      subagents, in parallel in the background where they are independent.
      Use the `model` override `opus` for design-heavy items; Sonnet is the
@@ -254,5 +262,5 @@ should be deleted rather than kept. Report findings by severity with file:line.
 | Lane | Where | Examples |
 |---|---|---|
 | `cloud` | Anywhere against GitHub, with no key or agent CLI: the local orchestrator, or a cloud session | code, tests, docs, CI, README, `loadout audit`, retrieval |
-| `local` | Erik's machine, with his logged-in `claude` / `codex` and the TypeSafe key | Sol builds, `bench/invoke.ts`, `bench/outcome.ts`, sweeps, judges, Codex `/hooks` trust, demo recording |
+| `local` | Erik's machine, with his logged-in `claude` / `codex` and the TypeSafe key | `bench/invoke.ts`, `bench/outcome.ts`, sweeps, judges, Codex `/hooks` trust, demo recording |
 | `erik` | Erik | going public, npm publish, posting, billing and secrets, budgets, decisions |

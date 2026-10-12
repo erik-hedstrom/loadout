@@ -51,22 +51,12 @@ All numbers, caveats and negative results are in [bench/RESULTS.md](bench/RESULT
 
 ## How the work continues
 
-The work continues as a loop in which Sol builds and Claude reviews
-([docs/loop/ORCHESTRATOR.md](docs/loop/ORCHESTRATOR.md)).
-
-- **The orchestrator** is a Claude Code session in the desktop app on Erik's
-  machine. It briefs Sol (Codex `gpt-6.1-sol`) through the Codex plugin's
-  companion, one worktree per item, then commits, opens the PR and runs the
-  review gate.
-- **Merge gate:** the full CI matrix (`ci-full` label), the `pr-reviewer`
-  subagent's approval (security, and anything that should not exist), and a
-  Codex review without open High or Medium findings.
-- **Cloud sessions** fill in when local usage runs out. They have no
-  TypeSafe key, no Codex CLI and no companion. Claude builds there, and the
-  Codex review is `@codex review` on GitHub, or a local Codex review that
-  Erik runs. They open PRs; the next orchestrator run takes them through the
-  gate and merges.
-- **Shared state:** branches, PRs and `docs/loop/BACKLOG.md`.
+The work continues as a loop in which Sol (Codex) builds and Claude reviews.
+It is run by a Claude Code session on Erik's machine. Cloud sessions fill in
+when local usage runs out and leave merging to the next local run. The
+topology, merge gate, prompts and budgets are in
+[docs/loop/ORCHESTRATOR.md](docs/loop/ORCHESTRATOR.md). Shared state lives in
+branches, PRs and `docs/loop/BACKLOG.md`.
 
 ## Goals for the loop
 
@@ -113,12 +103,19 @@ The work continues as a loop in which Sol builds and Claude reviews
    on public repos) and, if you want one, add a security contact to
    SECURITY.md. Decide whether `bench/results/*-overhead` may keep your
    ambient plugin and skill names.
+
+   History check (2026-10-12, 168 commits, without textconv): no key-shaped
+   strings and no personal email. Authors are noreply addresses. The one
+   personal detail is the Windows username, in a since-deleted
+   `.vitest/json/output.json`.
 2. **npm name.** `loadout` is taken (0.0.2). Options: `@erik-hedstrom/loadout`
    (scoped, always available), or an unscoped name to check
    (`loadout-router`, `skill-loadout`, …).
 3. **Budgets.**
-   - GitHub Actions: raise the spending limit, drop macOS from `ci-full`, or
-     merge on local test runs until the monthly reset.
+   - GitHub Actions: make the repo public (Actions is then free on standard
+     runners; see decision 1), raise the spending limit, drop macOS from
+     `ci-full`, or merge on local test runs until the monthly reset. The last
+     option needs AGENTS.md's merge rule changed.
    - Cloud sessions: add `TYPESAFE_API_KEY` and network access to
      `api.typesafe.ai` and `huggingface.co` to the environment, if they should
      run real-Jev checks (D11).
@@ -179,8 +176,8 @@ native machine:
   shims read as not on PATH, in `loadout run` and `doctor` (D7).
 - **Outcome evaluation:** the arms invent their own inputs, the runs inherit
   the user's Codex config, and the sample is tiny.
-- **Router precision on new requests:** 64% of loads were useful on C1's
-  held-out requests, against 82% on v4's
+- **Router precision on new requests:** 64% (55–72) of loads were useful on
+  C1's held-out requests, against 82% (75–87) on v4's
   ([RESULTS](bench/RESULTS.md#c1-2026-10-08-new-held-out-requests)), mostly
   on general business requests. Generic skills such as
   `frontend-ui-engineering` load on simple UI work (C4).

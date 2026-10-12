@@ -7,17 +7,12 @@ The orchestrator keeps this file current. Statuses: `todo`, `in progress (PR #)`
 - **P:** priority. P0 is the first iterations; P1 next; P2 later.
 - **Agent:** suggested vendor. The other vendor reviews.
 - **Lane:** `cloud` (needs no key or agent CLI, so a cloud session can do
-  it), `local` (needs Erik's logged-in CLIs or apps, the TypeSafe key, or
-  Sol), `erik` (needs Erik's decision or action).
+  it), `local` (needs Erik's logged-in CLIs or apps, or the TypeSafe key),
+  `erik` (needs Erik's decision or action).
 
-**Default CLIs first (Erik, 2026-10-12).** loadout has to work where people
-already are: the stock `claude` and `codex` CLIs, through their own extension
-points (the Claude Code plugin and its prompt hook, the Codex hook, MCP
-search). Asking people to start their agent through `loadout claude|codex`
-is a hard sell, so the launcher stays for benchmarks and power users, and
-launcher-only work is P2. Alternative hosts (OpenCode, T3 Code, Cursor) get
-the generic MCP server and no dedicated work. Verified so far: the Claude
-Code CLI only ([docs/hosts.md](../hosts.md)).
+Priorities follow the decision "Default CLIs first" in
+[HANDOFF.md](../../HANDOFF.md#decisions-only-erik-can-make-ask-dont-assume):
+launcher-only work is P2.
 
 **Order of things:**
 1. loadout verified in both default CLIs: the Codex hook (D2), a one-step
@@ -26,9 +21,6 @@ Code CLI only ([docs/hosts.md](../hosts.md)).
 2. Precision on new requests (C4).
 3. A README that leads with the plugin and the hook (A1), then the demo (A5).
 4. Launch.
-
-Router tuning uses C1 dev (99) and v4's 315 requests; C1 test (201) stays
-untouched for reporting.
 
 ## A. Adoption and ease of use
 
@@ -316,7 +308,7 @@ Acceptance: a third row in that RESULTS table, with raw results. The README's
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
 | D10 | P0 | In-host first: loadout as a Claude Code plugin (hook), CLI then desktop app | Codex | cloud + local + erik | blocked: desktop app check (Erik). Plugin merged in [#9](https://github.com/erik-hedstrom/loadout/pull/9) |
-| D11 | P0 | Cut the hook's per-prompt start cost | Codex | cloud + local | in progress ([#14](https://github.com/erik-hedstrom/loadout/pull/14) merged: follow-ups skip start-up, relay loads on demand); left: cut the library scan and model load for routed prompts, then the real-Jev `hook-latency.ts` run (needs `TYPESAFE_API_KEY` and `api.typesafe.ai` in the cloud environment) |
+| D11 | P0 | Cut the hook's per-prompt start cost | Codex | cloud + local | in progress ([#14](https://github.com/erik-hedstrom/loadout/pull/14) merged: follow-ups skip start-up, relay loads on demand); left: cut the library scan and model load for routed prompts, then the real-Jev `hook-latency.ts` run (local) |
 | D1 | P0 | Validate on the new native Linux machine | Claude | local | todo (machine pending) |
 | D7 | P1 | `loadout doctor` | Codex | cloud | todo |
 | D2 | P0 | Live Codex hook test | Claude | local + erik | todo (needs Erik to trust the hook in `/hooks`) |
@@ -326,7 +318,7 @@ Acceptance: a third row in that RESULTS table, with raw results. The README's
 | D6 | P2 | HTTP: cancellation reaches Jev | Claude | cloud | done ([#19](https://github.com/erik-hedstrom/loadout/pull/19)) |
 | D8 | P1 | Host capability matrix (verified vs generated) | Claude | cloud | done ([#18](https://github.com/erik-hedstrom/loadout/pull/18)) |
 | D9 | P1 | Codex parity: neutral session skill dir, tier presets | Claude | cloud | done ([#21](https://github.com/erik-hedstrom/loadout/pull/21)); Codex launch not re-run live |
-| D12 | P1 | Codex: install the hook and search as one step, if Codex allows it | Codex | local | todo |
+| D12 | P0 | Codex: install the hook and search as one step, if Codex allows it | Codex | local | todo (codex-cli 0.160.1 has `codex plugin`; left: what a plugin may carry) |
 
 **D10. In-host first: loadout as a Claude Code plugin.**
 
@@ -511,6 +503,11 @@ Acceptance:
   snippet.
 - Nothing edits `~/.codex` (rule 3).
 
+Learnings (2026-10-12, `codex --help` on 0.160.1): `codex plugin` exists, with
+`marketplace add` (a local or Git marketplace) and `add PLUGIN@MARKETPLACE`,
+like Claude Code's. Left: whether a Codex plugin can carry a hook and an MCP
+server, and whether its hook still needs trusting in `/hooks`.
+
 **D7. `loadout doctor`.**
 
 Acceptance:
@@ -636,9 +633,9 @@ Acceptance:
 Remaining (orchestrator): record the 0.160.1 negative result in RESULTS:
 unified_exec stays true, so preflight refuses Codex. No Codex kappa until preflight
 and a one-call hostile temporary AGENTS.md canary both pass (answer unchanged);
-verify installed-skill isolation without relocating CODEX_HOME. Check `claude -p`
-in cloud; re-judge 40 v4 requests with an Opus subagent via `files` and, when safe,
-`codex`. Preserve IDs/splits and raw results; report stored-verdict agreement,
+verify installed-skill isolation without relocating CODEX_HOME. Re-judge 40 v4
+requests locally through `claude -p` and, when safe, `codex`; never in a cloud
+session (ORCHESTRATOR, "Cloud fallback"). Preserve IDs/splits and raw results; report stored-verdict agreement,
 inter-judge Cohen's kappa, intervals and measured cost. The judge prompt changed
 (catalog escaping/framing, rubric line), as did logic (1 retry instead of 2;
 unresolved disputes excluded). Agreement measures prompt and logic changes plus
