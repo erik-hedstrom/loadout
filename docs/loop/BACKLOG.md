@@ -310,7 +310,7 @@ Acceptance: a third row in that RESULTS table, with raw results. The README's
 | D10 | P0 | In-host first: loadout as a Claude Code plugin (hook), CLI then desktop app | Codex | cloud + local + erik | blocked: desktop app check (Erik). Plugin merged in [#9](https://github.com/erik-hedstrom/loadout/pull/9) |
 | D11 | P0 | Cut the hook's per-prompt start cost | Codex | cloud + local | in progress ([#14](https://github.com/erik-hedstrom/loadout/pull/14) merged: follow-ups skip start-up, relay loads on demand); left: cut the library scan and model load for routed prompts, then the real-Jev `hook-latency.ts` run (local) |
 | D1 | P0 | Validate on the new native Linux machine | Claude | local | todo (machine pending) |
-| D7 | P1 | `loadout doctor` | Codex | cloud | todo |
+| D7 | P1 | `loadout doctor` | Claude | cloud | done ([#20](https://github.com/erik-hedstrom/loadout/pull/20)) |
 | D2 | P0 | Live Codex hook test | Claude | local + erik | todo (needs Erik to trust the hook in `/hooks`) |
 | D3 | P2 | Desktop and IDE hosts end to end | Claude | local | todo (generic MCP only, 2026-10-12) |
 | D5 | P2 | Isolation mode | Codex | cloud | todo |
@@ -515,6 +515,26 @@ Acceptance:
   index, configured hosts and CLI versions.
 - Prints the fix for each failed check.
 - Read-only.
+
+Learnings (2026-10-09):
+- The key check prints only "found" or "not found", never the key file's
+  path. The live call is one Noul question with no retries; its failure text
+  comes from `jevClient`'s fixed diagnostics.
+- Hosts appear only when their CLI is on PATH or their config folder
+  exists. A host counts as set up when the plugin is enabled, a `loadout
+  hook` entry is present, or a search server is configured
+  (`[mcp_servers.loadout]`, or `mcpServers.loadout` in Claude's user-scope
+  `.claude.json`).
+- Local Codex adversarial review (2026-10-11): doctor rejected its own
+  generated hooks on native Windows (the `\` separator), which Ubuntu-only CI
+  could not show. Declined: failing a host whose CLI is missing (desktop-only
+  setups have none) and anchoring the hook match against `echo loadout hook`.
+- Also checks `loadout` on PATH, which the plugin's hook needs. A missing
+  optional embedding package is reported, not failed.
+- Left: native Windows. `which()` probes bare names without PATHEXT, so an
+  install with only `claude.exe` or a `.cmd` shim reads as not on PATH, in
+  doctor and in `loadout run`. The fix belongs in `which()` and must decide
+  how `.cmd` shims are spawned, since Node refuses them without a shell.
 
 ## E. Engineering quality (what a reviewer of the repo sees)
 

@@ -2,13 +2,14 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
-import { loadConfig, paths, resolveApiKey, writeDefaultConfig, type Config } from './config.js';
+import { DEFAULT_CONFIG, loadConfig, paths, resolveApiKey, writeDefaultConfig, type Config } from './config.js';
 import { jevClient } from './jev.js';
 import { claudeArgs, codexArgs, hostSetup, HOSTS, launch, materialize, pathTranslator, which, windowsPath, type Agent, type Host } from './launch.js';
 import { addFromGitHub, addSkills, librarySources, parseGitHub, scanLibrary, skillExcerpt, type AddResult } from './library.js';
 import { repoSignals } from './repo.js';
 import { route } from './route.js';
 import { cachedEmbeddings, libraryEmbeddings } from './embed.js';
+import { doctor, formatDoctor } from './doctor.js';
 import { HOOK_FAILURE_NOTE, hookOutput, isFollowUp, promptContext, type HookInput } from './hook.js';
 import { reportJson, type Capability, type RouteDecision } from './types.js';
 
@@ -34,6 +35,7 @@ Usage:
                                           that fit as context (reads the hook JSON on stdin)
   loadout setup <host> [--windows]        Print plugin, hook and MCP setup instructions for a host:
                                           ${HOSTS.join(', ')}
+  loadout doctor                          Check the key (one Jev call), library, index and hosts; read-only
 
 The library lives in ~/.loadout/library (override with LOADOUT_HOME):
   skills/<name>/SKILL.md   and   mcp.json ({"mcpServers": {...}}, optional "description" per server)
@@ -175,7 +177,16 @@ async function main(): Promise<number> {
     await launchMcp(rest[0] ?? '', paths.library());
     return 0;
   }
-  const config = loadConfig();
+  let config: Config;
+  let configError: string | undefined;
+  try {
+    config = loadConfig();
+  } catch (err) {
+    // doctor exists to diagnose a broken setup, so it reports the config and checks the rest on defaults.
+    if (command !== 'doctor') throw err;
+    configError = err instanceof Error ? err.message : 'cannot be read';
+    config = DEFAULT_CONFIG;
+  }
 
   switch (command) {
     case 'init': {
@@ -323,6 +334,13 @@ async function main(): Promise<number> {
       const { where, snippet } = hostSetup(host, windows);
       console.log(`# ${where}\n${snippet}`);
       return 0;
+    }
+
+    case 'doctor': {
+      const checks = await doctor(config, (apiKey) => jevClient({ apiKey, baseUrl: config.jev.baseUrl, model: config.jev.model, retries: 0 }));
+      if (configError) checks.unshift({ name: 'config', ok: false, detail: configError, fix: `fix or delete ${paths.config()}; the other checks used the defaults` });
+      console.log(formatDoctor(checks));
+      return checks.every((c) => c.ok) ? 0 : 1;
     }
 
     case undefined:
