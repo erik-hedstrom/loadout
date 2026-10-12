@@ -12,7 +12,7 @@
  *           claude-code`: does the agent open what the hook suggests?
  *   plugin  (Claude) the shipped hook-only plugin; nothing preloaded and no
  *           MCP server: does the agent open what the hook suggests?
- * Ambient hooks that call loadout by absolute path bypass PATH and are not counted.
+ * Ambient hooks that call loadout by absolute path bypass PATH; only their context shows, so a silent one is not detected.
  *
  * Each run is capped (Claude --max-turns, a timeout), since only the agent's
  * first moves matter here. It starts in an empty folder where the agent may
@@ -81,7 +81,7 @@ interface Event { tool: string; detail: string; ok: boolean; id?: string }
 interface Inventory { plugins: { name: string; path?: string }[] }
 interface HookExecution { id: string; name: string; event: string; exit_code?: number; outcome?: string; additionalContext?: string }
 
-function checkInventory(inventory: Inventory | undefined, hookInvocations: number, pluginDir?: string): string | undefined {
+function checkInventory(inventory: Inventory | undefined, hookInvocations: number, contextExecutions: number, pluginDir?: string): string | undefined {
   if (!inventory || !Array.isArray(inventory.plugins)) return 'no startup inventory';
   const normalize = (p: string) => {
     const path = p.replace(/\\/g, '/').replace(/\/$/, '');
@@ -96,6 +96,8 @@ function checkInventory(inventory: Inventory | undefined, hookInvocations: numbe
   if (mode === 'plugin' || mode === 'hook') {
     if (hookInvocations !== 1) return 'expected exactly one loadout UserPromptSubmit hook; measurement invalid';
   } else if (hookInvocations) return 'unexpected loadout UserPromptSubmit hook; measurement invalid';
+  // A hook that calls loadout by absolute path bypasses the shim; its context is still visible.
+  if (contextExecutions > hookInvocations) return 'uncounted loadout hook context; measurement invalid';
   return undefined;
 }
 
@@ -157,7 +159,8 @@ for (const id of values.ids.split(',')) {
   if (mode === 'plugin') session.pluginDir = join(repo, 'plugins', 'loadout');
   const hookArgs = mode === 'hook' ? ['--settings', JSON.stringify(claudeHookBlock('loadout hook claude'))] : [];
   const cwd = mkdtempSync(join(workRoot, 'loadout-work-'));
-  const marker = join(cwd, 'loadout-hook-invocations');
+  // Outside cwd: the agent is told its folder is empty, and the hook routes on cwd's file names.
+  const marker = shimDir ? join(shimDir, `${id}.invocations`) : '';
   if (shimDir) {
     writeFileSync(marker, '');
     const quote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
@@ -173,7 +176,8 @@ for (const id of values.ids.split(',')) {
   const proc = await run(bin, args, cwd, Number(values['timeout-s']) * 1000, childEnv);
   const { events, hooks, costUsd, inventory } = toolEvents(proc.stdout);
   const hookInvocations = shimDir ? readFileSync(marker, 'utf8').split('\n').filter(Boolean).length : 0;
-  const invalid = agent === 'claude' ? checkInventory(inventory, hookInvocations, session.pluginDir) : undefined;
+  if (shimDir) rmSync(marker);
+  const invalid = agent === 'claude' ? checkInventory(inventory, hookInvocations, hooks.filter((h) => h.additionalContext?.includes('<skill_relevance>')).length, session.pluginDir) : undefined;
 
   // Which library skills did the agent actually open?
   const folders = new Set(session.skills.map((c) => basename(c.source)));

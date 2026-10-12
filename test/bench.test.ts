@@ -47,6 +47,8 @@ describe('benchmark backends', () => {
     { mode: 'search', windowsAgent: false, ambient: 'plugin' },
     { mode: 'search', windowsAgent: false, ambient: 'hook' },
     { mode: 'routed', windowsAgent: false, ambient: 'hook' },
+    { mode: 'search', windowsAgent: false, ambient: 'absolute' },
+    { mode: 'plugin', windowsAgent: false, ambient: 'absolute' },
     { mode: 'plugin', windowsAgent: false, problem: 'missing plugin' },
     { mode: 'plugin', windowsAgent: false, problem: 'missing hook' },
     { mode: 'hook', windowsAgent: false, problem: 'missing hook' },
@@ -89,11 +91,13 @@ describe('benchmark backends', () => {
       inventories.push(inventory);
       const count = (mode === 'plugin' || mode === 'hook' ? 1 : 0) + (ambient === 'hook' ? 1 : 0);
       hookCounts.push(problem === 'missing hook' ? 0 : count);
-      const marker = join(options!.cwd as string, 'loadout-hook-invocations');
+      // The agent is told its folder is empty, and the hook routes on its file names.
+      expect(readdirSync(options!.cwd as string)).toEqual([]);
       const sep = windowsAgent ? ';' : delimiter;
       const shimPath = options!.env!.PATH!.split(sep)[0]!;
       const shimDir = windowsAgent ? shimPath.slice('C:\\translated'.length) : shimPath;
       const shim = join(shimDir, 'loadout');
+      const marker = join(shimDir, readdirSync(shimDir).find((f) => f.endsWith('.invocations'))!);
       if (mode === 'hook') expect(JSON.parse(args[args.indexOf('--settings') + 1]!).hooks.UserPromptSubmit[0].hooks[0].command).toBe('loadout hook claude');
       for (let i = 0; i < hookCounts.at(-1)!; i++) {
         if (!windowsAgent && process.platform !== 'win32') {
@@ -105,7 +109,8 @@ describe('benchmark backends', () => {
           appendFileSync(marker, 'loadout hook claude\n');
         }
       }
-      const hooks = Array.from({ length: hookCounts.at(-1)! }, (_, i) => {
+      // An 'absolute' ambient hook bypasses the shim: it shows in hook events but not in the marker.
+      const hooks = Array.from({ length: hookCounts.at(-1)! + (ambient === 'absolute' ? 1 : 0) }, (_, i) => {
         const fields = { hook_id: `hook-${i}`, hook_name: 'UserPromptSubmit', hook_event: probe.hook.event };
         const stdout = problem === 'silent hook' || ambient === 'hook' && i === count - 1 ? '' : JSON.stringify({ hookSpecificOutput: { hookEventName: probe.hook.event, additionalContext: probe.hook.additionalContext } });
         return [
@@ -133,13 +138,13 @@ describe('benchmark backends', () => {
       process.argv = [process.execPath, 'bench/invoke.ts', dir, '--agent', 'claude', '--mode', mode, '--ids', 'a,b'];
       vi.resetModules();
       if (ambient || problem && problem !== 'silent hook') {
-        const reason = problem === 'no init' || problem === 'bad init' ? 'no startup inventory' : ambient === 'plugin' ? 'ambient loadout plugin; measurement invalid' : problem === 'missing plugin' ? 'missing loadout plugin; measurement invalid' : mode === 'routed' || mode === 'search' ? 'unexpected loadout UserPromptSubmit hook; measurement invalid' : 'expected exactly one loadout UserPromptSubmit hook; measurement invalid';
+        const reason = problem === 'no init' || problem === 'bad init' ? 'no startup inventory' : ambient === 'plugin' ? 'ambient loadout plugin; measurement invalid' : ambient === 'absolute' ? 'uncounted loadout hook context; measurement invalid' : problem === 'missing plugin' ? 'missing loadout plugin; measurement invalid' : mode === 'routed' || mode === 'search' ? 'unexpected loadout UserPromptSubmit hook; measurement invalid' : 'expected exactly one loadout UserPromptSubmit hook; measurement invalid';
         await expect(import('../bench/invoke.js')).rejects.toThrow(reason);
         const rows = readFileSync(join(dir, `invoke-claude-${mode}.jsonl`), 'utf8').trim().split('\n').map((line) => JSON.parse(line));
         expect(rows).toHaveLength(1);
         expect(calls).toHaveLength(1);
-        expect(rows[0]).toMatchObject({ id: 'a', invalid: reason, costUsd: 0.05, exit: problem === 'no init' ? 1 : 0, timedOut: false, invoked: ['skill-a'], tools: ['Read'], inventory: problem === 'no init' || problem === 'bad init' ? null : inventories[0], hookInvocations: hookCounts[0]!, hookEventCount: hookCounts[0]! });
-        expect(rows[0].hooks).toHaveLength(hookCounts[0]!);
+        expect(rows[0]).toMatchObject({ id: 'a', invalid: reason, costUsd: 0.05, exit: problem === 'no init' ? 1 : 0, timedOut: false, invoked: ['skill-a'], tools: ['Read'], inventory: problem === 'no init' || problem === 'bad init' ? null : inventories[0], hookInvocations: hookCounts[0]!, hookEventCount: hookCounts[0]! + (ambient === 'absolute' ? 1 : 0) });
+        expect(rows[0].hooks).toHaveLength(hookCounts[0]! + (ambient === 'absolute' ? 1 : 0));
         return;
       }
       await import('../bench/invoke.js');
