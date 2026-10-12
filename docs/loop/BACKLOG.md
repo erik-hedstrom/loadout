@@ -28,7 +28,7 @@ launcher-only work is P2.
 |---|---|---|---|---|---|
 | A2 | P0 | `loadout audit`: what your installed skills cost you | Claude | cloud | done ([PR #3](https://github.com/erik-hedstrom/loadout/pull/3)) |
 | A1 | P0 | README rewrite around the problem, 3-command quickstart, GIF | Claude | cloud | todo (leads with the plugin and the Codex hook; the launcher moves down) |
-| A3 | P1 | `loadout init` wizard + starter packs | Codex | cloud | in progress (PR pending, `agent/a3-init-wizard`) |
+| A3 | P1 | `loadout init` wizard + starter packs | Codex | cloud | in progress ([#30](https://github.com/erik-hedstrom/loadout/pull/30)) |
 | A4 | P1 | npm package under an available name + release workflow | Codex | cloud + erik | blocked: npm name decision |
 | A5 | P1 | Demo recording (route, launch, hook) | Claude | local | todo (after A1) |
 
@@ -89,18 +89,11 @@ Acceptance:
 - Completes in under 2 minutes, excluding downloads.
 
 Learnings (2026-10-12):
-- The wizard runs only with no flags and a TTY on stdin and stdout, so
-  `init --key-file` and piped runs behave as before. `--pack <name>` is the
-  flags path for packs.
-- It never takes the key itself: node:readline has no hidden input, so it asks
-  for a key file path (or TYPESAFE_API_KEY) and never echoes an answer, in case
-  the key is pasted there. The terminal still echoes what is typed.
-- Packs: `documents` (anthropics/skills), `security` (trailofbits/skills),
-  `workflow` (obra/superpowers), all from `bench/data/library.sh`. No
-  "popular" pack: the skills.sh top list (`bench/data/popular.jsonl`) is not
-  committed, so nothing in the repo backs one.
-- Hosts are detected by CLI on absolute PATH entries (doctor's `onPath`); the
-  Claude desktop app has no CLI, so it is listed under "Other hosts".
+- node:readline has no hidden input, and a terminal echoes what is typed, so
+  the wizard never prompts for the key or its file; it points to
+  TYPESAFE_API_KEY or `init --key-file`.
+- No "popular" pack: the skills.sh top list (`bench/data/popular.jsonl`) is
+  not committed, so nothing in the repo backs one.
 
 **A4. npm release.**
 

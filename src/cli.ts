@@ -227,8 +227,8 @@ async function main(): Promise<number> {
       const index = () => embeddingsFor(scanLibrary(paths.library()), config).then(() => {});
       if (rest.length === 0 && process.stdin.isTTY && process.stdout.isTTY) {
         return wizard(process.stdin, process.stdout, {
-          keyFound: (keyFile) => hasKey(config, keyFile),
-          writeConfig: (apiKeyFile) => writeDefaultConfig(apiKeyFile ? { apiKeyFile } : {}),
+          keyFound: () => hasKey(config),
+          writeConfig: () => writeDefaultConfig(),
           add: addSources,
           index,
           hosts: detectHosts(onPath),

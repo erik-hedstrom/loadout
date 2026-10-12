@@ -5,6 +5,7 @@ import { delimiter, join } from 'node:path';
 import { Readable, Writable } from 'node:stream';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadConfig, paths, writeDefaultConfig } from '../src/config.js';
+import { parseGitHub } from '../src/library.js';
 import { detectHosts, hasKey, PACKS, packSources, wizard, type InitDeps } from '../src/init.js';
 
 const KEY = 'a3-key-canary-5519';
@@ -27,8 +28,8 @@ async function run(lines: string[], overrides: Partial<InitDeps> = {}) {
   const sink = new Writable({ write: (chunk, _enc, done) => ((output += chunk), done()) });
   const added: string[][] = [];
   const deps: InitDeps = {
-    keyFound: (keyFile) => hasKey(loadConfig(), keyFile),
-    writeConfig: (apiKeyFile) => writeDefaultConfig(apiKeyFile ? { apiKeyFile } : {}),
+    keyFound: () => hasKey(loadConfig()),
+    writeConfig: () => writeDefaultConfig(),
     add: (sources) => (added.push(sources), 0),
     index: vi.fn(async () => {}),
     hosts: ['claude-code'],
@@ -41,15 +42,15 @@ async function run(lines: string[], overrides: Partial<InitDeps> = {}) {
 
 describe('starter packs', () => {
   it('maps names and 1-based numbers to deduplicated sources and reports the rest', () => {
-    const documents = PACKS.find((p) => p.name === 'documents')!.sources;
-    const security = PACKS.find((p) => p.name === 'security')!.sources;
-    expect(packSources(['Documents, 2', 'documents'])).toEqual({ sources: [...documents, ...security], unknown: [] });
+    const documents = PACKS.find((p) => p.name === 'documents')!.source;
+    const security = PACKS.find((p) => p.name === 'security')!.source;
+    expect(packSources(['Documents, 2', 'documents'])).toEqual({ sources: [documents, security], unknown: [] });
     expect(packSources(['0', '99', 'popular', '../etc'])).toEqual({ sources: [], unknown: ['0', '99', 'popular', '../etc'] });
     expect(packSources([])).toEqual({ sources: [], unknown: [] });
   });
 
   it('are GitHub sources the add path accepts', () => {
-    for (const p of PACKS) for (const s of p.sources) expect(s).toMatch(/^https:\/\/github\.com\/[\w.-]+\/[\w.-]+$/);
+    for (const p of PACKS) expect(parseGitHub(p.source)).toBeTruthy();
   });
 });
 
@@ -61,52 +62,54 @@ describe('detectHosts', () => {
 });
 
 describe('init wizard', () => {
-  it('sets the key file, adds the chosen packs, builds the index and prints setup for detected hosts', async () => {
-    const keyFile = join(home, 'typesafe.txt');
-    writeFileSync(keyFile, `${KEY}\n`, { mode: 0o600 });
-    const { code, output, added, deps } = await run([keyFile, '1, security']);
+  it('adds the chosen packs, builds the index and prints setup for detected hosts', async () => {
+    const { code, output, added, deps } = await run(['1, security']);
     expect(code).toBe(0);
-    expect(added).toEqual([[...PACKS[0]!.sources, ...PACKS[1]!.sources]]);
+    expect(added).toEqual([[PACKS[0]!.source, PACKS[1]!.source]]);
     expect(deps.index).toHaveBeenCalledOnce();
-    expect(loadConfig().jev.apiKeyFile).toBe(keyFile);
+    expect(output).toContain('not found: set TYPESAFE_API_KEY in your shell, or run `loadout init --key-file <path>`');
     expect(output).toContain(`wrote ${paths.config()}`);
     expect(output).toContain('# setup for claude-code');
     expect(output).toContain('Other hosts: loadout setup <codex|claude-desktop|cursor|opencode>');
   });
 
-  it('skips the key question when a key is found, and adds nothing on Enter', async () => {
+  it('reports a found key, and adds nothing on Enter', async () => {
     vi.stubEnv('TYPESAFE_API_KEY', KEY);
     const { code, output, added, deps } = await run([''], { hosts: [] });
     expect(code).toBe(0);
     expect(output).toMatch(/TypeSafe key .*\n {2}found\n/);
-    expect(output).not.toContain('Key file path');
     expect(added).toEqual([]);
     expect(deps.index).toHaveBeenCalledOnce();
     expect(output).toContain('No host CLI found on PATH: loadout setup <claude-code|codex|claude-desktop|cursor|opencode>');
   });
 
   it('asks again after an unknown pack, and ends cleanly when input runs out', async () => {
-    const { code, output, added } = await run(['', 'popular']);
+    const { code, output, added } = await run(['popular']);
     expect(code).toBe(0);
     expect(output).toContain('unknown pack; choose from documents, security, workflow');
     expect(added).toEqual([]);
-    expect(loadConfig().jev.apiKeyFile).toBeUndefined();
   });
 
   it('fails when a pack fails to add', async () => {
-    const { code } = await run(['', 'workflow'], { add: () => 1 });
+    const { code } = await run(['workflow'], { add: () => 1 });
     expect(code).toBe(1);
   });
 
-  it('never prints the key: not from the env, the key file, or a key pasted at the path prompt', async () => {
-    const empty = join(home, 'empty.txt');
-    writeFileSync(empty, '');
-    const keyFile = join(home, 'typesafe.txt');
-    writeFileSync(keyFile, KEY);
-    const { output } = await run([KEY, empty, keyFile, '']);
-    expect(output).toContain('no such file');
-    expect(output).toContain('that file is empty or cannot be read');
+  it('never asks for or prints the key: not from the env, the key file, or a key typed at a prompt', async () => {
+    const { output } = await run([KEY, '']);
+    // The typed key was taken as a pack choice, rejected without being echoed, and the pack prompt asked again.
+    expect(output.split('Packs to add').length - 1).toBe(2);
+    expect(output).not.toMatch(/key file path/i);
+    expect(output).toContain('unknown pack; choose from');
     expect(output).not.toContain(KEY);
+    expect(readFileSync(paths.config(), 'utf8')).not.toContain(KEY);
+
+    const keyFile = join(home, 'typesafe.txt');
+    writeFileSync(keyFile, KEY, { mode: 0o600 });
+    writeDefaultConfig({ apiKeyFile: keyFile });
+    const fromFile = await run(['']);
+    expect(fromFile.output).toContain('  found');
+    expect(fromFile.output).not.toContain(KEY);
     expect(readFileSync(paths.config(), 'utf8')).not.toContain(KEY);
     expect(loadConfig().jev.apiKeyFile).toBe(keyFile);
 
@@ -154,6 +157,6 @@ describe('loadout init without a terminal', () => {
     const result = cli(['--pack', 'security'], { PATH: `${bin}${delimiter}${process.env.PATH}` });
     expect(result.status).toBe(1);
     expect(result.stdout).toContain('wrote ');
-    expect(result.stderr).toContain(`${PACKS[1]!.sources[0]}: `);
+    expect(result.stderr).toContain(`${PACKS[1]!.source}: `);
   });
 });
