@@ -37,8 +37,9 @@ codex plugin marketplace add erik-hedstrom/loadout && codex plugin add loadout-c
   installed skills' descriptions add (about 4 characters per token, before
   host caps) and lists your MCP servers without counting their schemas. It
   only reads.
-- **After step 3,** `loadout doctor` checks the key (one Jev call), library,
-  index and hosts, and prints a fix for each gap.
+- **After step 3,** `loadout doctor` checks the key (one Jev call when Jev
+  routing is on and a key is found), library, index and hosts, and prints a
+  fix for each gap.
 
 Skills copied with `audit --adopt` stay listed by the agents, and keep
 costing tokens, until you move them out of the agents' own folders;

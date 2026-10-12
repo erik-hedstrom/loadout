@@ -15,12 +15,12 @@ loadout codex --headless "<task>" -- --skip-git-repo-check   # run once and exit
 ```
 $ loadout route "Lay out our services as a canvas file I can open in Obsidian"
 router: jev — 200/1,262 candidates in … ms, … tokens, $…
-need:   0.67 — a specialised skill is likely useful
-tier:   small  (large 0.06, medium 0.42, small 0.52)
+need:   … — a specialised skill is likely useful
+tier:   small  (large …, medium …, small …)
 skills: (fit: how well each matches the request, 0-1)
-  ◆ 1.00  json-canvas        loaded, injected (clear winner)  share 0.99
-  ○ 0.84  obsidian-markdown  offered  share 0.00
-  ○ 0.73  obsidian-cli       offered  share 0.00
+  ◆ …  json-canvas        loaded, injected (clear winner)  share …
+  ○ …  obsidian-markdown  offered  share …
+  ○ …  obsidian-cli       offered  share …
 ```
 
 How the decision is made: [DESIGN.md](../DESIGN.md#router).

@@ -69,7 +69,8 @@ include your username.
 The launcher, `loadout route` and `find_skills` send a request again, once,
 after a network error, a timeout, a 429 or a 5xx; the hook does not retry.
 
-`loadout doctor` also makes one Jev call with fixed text, to check the key.
+`loadout doctor` also makes one Jev call with fixed text, to check the key,
+but only when Jev routing is on and a key is found.
 Code-level detail: [SECURITY.md](../SECURITY.md#prompt-hook).
 
 To keep prompts local, set `"router": "lexical"` in loadout's config; the hook
