@@ -124,7 +124,8 @@ describe('init wizard', () => {
     expect((await run([''])).output).not.toContain(KEY);
     // Formatted as Node prints them, so a key inside a logged object is caught, and byte chunks decoded as a stream writes them.
     const text = (a: unknown) => (a instanceof Uint8Array ? Buffer.from(a).toString() : a);
-    for (const spy of streams) expect(spy.mock.calls.map((args) => format(...args.map(text))).join('\n')).not.toContain(KEY);
+    // Joined without separators, as a stream would print a key split over two writes.
+    for (const spy of streams) expect(spy.mock.calls.map((args) => format(...args.map(text))).join('')).not.toContain(KEY);
   });
 });
 
@@ -154,9 +155,16 @@ describe('loadout init without a terminal', () => {
     expect(pack.status).toBe(1);
     expect(pack.stderr).toContain('unknown pack; packs: documents, security, workflow');
     expect(pack.stderr + pack.stdout).not.toContain(KEY);
-    const missing = cli(['--key-file', join(home, 'nope.txt')]);
+    const missing = cli(['--key-file', KEY]);
     expect(missing.status).toBe(1);
     expect(missing.stderr).toContain('key file not found');
+    // Neither a stray positional nor an unknown option is echoed back by the argument parser.
+    for (const args of [[KEY], [`--${KEY}`]]) {
+      const bad = cli(args);
+      expect(bad.status).toBe(1);
+      expect(bad.stderr).toContain('usage: loadout init');
+    }
+    for (const r of [missing, cli([KEY]), cli([`--${KEY}`])]) expect(r.stdout + r.stderr).not.toContain(KEY);
     expect(existsSync(join(home, '.loadout'))).toBe(false);
   });
 
@@ -164,10 +172,12 @@ describe('loadout init without a terminal', () => {
     // A failing git: the pack's source reaches `loadout add` without downloading anything.
     const bin = join(home, 'bin');
     mkdirSync(bin);
-    writeFileSync(join(bin, 'git'), '#!/bin/sh\necho "fake git: $*" >&2\nexit 1\n', { mode: 0o755 });
-    const result = cli(['--pack', 'security'], { PATH: `${bin}${delimiter}${process.env.PATH}` });
+    // It also records whether the TypeSafe key reached git's environment.
+    writeFileSync(join(bin, 'git'), '#!/bin/sh\necho "${TYPESAFE_API_KEY:-unset}" > "$HOME/git-env"\necho "fake git: $*" >&2\nexit 1\n', { mode: 0o755 });
+    const result = cli(['--pack', 'security'], { PATH: `${bin}${delimiter}${process.env.PATH}`, TYPESAFE_API_KEY: KEY });
     expect(result.status).toBe(1);
     expect(result.stdout).toContain('wrote ');
     expect(result.stderr).toContain(`${PACKS[1]!.source}: `);
+    expect(readFileSync(join(home, 'git-env'), 'utf8')).toBe('unset\n');
   });
 });

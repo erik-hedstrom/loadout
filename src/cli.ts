@@ -223,7 +223,13 @@ async function main(): Promise<number> {
 
   switch (command) {
     case 'init': {
-      const { values } = parseArgs({ args: rest, options: { 'key-file': { type: 'string' }, pack: { type: 'string', multiple: true } } });
+      // Fixed text on every rejected argument here: a mistyped value can be a pasted key.
+      let values: { 'key-file'?: string; pack?: string[] };
+      try {
+        ({ values } = parseArgs({ args: rest, options: { 'key-file': { type: 'string' }, pack: { type: 'string', multiple: true } } }));
+      } catch {
+        fail('usage: loadout init [--key-file <path>] [--pack <name>]...');
+      }
       const index = () => embeddingsFor(scanLibrary(paths.library()), config).then(() => {});
       if (rest.length === 0 && process.stdin.isTTY && process.stdout.isTTY) {
         return wizard(process.stdin, process.stdout, config, {
@@ -234,9 +240,8 @@ async function main(): Promise<number> {
         });
       }
       const keyFile = values['key-file'] ? resolve(values['key-file']) : undefined;
-      if (keyFile && !existsSync(keyFile)) fail(`key file not found: ${keyFile}`);
+      if (keyFile && !existsSync(keyFile)) fail('key file not found; check the path given to --key-file');
       const { sources, unknown } = packSources(values.pack ?? []);
-      // Fixed text: a mistyped value can be a pasted key.
       if (unknown.length) fail(`unknown pack; packs: ${PACKS.map((p) => p.name).join(', ')}`);
       console.log(`wrote ${writeDefaultConfig(keyFile ? { apiKeyFile: keyFile } : {})}`);
       if (!sources.length) return 0;
