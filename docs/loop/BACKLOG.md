@@ -113,7 +113,7 @@ Acceptance:
 | B3 | P1 | Fact-checked comparison with alternatives | Codex | cloud | todo |
 | B2 | P1 | Launch kit drafts | Claude | cloud | todo (after A1, B1) |
 | B4 | P1 | Repo polish: description, topics, social preview, badges | Claude | cloud + erik | todo |
-| B6 | P2 | GitHub profile README draft | Claude | cloud | todo |
+| B6 | P2 | GitHub profile README draft | Claude | cloud | in progress (draft in `docs/launch/profile-README.md`; Erik fills two placeholders and publishes) |
 | B5 | P2 | Awesome-list and directory submissions (drafts) | Codex | erik | todo (repo public since 2026-10-12; agents draft, Erik submits) |
 
 **B1. Token-waste study.**
@@ -171,6 +171,12 @@ Acceptance:
 Acceptance: `docs/launch/profile-README.md` for github.com/erik-hedstrom,
 presenting loadout and the engineering behind it (benchmarks, reviews,
 cross-vendor agents). Erik publishes.
+
+Learnings: every number links to RESULTS with an absolute URL, because the
+file is copied into another repo. Anchors were checked against GitHub's slug
+rules. The cross-family judging claim covers C1 only: v4's requests were
+expanded by Sonnet and judged by Opus. Left: Erik writes the personal line and
+publishes.
 
 ## C. Skill decision-making (router quality)
 
