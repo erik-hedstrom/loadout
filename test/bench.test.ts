@@ -74,9 +74,8 @@ describe('benchmark backends', () => {
     vi.stubEnv('WSLENV', 'KEEP/p:PATH/up');
     const translate = (p: string) => windowsAgent ? `C:\\translated${p.replace(/\\/g, '/')}` : p;
     vi.doMock('../src/launch.js', async (original) => ({ ...await original<typeof import('../src/launch.js')>(), pathTranslator: () => translate, hookCommand: () => 'printf "%s" "$HOOK_OUT"; printf hook-err >&2; exit 7' }));
-    const windowsPath = 'C:\\Windows\\System32;C:\\tools';
     vi.mocked(execFileSync).mockImplementation((command, args) => {
-      if (command === 'cmd.exe') return args?.includes('echo %PATH%') ? windowsPath + '\n' : 'C:\\Temp\n';
+      if (command === 'cmd.exe') return 'C:\\Temp\n';
       if (command === 'wslpath') return args?.includes('-w') ? translate(args[1]!) + '\n' : tmpdir() + '\n';
       throw new Error(`unexpected command ${command}`);
     });
@@ -95,9 +94,7 @@ describe('benchmark backends', () => {
       hookCounts.push(problem === 'missing hook' ? 0 : count);
       // The agent is told its folder is empty, and the hook routes on its file names.
       expect(readdirSync(options!.cwd as string)).toEqual([]);
-      const sep = windowsAgent ? ';' : delimiter;
-      const shimPath = options!.env!.PATH!.split(sep)[0]!;
-      const shimDir = windowsAgent ? shimPath.slice('C:\\translated'.length) : shimPath;
+      const shimDir = options!.env!.PATH!.split(delimiter)[0]!;
       const shim = join(shimDir, 'loadout');
       const marker = join(shimDir, readdirSync(shimDir).find((f) => f.endsWith('.invocations'))!);
       if (mode === 'hook') expect(JSON.parse(args[args.indexOf('--settings') + 1]!).hooks.UserPromptSubmit[0].hooks[0].command).toBe('loadout hook claude');
@@ -159,12 +156,11 @@ describe('benchmark backends', () => {
         if (mode === 'plugin') {
           expect(call.args).toEqual(['-p', `Request ${i ? 'b' : 'a'}\n\n(Test run: nothing is attached and the folder is empty. Where the request refers to files or data you do not have, create small realistic sample inputs and carry on.)`, '--model', 'sonnet', '--plugin-dir', translate(join(repo, 'plugins', 'loadout')), '--output-format', 'stream-json', '--verbose', '--include-hook-events', '--no-session-persistence', '--max-turns', '6', '--strict-mcp-config', '--permission-mode', 'acceptEdits']);
         }
-        const sep = windowsAgent ? ';' : delimiter;
-        expect(call.env!.PATH!.slice(call.env!.PATH!.indexOf(sep))).toBe(sep + (windowsAgent ? windowsPath : fakePath));
-        expect(call.env!.PATH!.split(sep)[0]).toContain('loadout-bin-');
-        if (windowsAgent) expect(call.env!.PATH!.split(sep)[0]).toMatch(/^C:\\translated/);
+        // Under WSL the launcher script needs a Linux PATH; WSLENV's PATH/l translates it for claude.exe.
+        expect(call.env!.PATH!.slice(call.env!.PATH!.indexOf(delimiter))).toBe(delimiter + fakePath);
+        expect(call.env!.PATH!.split(delimiter)[0]).toContain('loadout-bin-');
         expect(call.env!.LOADOUT_HOME).toBe(dir);
-        expect(call.env!.WSLENV).toBe(windowsAgent ? 'KEEP/p:PATH' : 'KEEP/p:PATH/up');
+        expect(call.env!.WSLENV).toBe(windowsAgent ? 'KEEP/p:PATH/l' : 'KEEP/p:PATH/up');
       }
       const rows = readFileSync(join(dir, `invoke-claude-${mode}.jsonl`), 'utf8').trim().split('\n').map((line) => JSON.parse(line));
       expect(rows.map((row) => row.id)).toEqual(['a', 'b']);

@@ -67,11 +67,9 @@ let childEnv: NodeJS.ProcessEnv | undefined;
 if (agent === 'claude') {
   shimDir = mkdtempSync(join(workRoot, 'loadout-bin-'));
   childEnv = { ...process.env, PATH: `${shimDir}${delimiter}${process.env.PATH ?? ''}` };
-  if (windowsAgent) {
-    const windowsPath = execFileSync('cmd.exe', ['/c', 'echo %PATH%'], { encoding: 'utf8' }).trim();
-    childEnv.PATH = `${execFileSync('wslpath', ['-w', shimDir], { encoding: 'utf8' }).trim()};${windowsPath}`;
-    childEnv.WSLENV = [...(process.env.WSLENV ?? '').split(':').filter((s) => s && !/^PATH(?:\/.*)?$/.test(s)), 'PATH'].join(':');
-  }
+  // The `claude` we start is a launcher script run inside WSL, so PATH stays a Linux list; PATH/l
+  // translates it, shim folder first, for the Windows claude.exe and the hook shell it starts.
+  if (windowsAgent) childEnv.WSLENV = [...(process.env.WSLENV ?? '').split(':').filter((s) => s && !/^PATH(?:\/.*)?$/.test(s)), 'PATH/l'].join(':');
 }
 const NOTE = '\n\n(Test run: nothing is attached and the folder is empty. Where the request refers to files or data you do not have, create small realistic sample inputs and carry on.)';
 const out = join(dir, `invoke-${agent}-${mode}.jsonl`);
