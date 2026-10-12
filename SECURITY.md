@@ -91,7 +91,7 @@ are inherited from the temp directory.
 
 ## Reporting
 
-[Private vulnerability reporting](https://github.com/erik-hedstrom/loadout/security/advisories/new)
-opens when the repository becomes public. Until then, report to the maintainer directly.
-Include the affected version, reproduction steps and impact, with credentials
-removed. Do not report vulnerabilities in public issues.
+Report vulnerabilities through
+[private vulnerability reporting](https://github.com/erik-hedstrom/loadout/security/advisories/new),
+not in public issues. Include the affected version, reproduction steps and
+impact, with credentials removed.

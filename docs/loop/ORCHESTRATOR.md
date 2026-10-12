@@ -85,7 +85,9 @@ when his local Claude usage runs out.
     public.
 - **`pr-reviewer` APPROVE.**
 - **Codex review** of the final head, with no open High or Medium finding,
-  from Sol through the companion or from Codex on GitHub.
+  from Sol through the companion or from Codex on GitHub. A declined finding
+  stays open until the reviewer accepts the reason on re-review, or Erik
+  overrides it.
 - **Acceptance criteria met**, with the backlog row updated in the PR.
 
 Squash-merge with `--delete-branch`, one PR at a time. After each merge, wait
@@ -200,12 +202,14 @@ and a fresh Sol adversarial-review, then run the merge gate in ORCHESTRATOR.md. 
 open PRs from cloud sessions through the same gate.
 
 Use these skills (Skill tool) at these points:
-- codex:gpt-5-4-prompting: before writing each Sol brief.
+- codex:gpt-5-4-prompting: before writing each Sol brief. It is the Codex plugin's
+  guide to prompts sent through the companion; it names GPT-5.4 but applies to Sol.
 - superpowers:using-git-worktrees: when starting an item. Worktrees go under
   dev/sandbox/loadout-wt/<item>.
 - superpowers:receiving-code-review: when pr-reviewer or Sol findings come back.
   Check each finding against the code, then fix it or decline it with a reason in
-  the PR.
+  the PR. A declined High or Medium stays open until its reviewer accepts the reason
+  on re-review, or Erik overrides it.
 - superpowers:systematic-debugging: on any failing test or CI job, before a fix.
 - superpowers:verification-before-completion: before you call a PR ready, merge it,
   or write the iteration log row.
@@ -252,7 +256,7 @@ verification-before-completion before you call a PR ready.
 
 The repo is public: every push, PR and comment is public at once. The rules in
 AGENTS.md apply in full. Never print or commit secrets, edit the user's agent configs,
-publish, or post.
+change repo settings, publish, or post.
 ```
 
 ### Sol brief (a file in the scratchpad)
