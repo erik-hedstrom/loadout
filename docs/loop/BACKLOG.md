@@ -18,9 +18,10 @@ The orchestrator keeps this file current. Statuses: `todo`, `in progress (PR #)`
 
 New router tuning only happens on new held-out requests (C1).
 
-In-host first (Erik, 2026-10-07): loadout works inside Claude Code, in the
-CLI and the desktop app, through a plugin and its prompt hook (D10). The
-launcher is for power users and benchmarks.
+In-host first (Erik, 2026-10-07): loadout runs inside Claude Code, in the
+CLI and the desktop app, through a plugin and its prompt hook (D10). Shown
+for the CLI only so far ([docs/hosts.md](../hosts.md)). The launcher is for
+power users and benchmarks.
 
 ## A. Adoption and ease of use
 
@@ -312,9 +313,9 @@ Acceptance: a third row in that RESULTS table, with raw results. The README's
 | D3 | P1 | Desktop and IDE hosts end to end | Claude | local | todo |
 | D5 | P2 | Isolation mode | Codex | cloud | todo |
 | D4 | P2 | Gateway: native tools via `tools/list_changed` | Codex | cloud | todo |
-| D6 | P2 | HTTP: cancellation reaches Jev | Claude | cloud | review ([#19](https://github.com/erik-hedstrom/loadout/pull/19)) |
-| D8 | P1 | Host capability matrix (verified vs generated) | Codex | cloud | todo |
-| D9 | P1 | Codex parity: neutral session skill dir, tier presets | Claude | cloud | review ([#21](https://github.com/erik-hedstrom/loadout/pull/21)) |
+| D6 | P2 | HTTP: cancellation reaches Jev | Claude | cloud | done ([#19](https://github.com/erik-hedstrom/loadout/pull/19)) |
+| D8 | P1 | Host capability matrix (verified vs generated) | Claude | cloud | done ([#18](https://github.com/erik-hedstrom/loadout/pull/18)) |
+| D9 | P1 | Codex parity: neutral session skill dir, tier presets | Claude | cloud | done ([#21](https://github.com/erik-hedstrom/loadout/pull/21)); Codex launch not re-run live |
 
 **D10. In-host first: loadout as a Claude Code plugin.**
 
@@ -460,9 +461,16 @@ and ChatGPT skills-only HTTP search. A non-Claude user notices.
 
 Acceptance:
 - `docs/hosts.md`: one table, hosts × {launch, tier, hook, search, gateway},
-  each cell "verified" (with the date and how), "generated, untested" or
-  "not supported".
+  each cell "verified" (with the date and how), "untested" (implemented,
+  not run in that host) or "not supported".
 - README and `setup` output claim no more than the table.
+
+Learnings (2026-10-09): every "verified" cell traces to a RESULTS section.
+Tier stays untested: no recorded run shows a tier choice reaching the agent.
+The README and `setup` output already claimed no more than the table, so
+they only gained a link; HANDOFF's untested-hosts note now points to it.
+Gateway is untested in every host: only the unit tests' canary server has
+exercised it.
 
 **D9. Codex parity.**
 

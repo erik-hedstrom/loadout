@@ -184,6 +184,8 @@ everything else, `loadout setup <host>` prints the config for this machine:
 | OpenCode | `loadout setup opencode` |
 | ChatGPT chat (developer mode) | `loadout mcp --http` behind an HTTPS tunnel (see below) |
 
+Which of these have been checked in a real session: [docs/hosts.md](docs/hosts.md).
+
 ChatGPT only connects to remote HTTPS MCP servers. `loadout mcp --http`
 serves the same search on `http://127.0.0.1:8787/mcp`:
 - it serves skills only, never the MCP gateway, so a remote client cannot
