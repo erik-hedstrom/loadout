@@ -10,6 +10,8 @@
  *   hook    (Claude) nothing preloaded; `loadout hook claude` routes the prompt
  *           and the loadout MCP server is attached, as after `loadout setup
  *           claude-code`: does the agent open what the hook suggests?
+ *   plugin  (Claude) the shipped hook-only plugin; nothing preloaded and no
+ *           MCP server: does the agent open what the hook suggests?
  *
  * Each run is capped (Claude --max-turns, a timeout), since only the agent's
  * first moves matter here. It starts in an empty folder where the agent may
@@ -18,12 +20,12 @@
  * agent to make up small sample inputs; otherwise it stops to ask before
  * reaching the point where it would open a skill.
  *
- *   npx tsx bench/invoke.ts <sweep dir> --agent claude|codex --mode routed|search --ids a,b,c [--max-turns 6]
+ *   npx tsx bench/invoke.ts <sweep dir> --agent claude|codex --mode routed|search|hook|plugin --ids a,b,c [--max-turns 6]
  */
 import { execFileSync } from 'node:child_process';
-import { appendFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, join } from 'node:path';
+import { basename, delimiter, join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { loadConfig, paths } from '../src/config.js';
 import { claudeArgs, claudeHookSettings, codexArgs, materialize, pathTranslator, which, type Agent } from '../src/launch.js';
@@ -43,20 +45,38 @@ const { values, positionals } = parseArgs({
   },
 });
 const dir = positionals[0];
-if (!dir || !values.ids) throw new Error('usage: invoke.ts <sweep dir> --agent claude|codex --mode routed|search --ids a,b');
+if (!dir || !values.ids) throw new Error('usage: invoke.ts <sweep dir> --agent claude|codex --mode routed|search|hook|plugin --ids a,b');
 const agent = values.agent as Agent;
-const mode = values.mode as 'routed' | 'search' | 'hook';
-if (mode === 'hook' && agent !== 'claude') throw new Error('hook mode is Claude Code only');
+const mode = values.mode as 'routed' | 'search' | 'hook' | 'plugin';
+if ((mode === 'hook' || mode === 'plugin') && agent !== 'claude') throw new Error(`${mode} mode is Claude Code only`);
 const rows = new Map(readJsonl<SweepRow>(join(dir, 'decisions.jsonl')).map((r) => [r.id, r]));
 const library = scanLibrary(paths.library());
 const byKey = new Map(library.map((c) => [capabilityKey(c), c]));
-const config = { ...loadConfig(), search: true };
+const config = { ...loadConfig(), search: mode !== 'plugin' };
 const bin = which(agent);
 if (!bin) throw new Error(`${agent} not on PATH`);
 const toPath = pathTranslator(bin);
 const sessions = mkdtempSync(join(tmpdir(), 'loadout-invoke-'));
 // A Windows agent under WSL needs its working folder on the Windows side (its shell cannot use \\wsl.localhost paths).
 const workRoot = toPath('/') !== '/' ? execFileSync('wslpath', ['-u', execFileSync('cmd.exe', ['/c', 'echo %TEMP%'], { encoding: 'utf8' }).trim()], { encoding: 'utf8' }).trim() : tmpdir();
+const repo = join(import.meta.dirname, '..');
+let shimDir: string | undefined;
+let childEnv: NodeJS.ProcessEnv | undefined;
+if (mode === 'plugin') {
+  const entry = join(repo, 'dist', 'cli.js');
+  if (!existsSync(entry)) throw new Error('plugin mode needs this checkout built: npm run build');
+  const windowsAgent = toPath('/') !== '/';
+  const cli = [process.execPath, entry].map((p) => process.platform === 'win32' ? p.replace(/\\/g, '/') : p);
+  const command = windowsAgent
+    ? ['wsl.exe', ...(process.env.WSL_DISTRO_NAME ? ['-d', process.env.WSL_DISTRO_NAME] : []), '--exec', ...(process.env.LOADOUT_HOME ? ['/usr/bin/env', `LOADOUT_HOME=${process.env.LOADOUT_HOME}`] : []), ...cli]
+    : cli;
+  const quote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
+  shimDir = mkdtempSync(join(workRoot, 'loadout-bin-'));
+  writeFileSync(join(shimDir, 'loadout'), `#!/bin/sh\n${windowsAgent ? 'export MSYS_NO_PATHCONV=1\n' : ''}exec ${command.map(quote).join(' ')} "$@"${windowsAgent ? " '--windows-paths'" : ''}\n`, { mode: 0o700 });
+  childEnv = { ...process.env, PATH: `${shimDir}${delimiter}${process.env.PATH ?? ''}` };
+  // WSL must translate the shim's PATH entry for the Windows child to find it.
+  if (windowsAgent) childEnv.WSLENV = [...(process.env.WSLENV ?? '').split(':').filter((s) => s && !/^PATH(?:\/.*)?$/.test(s)), 'PATH/l'].join(':');
+}
 const NOTE = '\n\n(Test run: nothing is attached and the folder is empty. Where the request refers to files or data you do not have, create small realistic sample inputs and carry on.)';
 const out = join(dir, `invoke-${agent}-${mode}.jsonl`);
 
@@ -101,8 +121,8 @@ for (const id of values.ids.split(',')) {
   const decision = decisionFor(row, library, mode !== 'routed');
   const session = materialize(decision, agent, config, sessions, toPath);
   if (values.model) session.model = values.model;
-  // As installed by `loadout setup claude-code`: no launcher note, just the hook and the MCP server.
-  if (mode === 'hook') session.relevance = undefined;
+  if (mode === 'hook' || mode === 'plugin') session.relevance = undefined;
+  if (mode === 'plugin') session.pluginDir = join(repo, 'plugins', 'loadout');
   const hookArgs = mode === 'hook' ? ['--settings', JSON.stringify(claudeHookSettings(toPath('/') !== '/'))] : [];
   const cwd = mkdtempSync(join(workRoot, 'loadout-work-'));
   const task = row.request + NOTE;
@@ -111,7 +131,7 @@ for (const id of values.ids.split(',')) {
       ? claudeArgs(session, task, ['--output-format', 'stream-json', '--verbose', '--max-turns', values['max-turns']!, '--strict-mcp-config', '--permission-mode', 'acceptEdits', ...hookArgs], { headless: true, toPath })
       : codexArgs(session, task, ['--json', '-s', 'workspace-write', '--skip-git-repo-check'], { headless: true });
   const started = Date.now();
-  const proc = await run(bin, args, cwd, Number(values['timeout-s']) * 1000);
+  const proc = await run(bin, args, cwd, Number(values['timeout-s']) * 1000, childEnv);
   const { events, costUsd } = toolEvents(proc.stdout);
 
   // Which library skills did the agent actually open?
@@ -160,3 +180,4 @@ for (const id of values.ids.split(',')) {
   }
 }
 rmSync(sessions, { recursive: true, force: true });
+if (shimDir) rmSync(shimDir, { recursive: true, force: true });

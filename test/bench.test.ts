@@ -1,6 +1,6 @@
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { delimiter, join } from 'node:path';
 import { execFileSync, spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
@@ -33,6 +33,103 @@ function disputedFixture() {
 }
 
 describe('benchmark backends', () => {
+  it.each([false, true])('runs the shipped plugin with only this build on the child PATH (Windows agent under WSL: %s)', async (windowsAgent) => {
+    const dir = join(temp(), "sweep ' $value"), binDir = temp();
+    mkdirSync(dir);
+    const repo = join(import.meta.dirname, '..');
+    const parentPath = process.env.PATH;
+    const fakePath = [binDir, 'installed-loadout'].join(delimiter);
+    writeFileSync(join(binDir, 'claude'), '', { mode: 0o755 });
+    const skill = join(dir, 'library', 'skills', 'skill-a');
+    mkdirSync(skill, { recursive: true });
+    writeFileSync(join(skill, 'SKILL.md'), '---\nname: skill-a\ndescription: Fits\n---\n');
+    writeFileSync(join(dir, 'decisions.jsonl'), ['a', 'b'].map((id) => JSON.stringify({ id, request: `Request ${id}`, tier: 'medium', loaded: [{ key: 'skill-a', fit: 1, inject: 'clear' }], offered: [], shortlist: [] })).join('\n') + '\n');
+    vi.stubEnv('LOADOUT_HOME', dir);
+    vi.stubEnv('PATH', fakePath);
+    vi.stubEnv('WSL_DISTRO_NAME', 'bench-distro');
+    vi.stubEnv('WSLENV', 'KEEP/p:PATH/up');
+    const translate = (p: string) => windowsAgent ? `C:\\translated${p.replace(/\\/g, '/')}` : p;
+    vi.doMock('../src/launch.js', async (original) => ({ ...await original<typeof import('../src/launch.js')>(), pathTranslator: () => translate }));
+    vi.mocked(execFileSync).mockImplementation((command) => {
+      if (command === 'cmd.exe') return 'C:\\Temp\n';
+      if (command === 'wslpath') return tmpdir() + '\n';
+      throw new Error(`unexpected command ${command}`);
+    });
+    const calls: { args: string[]; env: NodeJS.ProcessEnv; shim: string }[] = [];
+    vi.mocked(spawn).mockImplementation((_command, argv, options) => {
+      const env = options!.env!;
+      const shimDir = env.PATH!.split(delimiter)[0]!;
+      calls.push({ args: argv as string[], env, shim: readFileSync(join(shimDir, 'loadout'), 'utf8') });
+      const child = new EventEmitter() as ChildProcess;
+      child.stdout = new PassThrough(); child.stderr = new PassThrough();
+      queueMicrotask(() => {
+        child.stdout!.emit('data', Buffer.from([
+          { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Read', id: 'read-a', input: { file_path: '/library/skills/skill-a/SKILL.md' } }] } },
+          { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'read-a' }] } },
+          { type: 'result', total_cost_usd: 0 },
+        ].map((e) => JSON.stringify(e)).join('\n')));
+        child.emit('close', 0);
+      });
+      return child;
+    });
+    const argv = process.argv;
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      process.argv = [process.execPath, 'bench/invoke.ts', dir, '--agent', 'claude', '--mode', 'plugin', '--ids', 'a,b'];
+      vi.resetModules();
+      await import('../bench/invoke.js');
+      expect(calls).toHaveLength(2);
+      for (const [i, call] of calls.entries()) {
+        expect(call.args).toEqual(['-p', `Request ${i ? 'b' : 'a'}\n\n(Test run: nothing is attached and the folder is empty. Where the request refers to files or data you do not have, create small realistic sample inputs and carry on.)`, '--model', 'sonnet', '--plugin-dir', translate(join(repo, 'plugins', 'loadout')), '--output-format', 'stream-json', '--verbose', '--max-turns', '6', '--strict-mcp-config', '--permission-mode', 'acceptEdits']);
+        expect(call.env.PATH!.slice(call.env.PATH!.indexOf(delimiter))).toBe(delimiter + fakePath);
+        expect(call.env.LOADOUT_HOME).toBe(dir);
+        expect(call.shim).toContain(join(repo, 'dist', 'cli.js').replace(/\\/g, '/'));
+        expect(call.shim).not.toContain('src/cli.ts');
+        expect(call.shim).toContain('"$@"');
+        if (windowsAgent) {
+          expect(call.shim).toContain("'wsl.exe' '-d' 'bench-distro' '--exec'");
+          expect(call.shim).toContain('"$@" \'--windows-paths\'\n');
+          expect(call.shim).toContain('MSYS_NO_PATHCONV=1');
+          expect(call.shim).toContain(String.raw`sweep '\'' $value'`);
+          expect(call.env.WSLENV).toBe('KEEP/p:PATH/l');
+        } else {
+          expect(call.shim).toContain(process.execPath.replace(/\\/g, '/'));
+          expect(call.shim).not.toContain('wsl.exe');
+        }
+      }
+      const rows = readFileSync(join(dir, 'invoke-claude-plugin.jsonl'), 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+      expect(rows.map((row) => row.id)).toEqual(['a', 'b']);
+      for (const row of rows) {
+        expect(row).toMatchObject({ agent: 'claude', mode: 'plugin', model: 'sonnet', loaded: [], injected: [], offered: [], invoked: ['skill-a'], searches: [], tools: ['Read'], exit: 0, timedOut: false, costUsd: 0 });
+        expect(row.ms).toBeGreaterThanOrEqual(0);
+      }
+      expect(process.env.PATH).toBe(fakePath);
+    } finally {
+      process.argv = argv;
+      log.mockRestore();
+      vi.doUnmock('../src/launch.js');
+      vi.unstubAllEnvs();
+      vi.mocked(spawn).mockReset();
+      vi.mocked(execFileSync).mockReset();
+      vi.resetModules();
+    }
+    expect(process.env.PATH).toBe(parentPath);
+  });
+
+  it('rejects plugin mode for Codex before starting an agent', async () => {
+    const argv = process.argv;
+    vi.mocked(spawn).mockClear();
+    try {
+      process.argv = [process.execPath, 'bench/invoke.ts', temp(), '--agent', 'codex', '--mode', 'plugin', '--ids', 'a'];
+      vi.resetModules();
+      await expect(import('../bench/invoke.js')).rejects.toThrow('plugin mode is Claude Code only');
+      expect(spawn).not.toHaveBeenCalled();
+    } finally {
+      process.argv = argv;
+      vi.resetModules();
+    }
+  });
+
   it('generates 300 seeds through pending files and resumes with IDs and provenance', () => {
     const dir = temp(), out = join(dir, 'seeds-c1.jsonl');
     const pending = runSeeds(dir, ['--effort', 'high']);
