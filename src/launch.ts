@@ -360,7 +360,7 @@ export const windowsPath = (p: string) => execFileSync('wslpath', ['-w', p], { e
 export interface LaunchOptions {
   /** Run once and exit (`claude -p`, `codex exec`) instead of an interactive session. */
   headless?: boolean;
-  /** Hide the user's own MCP servers (and Codex config) for this session. */
+  /** Codex only: skip the user's config.toml. Claude isolation comes from `materialize(..., isolate)`. */
   isolate?: boolean;
   toPath?: (p: string) => string;
 }

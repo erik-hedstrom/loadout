@@ -164,13 +164,14 @@ adding official flags to the agent's command line only. It writes nothing to
 
 - Claude Code: `--strict-mcp-config` (loadout's own servers still load) and
   `--settings <file>` with `disableClaudeAiConnectors` for the claude.ai
-  connectors, written to the session folder. Both are in the [CLI reference](https://code.claude.com/docs/en/cli-reference)
-  and [settings reference](https://code.claude.com/docs/en/settings-reference#disableclaudeaiconnectors).
+  connectors, written to the session folder. Both are in the
+  [CLI reference](https://code.claude.com/docs/en/cli-reference) and
+  [settings reference](https://code.claude.com/docs/en/settings-reference#disableclaudeaiconnectors).
+  `--isolate` refuses a `--settings` or `--mcp-config` of your own after `--`.
 - Codex: `codex exec --ignore-user-config` skips `$CODEX_HOME/config.toml`
   (auth still uses `CODEX_HOME`). Only `exec` defines the flag
   ([source](https://github.com/openai/codex/blob/main/codex-rs/exec/src/cli.rs)),
   so `loadout codex --isolate` requires `--headless` and refuses otherwise.
-  `--isolate` also refuses a `--settings` of your own after `--`.
 
 Not hidden:
 

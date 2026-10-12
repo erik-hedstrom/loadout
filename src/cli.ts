@@ -267,7 +267,9 @@ async function main(): Promise<number> {
       if (!task) fail(`${agent} needs a task`);
       // Refused before routing: that is a paid Jev call, and a session dir would be left behind.
       if (values.isolate && agent === 'codex' && !values.headless) fail('--isolate for codex needs --headless: interactive Codex has no flag to skip the user config');
-      if (values.isolate && passthrough.some((a) => a === '--settings' || a.startsWith('--settings='))) fail('--isolate sets --settings itself; drop --settings from the arguments after --');
+      // A passthrough --mcp-config adds servers that --strict-mcp-config keeps, and a second --settings replaces ours.
+      const passed = (flag: string) => passthrough.some((a) => a === flag || a.startsWith(`${flag}=`));
+      if (values.isolate && (passed('--settings') || passed('--mcp-config'))) fail('--isolate sets --settings and --mcp-config itself; drop them from the arguments after --');
 
       const bin = which(agent);
       const toPath = pathTranslator(bin);

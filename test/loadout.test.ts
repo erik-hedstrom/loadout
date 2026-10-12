@@ -914,10 +914,10 @@ describe('launch', () => {
     expect(codex.result.stderr).toBe('loadout: --isolate for codex needs --headless: interactive Codex has no flag to skip the user config\n');
     expect(codex.sessions).toBe(false);
 
-    for (const settings of [['--settings', '{}'], ['--settings={}']]) {
-      const claude = run('claude', '--isolate', '--dry-run', '--lexical', TASK, '--', ...settings);
+    for (const own of [['--settings', '{}'], ['--settings={}'], ['--mcp-config', 'user.json'], ['--mcp-config=user.json']]) {
+      const claude = run('claude', '--isolate', '--dry-run', '--lexical', TASK, '--', ...own);
       expect(claude.result.status).not.toBe(0);
-      expect(claude.result.stderr).toBe('loadout: --isolate sets --settings itself; drop --settings from the arguments after --\n');
+      expect(claude.result.stderr).toBe('loadout: --isolate sets --settings and --mcp-config itself; drop them from the arguments after --\n');
       expect(claude.sessions).toBe(false);
     }
   });
