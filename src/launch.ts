@@ -35,6 +35,8 @@ export interface Session {
   pluginDir?: string;
   /** Generated MCP config in Claude Code's `--mcp-config` format. */
   mcpConfig?: string;
+  /** Isolation settings for `--settings` (Claude only). A file, not inline JSON, so no shell or Windows quoting touches it. */
+  settings?: string;
   /** `loadout mcp` for this agent, when mid-session search is on. */
   search?: McpServerConfig;
 }
@@ -153,6 +155,7 @@ export function materialize(
   config: Config,
   sessionsDir: string,
   toPath: (p: string) => string = (p) => p,
+  isolate = false,
 ): Session {
   const id = `${new Date().toISOString().replace(/[:.]/g, '-')}-${Math.random().toString(36).slice(2, 6)}`;
   const dir = join(sessionsDir, id);
@@ -217,6 +220,12 @@ export function materialize(
       ...(search ? [[SEARCH_SERVER, search]] : []),
     ]);
     writeFileSync(session.mcpConfig, JSON.stringify({ mcpServers }, null, 2), { mode: 0o600 });
+  }
+
+  if (agent === 'claude' && isolate) {
+    // `--strict-mcp-config` is not documented to drop the claude.ai connectors the CLI fetches itself; this setting does.
+    session.settings = join(dir, 'settings.json');
+    writeFileSync(session.settings, JSON.stringify({ disableClaudeAiConnectors: true }), { mode: 0o600 });
   }
 
   return session;
@@ -374,8 +383,7 @@ export function claudeArgs(session: Session, task: string, extra: string[], opts
   ];
   if (trusted.length) args.push('--allowedTools', ...trusted);
   if (session.mcpConfig) args.push('--mcp-config', toPath(session.mcpConfig));
-  // The connectors are fetched by the CLI itself, so `--strict-mcp-config` alone is not documented to drop them.
-  if (opts.isolate) args.push('--strict-mcp-config', '--settings', '{"disableClaudeAiConnectors":true}');
+  if (session.settings) args.push('--strict-mcp-config', '--settings', toPath(session.settings));
   return args;
 }
 
@@ -420,8 +428,6 @@ export function codexPrompt(session: Session, task: string): string {
 }
 
 export function codexArgs(session: Session, task: string, extra: string[], opts: LaunchOptions = {}): string[] {
-  // Only `codex exec` defines --ignore-user-config; the interactive CLI has no flag that skips config.toml.
-  if (opts.isolate && !opts.headless) throw new Error('--isolate for codex needs --headless: interactive Codex has no flag to skip the user config');
   const args = [...(opts.headless ? ['exec'] : []), ...(opts.isolate ? ['--ignore-user-config'] : []), '-m', session.model];
   if (session.effort) args.push('-c', `model_reasoning_effort=${toToml(session.effort)}`);
   const used = new Set<string>();

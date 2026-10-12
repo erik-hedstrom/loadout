@@ -265,11 +265,14 @@ async function main(): Promise<number> {
       });
       const task = positionals.join(' ').trim();
       if (!task) fail(`${agent} needs a task`);
+      // Refused before routing: that is a paid Jev call, and a session dir would be left behind.
+      if (values.isolate && agent === 'codex' && !values.headless) fail('--isolate for codex needs --headless: interactive Codex has no flag to skip the user config');
+      if (values.isolate && passthrough.some((a) => a === '--settings' || a.startsWith('--settings='))) fail('--isolate sets --settings itself; drop --settings from the arguments after --');
 
       const bin = which(agent);
       const toPath = pathTranslator(bin);
       const decision = await decide(task, config, Boolean(values.lexical));
-      const session = materialize(decision, agent, config, paths.sessions(), toPath);
+      const session = materialize(decision, agent, config, paths.sessions(), toPath, Boolean(values.isolate));
       console.error(explain(decision, session.effort ? `${session.model} (${session.effort})` : session.model));
       console.error(`session: ${session.dir}`);
 

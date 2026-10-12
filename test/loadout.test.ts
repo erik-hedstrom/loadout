@@ -880,23 +880,46 @@ describe('launch', () => {
   });
 
   it('adds the isolation flags only with --isolate, and only the ones each host documents', () => {
-    const claude = materialize(decision, 'claude', DEFAULT_CONFIG, tempDir('loadout-s-'));
-    const plain = claudeArgs(claude, TASK, []);
-    expect(plain).not.toContain('--strict-mcp-config');
-    expect(plain).not.toContain('--settings');
-    const isolated = claudeArgs(claude, TASK, ['--permission-mode', 'plan'], { isolate: true });
-    expect(isolated.slice(-3)).toEqual(['--strict-mcp-config', '--settings', '{"disableClaudeAiConnectors":true}']);
+    const plain = materialize(decision, 'claude', DEFAULT_CONFIG, tempDir('loadout-s-'));
+    expect(plain.settings).toBeUndefined();
+    expect(claudeArgs(plain, TASK, [])).not.toContain('--strict-mcp-config');
+
+    const claude = materialize(decision, 'claude', DEFAULT_CONFIG, tempDir('loadout-s-'), (p) => p, true);
+    const isolated = claudeArgs(claude, TASK, ['--permission-mode', 'plan']);
+    expect(isolated.slice(-3)).toEqual(['--strict-mcp-config', '--settings', claude.settings]);
+    expect(JSON.parse(readFileSync(claude.settings!, 'utf8'))).toEqual({ disableClaudeAiConnectors: true });
     // loadout's own servers still load; the flag only drops the others.
     expect(isolated).toContain('--mcp-config');
     expect(isolated).toContain('--plugin-dir');
     expect(isolated).toContain('--permission-mode');
+    // The settings path goes through the WSL translation like the other paths.
+    expect(claudeArgs(claude, TASK, [], { toPath: (p) => `W:${p}` }).at(-1)).toBe(`W:${claude.settings}`);
 
-    const codex = materialize(decision, 'codex', NO_SEARCH, tempDir('loadout-s-'));
+    const codex = materialize(decision, 'codex', NO_SEARCH, tempDir('loadout-s-'), (p) => p, true);
+    expect(codex.settings).toBeUndefined();
     expect(codexArgs(codex, TASK, [], { headless: true })).not.toContain('--ignore-user-config');
     expect(codexArgs(codex, TASK, [], { headless: true, isolate: true }).slice(0, 4)).toEqual(['exec', '--ignore-user-config', '-m', 'gpt-6.1-sol']);
     expect(codexArgs(codex, TASK, [], { headless: true, isolate: true }).some((a) => a.startsWith('mcp_servers.postgres='))).toBe(true);
-    // Interactive Codex has no such flag: refuse rather than launch without isolation.
-    expect(() => codexArgs(codex, TASK, [], { isolate: true })).toThrow(/needs --headless/);
+  });
+
+  it('refuses unsupported --isolate launches before routing or writing a session', () => {
+    const cli = join(import.meta.dirname, '..', 'src', 'cli.ts');
+    const run = (...args: string[]) => {
+      const home = tempDir('loadout-iso-');
+      const result = spawnSync(process.execPath, ['--import', import.meta.resolve('tsx'), cli, ...args], { env: { ...process.env, LOADOUT_HOME: home }, encoding: 'utf8', timeout: 20_000 });
+      return { result, sessions: existsSync(join(home, 'sessions')) };
+    };
+    const codex = run('codex', '--isolate', '--dry-run', '--lexical', TASK);
+    expect(codex.result.status).not.toBe(0);
+    expect(codex.result.stderr).toBe('loadout: --isolate for codex needs --headless: interactive Codex has no flag to skip the user config\n');
+    expect(codex.sessions).toBe(false);
+
+    for (const settings of [['--settings', '{}'], ['--settings={}']]) {
+      const claude = run('claude', '--isolate', '--dry-run', '--lexical', TASK, '--', ...settings);
+      expect(claude.result.status).not.toBe(0);
+      expect(claude.result.stderr).toBe('loadout: --isolate sets --settings itself; drop --settings from the arguments after --\n');
+      expect(claude.sessions).toBe(false);
+    }
   });
 
   it('keeps Codex MCP keys unique and connects HTTP servers through library keys', () => {
