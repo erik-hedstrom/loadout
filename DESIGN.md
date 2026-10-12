@@ -26,28 +26,43 @@ arbitrarily large. The agent still makes the final call from the shortlist.
 
 ## Architecture
 
+```mermaid
+flowchart TB
+    subgraph host["Host integration"]
+        CH["Claude Code plugin<br/>loadout hook claude"]
+        XH["Codex plugin<br/>loadout hook codex"]
+        MS["Search server<br/>loadout mcp"]
+        LA["Launcher<br/>loadout claude / codex"]
+    end
+
+    subgraph routing["Routing: route() in src/route.ts"]
+        LIB[("Library<br/>scanLibrary")]
+        RET["Retrieve: BM25 + embeddings<br/>top 200 candidates"]
+        JEV["Jev SystemOneClient<br/>wide request, then close request"]
+        DEC["decide()<br/>load, offer, inject or stay quiet"]
+        LEX["Lexical fallback<br/>BM25 score only"]
+        MEN["Named skills override"]
+        LIB --> RET
+        RET --> JEV
+        RET -->|"no key, --lexical, or Jev fails"| LEX
+        JEV --> DEC
+        DEC --> MEN
+        LEX --> MEN
+    end
+
+    subgraph out["Output"]
+        CTX["Context injection<br/>skill_relevance block and SKILL.md in the user turn"]
+        SKL["Skill loading<br/>generated plugin and mcp.json, or load_skill"]
+        TIER["Model tier, launcher only<br/>--model or -m"]
+    end
+
+    host -->|"task + repo signals"| routing
+    MEN --> CTX
+    MEN --> SKL
+    MEN --> TIER
 ```
-            ┌──────────────── library (~/.loadout/library) ────────────────┐
-            │ skills/<name>/SKILL.md      mcp.json (+ description per server) │
-            └───────────────────────────────┬───────────────────────────────┘
-                                            │ scan
- task + repo signals ──► [1] retrieve (BM25 + embeddings, local) ──► 200 candidates
-                                            │
-                         [2] Jev wide:  choice over 200 + "no skill needed"
-                                        2 nouls → need score · model tier
-                                            │ top 8
-                         [3] Jev close: graded fit score per candidate
-                                        choice among the 8 + "no skill needed"
-                                            │
-                         [4] decide (code): load ≤ 3 · offer fit ≥ 0.7 · or stay quiet
-                                            │
-            ┌───────────────────────────────┴────────────────────────────┐
-     Claude Code launcher                                     Codex launcher
-     --model <alias>                                          -m <model>
-     --plugin-dir <generated plugin with chosen skills>       -c mcp_servers.<n>.…
-     --mcp-config <generated mcp.json>                        skills + relevance note in the prompt
-     --append-system-prompt <relevance note>
-```
+
+Every host path calls the same `route()`; the sections below cover each stage.
 
 ### Integration layers
 
