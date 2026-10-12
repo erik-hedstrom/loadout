@@ -177,7 +177,7 @@ cross-vendor agents). Erik publishes.
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
 | C1 | P0 | New held-out request set + re-measure v4 | Codex (seeds, expand) + Claude (judge) | local | done ([#16](https://github.com/erik-hedstrom/loadout/pull/16)): precision falls on new requests (64% vs 82%); judged through local `claude -p`, not the API (see Learnings) |
-| C2 | P1 | Outcome eval on the small tier with fixed fixtures | Claude (design) | cloud (fixtures) + local (runs) | todo |
+| C2 | P1 | Outcome eval on the small tier with fixed fixtures | Claude (design) | cloud (fixtures) + local (runs) | in progress (fixtures: PR pending; runs: local) |
 | C3 | P2 | Does Jev pick a sensible model tier? | Claude | cloud | todo (launcher only: the hook and search keep the user's model) |
 | C4 | P0 | Demote generic "fits everything" skills | Codex | cloud | todo (next: C1 shows over-loading on general business requests) |
 | C5 | P2 | Retrieval beyond 200 candidates (Jev tournament) | Codex | cloud | todo |
@@ -227,6 +227,23 @@ Acceptance:
   - large tier bare.
 - Blind pairwise judging in both orders, longer caps (15 min).
 - Report win rates with intervals, plus cost per task.
+
+Learnings (cloud half; [fixtures and protocol](../../bench/fixtures/c2/PROTOCOL.md)):
+- 18 tasks (4 controls) with committed inputs in `bench/fixtures/c2/`, written
+  without reading the library, so the tasks do not follow its skills. A
+  committed script generates the docx, xlsx, pptx and pdf inputs.
+- Several tasks carry a planted trap (a total that does not add up, a
+  duplicated customer, a rent table the edit must also change); `KEY.md` lists
+  them for the judge only.
+- Claude wrote the tasks and runs all arms, so the judge is Codex. Leakage of
+  a skill's template is reduced by showing the judge only the final message and
+  files, redacting skill names, and recording the judge's guess of the arm; the
+  rest stays a stated limit.
+- Not done, local: the runner, the text extraction for office files, the judge
+  script, and the runs. At n = 18 per comparison only large differences show.
+- Open for Erik: shell permissions for the runs, and Sonnet 5.5 or Opus as the
+  large tier. Spend estimate is about $45 notional Claude cost (range $20-90),
+  an estimate until a smoke run measures it.
 
 **C3. Tier choice.**
 

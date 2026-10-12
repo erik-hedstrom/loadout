@@ -1,0 +1,20 @@
+[
+  { "id": "docx-lease-amendment", "area": "documents", "control": false },
+  { "id": "xlsx-budget-cleanup", "area": "documents", "control": false },
+  { "id": "pdf-invoice-extract", "area": "documents", "control": false },
+  { "id": "pptx-board-deck", "area": "documents", "control": false },
+  { "id": "docx-minutes", "area": "documents", "control": false },
+  { "id": "web-pricing-fix", "area": "web", "control": false },
+  { "id": "web-landing-new", "area": "web", "control": false },
+  { "id": "web-signup-form", "area": "web", "control": false },
+  { "id": "data-sales-clean", "area": "data", "control": false },
+  { "id": "data-ab-test", "area": "data", "control": false },
+  { "id": "data-orders-sqlite", "area": "data", "control": false },
+  { "id": "devops-ci-slow", "area": "devops", "control": false },
+  { "id": "devops-compose-debug", "area": "devops", "control": false },
+  { "id": "code-logsum-flags", "area": "coding", "control": false },
+  { "id": "ctl-ratelimiter-bug", "area": "coding", "control": true },
+  { "id": "ctl-interval-merge", "area": "coding", "control": true },
+  { "id": "ctl-merge-conflict", "area": "coding", "control": true },
+  { "id": "ctl-customer-reply", "area": "writing", "control": true }
+]

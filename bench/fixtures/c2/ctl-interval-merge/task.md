@@ -1,0 +1,1 @@
+Implement merge_bookings in bookings.py, as described in its docstring. Back-to-back bookings (one ends exactly when the next starts) should be merged too. Don't mutate the list that's passed in. Add tests I can run with `python3 -m unittest`, including the awkward cases.
