@@ -281,7 +281,7 @@ export function hostSetup(host: Host, windows: boolean): { where: string; snippe
       };
     case 'codex':
       if (!windows) return {
-        where: 'Codex CLI (verified with 0.160.1): run once; requires loadout on PATH and Node 22.12+; after installing, run /hooks in Codex to trust the hook; desktop and T3 Code plugin support: not yet tested',
+        where: 'Codex CLI: install checked offline with 0.160.1; live hook untested (D2); requires loadout on PATH and Node 22.12+; after installing, run /hooks in Codex to trust the hook; desktop and T3 Code plugin support: not yet tested',
         snippet: [
           '# Privacy: the hook runs in every project (user scope). It sends each routed prompt, with the repository\'s top-level file names and dependency names, to TypeSafe\'s Jev API. Setting "router": "lexical" in loadout\'s config keeps prompts local.',
           'codex plugin marketplace add erik-hedstrom/loadout',

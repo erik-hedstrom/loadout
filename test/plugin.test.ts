@@ -16,7 +16,7 @@ describe('Claude Code plugin', () => {
   it('ships a hook-only marketplace plugin', () => {
     const marketplace = JSON.parse(readFileSync(join(ROOT, '.claude-plugin/marketplace.json'), 'utf8'));
     expect(marketplace.name).toBe('loadout');
-    expect(marketplace.plugins).toHaveLength(2);
+    expect(marketplace.plugins).toEqual([{ name: 'loadout', source: './plugins/loadout' }]);
     const entry = marketplace.plugins[0];
     expect(entry.name).toBe('loadout');
     expect(entry.source).toBe('./plugins/loadout');
@@ -30,11 +30,14 @@ describe('Claude Code plugin', () => {
 });
 
 describe('Codex plugin', () => {
-  it('ships a Codex entry in the shared marketplace with the prompt hook and search server', () => {
-    const marketplace = JSON.parse(readFileSync(join(ROOT, '.claude-plugin/marketplace.json'), 'utf8'));
+  it('ships a Codex-only marketplace with the prompt hook and search server', () => {
+    const marketplace = JSON.parse(readFileSync(join(ROOT, '.agents/plugins/marketplace.json'), 'utf8'));
     expect(marketplace.name).toBe('loadout');
-    expect(marketplace.plugins).toContainEqual({ name: 'loadout-codex', source: './plugins/loadout-codex' });
-    const dir = join(ROOT, marketplace.plugins.find((entry: { name: string }) => entry.name === 'loadout-codex').source);
+    expect(marketplace.description).toContain("TypeSafe's Jev API");
+    expect(marketplace.plugins).toEqual([{ name: 'loadout-codex', source: './plugins/loadout-codex' }]);
+    const claudeMarketplace = JSON.parse(readFileSync(join(ROOT, '.claude-plugin/marketplace.json'), 'utf8'));
+    expect(claudeMarketplace.plugins.some((entry: { name: string }) => entry.name === 'loadout-codex')).toBe(false);
+    const dir = join(ROOT, marketplace.plugins[0].source);
     const plugin = JSON.parse(readFileSync(join(dir, '.codex-plugin/plugin.json'), 'utf8'));
     expect(plugin.name).toBe('loadout-codex');
     expect(plugin.description).toContain("TypeSafe's Jev API");
@@ -53,15 +56,12 @@ describe('Codex plugin', () => {
     const { where, snippet } = hostSetup('codex', false);
     expect(where).toContain('loadout on PATH and Node 22.12+');
     expect(where).toContain('/hooks');
+    expect(where).toContain('install checked offline with 0.160.1');
+    expect(where).toContain('live hook untested (D2)');
     expect(snippet).toContain('codex plugin marketplace add erik-hedstrom/loadout\ncodex plugin add loadout-codex@loadout');
-    expect(snippet).not.toContain('[mcp_servers.');
-    expect(snippet).not.toContain('[[hooks.');
-    expect(snippet).not.toContain('codex mcp add');
-    const notice = snippet.split('\n')[0]!;
-    expect(notice).toContain('every project (user scope)');
-    expect(notice).toContain("each routed prompt, with the repository's top-level file names and dependency names, to TypeSafe's Jev API");
-    expect(notice).toContain('"router": "lexical"');
-    expect(snippet.indexOf('codex plugin marketplace add')).toBeGreaterThan(notice.length);
+    expect(snippet).toContain('every project (user scope)');
+    expect(snippet).toContain("each routed prompt, with the repository's top-level file names and dependency names, to TypeSafe's Jev API");
+    expect(snippet).toContain('"router": "lexical"');
   });
 
   it.each([false, true])('setup never prints credentials or a configured key file, or edits host configs (WSL=%s)', (windows) => {

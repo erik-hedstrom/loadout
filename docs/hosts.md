@@ -47,11 +47,14 @@ Notes:
    `plugin/read`, `hooks/list` and `codex mcp list` were checked with Codex
    0.160.1 on 2026-10-12. `hooks/list` reported the installed hook as
    `untrusted`: trust it with `/hooks` before routing prompts. A live hook
-   session is untested (backlog D2); desktop and T3 Code plugin support
-   are also untested.
+   session is untested (backlog D2). There is no tested setup path for the
+   Codex tab of the ChatGPT desktop app or T3 Code yet: plugin support is
+   untested, and setup no longer prints native TOML for these hosts.
 7. The launcher attached the server with `-c mcp_servers.…` (2026-10-06,
-   as in note 1). The
-   plugin's search server was listed as enabled, without starting it.
+   as in note 1). The plugin's search server was listed as enabled, without
+   starting it.
+   The Codex plugin attaches search on every request; its per-request token
+   cost in Codex is not measured.
    WSL loadout behind Windows Codex needs `loadout setup codex --windows`:
    its TOML supplies the machine-specific `wsl.exe` wrapper the plugin's
    fixed PATH commands cannot carry. This fallback is untested in a host.

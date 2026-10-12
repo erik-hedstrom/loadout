@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, join, relative } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -123,6 +123,35 @@ describe('doctor', () => {
     const checks = byName(await doctor(config, () => okClient));
     expect(checks['Claude Code']!.detail).toMatch(/loadout: settings hook$/);
     expect(checks['Codex']!.detail).toMatch(/loadout: hook \(trust not checked: approve it once in \/hooks\) and search server$/);
+  });
+
+  it('recognises a plugin-only Codex install without exposing or editing config contents', async () => {
+    mkdirSync(join(home, 'codex'));
+    const file = join(home, 'codex', 'config.toml');
+    const content = `[plugins."loadout-codex@loadout"]\nenabled = true\nprivate = "${KEY}"\n`;
+    writeFileSync(file, content);
+    const checks = await doctor(config, () => okClient);
+    expect(byName(checks)['Codex']).toMatchObject({
+      ok: true,
+      detail: 'CLI not on PATH; loadout: plugin enabled (hook trust not verifiable from config: approve it in /hooks)',
+    });
+    expect(formatDoctor(checks)).not.toContain(KEY);
+    expect(readFileSync(file, 'utf8')).toBe(content);
+  });
+
+  it.each([
+    '[plugins."loadout-codex@loadout"]\nenabled = false\n',
+    '[plugins."loadout-codex@loadout"]\nenabled = "true"\n',
+    '[plugins."loadout-codex@loadout"]\n',
+    'plugins = { "loadout-codex@loadout" = true }\n',
+    '[plugins."loadout@loadout"]\nenabled = true\n',
+    '[plugins."loadout-codex@loadout"]\nenabled = true\n[features]\nplugins = false\n',
+  ])('does not count a disabled or invalid Codex plugin config (%s)', async (content) => {
+    mkdirSync(join(home, 'codex'));
+    writeFileSync(join(home, 'codex', 'config.toml'), content);
+    expect(byName(await doctor(config, () => okClient))['Codex']).toMatchObject({
+      ok: false, detail: 'CLI not on PATH; loadout: not set up',
+    });
   });
 
   it.each([

@@ -238,14 +238,10 @@ codex plugin marketplace add erik-hedstrom/loadout
 codex plugin add loadout-codex@loadout
 ```
 
-The Codex plugin includes the prompt hook and MCP library search. Each
-routed prompt, with the repository's top-level file names and dependency
+Each routed prompt, with the repository's top-level file names and dependency
 names, goes to TypeSafe's Jev API; `"router": "lexical"` keeps prompts local.
-Trust the installed hook with `/hooks`. Installation and capability listing
-were checked offline with Codex 0.160.1; a live hook session, desktop and
-T3 Code plugin support remain untested. For WSL loadout behind Windows
-Codex, `loadout setup codex --windows` prints TOML instead: the fixed plugin
-commands cannot carry the required `wsl.exe` wrapper.
+See [host setup and verification](docs/hosts.md) for hook trust, WSL setup,
+host support and search overhead.
 
 For loadout running in WSL behind Windows Claude Code, use `loadout setup
 claude-code --windows` and merge its settings.json hook snippet into
