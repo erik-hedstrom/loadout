@@ -22,9 +22,10 @@ Usage:
   loadout audit [--json] [--adopt]        Estimate installed listings; optionally copy skills to ~/.loadout
   loadout route [--json] [--lexical] <task>
                                           Show what would be selected, without launching
-  loadout claude [--dry-run] [--headless] <task> [-- <claude args>]
-  loadout codex  [--dry-run] [--headless] <task> [-- <codex args>]
+  loadout claude [--dry-run] [--headless] [--isolate] <task> [-- <claude args>]
+  loadout codex  [--dry-run] [--headless] [--isolate] <task> [-- <codex args>]
                                           --headless runs once and exits (claude -p / codex exec)
+                                          --isolate hides your own MCP servers (codex: needs --headless)
   loadout mcp [--lexical]                 Serve the library over MCP (stdio): find_skills, load_skill,
                                           and a gateway to the library's MCP servers
   loadout mcp --http [--port 8787] [--host 127.0.0.1] [--token-file f] [--allowed-host h]
@@ -260,7 +261,7 @@ async function main(): Promise<number> {
       const { values, positionals } = parseArgs({
         args: own,
         allowPositionals: true,
-        options: { 'dry-run': { type: 'boolean' }, lexical: { type: 'boolean' }, headless: { type: 'boolean' } },
+        options: { 'dry-run': { type: 'boolean' }, lexical: { type: 'boolean' }, headless: { type: 'boolean' }, isolate: { type: 'boolean' } },
       });
       const task = positionals.join(' ').trim();
       if (!task) fail(`${agent} needs a task`);
@@ -272,7 +273,7 @@ async function main(): Promise<number> {
       console.error(explain(decision, session.effort ? `${session.model} (${session.effort})` : session.model));
       console.error(`session: ${session.dir}`);
 
-      const opts = { headless: Boolean(values.headless), toPath };
+      const opts = { headless: Boolean(values.headless), isolate: Boolean(values.isolate), toPath };
       const args = agent === 'claude' ? claudeArgs(session, task, passthrough, opts) : codexArgs(session, task, passthrough, opts);
       if (values['dry-run']) {
         // POSIX single quotes: nothing inside is expanded, unlike JSON's double quotes.

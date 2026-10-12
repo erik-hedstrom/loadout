@@ -879,6 +879,26 @@ describe('launch', () => {
     expect(() => toToml(Number.NaN)).toThrow();
   });
 
+  it('adds the isolation flags only with --isolate, and only the ones each host documents', () => {
+    const claude = materialize(decision, 'claude', DEFAULT_CONFIG, tempDir('loadout-s-'));
+    const plain = claudeArgs(claude, TASK, []);
+    expect(plain).not.toContain('--strict-mcp-config');
+    expect(plain).not.toContain('--settings');
+    const isolated = claudeArgs(claude, TASK, ['--permission-mode', 'plan'], { isolate: true });
+    expect(isolated.slice(-3)).toEqual(['--strict-mcp-config', '--settings', '{"disableClaudeAiConnectors":true}']);
+    // loadout's own servers still load; the flag only drops the others.
+    expect(isolated).toContain('--mcp-config');
+    expect(isolated).toContain('--plugin-dir');
+    expect(isolated).toContain('--permission-mode');
+
+    const codex = materialize(decision, 'codex', NO_SEARCH, tempDir('loadout-s-'));
+    expect(codexArgs(codex, TASK, [], { headless: true })).not.toContain('--ignore-user-config');
+    expect(codexArgs(codex, TASK, [], { headless: true, isolate: true }).slice(0, 4)).toEqual(['exec', '--ignore-user-config', '-m', 'gpt-6.1-sol']);
+    expect(codexArgs(codex, TASK, [], { headless: true, isolate: true }).some((a) => a.startsWith('mcp_servers.postgres='))).toBe(true);
+    // Interactive Codex has no such flag: refuse rather than launch without isolation.
+    expect(() => codexArgs(codex, TASK, [], { isolate: true })).toThrow(/needs --headless/);
+  });
+
   it('keeps Codex MCP keys unique and connects HTTP servers through library keys', () => {
     const http = { id: 'mcp:a.b', kind: 'mcp' as const, name: 'a.b', description: '', source: '', server: { url: 'https://x.dev/mcp', headers: { Authorization: 'Bearer t' } } };
     const other = { ...http, id: 'mcp:a_b', name: 'a_b' };

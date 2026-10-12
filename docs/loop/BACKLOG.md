@@ -313,7 +313,7 @@ Acceptance: a third row in that RESULTS table, with raw results. The README's
 | D7 | P1 | `loadout doctor` | Claude | cloud | done ([#20](https://github.com/erik-hedstrom/loadout/pull/20)) |
 | D2 | P0 | Live Codex hook test | Claude | local + erik | todo (needs Erik to trust the hook in `/hooks`) |
 | D3 | P2 | Desktop and IDE hosts end to end | Claude | local | todo (generic MCP only, 2026-10-12) |
-| D5 | P2 | Isolation mode | Codex | cloud | todo |
+| D5 | P2 | Isolation mode | Codex | cloud | in progress (branch `agent/d5-isolate`; PR pending). Claude MCP done; plugins and interactive Codex cannot be hidden |
 | D4 | P2 | Gateway: native tools via `tools/list_changed` | Codex | cloud | todo |
 | D6 | P2 | HTTP: cancellation reaches Jev | Claude | cloud | done ([#19](https://github.com/erik-hedstrom/loadout/pull/19)) |
 | D8 | P1 | Host capability matrix (verified vs generated) | Claude | cloud | done ([#18](https://github.com/erik-hedstrom/loadout/pull/18)) |
@@ -458,6 +458,26 @@ Acceptance:
   the session, through official flags only (`--strict-mcp-config`; Codex
   `--ignore-user-config` where available).
 - Document what cannot be hidden.
+
+Learnings (2026-10-12, docs read, no live run): flags checked against
+Claude Code's [CLI reference](https://code.claude.com/docs/en/cli-reference),
+[mcp](https://code.claude.com/docs/en/mcp#disable-claude-ai-connectors) and
+[settings reference](https://code.claude.com/docs/en/settings-reference#disableclaudeaiconnectors)
+pages, and openai/codex `main` (`codex-rs/exec/src/cli.rs`, `tui/src/cli.rs`,
+`utils/cli/src/shared_options.rs`).
+- `--strict-mcp-config` exists, but the CLI docs do not say it drops claude.ai
+  connectors; `disableClaudeAiConnectors` does, and `--settings` takes inline
+  JSON above the user file. `--isolate` passes both.
+- Claude Code has no flag that hides user-installed plugins alone. `--bare`
+  skips OAuth; `--safe-mode` and `--bare` may also drop `--plugin-dir`
+  (undocumented); `--setting-sources` has an undocumented effect on
+  `enabledPlugins`. None is used.
+- `--ignore-user-config` is defined only for `codex exec`, not the interactive
+  CLI, so `loadout codex --isolate` refuses without `--headless`.
+- Left: a live check on a machine with both CLIs (does a user-scope MCP server
+  and a plugin server disappear, does the claude.ai connector list shrink, does
+  Codex still read `.codex/config.toml`). Decision for Erik: whether
+  `--setting-sources project,local` is acceptable as the plugin story.
 
 **D6. HTTP cancellation.**
 

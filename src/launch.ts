@@ -351,6 +351,8 @@ export const windowsPath = (p: string) => execFileSync('wslpath', ['-w', p], { e
 export interface LaunchOptions {
   /** Run once and exit (`claude -p`, `codex exec`) instead of an interactive session. */
   headless?: boolean;
+  /** Hide the user's own MCP servers (and Codex config) for this session. */
+  isolate?: boolean;
   toPath?: (p: string) => string;
 }
 
@@ -372,6 +374,8 @@ export function claudeArgs(session: Session, task: string, extra: string[], opts
   ];
   if (trusted.length) args.push('--allowedTools', ...trusted);
   if (session.mcpConfig) args.push('--mcp-config', toPath(session.mcpConfig));
+  // The connectors are fetched by the CLI itself, so `--strict-mcp-config` alone is not documented to drop them.
+  if (opts.isolate) args.push('--strict-mcp-config', '--settings', '{"disableClaudeAiConnectors":true}');
   return args;
 }
 
@@ -416,7 +420,9 @@ export function codexPrompt(session: Session, task: string): string {
 }
 
 export function codexArgs(session: Session, task: string, extra: string[], opts: LaunchOptions = {}): string[] {
-  const args = [...(opts.headless ? ['exec'] : []), '-m', session.model];
+  // Only `codex exec` defines --ignore-user-config; the interactive CLI has no flag that skips config.toml.
+  if (opts.isolate && !opts.headless) throw new Error('--isolate for codex needs --headless: interactive Codex has no flag to skip the user config');
+  const args = [...(opts.headless ? ['exec'] : []), ...(opts.isolate ? ['--ignore-user-config'] : []), '-m', session.model];
   if (session.effort) args.push('-c', `model_reasoning_effort=${toToml(session.effort)}`);
   const used = new Set<string>();
   if (session.search) {

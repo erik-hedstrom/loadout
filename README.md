@@ -132,7 +132,8 @@ loadout doctor                                           # check key, library, i
 ```
 
 Flags: `--dry-run` prints the command instead of launching; `--lexical` routes
-offline without Jev; `--headless` runs once and exits. If Jev is unreachable,
+offline without Jev; `--headless` runs once and exits; `--isolate` hides your
+own MCP servers (below). If Jev is unreachable,
 loadout falls back to keyword ranking and says so, so a launch never blocks.
 Each launch writes its decision, copies of the selected skills and any
 generated config to `~/.loadout/sessions/<id>/`.
@@ -149,11 +150,46 @@ generated config to `~/.loadout/sessions/<id>/`.
 The tier mappings are presets: whether each model suits the work Jev assigns
 to its tier is not measured yet ([C3](docs/loop/BACKLOG.md)).
 
-**loadout adds to your session; it does not isolate it.** Skills, plugins and
+**By default loadout adds to your session; it does not isolate it.** Skills, plugins and
 MCP servers you have configured in Claude Code or Codex stay active alongside
 the selection, as do your approval policies. To get the full benefit, move the
 skills you don't need everywhere out of the agents' own folders and into the
-loadout library (`loadout add <dir>`).
+loadout library (`loadout add <dir>`). `--isolate` hides some of it, below.
+
+**Isolation.** `--isolate` keeps your own MCP servers out of one launch, by
+adding official flags to the agent's command line only. It writes nothing to
+`~/.claude` or `~/.codex`.
+
+- Claude Code: `--strict-mcp-config` (loadout's own servers still load) and
+  `--settings '{"disableClaudeAiConnectors":true}'` for the claude.ai
+  connectors. Both are in the [CLI reference](https://code.claude.com/docs/en/cli-reference)
+  and [settings reference](https://code.claude.com/docs/en/settings-reference#disableclaudeaiconnectors).
+- Codex: `codex exec --ignore-user-config` skips `$CODEX_HOME/config.toml`
+  (auth still uses `CODEX_HOME`). Only `exec` defines the flag
+  ([source](https://github.com/openai/codex/blob/main/codex-rs/exec/src/cli.rs)),
+  so `loadout codex --isolate` requires `--headless` and refuses otherwise.
+
+Not hidden:
+
+- **Claude Code plugins.** No flag disables the plugins you installed for one
+  session. `--bare` and `--safe-mode` switch off plugins and MCP servers
+  wholesale, but `--bare` skips OAuth and keychain logins, and the docs do
+  not say whether either keeps `--plugin-dir` and `--mcp-config`.
+  `--setting-sources project,local` (pass it after `--`) skips your user
+  settings, but its effect on `enabledPlugins` is not documented and it drops
+  your user hooks, permissions and model too. If you installed the loadout
+  hook plugin, it still runs next to the launcher.
+- Servers from a plugin that stays enabled: the docs do not say whether
+  `--strict-mcp-config` drops them.
+- A `managed-mcp.json` (organization policy): Claude Code exits at startup
+  when `--strict-mcp-config` meets one.
+- Codex project config: the flag's help names only
+  `$CODEX_HOME/config.toml`, so a project `.codex/config.toml` is presumably
+  still read (not checked).
+- Interactive Codex, and Codex plugins and skills: no flag found.
+- Your CLAUDE.md, `AGENTS.md`, hooks, permissions and env: not MCP, not touched.
+
+Checked against the sources above on 2026-10-12; no live run (not shown).
 
 ## Search mid-session, from any MCP host
 
