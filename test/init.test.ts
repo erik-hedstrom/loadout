@@ -122,8 +122,9 @@ describe('init wizard', () => {
 
     vi.stubEnv('TYPESAFE_API_KEY', KEY);
     expect((await run([''])).output).not.toContain(KEY);
-    // Formatted as Node prints them, so a key inside a logged object is caught too.
-    for (const spy of streams) expect(spy.mock.calls.map((args) => format(...args)).join('\n')).not.toContain(KEY);
+    // Formatted as Node prints them, so a key inside a logged object is caught, and byte chunks decoded as a stream writes them.
+    const text = (a: unknown) => (a instanceof Uint8Array ? Buffer.from(a).toString() : a);
+    for (const spy of streams) expect(spy.mock.calls.map((args) => format(...args.map(text))).join('\n')).not.toContain(KEY);
   });
 });
 
@@ -149,9 +150,10 @@ describe('loadout init without a terminal', () => {
   });
 
   it('rejects an unknown pack or a missing key file before writing anything', () => {
-    const pack = cli(['--pack', 'popular']);
+    const pack = cli(['--pack', KEY]);
     expect(pack.status).toBe(1);
-    expect(pack.stderr).toContain('unknown pack: popular; packs: documents, security, workflow');
+    expect(pack.stderr).toContain('unknown pack; packs: documents, security, workflow');
+    expect(pack.stderr + pack.stdout).not.toContain(KEY);
     const missing = cli(['--key-file', join(home, 'nope.txt')]);
     expect(missing.status).toBe(1);
     expect(missing.stderr).toContain('key file not found');

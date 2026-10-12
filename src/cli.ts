@@ -236,7 +236,8 @@ async function main(): Promise<number> {
       const keyFile = values['key-file'] ? resolve(values['key-file']) : undefined;
       if (keyFile && !existsSync(keyFile)) fail(`key file not found: ${keyFile}`);
       const { sources, unknown } = packSources(values.pack ?? []);
-      if (unknown.length) fail(`unknown pack: ${unknown.join(', ')}; packs: ${PACKS.map((p) => p.name).join(', ')}`);
+      // Fixed text: a mistyped value can be a pasted key.
+      if (unknown.length) fail(`unknown pack; packs: ${PACKS.map((p) => p.name).join(', ')}`);
       console.log(`wrote ${writeDefaultConfig(keyFile ? { apiKeyFile: keyFile } : {})}`);
       if (!sources.length) return 0;
       const failed = addSources(sources);
