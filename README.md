@@ -133,8 +133,8 @@ loadout setup <host>                                     # print the config that
 Flags: `--dry-run` prints the command instead of launching; `--lexical` routes
 offline without Jev; `--headless` runs once and exits. If Jev is unreachable,
 loadout falls back to keyword ranking and says so, so a launch never blocks.
-Each launch writes its decision and generated plugin/MCP config to
-`~/.loadout/sessions/<id>/`.
+Each launch writes its decision, copies of the selected skills and any
+generated config to `~/.loadout/sessions/<id>/`.
 
 | | Claude Code | Codex |
 |---|---|---|
@@ -144,6 +144,9 @@ Each launch writes its decision and generated plugin/MCP config to
 | Relevance note | `--append-system-prompt` | in the prompt |
 | MCP | generated file via `--mcp-config` | `-c mcp_servers.<name>={…}` |
 | `autoApprove` servers | `--allowedTools mcp__<name>` | `default_tools_approval_mode = "approve"` |
+
+The tier mappings are presets: whether each model suits the work Jev assigns
+to its tier is not measured yet ([C3](docs/loop/BACKLOG.md)).
 
 **loadout adds to your session; it does not isolate it.** Skills, plugins and
 MCP servers you have configured in Claude Code or Codex stay active alongside

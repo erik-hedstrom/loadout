@@ -313,9 +313,9 @@ Acceptance: a third row in that RESULTS table, with raw results. The README's
 | D3 | P1 | Desktop and IDE hosts end to end | Claude | local | todo |
 | D5 | P2 | Isolation mode | Codex | cloud | todo |
 | D4 | P2 | Gateway: native tools via `tools/list_changed` | Codex | cloud | todo |
-| D6 | P2 | HTTP: cancellation reaches Jev | Codex | cloud | todo |
-| D8 | P1 | Host capability matrix (verified vs generated) | Claude | cloud | review ([#18](https://github.com/erik-hedstrom/loadout/pull/18)) |
-| D9 | P1 | Codex parity: neutral session skill dir, tier presets | Codex | cloud | todo (after E9) |
+| D6 | P2 | HTTP: cancellation reaches Jev | Claude | cloud | done ([#19](https://github.com/erik-hedstrom/loadout/pull/19)) |
+| D8 | P1 | Host capability matrix (verified vs generated) | Claude | cloud | done ([#18](https://github.com/erik-hedstrom/loadout/pull/18)) |
+| D9 | P1 | Codex parity: neutral session skill dir, tier presets | Claude | cloud | done ([#21](https://github.com/erik-hedstrom/loadout/pull/21)); Codex launch not re-run live |
 
 **D10. In-host first: loadout as a Claude Code plugin.**
 
@@ -446,6 +446,12 @@ Acceptance:
   to `fetch`.
 - A test shows a disconnected client stops the Jev call.
 
+Learnings (2026-10-09): no new plumbing on the server side. The MCP SDK
+already aborts a handler's `extra.signal` when the transport closes, and
+`serveHttp` closes it when the response closes. The same signal handles a
+stdio host's `notifications/cancelled`. A cancelled request is not retried,
+and its error is fixed text like the other Jev diagnostics.
+
 **D8. Host capability matrix.**
 
 Why (Sol review, 2026-10-07): the README promises model, skill and MCP
@@ -477,6 +483,12 @@ Acceptance:
   only for Claude.
 - Tier mappings are documented as model/effort presets, labelled
   unvalidated until C3 measures them.
+
+Learnings (2026-10-09): Codex sessions now copy skills to
+`<session>/skills/` with no `.claude-plugin/`; Claude sessions keep
+`<session>/plugin/skills/`, which `--plugin-dir` needs. `Session.skillsDir`
+names the copies for both. The README table and the `tiers` config comment
+call the mappings unvalidated presets.
 
 **D7. `loadout doctor`.**
 
