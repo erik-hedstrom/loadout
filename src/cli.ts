@@ -65,7 +65,7 @@ const note = (message: string) => console.error(`loadout: ${message}`);
 const embeddingsFor = (library: Capability[], config: Config) => (config.embeddings ? libraryEmbeddings(library, paths.embeddings(), note) : Promise.resolve(undefined));
 
 async function decide(task: string, config: Config, lexical: boolean): Promise<RouteDecision> {
-  const library = scanLibrary(paths.library());
+  const library = scanLibrary(paths.library(), { cache: true });
   if (library.length === 0) note(`library is empty (${paths.library()}); continuing with no extra capabilities`);
   const client = router(config, lexical);
   // Embeddings only feed the Jev router's candidate list; keyword routing never waits for them.
@@ -144,7 +144,7 @@ async function runHook(rest: string[]): Promise<number> {
     // No retries and a short timeout: two Jev requests must fit well inside the deadline.
     const client = apiKey ? jevClient({ apiKey, baseUrl: config.jev.baseUrl, model: config.jev.model, timeoutMs: 8_000, retries: 0 }) : undefined;
     const context = await promptContext(input, {
-      library: scanLibrary(paths.library()),
+      library: scanLibrary(paths.library(), { cache: true }),
       config,
       client,
       embeddings: client && config.embeddings ? await cachedEmbeddings(paths.embeddings()) : undefined,
@@ -298,7 +298,7 @@ async function main(): Promise<number> {
         },
       });
       const toPath = values['windows-paths'] ? windowsPath : undefined;
-      const library = scanLibrary(paths.library());
+      const library = scanLibrary(paths.library(), { cache: true });
       const client = router(config, Boolean(values.lexical));
       // Loaded on demand: the MCP SDK is the heaviest import, and only this command needs it.
       const { serveHttp, serveStdio } = await import('./mcp.js');

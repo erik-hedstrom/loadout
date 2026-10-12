@@ -1,0 +1,247 @@
+{
+  "mode": "real Jev",
+  "node": "v24.15.0",
+  "limit": 20,
+  "rows": [
+    {
+      "id": "web-21",
+      "ms": {
+        "config load": 0.07510600000000522,
+        "scanLibrary": 274.83765,
+        "cachedEmbeddings": 389.4094759999999,
+        "Jev wide": 649.256926,
+        "Jev close": 341.9998640000001,
+        "promptContext total": 1370.972216,
+        "CLI wall clock": 1784.8191700000002
+      }
+    },
+    {
+      "id": "web-24",
+      "ms": {
+        "config load": 0.13734599999997954,
+        "scanLibrary": 204.52460399999973,
+        "cachedEmbeddings": 1.4857700000002296,
+        "Jev wide": 475.3835790000003,
+        "Jev close": 315.03605100000004,
+        "promptContext total": 888.8925639999998,
+        "CLI wall clock": 1862.9841350000006
+      }
+    },
+    {
+      "id": "web-03",
+      "ms": {
+        "config load": 0.19730299999991985,
+        "scanLibrary": 164.2032220000001,
+        "cachedEmbeddings": 1.47361600000022,
+        "Jev wide": 458.62338399999953,
+        "Jev close": 312.2618389999998,
+        "promptContext total": 869.9707779999999,
+        "CLI wall clock": 1817.085994
+      }
+    },
+    {
+      "id": "web-04",
+      "ms": {
+        "config load": 0.1556720000007772,
+        "scanLibrary": 148.03403799999978,
+        "cachedEmbeddings": 1.5475700000006327,
+        "Jev wide": 473.811185999999,
+        "Jev close": 382.5713539999997,
+        "promptContext total": 956.5882229999988,
+        "CLI wall clock": 1636.093972999999
+      }
+    },
+    {
+      "id": "web-09",
+      "ms": {
+        "config load": 0.21707099999912316,
+        "scanLibrary": 139.88198400000147,
+        "cachedEmbeddings": 1.545706999999311,
+        "Jev wide": 585.4260250000007,
+        "Jev close": 365.89108399999895,
+        "promptContext total": 1111.254051,
+        "CLI wall clock": 1825.916401999999
+      }
+    },
+    {
+      "id": "web-13",
+      "ms": {
+        "config load": 0.16370699999970384,
+        "scanLibrary": 136.68319100000008,
+        "cachedEmbeddings": 1.6128969999990659,
+        "Jev wide": 497.1490439999998,
+        "Jev close": 339.38152699999955,
+        "promptContext total": 937.2939660000011,
+        "CLI wall clock": 1818.3732759999984
+      }
+    },
+    {
+      "id": "web-16",
+      "ms": {
+        "config load": 0.17663299999912851,
+        "scanLibrary": 138.62710099999822,
+        "cachedEmbeddings": 1.52672000000166,
+        "Jev wide": 478.3555009999982,
+        "Jev close": 380.4870950000004,
+        "promptContext total": 980.2121960000004,
+        "CLI wall clock": 1721.3073170000025
+      }
+    },
+    {
+      "id": "backend-02",
+      "ms": {
+        "config load": 0.17177299999821116,
+        "scanLibrary": 135.72113799999715,
+        "cachedEmbeddings": 1.4626250000001164,
+        "Jev wide": 569.2520289999993,
+        "Jev close": 421.3468209999992,
+        "promptContext total": 1102.5444609999977,
+        "CLI wall clock": 1661.7764049999969
+      }
+    },
+    {
+      "id": "backend-04",
+      "ms": {
+        "config load": 0.1606309999988298,
+        "scanLibrary": 133.4806630000021,
+        "cachedEmbeddings": 1.5180440000003728,
+        "Jev wide": 520.4520550000016,
+        "Jev close": 440.5337500000023,
+        "promptContext total": 1054.2414949999984,
+        "CLI wall clock": 1689.598965000001
+      }
+    },
+    {
+      "id": "backend-07",
+      "ms": {
+        "config load": 0.16774500000246917,
+        "scanLibrary": 129.83607800000027,
+        "cachedEmbeddings": 1.7405839999992168,
+        "Jev wide": 474.5366360000007,
+        "Jev close": 407.9841809999998,
+        "promptContext total": 988.0400799999989,
+        "CLI wall clock": 1814.059369999999
+      }
+    },
+    {
+      "id": "backend-08",
+      "ms": {
+        "config load": 0.24244999999791617,
+        "scanLibrary": 126.72568700000193,
+        "cachedEmbeddings": 1.420694000000367,
+        "Jev wide": 467.72932899999796,
+        "Jev close": 417.11372100000153,
+        "promptContext total": 993.5010089999996,
+        "CLI wall clock": 1650.7153620000026
+      }
+    },
+    {
+      "id": "backend-12",
+      "ms": {
+        "config load": 0.1673640000008163,
+        "scanLibrary": 149.76829900000303,
+        "cachedEmbeddings": 1.6816000000035274,
+        "Jev wide": 531.2018270000044,
+        "Jev close": 325.987122999999,
+        "promptContext total": 950.0218810000006,
+        "CLI wall clock": 1840.6762079999971
+      }
+    },
+    {
+      "id": "backend-15",
+      "ms": {
+        "config load": 0.16007099999842467,
+        "scanLibrary": 140.95406199999707,
+        "cachedEmbeddings": 1.4991870000012568,
+        "Jev wide": 650.8098670000036,
+        "Jev close": 398.0959900000016,
+        "promptContext total": 1156.3453630000004,
+        "CLI wall clock": 1901.009987999998
+      }
+    },
+    {
+      "id": "backend-19",
+      "ms": {
+        "config load": 0.18841600000450853,
+        "scanLibrary": 128.3188569999984,
+        "cachedEmbeddings": 1.5811349999930826,
+        "Jev wide": 476.5745360000001,
+        "Jev close": 358.60206599999947,
+        "promptContext total": 949.0976999999984,
+        "CLI wall clock": 1613.3258990000031
+      }
+    },
+    {
+      "id": "backend-20",
+      "ms": {
+        "config load": 0.17177300000184914,
+        "scanLibrary": 136.98355599999923,
+        "cachedEmbeddings": 1.5823579999996582,
+        "Jev wide": 465.33452700000635,
+        "Jev close": 346.04249100000015,
+        "promptContext total": 936.1829040000011,
+        "CLI wall clock": 1781.4090510000024
+      }
+    },
+    {
+      "id": "integrations-01",
+      "ms": {
+        "config load": 0.14695499999652384,
+        "scanLibrary": 123.89276699999755,
+        "cachedEmbeddings": 1.5214199999973061,
+        "Jev wide": 931.6935440000016,
+        "Jev close": 388.87377099999867,
+        "promptContext total": 1415.4118480000034,
+        "CLI wall clock": 1892.2596559999947
+      }
+    },
+    {
+      "id": "integrations-02",
+      "ms": {
+        "config load": 0.1571750000002794,
+        "scanLibrary": 126.64761799999542,
+        "cachedEmbeddings": 1.4801099999967846,
+        "Jev wide": 574.9255080000003,
+        "Jev close": 366.7765589999981,
+        "promptContext total": 1046.3811849999984,
+        "CLI wall clock": 1894.4863440000045
+      }
+    },
+    {
+      "id": "integrations-04",
+      "ms": {
+        "config load": 0.15719499999977415,
+        "scanLibrary": 125.37846700000227,
+        "cachedEmbeddings": 1.6584749999965425,
+        "Jev wide": 550.1793529999995,
+        "Jev close": 416.5364520000003,
+        "promptContext total": 1078.104320999999,
+        "CLI wall clock": 1771.8260470000023
+      }
+    },
+    {
+      "id": "integrations-10",
+      "ms": {
+        "config load": 0.15117299999837996,
+        "scanLibrary": 124.36317700000654,
+        "cachedEmbeddings": 1.4310550000009243,
+        "Jev wide": 509.084305999997,
+        "Jev close": 339.09780599999795,
+        "promptContext total": 951.9606829999975,
+        "CLI wall clock": 1680.4777729999987
+      }
+    },
+    {
+      "id": "integrations-17",
+      "ms": {
+        "config load": 0.1503009999942151,
+        "scanLibrary": 124.01880100000562,
+        "cachedEmbeddings": 1.548131999996258,
+        "Jev wide": 523.9650069999989,
+        "Jev close": 386.3383399999948,
+        "promptContext total": 1009.0170319999961,
+        "CLI wall clock": 1754.5860420000026
+      }
+    }
+  ]
+}

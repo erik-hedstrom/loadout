@@ -89,7 +89,7 @@ if (import.meta.main) {
       finally { ms[step] = performance.now() - start; }
     };
     const current = await time('config load', loadConfig);
-    const library = await time('scanLibrary', () => scanLibrary(paths.library()));
+    const library = await time('scanLibrary', () => scanLibrary(paths.library(), { cache: true }));
     if (!library.some((c) => c.kind === 'skill') || !current.maxCandidates || !current.shortlist) throw new Error('needs a nonempty skill library and nonzero candidate/shortlist limits');
     const embeddings = current.embeddings ? await time('cachedEmbeddings', () => cachedEmbeddings(paths.embeddings())) : undefined;
     const replies: SystemOneResponse[] = [];

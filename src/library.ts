@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import {
   closeSync,
   constants,
@@ -22,6 +23,7 @@ import {
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { parse as parseYaml } from 'yaml';
+import { loadoutHome } from './config.js';
 import type { Capability, McpServerConfig } from './types.js';
 
 const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---/;
@@ -145,9 +147,13 @@ export function parseSkill(dir: string): (Capability & { disableModelInvocation?
   const meta = parseFrontmatter(text);
   const name = typeof meta.name === 'string' && meta.name.trim() ? meta.name.trim() : basename(dir);
   const description = typeof meta.description === 'string' ? meta.description.trim() : '';
+  return skillCapability(dir, { name, description, ...(meta['disable-model-invocation'] === true ? { disableModelInvocation: true } : {}) });
+}
+
+function skillCapability(dir: string, metadata: Pick<Capability, 'name' | 'description'> & { disableModelInvocation?: boolean }): Capability & { disableModelInvocation?: boolean } {
   const origin = readSource(dir)?.origin;
   // The id is the library folder, which is unique; the name is what the skill calls itself.
-  return { id: `skill:${basename(dir)}`, kind: 'skill', name, description, source: dir, ...(origin ? { origin } : {}), ...(meta['disable-model-invocation'] === true ? { disableModelInvocation: true } : {}) };
+  return { id: `skill:${basename(dir)}`, kind: 'skill', ...metadata, source: dir, ...(origin ? { origin } : {}) };
 }
 
 function subdirs(dir: string): string[] {
@@ -175,11 +181,86 @@ export function readMcpServers(libraryDir: string): NonNullable<McpFile['mcpServ
   return config.mcpServers ?? {};
 }
 
-export function scanLibrary(libraryDir: string): Capability[] {
+const SCAN_CACHE_FILE = 'library-scan.json';
+const SCAN_CACHE_BYTES = 32 * 1024 * 1024;
+const RACY_WINDOW_MS = 2_000;
+// Bump when parsing or cacheability changes: file fingerprints cannot detect changes to the code.
+const SCAN_CACHE_VERSION = 2;
+type CachedSkill = [folder: string, stamp: string, name: string, description: string, disableModelInvocation: boolean];
+interface ScanCache {
+  version: typeof SCAN_CACHE_VERSION;
+  root: string;
+  skills: CachedSkill[];
+}
+
+function manifestStamp(dir: string, cutoffNs: bigint): string | undefined {
+  try {
+    const st = lstatSync(join(dir, 'SKILL.md'), { bigint: true });
+    // Coarse timestamp ticks can hide same-size edits during a scan; recent files must be parsed again.
+    if (st.mtimeNs >= cutoffNs || st.ctimeNs >= cutoffNs) return undefined;
+    // ctime catches edits with restored mtimes; inode and mode catch replacements and permission changes.
+    return st.isFile() && st.size <= LIMITS.manifestBytes ? `${st.dev}:${st.ino}:${st.mode}:${st.size}:${st.mtimeNs}:${st.ctimeNs}` : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function readScanCache(dir: string, root: string): ScanCache | undefined {
+  try {
+    const cache: unknown = JSON.parse(readConfined(dir, SCAN_CACHE_FILE, SCAN_CACHE_BYTES).toString('utf8'));
+    if (!cache || typeof cache !== 'object') return undefined;
+    const c = cache as Partial<ScanCache>;
+    if (c.version !== SCAN_CACHE_VERSION || c.root !== root || !Array.isArray(c.skills)) return undefined;
+    for (const entry of c.skills) {
+      if (!Array.isArray(entry) || entry.length !== 5 || !entry.slice(0, 4).every(v => typeof v === 'string') || typeof entry[4] !== 'boolean') return undefined;
+    }
+    return c as ScanCache;
+  } catch {
+    return undefined;
+  }
+}
+
+function writeScanCache(dir: string, cache: ScanCache): void {
+  const tmp = join(dir, `${SCAN_CACHE_FILE}.${randomUUID()}.tmp`);
+  try {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(tmp, JSON.stringify(cache), { flag: 'wx' });
+    renameSync(tmp, join(dir, SCAN_CACHE_FILE));
+  } catch (err) {
+    // Cache persistence cannot prevent routing, and errors may quote untrusted paths or contents.
+    const code = (err as NodeJS.ErrnoException).code;
+    // Another Windows hook may still hold the destination open; a later scan can retry quietly.
+    if (code !== 'EPERM' && code !== 'EBUSY') console.error('loadout: library metadata cache could not be saved');
+    // The failure is reported once above. A cleanup error (ENOTDIR on Linux when the index
+    // path is a file) adds nothing, and a leftover temp file has a unique name.
+    try {
+      rmSync(tmp, { force: true });
+    } catch {}
+  }
+}
+
+export function scanLibrary(libraryDir: string, options: { cache?: boolean } = {}): Capability[] {
+  const dirs = subdirs(join(libraryDir, 'skills'));
+  // Routing opts in; audit, doctor and other read-only callers must neither create nor refresh the cache.
+  const cacheDir = options.cache ? join(loadoutHome(), 'index') : undefined;
+  const root = cacheDir && existsSync(join(libraryDir, 'skills')) ? realpathSync(join(libraryDir, 'skills')) : '';
+  const cache = cacheDir ? readScanCache(cacheDir, root) : undefined;
+  const cutoffNs = BigInt(Date.now() - RACY_WINDOW_MS) * 1_000_000n;
+  const byFolder = new Map(cache?.skills.map(entry => [entry[0], entry]));
+  const skills: CachedSkill[] = [];
+  let changed = cache === undefined;
   const capabilities: Capability[] = [];
-  for (const dir of subdirs(join(libraryDir, 'skills'))) {
-    const skill = parseSkill(dir);
+  for (const dir of dirs) {
+    const stamp = cacheDir ? manifestStamp(dir, cutoffNs) : undefined;
+    const cached = byFolder.get(basename(dir));
+    const hit = stamp !== undefined && cached?.[1] === stamp;
+    const skill = hit ? skillCapability(dir, { name: cached[2], description: cached[3], ...(cached[4] ? { disableModelInvocation: true } : {}) }) : parseSkill(dir);
     if (skill) capabilities.push(skill);
+    const cacheable = cacheDir && skill && stamp !== undefined && (hit || manifestStamp(dir, cutoffNs) === stamp);
+    if (cacheable) {
+      skills.push([basename(dir), stamp, skill.name, skill.description, skill.disableModelInvocation === true]);
+    }
+    if (!hit && (cached || cacheable)) changed = true;
   }
 
   const mcpFile = join(libraryDir, 'mcp.json');
@@ -187,6 +268,7 @@ export function scanLibrary(libraryDir: string): Capability[] {
     capabilities.push({ id: `mcp:${name}`, kind: 'mcp', name, description, source: mcpFile, server, autoApprove: autoApprove === true, gateway: gateway === true });
   }
 
+  if (cacheDir && (changed || skills.length !== cache?.skills.length)) writeScanCache(cacheDir, { version: SCAN_CACHE_VERSION, root, skills });
   return capabilities;
 }
 

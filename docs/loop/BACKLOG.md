@@ -308,7 +308,7 @@ Acceptance: a third row in that RESULTS table, with raw results. The README's
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
 | D10 | P0 | In-host first: loadout as a Claude Code plugin (hook), CLI then desktop app | Codex | cloud + local + erik | blocked: desktop app check (Erik). Plugin merged in [#9](https://github.com/erik-hedstrom/loadout/pull/9) |
-| D11 | P0 | Cut the hook's per-prompt start cost | Codex | cloud + local | in progress ([#14](https://github.com/erik-hedstrom/loadout/pull/14) merged: follow-ups skip start-up, relay loads on demand); left: cut the library scan and model load for routed prompts, then the real-Jev `hook-latency.ts` run (local) |
+| D11 | P0 | Cut the hook's per-prompt start cost | Codex | cloud + local | in progress ([#14](https://github.com/erik-hedstrom/loadout/pull/14), [#24](https://github.com/erik-hedstrom/loadout/pull/24) merged: the hook's new process p50 1,781 → 1,543 ms, scan 136 → 22 ms, [RESULTS](../../bench/RESULTS.md#routed-prompts-with-the-library-scan-cache-d11-2026-10-12)); left: time the new process's own Jev steps, and the embedding model load (needs a long-lived process: Erik decides) |
 | D1 | P0 | Validate on the new native Linux machine | Claude | local | todo (machine pending) |
 | D7 | P1 | `loadout doctor` | Claude | cloud | done ([#20](https://github.com/erik-hedstrom/loadout/pull/20)) |
 | D2 | P0 | Live Codex hook test | Claude | local + erik | todo (needs Erik to trust the hook in `/hooks`) |
@@ -394,8 +394,25 @@ Learnings (2026-10-08, [#14](https://github.com/erik-hedstrom/loadout/pull/14),
 [RESULTS](../../bench/RESULTS.md#hook-start-up-d11-2026-10-08)):
 - Done: follow-ups return before start-up, and `relay.js` loads only for
   `mcp-launch`.
-- Left: the library scan and the embedding model dominate what remains.
-  Then run `hook-latency.ts` with real Jev, as acceptance asks.
+- Left after #14: the library scan and the embedding model.
+
+Learnings (2026-10-12, [#24](https://github.com/erik-hedstrom/loadout/pull/24),
+[RESULTS](../../bench/RESULTS.md#routed-prompts-with-the-library-scan-cache-d11-2026-10-12)):
+- The routing paths opt in to a parsed-metadata cache
+  (`scanLibrary(dir, { cache: true })`). audit, doctor, list and sources stay
+  read-only. The first draft wrote the cache from every scan and broke
+  audit's no-write tests.
+- Staleness: discovery runs every time; manifests are fingerprinted by
+  device, inode, size, mode and ns mtime/ctime; entries within 2 s of the
+  scan are not cached (git's racy-index rule).
+- Removed in review: an unkeyed checksum (no authentication), folder-name
+  checks (keys only match live discovery), a library-path guard.
+- Linux only: a failed write was reported twice, because `rmSync` throws
+  ENOTDIR under a file (ENOENT on Windows). Windows-only runs could not show
+  it; the WSL run did.
+- Real Jev, 20 prompts: scanLibrary p50 136 → 22 ms; the new process 1,781 →
+  1,543 ms. Cutting the model load per process would need a long-lived
+  process.
 
 **D1. Native Linux validation.**
 
