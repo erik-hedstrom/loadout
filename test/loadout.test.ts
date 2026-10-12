@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CONFIG, type Config } from '../src/config.js';
 import { jevClient, JevError, validateResponse, type Question, type SystemOneClient } from '../src/jev.js';
-import { claudeArgs, claudeHookSettings, codexArgs, hookCommand, hostSetup, launch, loaderArgs, materialize, searchServer, toToml } from '../src/launch.js';
+import { claudeArgs, claudeHookSettings, codexArgs, hookCommand, hostSetup, isolateConflict, launch, loaderArgs, materialize, searchServer, toToml } from '../src/launch.js';
 import { hookOutput, isFollowUp, HOOK_FAILURE_NOTE, JEV_FALLBACK_NOTE, promptContext } from '../src/hook.js';
 import { createServer, readSkillFile, serveHttp } from '../src/mcp.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
@@ -898,7 +898,7 @@ describe('launch', () => {
     const codex = materialize(decision, 'codex', NO_SEARCH, tempDir('loadout-s-'), (p) => p, true);
     expect(codex.settings).toBeUndefined();
     expect(codexArgs(codex, TASK, [], { headless: true })).not.toContain('--ignore-user-config');
-    expect(codexArgs(codex, TASK, [], { headless: true, isolate: true }).slice(0, 4)).toEqual(['exec', '--ignore-user-config', '-m', 'gpt-6.1-sol']);
+    expect(codexArgs(codex, TASK, [], { headless: true, isolate: true }).slice(0, 6)).toEqual(['exec', '--ignore-user-config', '--disable', 'apps', '-m', 'gpt-6.1-sol']);
     expect(codexArgs(codex, TASK, [], { headless: true, isolate: true }).some((a) => a.startsWith('mcp_servers.postgres='))).toBe(true);
   });
 
@@ -914,12 +914,24 @@ describe('launch', () => {
     expect(codex.result.stderr).toBe('loadout: --isolate for codex needs --headless: interactive Codex has no flag to skip the user config\n');
     expect(codex.sessions).toBe(false);
 
-    for (const own of [['--settings', '{}'], ['--settings={}'], ['--mcp-config', 'user.json'], ['--mcp-config=user.json']]) {
-      const claude = run('claude', '--isolate', '--dry-run', '--lexical', TASK, '--', ...own);
-      expect(claude.result.status).not.toBe(0);
-      expect(claude.result.stderr).toBe('loadout: --isolate sets --settings and --mcp-config itself; drop them from the arguments after --\n');
-      expect(claude.sessions).toBe(false);
+    const cases: [string, ...string[]][] = [['claude', '--mcp-config', 'user.json'], ['claude', '--settings={}'], ['codex', '--headless', '--', '-c', 'mcp_servers.x.command="x"']];
+    for (const [agent, ...own] of cases) {
+      const refused = run(agent, '--isolate', '--dry-run', '--lexical', TASK, ...(agent === 'claude' ? ['--'] : []), ...own);
+      expect(refused.result.status).not.toBe(0);
+      expect(refused.result.stderr).toMatch(/^loadout: --isolate refuses (--mcp-config|--settings|-c) after --: it would undo the isolation\n$/);
+      expect(refused.sessions).toBe(false);
     }
+  });
+
+  it('finds passthrough arguments that would undo --isolate, in every spelling', () => {
+    for (const args of [['--settings', '{}'], ['--settings={}'], ['--mcp-config', 'a.json'], ['--mcp-config=a.json'], ['--chrome'], ['--ide']]) {
+      expect(isolateConflict('claude', ['--permission-mode', 'plan', ...args])).toBe(args[0]);
+    }
+    expect(isolateConflict('claude', ['--permission-mode', 'plan', '--model', 'opus'])).toBeUndefined();
+    for (const args of [['-c', 'mcp_servers.x.command="x"'], ['-cmcp_servers.x.url="u"'], ['--config', 'features.apps=true'], ['--config=mcp_servers.x.url="u"'], ['--enable', 'apps'], ['--enable=apps']]) {
+      expect(isolateConflict('codex', ['--skip-git-repo-check', ...args])).toBe(args[0]);
+    }
+    expect(isolateConflict('codex', ['--skip-git-repo-check', '-c', 'model_reasoning_effort="high"', '--disable', 'apps'])).toBeUndefined();
   });
 
   it('keeps Codex MCP keys unique and connects HTTP servers through library keys', () => {

@@ -167,17 +167,27 @@ adding official flags to the agent's command line only. It writes nothing to
   connectors, written to the session folder. Both are in the
   [CLI reference](https://code.claude.com/docs/en/cli-reference) and
   [settings reference](https://code.claude.com/docs/en/settings-reference#disableclaudeaiconnectors).
-  `--isolate` refuses a `--settings` or `--mcp-config` of your own after `--`.
 - Codex: `codex exec --ignore-user-config` skips `$CODEX_HOME/config.toml`
-  (auth still uses `CODEX_HOME`). Only `exec` defines the flag
+  (auth still uses `CODEX_HOME`), and `--disable apps` turns off the ChatGPT
+  Apps server, which is on by default for ChatGPT sign-ins
+  ([features](https://github.com/openai/codex/blob/main/codex-rs/features/src/lib.rs)).
+  Only `exec` defines `--ignore-user-config`
   ([source](https://github.com/openai/codex/blob/main/codex-rs/exec/src/cli.rs)),
   so `loadout codex --isolate` requires `--headless` and refuses otherwise.
+
+Arguments after `--` pass through unchanged, except those that would undo
+the isolation, which `--isolate` refuses before routing: Claude Code's
+`--settings`, `--mcp-config`, `--chrome` and `--ide`, and Codex's `--enable`
+and `-c`/`--config` overrides of `mcp_servers` or `features`.
 
 Not hidden:
 
 - **Claude Code plugins and their servers.** No per-session flag hides
   installed plugins or their servers, and an installed loadout hook plugin
   still runs next to the launcher.
+- Claude Code settings files (user, project, local): their hooks, permissions
+  and other settings still apply. `--setting-sources` could drop them, but it
+  also drops your permissions and model, so `--isolate` does not use it.
 - A `managed-mcp.json` (organization policy): Claude Code exits at startup
   when `--strict-mcp-config` meets one.
 - claude.ai connectors under managed settings: managed settings outrank

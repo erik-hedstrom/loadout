@@ -4,7 +4,7 @@ import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { DEFAULT_CONFIG, loadConfig, paths, resolveApiKey, writeDefaultConfig, type Config } from './config.js';
 import { jevClient } from './jev.js';
-import { claudeArgs, codexArgs, hostSetup, HOSTS, launch, materialize, pathTranslator, which, windowsPath, type Agent, type Host } from './launch.js';
+import { claudeArgs, codexArgs, hostSetup, HOSTS, isolateConflict, launch, materialize, pathTranslator, which, windowsPath, type Agent, type Host } from './launch.js';
 import { addFromGitHub, addSkills, librarySources, parseGitHub, scanLibrary, skillExcerpt, type AddResult } from './library.js';
 import { repoSignals } from './repo.js';
 import { route } from './route.js';
@@ -267,9 +267,8 @@ async function main(): Promise<number> {
       if (!task) fail(`${agent} needs a task`);
       // Refused before routing: that is a paid Jev call, and a session dir would be left behind.
       if (values.isolate && agent === 'codex' && !values.headless) fail('--isolate for codex needs --headless: interactive Codex has no flag to skip the user config');
-      // A passthrough --mcp-config adds servers that --strict-mcp-config keeps, and a second --settings replaces ours.
-      const passed = (flag: string) => passthrough.some((a) => a === flag || a.startsWith(`${flag}=`));
-      if (values.isolate && (passed('--settings') || passed('--mcp-config'))) fail('--isolate sets --settings and --mcp-config itself; drop them from the arguments after --');
+      const conflict = values.isolate ? isolateConflict(agent, passthrough) : undefined;
+      if (conflict) fail(`--isolate refuses ${conflict.split('=')[0]} after --: it would undo the isolation`);
 
       const bin = which(agent);
       const toPath = pathTranslator(bin);
