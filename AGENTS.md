@@ -10,6 +10,10 @@ loadout picks the skills, MCP servers and model tier for each coding-agent
 session or prompt, out of a library of any size, using a very cheap System One
 model (TypeSafe's Jev). TypeScript, Node ≥ 22.12, ESM, strict.
 
+It runs inside the stock `claude` and `codex` CLIs, through the plugin, hooks
+and MCP. New work targets that path first. The `loadout claude|codex`
+launcher is for benchmarks and power users.
+
 ```bash
 npm ci && npm run build      # dist/
 npm test                     # vitest, test/ only; no network, no key needed
@@ -104,11 +108,13 @@ These rules are why the numbers can be trusted. Keep it that way.
 - **Merge** needs `npm test` and `npm run typecheck` green, plus two reviews
   against the Code Review Rules below:
   - the `pr-reviewer` subagent (`.claude/agents/pr-reviewer.md`);
-  - Codex on GitHub: `@codex review`, or automatic reviews. Use
-    `@codex security review` for changes to file access, auth, the hook, the
-    HTTP server or anything that touches user configs.
+  - a Codex review: a fresh Sol `adversarial-review` through the Codex
+    companion, or `@codex review` on GitHub from a cloud session. Ask for a
+    security focus for changes to file access, auth, the hook, the HTTP
+    server or anything that touches user configs.
 
-  The orchestrator merges.
+  CI must pass on the full matrix (the `ci-full` label). The orchestrator
+  merges; see [ORCHESTRATOR.md](docs/loop/ORCHESTRATOR.md#merge-gate).
 - **Never** force-push `main` or rewrite published history.
 - **Backlog:** update the item in `docs/loop/BACKLOG.md` (status, PR link,
   learnings) in the same PR.
