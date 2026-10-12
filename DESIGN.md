@@ -52,7 +52,7 @@ flowchart TB
 
     subgraph out["Output"]
         CTX["Context injection<br/>skill_relevance note; SKILL.md only for named or clear-winner skills"]
-        SKL["Skill loading<br/>generated plugin and mcp.json, or load_skill"]
+        SKL["Skill loading<br/>Claude launcher: plugin + mcp.json<br/>Codex launcher: skill paths in the prompt + -c mcp_servers<br/>search server: load_skill"]
         TIER["Model tier, launcher only<br/>--model or -m"]
     end
 
