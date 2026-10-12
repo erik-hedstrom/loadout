@@ -81,9 +81,8 @@ when his local Claude usage runs out.
   - Windows on Node 22 can flake on 5 s subprocess timeouts:
     `gh run rerun <id> --failed`.
   - A job that fails with no steps never started. Read its check-run
-    annotation: it is usually the Actions spending limit.
-  - Add `ci-full` once, on the head you mean to merge: the matrix is what
-    uses up the Actions minutes (HANDOFF, Spend).
+    annotation: on 2026-10-12 it was the spending limit, before the repo went
+    public.
 - **`pr-reviewer` APPROVE.**
 - **Codex review** of the final head, with no open High or Medium finding,
   from Sol through the companion or from Codex on GitHub.
@@ -101,7 +100,7 @@ both sides.
   - WSL has the library and key in `~/.loadout`, with `claude` and `codex`
     logged in.
 - **GitHub.**
-  - GitHub Pro, so Actions runs on the private repo.
+  - The repo is public, so Actions on standard runners is free.
   - The `ci-full` label.
   - Codex automatic review turned on.
 - **Cloud environment (optional, Erik).**
@@ -112,7 +111,6 @@ both sides.
   - Cloud credit: $100 until 2026-11-05.
   - Jev: about $5 left, so ≤ $1 per iteration.
   - Codex: by plan.
-  - Actions: see HANDOFF, Spend.
 
 ## Iteration protocol
 
@@ -201,12 +199,30 @@ Codex companion, one worktree per item. Review every PR with the pr-reviewer sub
 and a fresh Sol adversarial-review, then run the merge gate in ORCHESTRATOR.md. Take
 open PRs from cloud sessions through the same gate.
 
+Use these skills (Skill tool) at these points:
+- codex:gpt-5-4-prompting: before writing each Sol brief.
+- superpowers:using-git-worktrees: when starting an item. Worktrees go under
+  dev/sandbox/loadout-wt/<item>.
+- superpowers:receiving-code-review: when pr-reviewer or Sol findings come back.
+  Check each finding against the code, then fix it or decline it with a reason in
+  the PR.
+- superpowers:systematic-debugging: on any failing test or CI job, before a fix.
+- superpowers:verification-before-completion: before you call a PR ready, merge it,
+  or write the iteration log row.
+- impeccable: for any UI or visual work (README visuals, the demo GIF, the social
+  preview). Tell Sol to use it too.
+- council: before you bring Erik a decision that has several valid paths.
+/codex:review and /codex:adversarial-review are user-only commands: run the companion
+script as ORCHESTRATOR.md shows. codex:codex-rescue is a subagent, not a skill.
+
+The repo is public: every push, PR and comment is public at once.
+
 Keep your own context for coordination: read summaries, never bench/results rows,
 node_modules, dist, lockfiles or full logs, and never re-read what you have already
 summarised. Keep state in the repo (backlog statuses, iteration log, PR descriptions)
 so you can resume after auto-compaction.
 
-Never: print or commit secrets, edit the user's agent configs, make anything public,
+Never: print or commit secrets, edit the user's agent configs, change repo settings,
 publish, or post. Draft those and ask Erik. Stop and ask Erik on a budget cap, a
 decision listed in HANDOFF.md, or a task failing twice.
 
@@ -230,8 +246,13 @@ the adversarial review request in ORCHESTRATOR.md, again on each new head. Do no
 bench/judge.ts. Record each PR's review state in its body. Do not merge: the local
 orchestrator runs the merge gate.
 
-The rules in AGENTS.md apply in full. Never print or commit secrets, edit the user's
-agent configs, make anything public, publish, or post.
+If this session lists the superpowers skills, use them as the local orchestrator does:
+receiving-code-review on review findings, systematic-debugging on failures, and
+verification-before-completion before you call a PR ready.
+
+The repo is public: every push, PR and comment is public at once. The rules in
+AGENTS.md apply in full. Never print or commit secrets, edit the user's agent configs,
+publish, or post.
 ```
 
 ### Sol brief (a file in the scratchpad)
@@ -263,4 +284,4 @@ should be deleted rather than kept. Report findings by severity with file:line.
 |---|---|---|
 | `cloud` | Anywhere against GitHub, with no key or agent CLI: the local orchestrator, or a cloud session | code, tests, docs, CI, README, `loadout audit`, retrieval |
 | `local` | Erik's machine, with his logged-in `claude` / `codex` and the TypeSafe key | `bench/invoke.ts`, `bench/outcome.ts`, sweeps, judges, Codex `/hooks` trust, demo recording |
-| `erik` | Erik | going public, npm publish, posting, billing and secrets, budgets, decisions |
+| `erik` | Erik | repo settings, npm publish, posting, billing and secrets, budgets, decisions |

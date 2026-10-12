@@ -14,7 +14,8 @@ usage and [DESIGN.md](DESIGN.md) for the architecture.
 
 ## Where it stands
 
-- **Repo:** https://github.com/erik-hedstrom/loadout, **private** for now.
+- **Repo:** https://github.com/erik-hedstrom/loadout, **public** since
+  2026-10-12. Everything pushed, and every PR and comment, is public at once.
 - **Version:** 0.1.0, not published. The npm name `loadout` is taken (see
   decisions below).
 - **Owner:** Erik Hedström (GitHub `erik-hedstrom`). Commits use
@@ -44,10 +45,10 @@ All numbers, caveats and negative results are in [bench/RESULTS.md](bench/RESULT
   runs.
 - **Cloud-session credit:** $100, expires 2026-11-05. It pays for Claude
   cloud sessions only, not Routines, Projects or API calls.
-- **GitHub Actions:** Pro includes 3,000 minutes a month. Windows counts
-  double and macOS ten times, so the `ci-full` matrix is the expensive part.
-  Jobs stopped starting on 2026-10-12. Job timings since 2026-10-01 add up
-  to about 3,400 billed minutes, about 62% of them macOS.
+- **GitHub Actions:** free on standard runners since the repo went public.
+  As a private repo it used up Pro's 3,000 monthly minutes on 2026-10-12:
+  about 3,400 billed minutes since 2026-10-01, about 62% of them macOS
+  (counted ten times).
 
 ## How the work continues
 
@@ -96,26 +97,24 @@ branches, PRs and `docs/loop/BACKLOG.md`.
   launcher-only work is P2. Alternative hosts such as OpenCode or T3 Code get
   the generic MCP server; competing with them is out of scope. Verified for
   the Claude Code CLI only ([docs/hosts.md](docs/hosts.md)).
+- **Public repo (2026-10-12).** The history was checked first (168 commits,
+  without textconv): no key-shaped strings and no personal email, and the
+  authors are noreply addresses. The one personal detail is the Windows
+  username, in a since-deleted `.vitest/json/output.json`.
 
-1. **Going public.** The repo is private. Recommended order: CI green,
-   LICENSE, README quickstart verified on a clean machine, then public.
-   On the day: enable private vulnerability reporting (GitHub offers it only
-   on public repos) and, if you want one, add a security contact to
-   SECURITY.md. Decide whether `bench/results/*-overhead` may keep your
-   ambient plugin and skill names.
-
-   History check (2026-10-12, 168 commits, without textconv): no key-shaped
-   strings and no personal email. Authors are noreply addresses. The one
-   personal detail is the Windows username, in a since-deleted
-   `.vitest/json/output.json`.
+1. **After going public.**
+   - Turn on private vulnerability reporting. It was off on 2026-10-12,
+     although SECURITY.md links to it.
+   - If you want one, add a security contact to SECURITY.md.
+   - `bench/results/*-overhead` names your installed plugins and skills.
+     They are public now; removing them from history would mean rewriting
+     it.
+   - Check whether Codex automatic review runs on PRs from outside
+     contributors, which would spend your plan.
 2. **npm name.** `loadout` is taken (0.0.2). Options: `@erik-hedstrom/loadout`
    (scoped, always available), or an unscoped name to check
    (`loadout-router`, `skill-loadout`, …).
 3. **Budgets.**
-   - GitHub Actions: make the repo public (Actions is then free on standard
-     runners; see decision 1), raise the spending limit, drop macOS from
-     `ci-full`, or merge on local test runs until the monthly reset. The last
-     option needs AGENTS.md's merge rule changed.
    - Cloud sessions: add `TYPESAFE_API_KEY` and network access to
      `api.typesafe.ai` and `huggingface.co` to the environment, if they should
      run real-Jev checks (D11).

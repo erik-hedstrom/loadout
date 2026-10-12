@@ -38,8 +38,10 @@ npm run dev -- route "<task>"   # needs a TypeSafe key (TYPESAFE_API_KEY or `loa
    - `loadout setup` prints config; it never edits files.
    - Anything that changes the user's environment needs their explicit
      approval.
-4. **Nothing goes public without Erik.** That includes:
-   - making the repo public;
+4. **Nothing goes public without Erik.** The repo itself is public (since
+   2026-10-12), so every push, PR and comment is public at once: push nothing
+   you would not publish. Beyond that, Erik's approval covers:
+   - changing repo visibility or settings;
    - `npm publish`;
    - posting anywhere (HN, Reddit, X, LinkedIn);
    - submitting to awesome lists or opening PRs on other repos;
