@@ -38,12 +38,13 @@ Notes:
    ([RESULTS](../bench/RESULTS.md#the-hook-plugin-in-the-claude-code-cli-2026-10-08)).
    The settings-file hook ran in 10 sessions on 2026-10-07
    ([RESULTS](../bench/RESULTS.md#do-agents-use-what-they-are-given)).
-4. 10 headless sessions per host with `find_skills` attached
+4. 10 headless sessions per host with `find_skills` attached, 2026-10-06
    ([RESULTS](../bench/RESULTS.md#do-agents-use-what-they-are-given)).
 5. The same plugin as the CLI. Erik's check is backlog D10.
 6. Codex runs a new hook only after the user trusts it with `/hooks`, which
    needs an interactive session. The live test is backlog D2.
-7. The launcher attached the server with `-c mcp_servers.…`. The
+7. The launcher attached the server with `-c mcp_servers.…` (2026-10-06, as
+   in note 1). The
    `~/.codex/config.toml` snippet from `loadout setup codex`: untested.
 8. `loadout mcp --http`; see the [README](../README.md#search-mid-session-from-any-mcp-host).
 

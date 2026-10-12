@@ -1,4 +1,4 @@
-# Handoff: loadout, 2026-10-08
+# Handoff: loadout, 2026-10-12
 
 Read this first if you are joining the project, human or agent. Then read
 [AGENTS.md](AGENTS.md) (rules), [docs/loop/ORCHESTRATOR.md](docs/loop/ORCHESTRATOR.md)
@@ -8,12 +8,14 @@ Read this first if you are joining the project, human or agent. Then read
 ## The one-paragraph version
 
 loadout selects skills, MCP servers and a model tier from a separate library,
-using documented extension points. See [README.md](README.md) for usage and
-[DESIGN.md](DESIGN.md) for the architecture.
+using documented extension points. It is meant to run inside the stock
+`claude` and `codex` CLIs people already use. See [README.md](README.md) for
+usage and [DESIGN.md](DESIGN.md) for the architecture.
 
 ## Where it stands
 
-- **Repo:** https://github.com/erik-hedstrom/loadout, **private** for now.
+- **Repo:** https://github.com/erik-hedstrom/loadout, **public** since
+  2026-10-12. Everything pushed, and every PR and comment, is public at once.
 - **Version:** 0.1.0, not published. The npm name `loadout` is taken (see
   decisions below).
 - **Owner:** Erik Hedström (GitHub `erik-hedstrom`). Commits use
@@ -35,30 +37,27 @@ All numbers, caveats and negative results are in [bench/RESULTS.md](bench/RESULT
 
 ### Spend
 
-- **Jev:** about $4 of the $10 TypeSafe credit (estimate; there is no usage
+- **Jev:** about $5 of the $10 TypeSafe credit (estimate; there is no usage
   endpoint).
 - **Claude subscription:** the judges and agent runs hit the session limit
   twice. Run judges sequentially, so the catalog prompt stays cached.
 - **Codex subscription:** used for reviews, request generation and outcome
   runs.
 - **Cloud-session credit:** $100, expires 2026-11-05. It pays for Claude
-  cloud sessions only, not Routines, Projects or API calls. The orchestrator
-  and its subagents run in one cloud session for that reason.
+  cloud sessions only, not Routines, Projects or API calls.
+- **GitHub Actions:** free on standard runners since the repo went public.
+  As a private repo it used up Pro's 3,000 monthly minutes on 2026-10-12:
+  about 3,400 billed minutes since 2026-10-01, about 62% of them macOS
+  (counted ten times).
 
 ## How the work continues
 
-The work continues as a multi-agent loop.
-
-- **Where it runs:** one Claude cloud session (Opus 5.5, auto-compact at
-  500k) acts as the orchestrator. It dispatches `worker` subagents for Claude
-  tasks and reaches Codex through GitHub (`@codex <task>`, `@codex review`).
-- **Merge gate:** every PR needs CI green, the `pr-reviewer` subagent's
-  approval (security, and anything that should not exist), and a Codex review.
-- **Shared state:** branches, PRs and `docs/loop/BACKLOG.md`.
-- **Erik's machine** is needed only for lane `local` tasks.
-
-See [docs/loop/ORCHESTRATOR.md](docs/loop/ORCHESTRATOR.md) for the one-time
-setup, the iteration protocol, the context discipline and the prompts.
+The work continues as a loop in which Sol (Codex) builds and Claude reviews.
+It is run by a Claude Code session on Erik's machine. Cloud sessions fill in
+when local usage runs out and leave merging to the next local run. The
+topology, merge gate, prompts and budgets are in
+[docs/loop/ORCHESTRATOR.md](docs/loop/ORCHESTRATOR.md). Shared state lives in
+branches, PRs and `docs/loop/BACKLOG.md`.
 
 ## Goals for the loop
 
@@ -68,9 +67,11 @@ setup, the iteration protocol, the context discipline and the prompts.
    numbers, in their scope. Its crossover near 57 skills is interpolated from
    Claude Code runs with generated names; for real libraries it is not
    measured.
-2. **Ease of use.** Get from zero to a routed session in three commands. Show
-   a GIF in the README. Make `loadout audit` show people their own waste
-   before they install anything else.
+2. **Ease of use, in the user's own CLI.** Get from zero to loadout running
+   inside `claude` or `codex` in three commands, with no new command to
+   start the agent. Show a GIF in the README. Make `loadout audit` show
+   people their own waste before they install anything else, and `loadout
+   doctor` show what is left to set up.
 3. **Decision quality.** Keep the router honest and improve it on new
    held-out data. Prove (or disprove) that outcomes improve, especially with
    cheap models, which is loadout's core economic argument.
@@ -84,30 +85,40 @@ setup, the iteration protocol, the context discipline and the prompts.
 
 ## Decisions only Erik can make (ask, don't assume)
 
-**Decided:** Apache-2.0 (2026-10-07); stay `erik-hedstrom`, not the
-considered `haesteining` alias; hook default (2026-10-07): loadout runs
-automatically inside Claude Code, in the CLI and desktop app, through a
-user-installed plugin (D10), whose install text says routed prompts go to
-TypeSafe. The launcher stays for power users and benchmarks. Shown for the
-CLI only; the desktop app is untested ([docs/hosts.md](docs/hosts.md)).
+**Decided:**
+- Apache-2.0 (2026-10-07). Stay `erik-hedstrom`, not the considered
+  `haesteining` alias.
+- **Default CLIs first (2026-10-07, widened 2026-10-12).** loadout plugs into
+  the stock `claude` and `codex` CLIs through their own extension points:
+  the Claude Code plugin and its prompt hook (D10), the Codex hook, and MCP
+  search. The plugin's install text says routed prompts go to TypeSafe.
+  Asking people to start their agent through `loadout claude|codex` is a hard
+  sell, so the launcher stays for benchmarks and power users, and
+  launcher-only work is P2. Alternative hosts such as OpenCode or T3 Code get
+  the generic MCP server; competing with them is out of scope. Verified for
+  the Claude Code CLI only ([docs/hosts.md](docs/hosts.md)).
+- **Public repo (2026-10-12).** The history was checked first (168 commits,
+  without textconv): no key-shaped strings and no personal email, and the
+  authors are noreply addresses. The one personal detail is the Windows
+  username, in a since-deleted `.vitest/json/output.json`.
 
-1. **Going public.** The repo is private. Recommended order: CI green,
-   LICENSE, README quickstart verified on a clean machine, then public.
-   On the day: enable private vulnerability reporting (GitHub offers it only
-   on public repos) and, if you want one, add a security contact to
-   SECURITY.md. Decide whether `bench/results/*-overhead` may keep your
-   ambient plugin and skill names.
+1. **After going public.**
+   - Turn on private vulnerability reporting. It was off on 2026-10-12,
+     although SECURITY.md links to it.
+   - If you want one, add a security contact to SECURITY.md.
+   - `bench/results/*-overhead` names your installed plugins and skills.
+     They are public now; removing them from history would mean rewriting
+     it.
+   - Check whether Codex automatic review runs on PRs from outside
+     contributors, which would spend your plan.
 2. **npm name.** `loadout` is taken (0.0.2). Options: `@erik-hedstrom/loadout`
    (scoped, always available), or an unscoped name to check
    (`loadout-router`, `skill-loadout`, …).
-3. **Cloud setup and budget.** Do the one-time setup in ORCHESTRATOR.md:
-   - GitHub app access to the repo;
-   - the `TYPESAFE_API_KEY` secret;
-   - the network allowlist;
-   - the Codex environment and automatic review.
-
-   Also set spending caps, and decide on more Jev credit when the $10 runs
-   out.
+3. **Budgets.**
+   - Cloud sessions: add `TYPESAFE_API_KEY` and network access to
+     `api.typesafe.ai` and `huggingface.co` to the environment, if they should
+     run real-Jev checks (D11).
+   - Jev: more credit when the $10 runs out.
 4. **Launch channels and timing.** Show HN, Reddit, X, LinkedIn, awesome
    lists. Agents draft; Erik posts.
 
@@ -118,6 +129,7 @@ git clone https://github.com/erik-hedstrom/loadout && cd loadout
 npm install && npm run build && npm link          # Node ≥ 22.12 (developed on 24)
 loadout init --key-file ~/keys/typesafe.txt       # the key file is NOT in git; keep it safe
 sh bench/data/library.sh                          # rebuild the 1,262-skill library the results used (~10 min)
+loadout doctor                                    # key, one Jev call, library, index, host setup
 npm test && npm run typecheck
 npx tsx bench/handwritten.ts                      # 18 hand-written checks against the real library (~$0.02)
 ```
@@ -141,7 +153,9 @@ native machine:
 | `src/relay.ts` | MCP transport relay |
 | `src/diagnostic.ts` | Fixed-text transport diagnostics |
 | `src/audit.ts` | Installed-skill listing and tool overhead audit |
-| `plugins/` | Hook-only Claude Code plugin |
+| `src/doctor.ts` | Read-only setup check (`loadout doctor`) |
+| `plugins/` | Hook-only Claude Code plugin: the main way in |
+| `docs/hosts.md` | What works in which host, verified or not |
 | `src/library.ts` | Library scan, safe `add` from dirs/GitHub, confined reads, sources |
 | `src/jev.ts`, `src/embed.ts`, `src/prefilter.ts`, `src/retrieve.ts` | Jev client and validation, embeddings, BM25, fusion |
 | `src/config.ts`, `src/cli.ts`, `src/repo.ts`, `src/types.ts` | Config, CLI, repo signals, types |
@@ -155,12 +169,15 @@ native machine:
 
 - **Gateway approvals:** the gateway exposes library servers through one
   generic `call_server_tool`. Native per-tool approvals need `tools/list_changed`.
-- **Codex hook:** not tested live, because trusting it needs `/hooks`
-  interactively.
-- **Untested hosts:** see [docs/hosts.md](docs/hosts.md).
+- **Untested in a real session:** the Codex hook (D2) and the desktop app
+  (D10); see [docs/hosts.md](docs/hosts.md).
+- **Native Windows:** `which()` ignores PATHEXT, so `claude.exe` and `.cmd`
+  shims read as not on PATH, in `loadout run` and `doctor` (D7).
 - **Outcome evaluation:** the arms invent their own inputs, the runs inherit
   the user's Codex config, and the sample is tiny.
-- **Router weak spots:** integrations, ML and apps. Generic skills such as
-  `frontend-ui-engineering` load on simple UI work. Further tuning on the same
-  315 requests would overfit, so new requests come first.
+- **Router precision on new requests:** 64% (55–72) of loads were useful on
+  C1's held-out requests, against 82% (75–87) on v4's
+  ([RESULTS](bench/RESULTS.md#c1-2026-10-08-new-held-out-requests)), mostly
+  on general business requests. Generic skills such as
+  `frontend-ui-engineering` load on simple UI work (C4).
 - **Tests:** `loadout.test.ts` still mixes modules (E3).

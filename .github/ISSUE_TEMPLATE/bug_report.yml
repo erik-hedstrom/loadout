@@ -3,7 +3,7 @@ description: Report unexpected loadout behavior.
 body:
   - type: markdown
     attributes:
-      value: Do not paste keys or MCP configs. Remove credentials from commands and output. Private vulnerability reporting opens when the repository becomes public. Until then, report to the maintainer directly.
+      value: Do not paste keys or MCP configs. Remove credentials from commands and output. Report vulnerabilities privately (see SECURITY.md), not here.
   - type: textarea
     id: environment
     attributes:
