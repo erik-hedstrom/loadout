@@ -35,34 +35,36 @@ flowchart TB
         LA["Launcher<br/>loadout claude / codex"]
     end
 
+    LIB[("Library<br/>scanLibrary")]
+
     subgraph routing["Routing: route() in src/route.ts"]
-        LIB[("Library<br/>scanLibrary")]
         RET["Retrieve: BM25 + embeddings<br/>top 200 candidates"]
         JEV["Jev SystemOneClient<br/>wide request, then close request"]
         DEC["decide()<br/>load, offer, inject or stay quiet"]
-        LEX["Lexical fallback<br/>BM25 score only"]
+        LEX["Lexical router<br/>BM25 score only; the hook adds nothing unless a skill is named"]
         MEN["Named skills override"]
-        LIB --> RET
         RET --> JEV
-        RET -->|"no key, --lexical, or Jev fails"| LEX
+        JEV -->|"Jev fails"| LEX
         JEV --> DEC
         DEC --> MEN
         LEX --> MEN
     end
 
     subgraph out["Output"]
-        CTX["Context injection<br/>skill_relevance block and SKILL.md in the user turn"]
+        CTX["Context injection<br/>skill_relevance note; injected SKILL.md in the user turn"]
         SKL["Skill loading<br/>generated plugin and mcp.json, or load_skill"]
         TIER["Model tier, launcher only<br/>--model or -m"]
     end
 
     host -->|"task + repo signals"| routing
+    LIB --> RET
+    LIB -->|"no key or lexical router"| LEX
     MEN --> CTX
     MEN --> SKL
     MEN --> TIER
 ```
 
-Every host path calls the same `route()`; the sections below cover each stage.
+Every host path calls the same `route()`.
 
 ### Integration layers
 
