@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import {
   closeSync,
   constants,
@@ -23,7 +23,7 @@ import {
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { parse as parseYaml } from 'yaml';
-import { paths } from './config.js';
+import { loadoutHome } from './config.js';
 import type { Capability, McpServerConfig } from './types.js';
 
 const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---/;
@@ -183,19 +183,21 @@ export function readMcpServers(libraryDir: string): NonNullable<McpFile['mcpServ
 
 const SCAN_CACHE_FILE = 'library-scan.json';
 const SCAN_CACHE_BYTES = 32 * 1024 * 1024;
-// Bump when manifest parsing changes: file fingerprints cannot detect changes to the parser.
-const SCAN_CACHE_VERSION = 1;
+const RACY_WINDOW_MS = 2_000;
+// Bump when parsing or cacheability changes: file fingerprints cannot detect changes to the code.
+const SCAN_CACHE_VERSION = 2;
 type CachedSkill = [folder: string, stamp: string, name: string, description: string, disableModelInvocation: boolean];
 interface ScanCache {
   version: typeof SCAN_CACHE_VERSION;
-  library: string;
   root: string;
   skills: CachedSkill[];
 }
 
-function manifestStamp(dir: string): string | undefined {
+function manifestStamp(dir: string, cutoffNs: bigint): string | undefined {
   try {
     const st = lstatSync(join(dir, 'SKILL.md'), { bigint: true });
+    // Coarse timestamp ticks can hide same-size edits during a scan; recent files must be parsed again.
+    if (st.mtimeNs >= cutoffNs || st.ctimeNs >= cutoffNs) return undefined;
     // ctime catches edits with restored mtimes; inode and mode catch replacements and permission changes.
     return st.isFile() && st.size <= LIMITS.manifestBytes ? `${st.dev}:${st.ino}:${st.mode}:${st.size}:${st.mtimeNs}:${st.ctimeNs}` : undefined;
   } catch {
@@ -203,20 +205,15 @@ function manifestStamp(dir: string): string | undefined {
   }
 }
 
-function readScanCache(dir: string, library: string, root: string): ScanCache | undefined {
+function readScanCache(dir: string, root: string): ScanCache | undefined {
   try {
     const cache: unknown = JSON.parse(readConfined(dir, SCAN_CACHE_FILE, SCAN_CACHE_BYTES).toString('utf8'));
     if (!cache || typeof cache !== 'object') return undefined;
-    const c = cache as Partial<ScanCache> & { checksum?: unknown };
-    if (c.version !== SCAN_CACHE_VERSION || c.library !== library || c.root !== root || !Array.isArray(c.skills)) return undefined;
-    const folders = new Set<string>();
+    const c = cache as Partial<ScanCache>;
+    if (c.version !== SCAN_CACHE_VERSION || c.root !== root || !Array.isArray(c.skills)) return undefined;
     for (const entry of c.skills) {
       if (!Array.isArray(entry) || entry.length !== 5 || !entry.slice(0, 4).every(v => typeof v === 'string') || typeof entry[4] !== 'boolean') return undefined;
-      const folder = entry[0];
-      if (!folder || folder.startsWith('.') || /[\\/]/.test(folder) || folders.has(folder)) return undefined;
-      folders.add(folder);
     }
-    if (c.checksum !== createHash('sha256').update(JSON.stringify(c.skills)).digest('hex')) return undefined;
     return c as ScanCache;
   } catch {
     return undefined;
@@ -225,21 +222,23 @@ function readScanCache(dir: string, library: string, root: string): ScanCache | 
 
 function writeScanCache(dir: string, cache: ScanCache): void {
   const tmp = join(dir, `${SCAN_CACHE_FILE}.${randomUUID()}.tmp`);
-  let written = false;
+  const report = (err: unknown) => {
+    const code = (err as NodeJS.ErrnoException)?.code;
+    // Another Windows hook may still hold the destination open; a later scan can retry quietly.
+    if (code !== 'EPERM' && code !== 'EBUSY') console.error('loadout: library metadata cache could not be saved');
+  };
   try {
     mkdirSync(dir, { recursive: true });
-    const checksum = createHash('sha256').update(JSON.stringify(cache.skills)).digest('hex');
-    writeFileSync(tmp, JSON.stringify({ ...cache, checksum }), { flag: 'wx' });
-    written = true;
+    writeFileSync(tmp, JSON.stringify(cache), { flag: 'wx' });
     renameSync(tmp, join(dir, SCAN_CACHE_FILE));
-  } catch {
+  } catch (err) {
     // Cache persistence cannot prevent routing, and errors may quote untrusted paths or contents.
-    console.error('loadout: library metadata cache could not be saved');
+    report(err);
   } finally {
     try {
-      if (written) rmSync(tmp, { force: true });
-    } catch {
-      console.error('loadout: library metadata cache temporary file could not be removed');
+      rmSync(tmp, { force: true });
+    } catch (err) {
+      report(err);
     }
   }
 }
@@ -247,24 +246,25 @@ function writeScanCache(dir: string, cache: ScanCache): void {
 export function scanLibrary(libraryDir: string, options: { cache?: boolean } = {}): Capability[] {
   const dirs = subdirs(join(libraryDir, 'skills'));
   // Routing opts in; audit, doctor and other read-only callers must neither create nor refresh the cache.
-  const cacheDir = options.cache && resolve(libraryDir) === resolve(paths.library()) ? join(paths.embeddings(), '..') : undefined;
-  const library = resolve(libraryDir);
+  const cacheDir = options.cache ? join(loadoutHome(), 'index') : undefined;
   const root = cacheDir && existsSync(join(libraryDir, 'skills')) ? realpathSync(join(libraryDir, 'skills')) : '';
-  const cache = cacheDir ? readScanCache(cacheDir, library, root) : undefined;
+  const cache = cacheDir ? readScanCache(cacheDir, root) : undefined;
+  const cutoffNs = BigInt(Date.now() - RACY_WINDOW_MS) * 1_000_000n;
   const byFolder = new Map(cache?.skills.map(entry => [entry[0], entry]));
   const skills: CachedSkill[] = [];
   let changed = cache === undefined;
   const capabilities: Capability[] = [];
   for (const dir of dirs) {
-    const stamp = cacheDir ? manifestStamp(dir) : undefined;
+    const stamp = cacheDir ? manifestStamp(dir, cutoffNs) : undefined;
     const cached = byFolder.get(basename(dir));
     const hit = stamp !== undefined && cached?.[1] === stamp;
     const skill = hit ? skillCapability(dir, { name: cached[2], description: cached[3], ...(cached[4] ? { disableModelInvocation: true } : {}) }) : parseSkill(dir);
     if (skill) capabilities.push(skill);
-    if (cacheDir && skill && stamp !== undefined && (hit || manifestStamp(dir) === stamp)) {
+    const cacheable = cacheDir && skill && stamp !== undefined && (hit || manifestStamp(dir, cutoffNs) === stamp);
+    if (cacheable) {
       skills.push([basename(dir), stamp, skill.name, skill.description, skill.disableModelInvocation === true]);
     }
-    if (!hit) changed = true;
+    if (!hit && (cached || cacheable)) changed = true;
   }
 
   const mcpFile = join(libraryDir, 'mcp.json');
@@ -272,7 +272,7 @@ export function scanLibrary(libraryDir: string, options: { cache?: boolean } = {
     capabilities.push({ id: `mcp:${name}`, kind: 'mcp', name, description, source: mcpFile, server, autoApprove: autoApprove === true, gateway: gateway === true });
   }
 
-  if (cacheDir && (changed || skills.length !== cache?.skills.length)) writeScanCache(cacheDir, { version: SCAN_CACHE_VERSION, library, root, skills });
+  if (cacheDir && (changed || skills.length !== cache?.skills.length)) writeScanCache(cacheDir, { version: SCAN_CACHE_VERSION, root, skills });
   return capabilities;
 }
 

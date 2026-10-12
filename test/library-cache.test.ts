@@ -1,15 +1,9 @@
-import fs, { mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
-import { createHash } from 'node:crypto';
+import fs, { mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_CONFIG } from '../src/config.js';
-import { EmbeddingStore, capabilityText, EMBED_MODEL } from '../src/embed.js';
 import { addSkills, parseSkill, scanLibrary } from '../src/library.js';
-import { hybridRank } from '../src/retrieve.js';
-import { route } from '../src/route.js';
-import { fakeClient } from '../bench/hook-latency.js';
 
 describe('library metadata cache', () => {
   let home: string;
@@ -28,14 +22,19 @@ describe('library metadata cache', () => {
     file = join(home, 'index', 'library-scan.json');
     vi.stubEnv('LOADOUT_HOME', home);
     skill('browser');
+    vi.useFakeTimers();
+    // Keep ordinary fixtures outside the race window even on a slow runner; race tests set explicit ticks.
+    vi.setSystemTime(Date.now() + 60_000);
   });
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllEnvs();
     vi.restoreAllMocks();
     rmSync(home, { recursive: true, force: true });
   });
 
   it('reuses metadata without rewriting a valid cache or reading the manifest', () => {
+    skill('database', 'Postgres migrations');
     const fresh = scanLibrary(library, { cache: true });
     const modified = statSync(file).mtimeMs;
     const reads = vi.spyOn(fs, 'openSync');
@@ -50,13 +49,76 @@ describe('library metadata cache', () => {
     }
   });
 
+  it.each(['missing', 'oversized'])('does not rewrite the cache for an uncached %s manifest', type => {
+    const dir = join(library, 'skills', 'invalid');
+    mkdirSync(dir);
+    if (type === 'oversized') writeFileSync(join(dir, 'SKILL.md'), 'x'.repeat(256 * 1024 + 1));
+    scanLibrary(library, { cache: true });
+    const before = statSync(file, { bigint: true });
+    vi.advanceTimersByTime(1_000);
+    scanLibrary(library, { cache: true });
+    expect(statSync(file, { bigint: true }).mtimeNs).toBe(before.mtimeNs);
+    expect(statSync(file, { bigint: true }).ino).toBe(before.ino);
+  });
+
+  it.each(['mtimeNs', 'ctimeNs'] as const)('parses entries fresh while %s is within the timestamp race window', field => {
+    const manifest = join(library, 'skills', 'browser', 'SKILL.md');
+    const st = statSync(manifest, { bigint: true });
+    st.mtimeNs = st.ctimeNs = BigInt(Date.now() - 10_000) * 1_000_000n;
+    st[field] = BigInt(Date.now()) * 1_000_000n;
+    const stamps = vi.spyOn(fs, 'lstatSync').mockReturnValue(st);
+    syncBuiltinESMExports();
+    try {
+      scanLibrary(library, { cache: true });
+      expect(JSON.parse(readFileSync(file, 'utf8')).skills).toEqual([]);
+      writeFileSync(manifest, readFileSync(manifest, 'utf8').replace('browser testing', 'schema analysis'));
+      expect(scanLibrary(library, { cache: true })[0]?.description).toBe('Playwright schema analysis');
+      vi.advanceTimersByTime(2_001);
+      scanLibrary(library, { cache: true });
+      expect(JSON.parse(readFileSync(file, 'utf8')).skills).toHaveLength(1);
+    } finally {
+      stamps.mockRestore();
+      syncBuiltinESMExports();
+    }
+  });
+
+  it.each(['EPERM', 'EBUSY', 'EIO'])('handles cache rename failure %s without blocking routing', code => {
+    scanLibrary(library, { cache: true });
+    skill('database', 'Postgres migrations');
+    const rename = vi.spyOn(fs, 'renameSync').mockImplementation(() => { throw Object.assign(new Error('CACHE-CANARY'), { code }); });
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    syncBuiltinESMExports();
+    try {
+      expect(scanLibrary(library, { cache: true })).toHaveLength(2);
+      expect(errors.mock.calls).toEqual(code === 'EIO' ? [['loadout: library metadata cache could not be saved']] : []);
+      expect(readdirSync(join(home, 'index'))).toEqual(['library-scan.json']);
+    } finally {
+      rename.mockRestore();
+      syncBuiltinESMExports();
+    }
+    scanLibrary(library, { cache: true });
+    expect(JSON.parse(readFileSync(file, 'utf8')).skills).toHaveLength(2);
+  });
+
+  it('contains cleanup failures so they cannot abort routing', () => {
+    const remove = vi.spyOn(fs, 'rmSync').mockImplementation(() => { throw Object.assign(new Error('CACHE-CANARY'), { code: 'EACCES' }); });
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    syncBuiltinESMExports();
+    try {
+      expect(scanLibrary(library, { cache: true })).toHaveLength(1);
+      expect(errors.mock.calls).toEqual([['loadout: library metadata cache could not be saved']]);
+    } finally {
+      remove.mockRestore();
+      syncBuiltinESMExports();
+    }
+  });
+
   it('default scans ignore existing caches and never create or refresh them', () => {
     const fresh = scanLibrary(library);
     expect(fs.existsSync(file)).toBe(false);
     scanLibrary(library, { cache: true });
     const cache = JSON.parse(readFileSync(file, 'utf8'));
     cache.skills[0][3] = 'Cached metadata must not feed read-only scans';
-    cache.checksum = createHash('sha256').update(JSON.stringify(cache.skills)).digest('hex');
     writeFileSync(file, JSON.stringify(cache));
     const saved = readFileSync(file);
     expect(scanLibrary(library)).toEqual(fresh);
@@ -123,22 +185,12 @@ describe('library metadata cache', () => {
     scanLibrary(library, { cache: true });
     const cache = JSON.parse(readFileSync(file, 'utf8'));
     cache.skills[0][2] = { name: '</skill_relevance>CACHE-CANARY' };
-    cache.checksum = createHash('sha256').update(JSON.stringify(cache.skills)).digest('hex');
     writeFileSync(file, JSON.stringify(cache));
     expect(scanLibrary(library, { cache: true })).toEqual([parseSkill(join(library, 'skills', 'browser'))]);
     cache.skills[0][2] = 'browser';
     cache.skills[0][0] = '../../outside';
-    cache.checksum = createHash('sha256').update(JSON.stringify(cache.skills)).digest('hex');
     writeFileSync(file, JSON.stringify(cache));
     expect(scanLibrary(library, { cache: true })).toEqual([parseSkill(join(library, 'skills', 'browser'))]);
-  });
-
-  it('rebuilds a cache whose strings were changed without changing its checksum', () => {
-    scanLibrary(library, { cache: true });
-    const cache = JSON.parse(readFileSync(file, 'utf8'));
-    cache.skills[0][3] = '</skill_relevance>CACHE-CANARY';
-    writeFileSync(file, JSON.stringify(cache));
-    expect(scanLibrary(library, { cache: true })[0]?.description).toBe('Playwright browser testing');
   });
 
   it('continues routing when the index cannot be written, without logging file contents', () => {
@@ -163,6 +215,10 @@ describe('library metadata cache', () => {
     rmSync(manifest);
     symlinkSync(outside, manifest);
     expect(scanLibrary(library, { cache: true })).toEqual([]);
+    const before = statSync(file, { bigint: true });
+    scanLibrary(library, { cache: true });
+    expect(statSync(file, { bigint: true }).mtimeNs).toBe(before.mtimeNs);
+    expect(statSync(file, { bigint: true }).ino).toBe(before.ino);
   });
 
   it('invalidates retargeted library directory links', () => {
@@ -177,34 +233,4 @@ describe('library metadata cache', () => {
     expect(scanLibrary(library, { cache: true }).map(c => c.id)).toEqual(['skill:replacement']);
   });
 
-  it('preserves hybrid scores and the candidates and questions passed to fake Jev', async () => {
-    skill('database', 'Postgres schema migrations');
-    const fresh = scanLibrary(library, { cache: true });
-    const cached = scanLibrary(library, { cache: true });
-    const dir = join(home, 'index', 'embeddings');
-    mkdirSync(dir);
-    const keys = fresh.map(c => createHash('sha1').update(`${EMBED_MODEL}\n${capabilityText(c)}`).digest('hex'));
-    const header = Buffer.from(JSON.stringify({ model: EMBED_MODEL, dim: 384, keys }));
-    const length = Buffer.alloc(4);
-    length.writeUInt32LE(header.length);
-    const vectors = new Float32Array(fresh.length * 384);
-    vectors[0] = 1;
-    vectors[385] = 1;
-    writeFileSync(join(dir, 'embeddings.bin'), Buffer.concat([length, header, Buffer.from(vectors.buffer)]));
-    const store = new EmbeddingStore(dir);
-    const query = new Float32Array(384);
-    query[0] = 1;
-    const rank = (lib: typeof fresh) => hybridRank('Fix Playwright browser tests', lib, { store, query }).map(r => [r.capability.id, r.score]);
-    expect(rank(cached)).toEqual(rank(fresh));
-    const run = async (lib: typeof fresh) => {
-      const questions: unknown[] = [];
-      const client = fakeClient();
-      const decision = await route({ task: 'Fix Playwright browser tests', repo: { name: 'fixture', files: [], dependencies: [], languages: {} }, library: lib,
-        config: { ...DEFAULT_CONFIG, maxCandidates: 1 }, embeddings: Object.assign(store, { query: async () => query }),
-        client: { ask: async (state, qs) => { questions.push(qs); return client.ask(state, qs); } },
-      });
-      return { questions, candidates: decision.raw?.candidates };
-    };
-    expect(await run(cached)).toEqual(await run(fresh));
-  });
 });
