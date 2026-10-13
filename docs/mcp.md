@@ -8,8 +8,10 @@ know-how when the work drifts away from what the session started with:
   does. Jev ranks them; without a key, with `--lexical` or when Jev fails,
   keyword ranking does;
 - `load_skill(skill, file?)`: the skill's instructions as attributed
-  third-party reference material, or one of its files (so hosts without file
-  access, like Claude Desktop, can still use scripts and references);
+  third-party reference material (past 40,000 characters, cut with a pointer
+  to the file), or one of its text files up to 256 KB, not a symlink (so
+  hosts without file access, like Claude Desktop, can still use scripts and
+  references);
 - `server_tools` / `call_server_tool`: a gateway to the library's MCP
   servers marked `"gateway": true` ([library](library.md#mcp-servers)),
   registered only when there are some. loadout leaves `call_server_tool`

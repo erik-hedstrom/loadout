@@ -55,11 +55,7 @@ TypeSafe's Jev API with repository and skill details. `"router": "lexical"` in
 adds context only for prompts that name a skill. What is sent, and from where:
 [privacy](docs/hook.md#privacy).
 
-**Tested so far:** the Claude Code plugin in one headless run
-([RESULTS](bench/RESULTS.md#the-hook-plugin-in-the-claude-code-cli-2026-10-08)),
-and the same hook from settings.json in 10 sessions
-([RESULTS](bench/RESULTS.md#do-agents-use-what-they-are-given)); the Codex
-plugin install offline only, with no live hook ([hosts](docs/hosts.md)).
+What has been checked in each host: [hosts](docs/hosts.md).
 
 ## What is measured
 
@@ -83,11 +79,8 @@ All numbers, caveats and negative results: [bench/RESULTS.md](bench/RESULTS.md).
   Codex (gpt-6.1-sol, 6-minute cap), where the loadout arm got the judge's
   top skill, it won 4 (22–78%), lost 3 (14–69%) and split 1 (2–47%)
   ([pilot](bench/RESULTS.md#is-the-work-better-outcome-pilot-2026-10-07)).
-- **Small libraries:** in a fresh Claude Code session's first request, the
-  MCP search tools cost more tokens than a native listing of 50 skills under
-  generated names; with real names: not shown
-  ([B1](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request)).
-  The Claude Code plugin adds only the hook; the Codex plugin also attaches
+- **Small libraries:** the MCP search tools can cost more than a native
+  listing ([cost](docs/mcp.md#cost-and-privacy)). The Claude Code plugin adds only the hook; the Codex plugin also attaches
   the search tools, whose cost in Codex is not measured.
 
 How it decides: [DESIGN.md](DESIGN.md). Security model: [SECURITY.md](SECURITY.md).

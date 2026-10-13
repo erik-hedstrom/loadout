@@ -16,7 +16,7 @@ loadout list --sources                            # where the skills came from, 
 `dist`, `build` and similar, and copies each skill into `skills/`. It then
 indexes new skills for retrieval (local embeddings when the optional
 `@huggingface/transformers` is installed; the first run downloads
-bge-small-en-v1.5, about 35 MB).
+bge-small-en-v1.5).
 - It records where each skill came from (the GitHub repo and commit, or the
   local folder's path), so re-adding updates it in place.
 - `list --sources` prints one `add` command per repo or folder, with the
