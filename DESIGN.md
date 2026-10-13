@@ -40,11 +40,14 @@ flowchart TB
     LIB[("Library<br/>scanLibrary")]
 
     subgraph routing["Routing: route() in src/route.ts"]
+        GATE{"Jev client?"}
         RET["Retrieve: BM25, plus embeddings when available<br/>top maxCandidates (200 by default)"]
         JEV["Jev SystemOneClient<br/>wide request: pick, need, model tier<br/>close request: top shortlist (8 by default)"]
         DEC["decide()<br/>load, offer, inject or stay quiet<br/>up to 3 skills, 2 MCP servers, 4 offers (defaults)"]
         LEX["Lexical router<br/>loads matches at least half the top BM25 score,<br/>up to 3 skills and 2 MCP servers (defaults)<br/>no offers; tier = defaultTier"]
-        MEN["Named skills override<br/>up to 3, injected"]
+        MEN["Named skills override<br/>up to 3, marked for injection"]
+        GATE -->|"yes"| RET
+        GATE -->|"no: no key, router: lexical, or --lexical"| LEX
         RET --> JEV
         JEV -->|"Jev fails, not cancelled"| LEX
         JEV --> DEC
@@ -53,35 +56,34 @@ flowchart TB
     end
 
     subgraph out["Output"]
-        CTX["Context, hook and launcher<br/>hook: skill_relevance list with Jev fit, or a keyword score relative to the top match<br/>in lexical mode (1.00 for a named skill the router did not rate);<br/>once per skill per session;<br/>hook in lexical mode: only when a skill is named<br/>Claude launcher: skill_relevance in the system prompt, skills named with Jev only<br/>Codex launcher: loaded and offered skills listed in the prompt,<br/>or the skill_relevance note when there are none<br/>SKILL.md text for named or clear-winner skills, if inject.enabled (default);<br/>past 12,000 characters, cut with a pointer to the file"]
-        SKL["Skill loading, launcher only<br/>loaded and offered skills<br/>Claude: generated plugin<br/>Codex: paths in the prompt"]
-        MCPS["Selected MCP servers, launcher only<br/>Claude: mcp.json<br/>Codex: -c mcp_servers"]
-        TIER["Model tier, launcher only<br/>Claude: --model, --effort<br/>Codex: -m, model_reasoning_effort"]
-        FSR["find_skills result<br/>returned to the agent: Jev-ranked matches with a fit score,<br/>or keyword matches when lexical (skills, then servers),<br/>or a note that nothing fits"]
-        LS["load_skill result<br/>one skill's SKILL.md (past 40,000 characters, cut with a pointer to the file)<br/>and up to 60 file names, or one text file up to 256 KB; no routing"]
+        HC["Hook context<br/>skill_relevance list: Jev fit, or a keyword score relative to the top match<br/>(1.00 for a named skill the router did not rate)<br/>once per skill per session id; with lexical routing, only when a skill is named"]
+        LC["Launcher prompt<br/>Claude: skill_relevance note in the system prompt<br/>Codex: skills listed in the prompt; the note only when no skill is loaded or offered<br/>the note names skills with Jev only; with lexical routing it is the search hint, when search is on"]
+        INJ["Injected SKILL.md text, hook and launcher<br/>named skills, and clear winners with Jev, if inject.enabled (default)<br/>past 12,000 characters, cut with a pointer to the file"]
+        LSN["Launcher session only<br/>skills: Claude generated plugin, Codex paths in the prompt<br/>MCP servers: Claude mcp.json, Codex -c mcp_servers<br/>tier: Claude --model, Codex -m; each adds an effort setting when the tier has one"]
+        DR["Decision report<br/>route: stdout, text or --json; launchers: the text summary on stderr<br/>includes the decision warning, if any:<br/>Jev fell back to keywords, or more than 3 skills named"]
+        NOTE["Notes on stderr, fixed text<br/>CLI, before routing: no key found, using lexical routing (not when lexical was chosen)<br/>hook, after routing: Jev fell back to keyword ranking;<br/>hook failed or hit its 20 s deadline"]
+        FSR["find_skills result<br/>returned to the agent, after any decision warning:<br/>Jev-ranked matches with a fit score,<br/>or keyword matches when lexical (skills, then servers),<br/>or a note that nothing fits"]
+        LS["load_skill result<br/>one library skill's SKILL.md (past 40,000 characters, cut with a pointer to the file)<br/>and up to 60 file names, or one text file up to 256 KB; no routing"]
         GW["Gateway: server_tools, call_server_tool<br/>library servers marked gateway: true; not over --http"]
-        WARN["Warning: no key, Jev fell back to keywords, or more than 3 skills named<br/>launcher: in the decision summary on stderr; route: in the decision report;<br/>find_skills: before the result; a missing key also a stderr notice<br/>hook: only a fixed note when Jev fell back"]
-        DR["Decision report, loadout route<br/>text, or --json"]
     end
 
     host -->|"prompt or task + repo signals<br/>(hooks skip short follow-ups)"| routing
     LA -->|"attaches it when search is on (default)"| MS
+    XH -->|"bundled .mcp.json"| MS
+    CH -.->|"optional, added by the user"| MS
     MS -->|"find_skills: goal and keywords + repo signals"| routing
     MS -->|"load_skill"| LS
     MS -->|"server_tools, call_server_tool; stdio only"| GW
-    LIB -->|"hook and --http find_skills: skills;<br/>stdio find_skills: skills + gateway servers;<br/>launcher and route: everything"| RET
-    LIB -->|"no key, router: lexical, or --lexical"| LEX
-    LIB -->|"skills named in the task"| MEN
-    LIB --> LS
-    LIB --> GW
-    MEN --> CTX
-    MEN --> SKL
-    MEN --> MCPS
-    MEN --> TIER
+    LIB -->|"launcher and route: skills and MCP servers<br/>hook: skills<br/>stdio find_skills: skills and gateway servers<br/>--http find_skills: skills"| routing
+    host --> NOTE
+    MS --> NOTE
+    MEN --> HC
+    MEN --> LC
+    MEN --> INJ
+    MEN --> LSN
     MEN --> DR
     DEC -->|"Jev: rated candidates, fit at least 0.5<br/>(general goals: also exact fit at least 0.8), at most 5"| FSR
     MEN -->|"lexical: the final selection, at most 5"| FSR
-    routing --> WARN
 ```
 
 ### Integration layers
@@ -178,10 +180,12 @@ literal, atomic questions; every decision rule is code (`decide()` in
    - If several installed skills share the name, the one the router rated best
      is used, and it replaces the other copies.
 6. **Tell the agent where to look**, without forcing it (TypeSafe's measured
-   wording), via `--append-system-prompt` for Claude Code, and for Codex in
-   the prompt when no skill is loaded or offered (otherwise the prompt lists
-   the loaded skills, then the offered ones under "Also available if
-   needed"):
+   wording), via `--append-system-prompt` for Claude Code. Codex gets it in the
+   prompt only when no skill is loaded or offered; otherwise the prompt lists
+   the loaded skills, then the offered ones under "Also available if needed".
+   Without Jev (no key, `--lexical`, or Jev down) the note names no skills: it
+   is only the search hint, and only when search is on, so a Codex prompt with
+   no skills and search off is the bare task:
 
    ```
    <skill_relevance>

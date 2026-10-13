@@ -787,7 +787,9 @@ DESIGN.md "Architecture"; the launcher flags it showed stay in the
 integration table. It sets no colors, so GitHub themes it. Rendered once with
 `npx -y @mermaid-js/mermaid-cli` (with `--no-sandbox`) to check the syntax; not
 viewed on GitHub in light and dark. Mermaid ignores `direction` inside a
-subgraph that has outside edges, so the host boxes wrap.
+subgraph that has outside edges, so the host boxes wrap. Each label was
+checked against the code on every entry path (launcher, hook, `route`, `mcp`
+stdio and `--http`) with Jev, lexical routing, no key and Jev failure.
 
 ## Iteration log
 
