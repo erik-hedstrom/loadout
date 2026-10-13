@@ -177,7 +177,7 @@ cross-vendor agents). Erik publishes.
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
 | C1 | P0 | New held-out request set + re-measure v4 | Codex (seeds, expand) + Claude (judge) | local | done ([#16](https://github.com/erik-hedstrom/loadout/pull/16)): precision falls on new requests (64% vs 82%); judged through local `claude -p`, not the API (see Learnings) |
-| C2 | P1 | Outcome eval on the small tier with fixed fixtures | Claude (design) | cloud (fixtures) + local (runs) | in progress (fixtures: PR pending; runs: local) |
+| C2 | P1 | Outcome eval on the small tier with fixed fixtures | Claude (design) | cloud (fixtures) + local (runs) | in progress ([#37](https://github.com/erik-hedstrom/loadout/pull/37), fixtures; runs: local) |
 | C3 | P2 | Does Jev pick a sensible model tier? | Claude | cloud | todo (launcher only: the hook and search keep the user's model) |
 | C4 | P0 | Demote generic "fits everything" skills | Codex | cloud | todo (next: C1 shows over-loading on general business requests) |
 | C5 | P2 | Retrieval beyond 200 candidates (Jev tournament) | Codex | cloud | todo |
@@ -230,7 +230,8 @@ Acceptance:
 
 Learnings (cloud half): [fixtures and protocol](../../bench/fixtures/c2/PROTOCOL.md).
 - The Jev key cannot be hidden from the agent's `Bash` in one sandbox: the
-  hook and `loadout mcp` run as the same user.
+  hook and `loadout mcp` run as the same user. The protocol keeps real keys in
+  a harness gateway outside the sandbox (`jev.baseUrl` already allows it).
 
 **C3. Tier choice.**
 

@@ -36,7 +36,7 @@ open is checked by script, not here.
 - One file, nothing loaded from the network, usable at phone width, brand colours used with readable contrast.
 
 ## web-signup-form
-- Rules: email format, password at least 10 characters with a digit, passwords match, terms checked. Errors beside fields, tied to inputs (aria-describedby, aria-invalid) and announced (live region or focus move). fetch call untouched. Rules in a module a Node test can import, with tests for `node --test`.
+- Rules: email format, password at least 10 characters with a digit, passwords match, terms checked. Errors beside fields, tied to inputs (aria-describedby, aria-invalid) and announced (live region or focus move). fetch call untouched. Rules in `validate.js` as `validate({ email, password, confirm, terms })` (the interface the task names), with tests for `node --test`. The rules and the fetch call are checked by a probe; the DOM half is the judge's.
 
 ## data-sales-clean
 - 336 rows, 6 exact duplicate order IDs. Mixed dates: ISO and 71 slash dates, 47 of them with a day above 12, which settles MM/DD/YYYY (and Q3 fits it). Region has case variants, padding and blanks. Some prices carry "$".

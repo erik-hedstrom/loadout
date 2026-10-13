@@ -71,9 +71,17 @@ describe('C2 fixtures', () => {
 
   // The smoke run must not use a scored task, so its fixture stays outside the index and the key.
   it('keeps the smoke fixture out of the 18 scored tasks', () => {
-    expect(readdirSync(join(root, 'smoke')).sort()).toEqual(['README.md', 'scores.csv', 'task.md']);
+    expect(readdirSync(join(root, 'smoke')).sort()).toEqual(['README.md', 'routes.txt', 'task.md']);
     expect(index.map((t) => t.id)).not.toContain('smoke');
     expect(readFileSync(join(root, 'KEY.md'), 'utf8')).not.toMatch(/^## smoke/m);
+  });
+
+  // The harness-owned probe for web-signup-form calls this interface, which only the task text tells the agent about.
+  it('names the signup interface in the task, the key and the protocol', () => {
+    for (const f of ['web-signup-form/task.md', 'KEY.md', 'PROTOCOL.md']) {
+      expect(readFileSync(join(root, f), 'utf8'), f).toContain('validate({ email, password, confirm, terms })');
+      expect(readFileSync(join(root, f), 'utf8'), f).toContain('validate.js');
+    }
   });
 
   it(`keeps every file at ${MAX_BYTES} bytes or less`, () => {
