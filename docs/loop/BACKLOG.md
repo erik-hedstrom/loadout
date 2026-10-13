@@ -159,8 +159,10 @@ Acceptance: a table with sources and access dates covering:
 State what each solves and what loadout adds.
 
 Learnings:
-- 8 rows in `docs/comparison.md`, read 2026-10-12. No head-to-head was run;
-  loadout's own numbers are quoted from RESULTS and B1's native-listing costs.
+- 8 rows in `docs/comparison.md`, read 2026-10-12 and re-checked against
+  the same sources on 2026-10-13. The only head-to-head numbers are B1's
+  (native listings against adding loadout's MCP server); the rest are quoted
+  from RESULTS.
 - `developers.openai.com` and `skills.sh` were blocked from the cloud session;
   the table marks what that left unconfirmed.
 - "toolsift" is `abdulmunimjemal/toolsift`; other searches return
