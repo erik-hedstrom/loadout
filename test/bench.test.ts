@@ -82,6 +82,7 @@ describe('benchmark backends', () => {
     });
     const calls: { args: string[]; env?: NodeJS.ProcessEnv }[] = [];
     const inventories: { plugins: { name: string; path: string }[] }[] = [];
+    const reduced = (inv: { plugins: { name: string }[] }) => ({ loadoutPlugins: inv.plugins.filter((p) => /^loadout(?:@|$)/i.test(p.name)).map((p) => p.name), otherPlugins: inv.plugins.filter((p) => !/^loadout(?:@|$)/i.test(p.name)).length });
     const hookCounts: number[] = [];
     vi.mocked(spawn).mockImplementation((_command, argv, options) => {
       const args = argv as string[];
@@ -145,7 +146,7 @@ describe('benchmark backends', () => {
         const rows = readFileSync(join(dir, `invoke-claude-${mode}.jsonl`), 'utf8').trim().split('\n').map((line) => JSON.parse(line));
         expect(rows).toHaveLength(1);
         expect(calls).toHaveLength(1);
-        expect(rows[0]).toMatchObject({ id: 'a', invalid: reason, costUsd: problem === 'auth failure' ? 0 : 0.05, exit: problem === 'no init' ? 1 : 0, timedOut: false, invoked: ['skill-a'], tools: ['Read'], inventory: problem === 'no init' || problem === 'bad init' ? null : inventories[0], hookInvocations: hookCounts[0]!, hookEventCount: hookCounts[0]! + (ambient === 'absolute' ? 1 : 0) });
+        expect(rows[0]).toMatchObject({ id: 'a', invalid: reason, costUsd: problem === 'auth failure' ? 0 : 0.05, exit: problem === 'no init' ? 1 : 0, timedOut: false, invoked: ['skill-a'], tools: ['Read'], inventory: problem === 'no init' || problem === 'bad init' ? null : reduced(inventories[0]!), hookInvocations: hookCounts[0]!, hookEventCount: hookCounts[0]! + (ambient === 'absolute' ? 1 : 0) });
         if (problem === 'auth failure') expect(rows[0].outcome).toEqual({ isError: true, subtype: 'success' });
         expect(rows[0].hooks).toHaveLength(hookCounts[0]! + (ambient === 'absolute' ? 1 : 0));
         return;
@@ -169,7 +170,9 @@ describe('benchmark backends', () => {
       for (const [i, row] of rows.entries()) {
         expect(row).toMatchObject({ agent: 'claude', mode, model: 'sonnet', invoked: ['skill-a'], searches: [], tools: ['Read'], exit: 0, timedOut: false, costUsd: 0.05, hookInvocations: hookCounts[i]!, hookEventCount: hookCounts[i]!, hookContext: problem !== 'silent hook' && hookCounts[i]! > 0 });
         if (mode !== 'routed') expect(row).toMatchObject({ loaded: [], injected: [], offered: [] });
-        expect(row.inventory).toEqual(inventories[i]);
+        expect(row.inventory).toEqual(reduced(inventories[i]!));
+        // Rows are public: no ambient plugin names or paths, and no hook skill text.
+        expect(JSON.stringify(row)).not.toMatch(/ambient|other-plugin|skill_relevance/);
         expect(row).not.toHaveProperty('invalid');
         expect(row.hooks).toHaveLength(hookCounts[i]!);
         expect(row.ms).toBeGreaterThanOrEqual(0);

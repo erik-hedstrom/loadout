@@ -79,6 +79,8 @@ interface Event { tool: string; detail: string; ok: boolean; id?: string }
 interface Inventory { plugins: { name: string; path?: string }[] }
 interface HookExecution { id: string; name: string; event: string; exit_code?: number; outcome?: string; additionalContext?: string }
 
+const isLoadout = (name: string) => /^loadout(?:@|$)/i.test(name);
+
 function checkInventory(inventory: Inventory | undefined, hookInvocations: number, uncountedContext: number, pluginDir?: string): string | undefined {
   if (!inventory || !Array.isArray(inventory.plugins)) return 'no startup inventory';
   const normalize = (p: string) => {
@@ -87,7 +89,7 @@ function checkInventory(inventory: Inventory | undefined, hookInvocations: numbe
   };
   let ownPlugins = 0;
   for (const plugin of inventory.plugins) {
-    if (!/^loadout(?:@|$)/i.test(plugin.name)) continue;
+    if (!isLoadout(plugin.name)) continue;
     if (!pluginDir || typeof plugin.path !== 'string' || normalize(plugin.path) !== normalize(toPath(pluginDir)) || ++ownPlugins > 1) return 'ambient loadout plugin; measurement invalid';
   }
   if (mode === 'plugin' && ownPlugins !== 1) return 'missing loadout plugin; measurement invalid';
@@ -211,8 +213,10 @@ for (const id of values.ids.split(',')) {
     agent,
     mode,
     model: session.model,
-    inventory: inventory ?? null,
-    hooks,
+    // Rows are committed to a public repo: keep what validity needs, not the user's plugin
+    // list, local paths or the hook's skill text.
+    inventory: inventory ? { loadoutPlugins: inventory.plugins.filter((p) => isLoadout(p.name)).map((p) => p.name), otherPlugins: inventory.plugins.filter((p) => !isLoadout(p.name)).length } : null,
+    hooks: hooks.map(({ additionalContext, ...h }) => ({ ...h, context: additionalContext?.includes('<skill_relevance>') ?? false })),
     hookInvocations,
     hookEventCount: hooks.length,
     hookContext: hooks.some((h) => h.additionalContext?.includes('<skill_relevance>')),
