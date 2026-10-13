@@ -183,7 +183,7 @@ cross-vendor agents). Erik publishes.
 | C5 | P2 | Retrieval beyond 200 candidates (Jev tournament) | Codex | cloud | todo |
 | C6 | P2 | Multi-intent requests | Claude | cloud | todo |
 | C7 | P1 | Recommended packs with measured upside (first: frontend with Impeccable) | Codex (harness) + Claude (runs) | cloud (fixtures) + local (runs) | todo (after B1, C2) |
-| C8 | P0 | Skill use with the hook-only plugin | Claude | local | todo |
+| C8 | P0 | Skill use with the hook-only plugin | Claude | local | done ([#25](https://github.com/erik-hedstrom/loadout/pull/25)): 0 of 10 headless; the hook routes on all 10, but the plugin cannot open what it routes to (D13) |
 
 **C1. New held-out requests.**
 
@@ -303,6 +303,23 @@ users install has the hook only. Add a plugin arm (`--plugin-dir`) to
 Acceptance: a third row in that RESULTS table, with raw results. The README's
 "has not been measured" is then replaced by the number.
 
+Learnings (2026-10-12, [#25](https://github.com/erik-hedstrom/loadout/pull/25)):
+- **0 of 10.** The hook added `<skill_relevance>` context on all 10 prompts;
+  Claude opened no skill. The context points to `load_skill`, which the
+  plugin lacks, or to the library folder, which a headless run may not read
+  (probe: "requested permissions to read … but you haven't granted it yet").
+  The 6 of 10 arm opened skills through the MCP server's `load_skill`.
+  Interactive sessions would prompt instead: not measured. Next: D13.
+- The bench took six review rounds to measure the right thing. Skill context is
+  not an execution counter (a hook legitimately returns nothing). A PATH shim
+  the bench owns counts invocations, plus a `context` mark for invocations
+  that returned context. A marker in the agent's folder changed both the task
+  and the hook's routing input. A run that fails before the model answers
+  (expired login, `is_error` at $0) used to read as a miss.
+- Under WSL the `claude` we start is a launcher script: PATH stays a Linux
+  list and `WSLENV=PATH/l` translates it. Mocked tests passed with the wrong
+  form; only a real run showed it.
+
 ## D. Integrations and robustness
 
 | ID | P | Task | Agent | Lane | Status |
@@ -319,6 +336,7 @@ Acceptance: a third row in that RESULTS table, with raw results. The README's
 | D8 | P1 | Host capability matrix (verified vs generated) | Claude | cloud | done ([#18](https://github.com/erik-hedstrom/loadout/pull/18)) |
 | D9 | P1 | Codex parity: neutral session skill dir, tier presets | Claude | cloud | done ([#21](https://github.com/erik-hedstrom/loadout/pull/21)); Codex launch not re-run live |
 | D12 | P0 | Codex: install the hook and search as one step, if Codex allows it | Codex | local | done ([#23](https://github.com/erik-hedstrom/loadout/pull/23)): `plugins/loadout-codex` through `.agents/plugins/marketplace.json`; install checked offline; the hook still needs `/hooks` trust; the live run is D2 |
+| D13 | P0 | The plugin must be able to open what its hook routes to | — | cloud + local + erik | blocked: design decision (Erik) |
 
 **D10. In-host first: loadout as a Claude Code plugin.**
 
@@ -538,8 +556,26 @@ throwaway `CODEX_HOME`):
   its server. doctor reads both, plus `[features] hooks`.
 - WSL loadout behind Windows Codex keeps the TOML snippet: plugin commands
   cannot carry the `wsl.exe` wrapper.
-- Left: `marketplace add erik-hedstrom/loadout` from GitHub (after merge); the
-  live hook (D2); desktop and T3 Code.
+- `codex plugin marketplace add erik-hedstrom/loadout` and `codex plugin add
+  loadout-codex@loadout` install from GitHub (2026-10-12, after merge,
+  throwaway `CODEX_HOME`).
+- Left: the live hook (D2); desktop and T3 Code.
+
+**D13. The plugin opens what its hook routes to.**
+
+Why (C8, 2026-10-12): the hook-only Claude Code plugin routed on 10 of 10
+prompts, and Claude opened 0 of 10 skills in headless runs. Its context points
+to `load_skill`, which only the MCP server has, or to library folders outside
+the working folder, which a headless run may not read. The Codex plugin
+carries the MCP server and is not affected by the first part.
+
+Acceptance:
+- The context names only ways to open a skill that the installed setup has.
+- The plugin arm in `bench/invoke.ts` re-run on the same 10 requests, against
+  the 6 of 10 and 2 of 10 rows.
+- Erik picks the approach first. Candidates: add the MCP server to the plugin
+  (B1: +546 tokens per request, which D10 avoided); inject the routed skill's
+  text into the hook context; or a Claude-side way to read the library.
 
 **D7. `loadout doctor`.**
 
@@ -796,3 +832,4 @@ integration layers, readable in both light and dark themes.
 | 2026-10-09 (iter 5) | #13 label-gated CI (`ci-full` label created), #11 and #12 E8 bench/src, #14 D11, #15 E8 docs, #16 C1 | — | Jev $0 / Claude: merges and conflict fixes / Codex: none | Actions runs again (GitHub Pro). Next work goes to a cloud session (Claude weekly usage at 96%) |
 | 2026-10-09 (iter 6, cloud) | — | Open PRs, each updating its own row: [#17](https://github.com/erik-hedstrom/loadout/pull/17) backlog statuses, [#18](https://github.com/erik-hedstrom/loadout/pull/18) D8, [#19](https://github.com/erik-hedstrom/loadout/pull/19) D6, [#20](https://github.com/erik-hedstrom/loadout/pull/20) D7, [#21](https://github.com/erik-hedstrom/loadout/pull/21) D9 | Jev $0 (no key in the cloud environment) / Claude: cloud-session credit / Codex: reviews on GitHub | Add `TYPESAFE_API_KEY` and `api.typesafe.ai` (and `huggingface.co`) to the cloud environment for D11's real-Jev run and C4 |
 | 2026-10-12 (iter 7) | #19 D6, #21 D9, #18 D8, #17 backlog statuses (after fixing pr-reviewer's two Mediums), #20 D7 (Sol fixed two findings from Erik's local Codex review: Windows hook paths, Claude search-only setup), all on the full matrix. This PR: default CLIs first, loop docs for the local and cloud setups | — | Jev under $0.001 (one doctor call) / Claude: pr-reviewer rounds (subscription) / Codex: one Sol build, five Sol reviews | Actions stopped starting jobs (Pro's minutes used up, about 62% by macOS). Erik made the repo public, so standard runners are free. Left for Erik: private vulnerability reporting (off), and the items under HANDOFF decision 1 |
+| 2026-10-12/13 (iter 8, desktop app) | #22 loop docs (after Erik enabled private vulnerability reporting); #24 D11 scan cache (new process p50 1,781 → 1,543 ms; D11 stays open); #23 D12 Codex plugin (installs from GitHub); this PR, #25 C8 (plugin arm 0 of 10: routes, cannot open) | — | Jev about $0.15 (hook latency, C8) / Claude: $1.93 C8 run plus probes, pr-reviewer rounds (subscription) / Codex: 3 Sol builds, about 12 fix rounds, about 20 reviews (ChatGPT plan) | D13: how the plugin opens skills (MCP server, inject, or other). D11: a long-lived process for the model load? D2: trust the Codex plugin hook in `/hooks`. D10: the desktop-app check. Ten stale worktrees under `dev/sandbox/loadout-wt` (all merged, clean) |

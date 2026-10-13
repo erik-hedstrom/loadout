@@ -228,8 +228,10 @@ You can also use `/plugin` inside a session. The plugin routes every prompt
 and adds the skills that fit as context, so sessions started without the
 launcher get the right skills without relying on the agent to search. The
 [search tool plus prompt hook](bench/RESULTS.md#do-agents-use-what-they-are-given)
-raised Claude Code's skill use from 2 to 6 of 10 sessions; the hook-only
-plugin has not been measured. Each skill
+raised Claude Code's skill use from 2 to 6 of 10 sessions. The hook-only
+plugin opened no skill in 10 headless sessions: it routes, but it has no
+`load_skill`, and reading the library needs a permission that a headless run
+cannot grant. Each skill
 is offered once per session, and short follow-ups ("yes", "go on") are not
 routed. For Codex CLI, `loadout setup codex` prints:
 

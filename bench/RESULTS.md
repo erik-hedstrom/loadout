@@ -385,6 +385,7 @@ hook, which routes the prompt and adds the skills that fit as context:
 |---|---:|
 | Search tool only | 2 of 10 |
 | Search tool + prompt hook | **6 of 10** |
+| Hook-only plugin, as users install it (2026-10-12) | **0 of 10** |
 
 In the 4 misses the hook did offer the right skill, and Claude still did not
 open it:
@@ -392,6 +393,30 @@ open it:
   calling any tool;
 - on the MCP server and the threat model it used up its 8 turns or 4 minutes
   first (shell commands are not approved in these runs).
+
+**The hook-only plugin routes, but in these runs the agent cannot open what
+it routes to** ([C8](../docs/loop/BACKLOG.md), [#25](https://github.com/erik-hedstrom/loadout/pull/25)).
+`plugins/loadout` was loaded with `--plugin-dir`, with no MCP server. Every
+row passed the bench's checks: the plugin was loaded, one loadout hook ran
+(counted by the bench's own PATH shim), and no other loadout hook or plugin
+was present. The hook added `<skill_relevance>` context on all 10 prompts.
+Claude opened no library skill:
+- The context says to call `load_skill`, or to read `SKILL.md` in the folder
+  given. The plugin has no `load_skill`; that was the search arm's MCP server.
+- Reading the folder failed. A one-call probe on the same setup got: "Claude
+  requested permissions to read from \\\\wsl.localhost\\…\\SKILL.md, but you
+  haven't granted it yet". In a headless run nobody can grant it.
+- 7 runs used their 8 turns, mostly on shell commands that were not approved.
+  3 answered in text.
+
+So this shows the headless case, with loadout in WSL behind Windows Claude
+Code. An interactive session would ask the user for permission to read each
+skill: not measured. The arm also differs from the two above in that the
+bench's shim is first on PATH; that changes how the hook is reached, not what
+the agent sees.
+
+Raw: [invoke-claude-plugin.jsonl](results/2026-10-06T05-40-33-sweep/invoke-claude-plugin.jsonl).
+Cost: $1.93 reported by Claude Code (Sonnet, subscription); Jev under $0.02.
 
 These are small samples (10 requests per cell, capped runs), not outcome
 measurements: they show whether the skill reaches the agent's context, not

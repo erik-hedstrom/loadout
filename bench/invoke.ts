@@ -140,7 +140,7 @@ function toolEvents(stream: string): { events: Event[]; hooks: HookExecution[]; 
       // An expired login ends as is_error at $0 (seen 2026-10-12). It would otherwise read as a miss.
       // A run that used its turns has a cost, so it stays a valid miss as in the earlier arms.
       failedBeforeModel = e.is_error === true && !(e.total_cost_usd > 0);
-      // Kept on the row: a quota stop after billed turns is is_error with a cost, and must not pass for a miss.
+      // Kept on the row, so analysis can tell a quota or API stop after billed turns from a miss.
       result = { isError: e.is_error === true, subtype: e.subtype };
     } else if (e.type === 'item.completed') {
       const it = e.item ?? {};
