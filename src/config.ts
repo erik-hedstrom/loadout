@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 import type { FitMeasure } from './route.js';
 import type { Tier } from './types.js';
 
@@ -91,7 +91,12 @@ export const DEFAULT_CONFIG: Config = {
 };
 
 export function loadoutHome(): string {
-  return process.env.LOADOUT_HOME ?? join(homedir(), '.loadout');
+  const home = process.env.LOADOUT_HOME;
+  if (!home) return join(homedir(), '.loadout');
+  // A relative value resolves against the working directory, which for a host-started server can be the open repo:
+  // the repo would then supply the config (including the Jev URL the key is sent to) and the skills.
+  if (!isAbsolute(home)) throw new Error('LOADOUT_HOME must be an absolute path');
+  return home;
 }
 
 export const paths = {
