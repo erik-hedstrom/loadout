@@ -209,11 +209,15 @@ the isolation, which `--isolate` refuses before routing:
 
 Not hidden:
 
-- **Claude Code plugins' hooks, skills and commands.** `--strict-mcp-config`
+- **Claude Code plugins' hooks, skills, commands and mods.** `--strict-mcp-config`
   ignores every MCP configuration but `--mcp-config`, plugin servers included,
-  but the rest of a plugin still loads. `--bare` and `--safe-mode` would hide
-  plugins, but also your own hooks, skills and CLAUDE.md, so `--isolate` uses
-  neither. An installed loadout hook plugin still runs next to the launcher.
+  but the rest of a plugin still loads. A plugin's mod can make network
+  requests and submit a prompt as if you typed it
+  ([mods](https://code.claude.com/docs/en/plugins/mods/overview#what-a-mod-can-reach)).
+  `--bare`, `--safe-mode` and `disableAllHooks` would stop these, but also
+  your own hooks (and the first two your skills and CLAUDE.md), so `--isolate`
+  uses none of them. An installed loadout hook plugin still runs next to the
+  launcher.
 - Claude Code settings files (user, project, local): their hooks, permissions
   and other settings still apply. `--setting-sources` could drop them, but it
   also drops your permissions and model, so `--isolate` does not use it.
