@@ -64,7 +64,7 @@ flowchart TB
         DR["Decision report, loadout route<br/>text, or --json"]
     end
 
-    host -->|"prompt or task + repo signals"| routing
+    host -->|"prompt or task + repo signals<br/>(hooks skip short follow-ups)"| routing
     LA -->|"attaches it when search is on (default)"| MS
     MS -->|"find_skills: goal and keywords + repo signals"| routing
     MS -->|"load_skill"| LS
@@ -80,7 +80,7 @@ flowchart TB
     MEN --> TIER
     MEN --> DR
     DEC -->|"Jev: rated candidates, fit at least 0.5<br/>(general goals: also exact fit at least 0.8), at most 5"| FSR
-    MEN -->|"lexical: the final selection"| FSR
+    MEN -->|"lexical: the final selection, at most 5"| FSR
     routing --> WARN
 ```
 
