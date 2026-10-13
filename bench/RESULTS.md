@@ -60,18 +60,24 @@ backlog, B7).
 - Two fresh sessions per arm. Claude sends two requests in one process
   (`--input-format stream-json`, `--no-session-persistence`); the counters of
   each request are those of its assistant message: uncached, cache creation and
-  cache read input tokens. Codex sends one `--ephemeral` request: a second turn
-  would need a persisted session.
+  cache read input tokens. Codex sends one `--ephemeral` request with
+  `--ignore-user-config --ignore-rules`: a second turn would need a persisted
+  session. Every arm's working directory name has the same length, because both
+  hosts put it in the prompt.
 - Deferral is inferred from the init tool list and the input delta against
   fixture characters; the hosts do not report it. A row is invalid, and not
   recorded, unless it passes its controls: every MCP arm has a positive input
   delta over the same host's baseline; with tool search off every fixture tool
-  is listed; with the default or `auto` either ToolSearch or every tool is
-  listed; behind the gateway loadout's four tools are listed; all servers are
-  connected and no others; Codex's `app-server` lists exactly the declared
-  servers and tools. The host version is stored on each row and may not change
-  during the study; Claude's plugin, skill and command inventory and Codex's
-  rendered context may not drift.
+  is listed; with the default or `auto`, either every tool is listed or
+  ToolSearch is listed and a third message (a canary) asking for the last tool
+  of the last server returns it in a ToolSearch result; behind the gateway
+  loadout's four tools are listed and `server_tools` lists the canary tool for
+  its server; all servers are connected and no others; Codex's `app-server`
+  lists exactly the declared servers and tools. A default or `auto` row where
+  every tool is listed is labelled "all loaded", with or without ToolSearch. The
+  canary turn is not measured. The host version is stored on each row and may
+  not change during the study; Claude's plugin, skill and command inventory and
+  Codex's rendered context may not drift.
 
 ## B1 results (2026-10-07): what installed skills cost per request
 

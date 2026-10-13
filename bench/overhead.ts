@@ -35,7 +35,7 @@ interface Call {
   free?: { features: Command; prompt: Command; inventory: Command };
 }
 export interface Plan { calls: Call[]; blockers: string[]; root: string }
-export interface Inventory { skills: string[]; plugins: string[]; slashCommands: string[]; mcp: { name: string; status: string }[]; agents: string[] | null }
+interface Inventory { skills: string[]; plugins: string[]; slashCommands: string[]; mcp: { name: string; status: string }[]; agents: string[] | null }
 export interface Usage {
   input: number; uncached: number; cacheCreation: number; cacheRead: number; output: number;
   model: string | null; inventory: Inventory | null;
@@ -245,6 +245,10 @@ function names(value: unknown): string[] {
     throw new Error('invalid init inventory');
   });
 }
+function initInventory(init: any): Inventory {
+  const mcp = names(init.mcp_servers).map((name, i) => ({ name, status: typeof init.mcp_servers[i]?.status === 'string' ? init.mcp_servers[i].status : 'unknown' }));
+  return { skills: names(init.skills), plugins: names(init.plugins), slashCommands: names(init.slash_commands), mcp, agents: Array.isArray(init.agents) ? names(init.agents) : null };
+}
 export function parseClaude(stdout: string): Usage {
   const es = events(stdout);
   if (es.some((e) => e.type === 'assistant' && e.message?.content?.some((c: any) => c.type === 'tool_use'))) throw new Error('unexpected tool use; measurement invalid');
@@ -257,7 +261,6 @@ export function parseClaude(stdout: string): Usage {
   const uncached = counter(u?.input_tokens, 'input_tokens');
   const cacheCreation = counter(u?.cache_creation_input_tokens, 'cache_creation_input_tokens');
   const cacheRead = counter(u?.cache_read_input_tokens, 'cache_read_input_tokens');
-  const mcp = names(init.mcp_servers).map((name, i) => ({ name, status: typeof init.mcp_servers[i]?.status === 'string' ? init.mcp_servers[i].status : 'unknown' }));
   const modelUsage: Record<string, Record<string, number>> = {};
   for (const [model, values] of Object.entries(result.modelUsage ?? {}) as [string, Record<string, unknown>][]) {
     modelUsage[model] = {};
@@ -268,40 +271,53 @@ export function parseClaude(stdout: string): Usage {
   return { input: uncached + cacheCreation + cacheRead, uncached, cacheCreation, cacheRead, output: counter(u?.output_tokens, 'output_tokens'),
     model: typeof init.model === 'string' ? init.model : null,
     modelUsage,
-    inventory: { skills: names(init.skills), plugins: names(init.plugins), slashCommands: names(init.slash_commands), mcp, agents: Array.isArray(init.agents) ? names(init.agents) : null } };
+    inventory: initInventory(init) };
 }
-export interface ClaudeSession { inventory: Inventory; tools: string[]; version: string; model: string | null; turns: Pick<Usage, 'input' | 'uncached' | 'cacheCreation' | 'cacheRead' | 'output'>[] }
+export interface ToolCall { name: string; input: unknown; result: string }
+export interface ClaudeSession { inventory: Inventory; tools: string[]; version: string; model: string | null; turns: Pick<Usage, 'input' | 'uncached' | 'cacheCreation' | 'cacheRead' | 'output'>[]; calls: ToolCall[] | null }
 /**
- * One process, several turns (stream-json input). Each turn's counters come from its own assistant message,
- * the per-request usage; a result's usage may be cumulative. A resumed turn may report num_turns of its history.
+ * One process, several turns (stream-json input). The first `measured` turns must use no tool; each one's counters
+ * come from its own assistant message, the per-request usage (a result's usage may be cumulative), and a later turn's
+ * num_turns may count the session so far. An optional last turn may call the tools in `canary.allow`; those calls
+ * and their results are returned and nothing in it is measured.
  */
-export function parseClaudeTurns(stdout: string, count: number): ClaudeSession {
+export function parseClaudeTurns(stdout: string, measured: number, canary?: { allow: string[] }): ClaudeSession {
   const es = events(stdout);
+  const total = measured + (canary ? 1 : 0);
   const inits = es.filter((e) => e.type === 'system' && e.subtype === 'init');
-  const results = es.filter((e) => e.type === 'result');
-  if (inits.length !== 1 || results.length !== count) throw new Error(`Claude did not produce one init and ${count} results`);
+  if (inits.length !== 1 || es.filter((e) => e.type === 'result').length !== total) throw new Error(`Claude did not produce one init and ${total} results`);
   const init = inits[0];
   const turns: ClaudeSession['turns'] = [];
+  const calls = new Map<string, ToolCall>();
+  let seen = 0;
   let last: any;
   for (const e of es) {
+    const inCanary = canary !== undefined && seen === measured;
     if (e.type === 'assistant') {
-      if (e.message?.content?.some((c: any) => c.type === 'tool_use')) throw new Error('unexpected tool use; measurement invalid');
+      for (const c of e.message?.content ?? []) {
+        if (c.type !== 'tool_use') continue;
+        if (!inCanary || !canary!.allow.includes(c.name)) throw new Error('unexpected tool use; measurement invalid');
+        calls.set(c.id, { name: c.name, input: c.input, result: '' });
+      }
       last = e.message;
+    } else if (e.type === 'user' && inCanary) {
+      for (const c of e.message?.content ?? []) if (c.type === 'tool_result' && calls.has(c.tool_use_id)) calls.get(c.tool_use_id)!.result += JSON.stringify(c.content);
     } else if (e.type === 'result') {
-      const i = turns.length;
-      if (e.subtype !== 'success' || e.is_error || ![1, i + 1].includes(e.num_turns) || !last) throw new Error(`Claude turn ${i + 1} failed or did not produce one request`);
-      const u = last.usage;
-      const uncached = counter(u?.input_tokens, 'input_tokens');
-      const cacheCreation = counter(u?.cache_creation_input_tokens, 'cache_creation_input_tokens');
-      const cacheRead = counter(u?.cache_read_input_tokens, 'cache_read_input_tokens');
-      turns.push({ input: uncached + cacheCreation + cacheRead, uncached, cacheCreation, cacheRead, output: counter(u?.output_tokens, 'output_tokens') });
+      if (e.subtype !== 'success' || e.is_error || (!inCanary && (![1, seen + 1].includes(e.num_turns) || !last))) throw new Error(`Claude turn ${seen + 1} failed or did not produce one request`);
+      if (!inCanary) {
+        const u = last.usage;
+        const uncached = counter(u?.input_tokens, 'input_tokens');
+        const cacheCreation = counter(u?.cache_creation_input_tokens, 'cache_creation_input_tokens');
+        const cacheRead = counter(u?.cache_read_input_tokens, 'cache_read_input_tokens');
+        turns.push({ input: uncached + cacheCreation + cacheRead, uncached, cacheCreation, cacheRead, output: counter(u?.output_tokens, 'output_tokens') });
+      }
+      seen++;
       last = undefined;
     }
   }
   if (typeof init.claude_code_version !== 'string' || !init.claude_code_version) throw new Error('init lacks claude_code_version');
-  const mcp = names(init.mcp_servers).map((name, i) => ({ name, status: typeof init.mcp_servers[i]?.status === 'string' ? init.mcp_servers[i].status : 'unknown' }));
   return { turns, tools: names(init.tools), version: init.claude_code_version, model: typeof init.model === 'string' ? init.model : null,
-    inventory: { skills: names(init.skills), plugins: names(init.plugins), slashCommands: names(init.slash_commands), mcp, agents: Array.isArray(init.agents) ? names(init.agents) : null } };
+    inventory: initInventory(init), calls: canary ? [...calls.values()] : null };
 }
 export function parseCodex(stdout: string): Usage {
   const es = events(stdout);
@@ -321,7 +337,7 @@ export function execute(command: Command): Promise<string> {
     const child = spawn(command.bin, command.args, { cwd: command.cwd, env: command.env, stdio: [command.stdin ? 'pipe' : 'ignore', 'pipe', 'ignore'], shell: false, windowsHide: true });
     let output = '';
     let exceeded = false;
-    // One window of 120 s per message the host is sent.
+    // The whole process gets 120 s for each message it is sent, not a timer per message.
     const timer = setTimeout(() => { exceeded = true; child.kill(); }, 120_000 * (command.stdin?.length ?? 1));
     const pending = [...(command.stdin ?? [])];
     const send = () => { const next = pending.shift(); if (next === undefined) child.stdin?.end(); else child.stdin?.write(next + '\n'); };

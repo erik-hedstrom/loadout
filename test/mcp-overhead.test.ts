@@ -7,7 +7,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { DISABLED_FEATURES, execute, parseClaudeTurns, type Command } from '../bench/overhead.js';
 import { catalogFacts, serverInstructions, serverSpecs, serverTools } from '../bench/mcp-fixtures.js';
-import { arms, armId, buildPlan, checkCodexInventory, claudeEnv, estimate, formatOffline, loadoutFacts, main, offline, positiveControl, runStudy, summarize, toolSearchBlockers, type Arm, type Plan, type Run } from '../bench/mcp-overhead.js';
+import { arms, armId, buildPlan, canaryFound, canaryOf, checkCodexInventory, claudeEnv, estimate, formatOffline, HOST_WRITES, loadoutFacts, main, offline, positiveControl, reading, runStudy, summarize, toolSearchBlockers, type Arm, type Plan, type Row, type Run } from '../bench/mcp-overhead.js';
 
 const temps: string[] = [];
 const temp = () => { const dir = mkdtempSync(join(tmpdir(), 'loadout-b7-test-')); temps.push(dir); return dir; };
@@ -132,21 +132,24 @@ describe('plan', () => {
   const plan = (only = {}, env: NodeJS.ProcessEnv = clean) => buildPlan(temp(), only, env);
   const mcpOf = (r: Run) => JSON.parse(r.command.args[r.command.args.indexOf('--mcp-config') + 1]!).mcpServers as Record<string, { env?: { LOADOUT_HOME: string } }>;
 
-  it('builds 46 runs: Claude sends both requests through one process, Codex one', () => {
+  it('builds 46 runs: Claude sends its requests through one process, with a canary message where deferral may be claimed', () => {
     const p = plan();
     expect(p.runs).toHaveLength(46);
     expect(p.blockers).toEqual([]);
     const claude = p.runs.filter((r) => r.arm.host === 'claude');
     expect(claude).toHaveLength(32);
     for (const r of claude) {
-      expect(r.command.args).toContain('--no-session-persistence');
-      expect(r.command.args).not.toContain('--resume');
       expect(r.command.args).not.toContain('--tools');
       expect(r.command.args.slice(r.command.args.indexOf('--input-format'), r.command.args.indexOf('--input-format') + 2)).toEqual(['--input-format', 'stream-json']);
       expect(r.command.args[r.command.args.indexOf('--model') + 1]).toBe('haiku');
-      expect(r.command.stdin).toHaveLength(2);
-      expect(JSON.parse(r.command.stdin![1]!)).toMatchObject({ type: 'user', message: { role: 'user' } });
+      const canary = r.arm.kind === 'gateway' || (r.arm.kind === 'native' && r.arm.toolSearch !== 'false');
+      expect(r.canary !== undefined).toBe(canary);
+      expect(r.command.stdin).toHaveLength(canary ? 3 : 2);
+      expect(r.requests).toBe(canary ? 5 : 2);
+      for (const line of r.command.stdin!) expect(JSON.parse(line)).toMatchObject({ type: 'user', message: { role: 'user' } });
+      if (canary) expect(r.command.stdin![2]).toContain(`\\"${r.canary!.tool}\\"`);
     }
+    expect(p.runs.filter((r) => r.arm.host === 'codex').every((r) => r.requests === 1 && r.canary === undefined)).toBe(true);
     expect(p.runs[0]!.arm).toEqual({ host: 'claude', kind: 'baseline' });
   });
 
@@ -157,7 +160,6 @@ describe('plan', () => {
       expect(args).not.toContain('--resume');
       if (r.arm.host === 'codex') for (const flag of ['--ephemeral', '--ignore-user-config', '--ignore-rules']) expect(args).toContain(flag);
       else expect(args).toContain('--no-session-persistence');
-      expect(r.command.stdin?.length ?? 1).toBe(r.arm.host === 'claude' ? 2 : 1);
     }
   });
 
@@ -170,6 +172,27 @@ describe('plan', () => {
     }
     expect(() => buildPlan(join(homedir(), '.claude', 'b7-test'), {}, clean)).toThrow('temporary');
     expect(() => buildPlan(join(homedir(), '.codex', 'b7-test'), {}, clean)).toThrow('temporary');
+  });
+
+  it('gives every arm a working directory of the same length, since the prompt carries it', () => {
+    const p = plan();
+    const names = new Set(p.runs.map((r) => r.command.cwd));
+    expect(names.size).toBe(23);
+    expect(new Set([...names].map((n) => n.length)).size).toBe(1);
+  });
+
+  it('makes the arms of a host differ only by their treatment', () => {
+    const p = plan();
+    const blank = (r: Run) => {
+      const args = [...r.command.args];
+      const i = args.indexOf('--mcp-config');
+      if (i >= 0) args[i + 1] = '<mcp>';
+      return JSON.stringify({ args: args.map((a) => a.replace(/^mcp_servers=.*/, 'mcp_servers=<mcp>')), stdin: r.command.stdin?.slice(0, 2), env: { ...r.command.env, ENABLE_TOOL_SEARCH: undefined }, bin: r.command.bin, cwdLength: r.command.cwd.length });
+    };
+    for (const host of ['claude', 'codex']) {
+      const runs = p.runs.filter((r) => r.arm.host === host);
+      expect(new Set(runs.map(blank)).size).toBe(1);
+    }
   });
 
   it('configures N native servers, or only loadout behind the gateway, with the tool search setting in the env', () => {
@@ -196,20 +219,24 @@ describe('plan', () => {
     expect(plan({ hosts: ['codex'] }, { ANTHROPIC_BASE_URL: 'http://proxy.invalid' }).blockers).toEqual([]);
   });
 
-  it('estimates by request and brackets the input tokens', async () => {
+  it('estimates by request, canary lookups included, and brackets the input tokens', async () => {
     const e = estimate(plan().runs, await offline());
-    expect(e.requests).toBe(78);
-    expect(e.inputTokens[0]).toBe(78 * 8_500);
+    expect(e.requests).toBe(150);
+    expect(e.inputTokens[0]).toBe(150 * 8_500);
     expect(e.inputTokens[1]).toBeGreaterThan(e.inputTokens[0]);
-    expect(e.seconds).toEqual([78 * 30, 32 * 240 + 14 * 120]);
+    expect(e.seconds).toEqual([150 * 30, 150 * 120]);
   });
 
-  it('main without --run prints the estimate, its caveat, env, stdin and argv, and starts no host', async () => {
+  it('main without --run prints the estimate, caveats, host-state writes, env, stdin and argv, and starts no host', async () => {
     const lines: string[] = [];
     await main(['--hosts', 'claude', '--configs', 'n1', '--repeats', '1'], { print: (s) => lines.push(s), run: never });
-    expect(lines[0]).toContain('6 runs, 12 paid requests');
-    expect(lines.join('\n')).toContain('probably undercounts');
-    expect(lines.join('\n')).toContain('Illustrative');
+    expect(lines[0]).toContain('6 runs, 24 paid requests');
+    const text = lines.join('\n');
+    expect(text).toContain('probably undercounts');
+    expect(text).toContain('Illustrative');
+    expect(text).toContain('ToolSearch is listed for native default at n20');
+    for (const write of HOST_WRITES) expect(lines).toContain(`HOST STATE: ${write}`);
+    expect(HOST_WRITES.join(' ')).toMatch(/~\/\.claude\.json[\s\S]*~\/\.codex[\s\S]*CODEX_API_KEY[\s\S]*ANTHROPIC_API_KEY/);
     const paid = lines.find((l) => l.startsWith('PAID claude/native/n1/false/1'))!;
     expect(paid).toContain('env=ENABLE_TOOL_SEARCH=false,MCP_TIMEOUT=60000');
     expect(paid).toContain('stdin=[');
@@ -260,37 +287,90 @@ describe('host process', () => {
     expect(() => parseClaudeTurns(jsonl({ ...init, claude_code_version: undefined }, ...turn(u1, 1), ...turn(u2, 2)), 2)).toThrow('claude_code_version');
     expect(() => parseClaudeTurns(jsonl(init, ...turn({ ...u1, cache_read_input_tokens: -1 }, 1), ...turn(u2, 2)), 2)).toThrow('cache_read');
   });
+
+  it('collects the canary turn\'s tool calls and results, and allows nothing else there or elsewhere', () => {
+    const init = { type: 'system', subtype: 'init', claude_code_version: '2.1.0', model: 'm', tools: [], skills: [], plugins: [], slash_commands: [], mcp_servers: [] };
+    const usage = (n: number) => ({ input_tokens: 5, cache_creation_input_tokens: n, cache_read_input_tokens: 0, output_tokens: 1 });
+    const turn = (n: number) => [{ type: 'assistant', message: { content: [{ type: 'text', text: 'OK' }], usage: usage(n) } }, { type: 'result', subtype: 'success', num_turns: n }];
+    const canary = (name: string) => [
+      { type: 'assistant', message: { content: [{ type: 'tool_use', id: 'tu1', name, input: { query: 'x' } }], usage: usage(3) } },
+      { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'tu1', content: [{ type: 'tool_reference', tool_name: 'mcp__a__b' }] }] } },
+      { type: 'assistant', message: { content: [{ type: 'text', text: 'b' }], usage: usage(4) } },
+      { type: 'result', subtype: 'success', num_turns: 5 }];
+    const allow = { allow: ['ToolSearch'] };
+    const ok = parseClaudeTurns(jsonl(init, ...turn(1), ...turn(2), ...canary('ToolSearch')), 2, allow);
+    expect(ok.turns).toHaveLength(2);
+    expect(ok.calls).toEqual([{ name: 'ToolSearch', input: { query: 'x' }, result: expect.stringContaining('mcp__a__b') }]);
+    expect(() => parseClaudeTurns(jsonl(init, ...turn(1), ...turn(2), ...canary('Bash')), 2, allow)).toThrow('tool use');
+    expect(() => parseClaudeTurns(jsonl(init, ...turn(1), ...turn(2)), 2, allow)).toThrow('3 results');
+    expect(() => parseClaudeTurns(jsonl(init, ...turn(1), ...turn(2), ...canary('ToolSearch')), 2)).toThrow('2 results');
+    expect(() => parseClaudeTurns(jsonl(init, ...canary('ToolSearch').slice(0, 1), ...turn(1), ...turn(2), ...turn(3)), 2, allow)).toThrow('tool use');
+  });
 });
 
 describe('positive controls', () => {
   const native = (toolSearch: Arm['toolSearch']): Arm => ({ host: 'claude', kind: 'native', config: 'n1', toolSearch });
   const names = (n: number) => serverTools(serverSpecs(1)[0]!).slice(0, n).map((t) => `mcp__tracker__${t.name}`);
   const gateway: Arm = { host: 'claude', kind: 'gateway', config: 'n1', toolSearch: 'default' };
+  const four = ['find_skills', 'load_skill', 'server_tools', 'call_server_tool'].map((t) => `mcp__loadout__${t}`);
 
   it('requires every tool when tool search is off', () => {
-    expect(() => positiveControl(native('false'), ['Bash', ...names(10)], 50)).not.toThrow();
-    expect(() => positiveControl(native('false'), ['Bash', 'ToolSearch', ...names(9)], 50)).toThrow('9 of 10');
-    expect(() => positiveControl(native('false'), ['Bash'], 50)).toThrow('0 of 10');
+    expect(() => positiveControl(native('false'), ['Bash', ...names(10)], 50, null)).not.toThrow();
+    expect(() => positiveControl(native('false'), ['Bash', 'ToolSearch', ...names(9)], 50, null)).toThrow('9 of 10');
+    expect(() => positiveControl(native('false'), ['Bash'], 50, null)).toThrow('0 of 10');
   });
 
-  it('accepts a deferred reading only with ToolSearch present', () => {
-    expect(() => positiveControl(native('default'), ['Bash', 'ToolSearch'], 5)).not.toThrow();
-    expect(() => positiveControl(native('auto'), ['Bash', ...names(10)], 5)).not.toThrow();
-    expect(() => positiveControl(native('default'), ['Bash', ...names(3)], 5)).toThrow('no ToolSearch');
-    expect(() => positiveControl(native('default'), ['Bash'], 5)).toThrow('no ToolSearch');
+  it('accepts a deferred reading only with ToolSearch present and the canary found, or every tool listed', () => {
+    expect(() => positiveControl(native('default'), ['Bash', 'ToolSearch'], 5, true)).not.toThrow();
+    expect(() => positiveControl(native('default'), ['Bash', 'ToolSearch'], 5, false)).toThrow('canary');
+    expect(() => positiveControl(native('auto'), ['Bash', 'ToolSearch', ...names(3)], 5, false)).toThrow('canary');
+    expect(() => positiveControl(native('auto'), ['Bash', ...names(10)], 5, false)).not.toThrow();
+    expect(() => positiveControl(native('default'), ['Bash', ...names(3)], 5, true)).toThrow('no ToolSearch');
+    expect(() => positiveControl(native('default'), ['Bash'], 5, true)).toThrow('no ToolSearch');
   });
 
-  it('requires loadout\'s four tools behind the gateway', () => {
-    const four = ['find_skills', 'load_skill', 'server_tools', 'call_server_tool'].map((t) => `mcp__loadout__${t}`);
-    expect(() => positiveControl(gateway, ['Bash', ...four], 5)).not.toThrow();
-    expect(() => positiveControl(gateway, ['Bash', 'ToolSearch', ...four.slice(1)], 5)).toThrow('not listed');
+  it('requires loadout\'s four tools behind the gateway, and the canary found through server_tools', () => {
+    expect(() => positiveControl(gateway, ['Bash', ...four], 5, true)).not.toThrow();
+    expect(() => positiveControl(gateway, ['Bash', ...four], 5, false)).toThrow('canary');
+    expect(() => positiveControl(gateway, ['Bash', 'ToolSearch', ...four.slice(1)], 5, true)).toThrow('not listed');
   });
 
   it('requires a positive input delta over the baseline, and none of the baseline itself', () => {
-    expect(() => positiveControl(native('default'), ['ToolSearch'], 0)).toThrow('no positive input delta');
-    expect(() => positiveControl(native('default'), ['ToolSearch'], -3)).toThrow('no positive input delta');
-    expect(() => positiveControl({ host: 'codex', kind: 'native', config: 'n1' }, null, 0)).toThrow('no positive input delta');
-    expect(() => positiveControl({ host: 'claude', kind: 'baseline' }, ['Bash'], 0)).not.toThrow();
+    expect(() => positiveControl(native('default'), ['ToolSearch'], 0, true)).toThrow('no positive input delta');
+    expect(() => positiveControl(native('default'), ['ToolSearch'], -3, true)).toThrow('no positive input delta');
+    expect(() => positiveControl({ host: 'codex', kind: 'native', config: 'n1' }, null, 0, null)).toThrow('no positive input delta');
+    expect(() => positiveControl({ host: 'codex', kind: 'native', config: 'n1' }, null, 1, null)).not.toThrow();
+    expect(() => positiveControl({ host: 'claude', kind: 'baseline' }, ['Bash'], 0, null)).not.toThrow();
+  });
+
+  it('finds the canary only where the host returned it for the right server', () => {
+    const c = canaryOf('n5');
+    expect(canaryFound(native('default'), c, [{ name: 'ToolSearch', input: {}, result: `"${c.qualified}"` }])).toBe(true);
+    expect(canaryFound(native('default'), c, [{ name: 'ToolSearch', input: {}, result: '"mcp__tracker__get_issue"' }])).toBe(false);
+    expect(canaryFound(native('default'), c, [{ name: 'Bash', input: {}, result: `"${c.qualified}"` }])).toBe(false);
+    const list = (server: string, result: string) => [{ name: 'mcp__loadout__server_tools', input: { server }, result }];
+    expect(canaryFound(gateway, c, list(c.server, `"${c.tool} - desc"`))).toBe(true);
+    expect(canaryFound(gateway, c, list(`mcp:${c.server}`, `"${c.tool}"`))).toBe(true);
+    expect(canaryFound(gateway, c, list('tracker', `"${c.tool}"`))).toBe(c.server === 'tracker');
+    expect(canaryFound(gateway, c, list(c.server, '"nothing"'))).toBe(false);
+  });
+
+  it('picks a different canary per configuration: the last tool of the last server', () => {
+    const picks = (['n1', 'n5', 'n20'] as const).map(canaryOf);
+    expect(new Set(picks.map((c) => c.qualified)).size).toBe(3);
+    expect(picks[2]!.server).toBe(serverSpecs(20).at(-1)!.name);
+    expect(picks[0]!.tool).toBe(serverTools(serverSpecs(1)[0]!).at(-1)!.name);
+  });
+
+  it('labels a row deferred only when fewer tools were listed than configured', () => {
+    const row = (o: Partial<Row>): Row => ({ host: 'claude', kind: 'native', config: 'n1', toolSearch: 'default', mcpToolsListed: 0, toolSearchListed: true, ...o }) as Row;
+    expect(reading(row({}))).toBe('deferred (canary found)');
+    expect(reading(row({ mcpToolsListed: 10 }))).toBe('all loaded (ToolSearch present)');
+    expect(reading(row({ mcpToolsListed: 10, toolSearchListed: false }))).toBe('all loaded (no ToolSearch)');
+    expect(reading(row({ toolSearch: 'false', mcpToolsListed: 10 }))).toBe('all loaded');
+    expect(reading(row({ kind: 'gateway' }))).toBe('gateway');
+    expect(reading(row({ kind: 'baseline' }))).toBe('');
+    expect(summarize([row({ config: 'n20', mcpToolsListed: 485, toolSearchListed: false, repeat: 1, turn: 1 })])).toContain('Tool search was not listed for native default at n20');
   });
 
   it('compares Codex\'s reported servers and tools with the arm, by count', () => {
@@ -309,7 +389,7 @@ describe('positive controls', () => {
 
 describe('measurement', () => {
   const SECRET_PLUGIN = 'ambient-private-plugin';
-  interface Opts { version?: (call: number) => string | undefined; plugin?: (call: number) => string; status?: string; extraServer?: boolean; toolUse2?: boolean; numTurns1?: number; tools?: (run: Run, base: string[]) => string[]; flat?: boolean; features?: boolean; codexContext?: (call: number) => string; codexVersion?: (call: number) => string; inventory?: (run: Run) => Map<string, string[]> }
+  interface Opts { canary?: (run: Run) => 'found' | 'missing'; version?: (call: number) => string | undefined; plugin?: (call: number) => string; status?: string; extraServer?: boolean; toolUse2?: boolean; numTurns1?: number; tools?: (run: Run, base: string[]) => string[]; flat?: boolean; features?: boolean; codexContext?: (call: number) => string; codexVersion?: (call: number) => string; inventory?: (run: Run) => Map<string, string[]> }
   /** A fake Claude and Codex that report what the plan declared: tools follow the tool search setting, counters grow with the servers. */
   function fakeHost(p: Plan, o: Opts = {}) {
     const calls: Command[] = [];
@@ -331,11 +411,18 @@ describe('measurement', () => {
       const base = ['Bash', ...(deferred ? ['ToolSearch'] : all)];
       const listed = [...r.servers, ...(o.extraServer ? ['ambient-extra'] : [])];
       const turn = (usage: object, numTurns: number, content: unknown[] = [{ type: 'text', text: 'OK' }]) => [{ type: 'assistant', message: { content, usage } }, { type: 'result', subtype: 'success', num_turns: numTurns, usage: { input_tokens: 1, cache_creation_input_tokens: 1, cache_read_input_tokens: 1, output_tokens: 1 } }];
+      const lookup = !r.canary ? [] : r.arm.kind === 'gateway'
+        ? [{ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'tu', name: 'mcp__loadout__server_tools', input: { server: r.canary.server } }], usage: {} } },
+           { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'tu', content: [{ type: 'text', text: (o.canary?.(r) ?? 'found') === 'found' ? r.canary.tool : 'nothing' }] }] } }]
+        : [{ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'tu', name: 'ToolSearch', input: { query: r.canary.tool } }], usage: {} } },
+           { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'tu', content: [{ type: 'tool_reference', tool_name: (o.canary?.(r) ?? 'found') === 'found' ? r.canary.qualified : 'mcp__x__y' }] }] } }];
+      const canaryTurn = !r.canary ? [] : [...lookup, ...turn({ input_tokens: 5, cache_creation_input_tokens: 0, cache_read_input_tokens: 100, output_tokens: 1 }, 5)];
       return jsonl(
         { type: 'system', subtype: 'init', claude_code_version: o.version ? o.version(call) : '2.0.0', model: 'haiku-resolved', skills: ['s'], plugins: [{ name: o.plugin?.(call) ?? SECRET_PLUGIN }], slash_commands: ['c'],
           tools: o.tools ? o.tools(r, base) : base, mcp_servers: listed.map((name) => ({ name, status: o.status ?? 'connected' })) },
         ...turn({ input_tokens: 5, cache_creation_input_tokens: 100 + delta, cache_read_input_tokens: 0, output_tokens: 1 }, o.numTurns1 ?? 1),
-        ...turn({ input_tokens: 5, cache_creation_input_tokens: 0, cache_read_input_tokens: 100 + delta, output_tokens: 1 }, 2, o.toolUse2 ? [{ type: 'tool_use', name: 'x' }] : undefined));
+        ...turn({ input_tokens: 5, cache_creation_input_tokens: 0, cache_read_input_tokens: 100 + delta, output_tokens: 1 }, 2, o.toolUse2 ? [{ type: 'tool_use', name: 'x' }] : undefined),
+        ...canaryTurn);
     };
     const inventory = async (command: Command) => {
       const r = p.runs.find((x) => x.free?.inventory.cwd === command.cwd)!;
@@ -365,8 +452,10 @@ describe('measurement', () => {
     const saved = readFileSync(join(out, 'rows.jsonl'), 'utf8');
     expect(saved.trim().split('\n')).toHaveLength(rows.length);
     expect(saved).not.toContain(SECRET_PLUGIN);
-    expect(summarize(rows, notes)).toContain('| claude | native | n1 | false | 1 | 1 |');
+    expect(summarize(rows, notes)).toContain('| claude | native | n1 | false | all loaded | 1 | 1 |');
     expect(h.calls.filter((c) => c.stdin).length).toBe(6);
+    expect(claude.filter((r) => r.canaryFound === true).length).toBe(2 * 4);
+    expect(claude.filter((r) => r.canaryFound === null).every((r) => r.kind === 'baseline' || r.toolSearch === 'false')).toBe(true);
   });
 
   it('records a Codex preflight with the version and counts, never the context', async () => {
@@ -417,10 +506,10 @@ describe('measurement', () => {
     await expect(study({ numTurns1: 2 })).rejects.toThrow('turn 1');
   });
 
-  it('refuses a connected server whose tools never arrived, in every arm kind', async () => {
-    await expect(study({ tools: (r, base) => (r.arm.toolSearch === 'false' ? base.slice(0, 5) : base) })).rejects.toThrow('of 10 MCP tools listed');
+  it('refuses a row whose canary lookup found nothing, for tool search and for the gateway', async () => {
+    await expect(study({ canary: (r) => (r.arm.kind === 'native' ? 'missing' : 'found') })).rejects.toThrow('canary');
+    await expect(study({ canary: (r) => (r.arm.kind === 'gateway' ? 'missing' : 'found') })).rejects.toThrow('server_tools did not list the canary tool');
     await expect(study({ tools: (r, base) => (r.arm.toolSearch === 'default' ? ['Bash'] : base) })).rejects.toThrow('no ToolSearch');
-    await expect(study({ tools: (r, base) => (r.arm.kind === 'gateway' ? ['Bash'] : base) })).rejects.toThrow('not listed');
   });
 
   it('refuses an MCP arm with no positive input delta over its baseline', async () => {
