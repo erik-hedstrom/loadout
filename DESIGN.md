@@ -31,10 +31,11 @@ flowchart TB
     subgraph host["Host integration"]
         CH["Claude Code plugin<br/>loadout hook claude"]
         XH["Codex plugin<br/>loadout hook codex + loadout mcp"]
-        MS["Search server: loadout mcp<br/>find_skills, load_skill, gateway"]
         LA["Launcher<br/>loadout claude / codex"]
         RT["loadout route<br/>prints the decision, launches nothing"]
     end
+
+    MS["Search server: loadout mcp<br/>find_skills, load_skill, gateway"]
 
     LIB[("Library<br/>scanLibrary")]
 
@@ -52,18 +53,22 @@ flowchart TB
     end
 
     subgraph out["Output"]
-        CTX["Context, hook and launcher<br/>hook: skill_relevance list with fit, once per skill per session;<br/>lexical: only when a skill is named<br/>Claude launcher: skill_relevance in the system prompt, skills named with Jev only<br/>Codex launcher: skill list in the prompt<br/>SKILL.md text for named or clear-winner skills, if inject.enabled (default)"]
+        CTX["Context, hook and launcher<br/>hook: skill_relevance list with fit, once per skill per session;<br/>hook in lexical mode: only when a skill is named<br/>Claude launcher: skill_relevance in the system prompt, skills named with Jev only<br/>Codex launcher: skill list in the prompt<br/>SKILL.md text for named or clear-winner skills, if inject.enabled (default)"]
         SKL["Skill loading, launcher only<br/>loaded and offered skills<br/>Claude: generated plugin<br/>Codex: paths in the prompt"]
         MCPS["Selected MCP servers, launcher only<br/>Claude: mcp.json<br/>Codex: -c mcp_servers"]
         TIER["Model tier, launcher only<br/>Claude: --model, --effort<br/>Codex: -m, model_reasoning_effort"]
         FSR["find_skills result<br/>returned to the agent: Jev-ranked matches with a fit score,<br/>or keyword matches when lexical (skills, then servers),<br/>or a note that nothing fits"]
         LS["load_skill result<br/>one skill's SKILL.md and file list, or one file; no routing"]
         GW["Gateway: server_tools, call_server_tool<br/>library servers marked gateway: true; not over --http"]
-        WARN["Warning, on stderr or before the find_skills result<br/>no key, Jev fell back to keywords, or more than 3 skills named"]
+        WARN["Warning, CLI and search server: on stderr or before the find_skills result<br/>no key, Jev fell back to keywords, or more than 3 skills named<br/>hook: only a fixed note when Jev fell back"]
+        DR["Decision report, loadout route<br/>text, or --json"]
     end
 
-    host -->|"prompt, task or find_skills goal, + repo signals"| routing
-    LIB -->|"hook: skills; find_skills: skills + gateway servers;<br/>launcher and route: everything"| RET
+    host -->|"prompt or task + repo signals"| routing
+    MS -->|"find_skills: goal and keywords + repo signals"| routing
+    MS -->|"load_skill"| LS
+    MS -->|"server_tools, call_server_tool; stdio only"| GW
+    LIB -->|"hook and --http find_skills: skills;<br/>stdio find_skills: skills + gateway servers;<br/>launcher and route: everything"| RET
     LIB -->|"no key, router: lexical, or --lexical"| LEX
     LIB -->|"skills named in the task"| MEN
     LIB --> LS
@@ -72,6 +77,7 @@ flowchart TB
     MEN --> SKL
     MEN --> MCPS
     MEN --> TIER
+    MEN --> DR
     DEC -->|"Jev: rated candidates, fit at least 0.5, at most 5"| FSR
     MEN -->|"lexical: the final selection"| FSR
     routing --> WARN
