@@ -32,7 +32,8 @@ offline without Jev; `--headless` runs once and exits. If Jev is unreachable,
 loadout falls back to keyword ranking and says so: an unreachable Jev delays
 a launch but does not stop it.
 Each launch writes its decision, copies of the selected and offered skills
-and any generated config to `~/.loadout/sessions/<id>/`.
+and any generated config to `~/.loadout/sessions/<id>/` (under
+`$LOADOUT_HOME` when set).
 
 | | Claude Code | Codex |
 |---|---|---|

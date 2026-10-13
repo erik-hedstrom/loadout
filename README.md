@@ -49,8 +49,9 @@ costing tokens, until you move them out of the agents' own folders;
 Then start `claude` or `codex` as usual. Latency and setup details:
 [the hook plugins](docs/hook.md).
 
-**Privacy:** the hook sends the text of each prompt event, in every project,
-to TypeSafe's Jev API with repository and skill details. In Claude Code that
+**Privacy:** the hook sends the text of each prompt event except short
+follow-ups such as "yes" or "go on", in every project, to TypeSafe's Jev API
+with repository and skill details. In Claude Code that
 includes scheduled tasks, background subagent reports and messages from other
 sessions. `"router": "lexical"` in `~/.loadout/config.json` (under
 `$LOADOUT_HOME` when set) keeps prompts local; the hook then adds context only
