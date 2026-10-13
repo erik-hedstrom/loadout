@@ -790,6 +790,10 @@ viewed on GitHub in light and dark. Mermaid ignores `direction` inside a
 subgraph that has outside edges, so the host boxes wrap. Each label was
 checked against the code on every entry path (launcher, hook, `route`, `mcp`
 stdio and `--http`) with Jev, lexical routing, no key and Jev failure.
+Round 19 kept an edge inventory (every flow in `src/` that enters or leaves a
+node, with file:line) and diffed it against the Mermaid source, because fixes
+for one finding had dropped edges added earlier: the library edges to the
+named-skill step and to `load_skill` went when five edges were folded into one.
 
 ## Iteration log
 
