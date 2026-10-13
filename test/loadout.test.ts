@@ -70,7 +70,12 @@ function fakeClient(relevance: Record<string, number>, opts: { tier?: string; ne
 describe('E9 security', () => {
   const config = { ...DEFAULT_CONFIG, search: false, embeddings: false };
 
-  it('ignores an empty LOADOUT_HOME and refuses a relative one, so a repo cannot supply the config', () => {
+  const runRoute = async (library: ReturnType<typeof scanLibrary>) => {
+    const { client } = fakeClient(Object.fromEntries(library.map((c) => [c.name, 0.99])));
+    return route({ task: TASK, repo: REPO, library, config, client });
+  };
+
+  it('ignores an empty LOADOUT_HOME and refuses a relative one, so the working directory cannot supply the config', () => {
     try {
       vi.stubEnv('LOADOUT_HOME', '');
       expect(loadoutHome()).toBe(join(homedir(), '.loadout'));
@@ -103,10 +108,6 @@ describe('E9 security', () => {
       vi.unstubAllEnvs();
     }
   });
-  const runRoute = async (library: ReturnType<typeof scanLibrary>) => {
-    const { client } = fakeClient(Object.fromEntries(library.map((c) => [c.name, 0.99])));
-    return route({ task: TASK, repo: REPO, library, config, client });
-  };
 
   it('redacts MCP values in list JSON, route JSON and saved decisions', async () => {
     const home = tempDir('loadout-e9-');
