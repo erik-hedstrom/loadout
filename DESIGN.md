@@ -42,8 +42,8 @@ flowchart TB
     subgraph routing["Routing: route() in src/route.ts"]
         RET["Retrieve: BM25, plus embeddings when available<br/>top maxCandidates (200 by default)"]
         JEV["Jev SystemOneClient<br/>wide request: pick, need, model tier<br/>close request: top shortlist (8 by default)"]
-        DEC["decide()<br/>load, offer, inject or stay quiet"]
-        LEX["Lexical router<br/>loads matches at least half the top BM25 score<br/>no offers; tier = defaultTier"]
+        DEC["decide()<br/>load, offer, inject or stay quiet<br/>up to 3 skills, 2 MCP servers, 4 offers (defaults)"]
+        LEX["Lexical router<br/>loads matches at least half the top BM25 score,<br/>up to 3 skills and 2 MCP servers (defaults)<br/>no offers; tier = defaultTier"]
         MEN["Named skills override<br/>up to 3, injected"]
         RET --> JEV
         JEV -->|"Jev fails, not cancelled"| LEX
@@ -53,7 +53,7 @@ flowchart TB
     end
 
     subgraph out["Output"]
-        CTX["Context, hook and launcher<br/>hook: skill_relevance list with Jev fit, or a keyword score relative to the top match<br/>in lexical mode; once per skill per session;<br/>hook in lexical mode: only when a skill is named<br/>Claude launcher: skill_relevance in the system prompt, skills named with Jev only<br/>Codex launcher: skill list in the prompt<br/>SKILL.md text for named or clear-winner skills, if inject.enabled (default);<br/>past 12,000 characters, cut with a pointer to the file"]
+        CTX["Context, hook and launcher<br/>hook: skill_relevance list with Jev fit, or a keyword score relative to the top match<br/>in lexical mode (1.00 for a named skill the router did not rate);<br/>once per skill per session;<br/>hook in lexical mode: only when a skill is named<br/>Claude launcher: skill_relevance in the system prompt, skills named with Jev only<br/>Codex launcher: loaded and offered skills listed in the prompt,<br/>or the skill_relevance note when there are none<br/>SKILL.md text for named or clear-winner skills, if inject.enabled (default);<br/>past 12,000 characters, cut with a pointer to the file"]
         SKL["Skill loading, launcher only<br/>loaded and offered skills<br/>Claude: generated plugin<br/>Codex: paths in the prompt"]
         MCPS["Selected MCP servers, launcher only<br/>Claude: mcp.json<br/>Codex: -c mcp_servers"]
         TIER["Model tier, launcher only<br/>Claude: --model, --effort<br/>Codex: -m, model_reasoning_effort"]
@@ -65,6 +65,7 @@ flowchart TB
     end
 
     host -->|"prompt or task + repo signals"| routing
+    LA -->|"attaches it when search is on (default)"| MS
     MS -->|"find_skills: goal and keywords + repo signals"| routing
     MS -->|"load_skill"| LS
     MS -->|"server_tools, call_server_tool; stdio only"| GW
@@ -78,7 +79,7 @@ flowchart TB
     MEN --> MCPS
     MEN --> TIER
     MEN --> DR
-    DEC -->|"Jev: rated candidates, fit at least 0.5, at most 5"| FSR
+    DEC -->|"Jev: rated candidates, fit at least 0.5<br/>(general goals: also exact fit at least 0.8), at most 5"| FSR
     MEN -->|"lexical: the final selection"| FSR
     routing --> WARN
 ```
@@ -178,8 +179,9 @@ literal, atomic questions; every decision rule is code (`decide()` in
      is used, and it replaces the other copies.
 6. **Tell the agent where to look**, without forcing it (TypeSafe's measured
    wording), via `--append-system-prompt` for Claude Code, and for Codex in
-   the prompt when no skill is selected (otherwise the prompt lists the
-   selected skills):
+   the prompt when no skill is loaded or offered (otherwise the prompt lists
+   the loaded skills, then the offered ones under "Also available if
+   needed"):
 
    ```
    <skill_relevance>
