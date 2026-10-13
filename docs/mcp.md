@@ -20,10 +20,11 @@ know-how when the work drifts away from what the session started with:
 
 ## Cost and privacy
 
-The tool definitions cost tokens on every request; against a small native
-listing they can cost more ([measured in Claude Code](../DESIGN.md#search-server-loadout-mcp)).
-In the
-measured headless runs, agents also searched less often than they should
+The tool definitions cost input tokens. Measured only in the first request of
+fresh Claude Code sessions, with generated skill names, they cost more than a
+native listing of 50 skills ([DESIGN](../DESIGN.md#search-server-loadout-mcp));
+later turns and Codex are not measured. In the headless runs, agents searched
+on their own mainly for tasks that felt unfamiliar
 ([RESULTS](../bench/RESULTS.md#do-agents-use-what-they-are-given)). So the
 [hook plugins](hook.md) are the main path and search is the supplement.
 

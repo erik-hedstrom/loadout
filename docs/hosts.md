@@ -32,8 +32,7 @@ Notes:
    read, the selected MCP server's tool was called, and an injected skill was
    followed ([RESULTS](../bench/RESULTS.md#end-to-end-in-the-agents)).
 2. The launch passes the tier's model (`--model`, `-m`). No recorded run
-   shows a tier choice reaching the agent, and whether Jev picks sensible
-   tiers is not shown (backlog C3).
+   shows a tier choice reaching the agent.
 3. The plugin, one `claude -p --plugin-dir` run, 2026-10-08
    ([RESULTS](../bench/RESULTS.md#the-hook-plugin-in-the-claude-code-cli-2026-10-08)). The
    marketplace install is untested.
@@ -54,8 +53,8 @@ Notes:
 7. The launcher attached the server with `-c mcp_servers.…` (2026-10-06,
    as in note 1). The plugin's search server was listed as enabled, without
    starting it.
-   The Codex plugin attaches search on every request; its per-request token
-   cost in Codex is not measured.
+   The token cost of the Codex plugin's search server in Codex is not
+   measured.
    For WSL behind Windows Codex: [hook plugins](hook.md#codex-cli); that
    TOML path is untested in a host.
 8. `loadout mcp --http`; see [library search over MCP](mcp.md#chatgpt-over-http).

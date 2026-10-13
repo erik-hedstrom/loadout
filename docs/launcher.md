@@ -31,8 +31,8 @@ and any generated config to `~/.loadout/sessions/<id>/` (under
 | `autoApprove` servers | `--allowedTools mcp__<name>` | `default_tools_approval_mode = "approve"` |
 | Library search | `loadout mcp` attached, `find_skills` and `load_skill` pre-approved | same |
 
-The tier mappings are presets: whether each model suits the work Jev assigns
-to its tier is not measured yet ([C3](loop/BACKLOG.md)). Turn off the attached
+The tier mappings are presets; Jev's tier choice is an
+[open question](../DESIGN.md#open-questions). Turn off the attached
 search with `"search": false` in the config.
 
 **loadout adds to your session; it does not isolate it.** Skills, plugins and

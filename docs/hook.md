@@ -38,11 +38,11 @@ What the hook adds, and when: [DESIGN.md](../DESIGN.md#prompt-hook).
 ## Latency
 
 Each routed prompt waits before the agent starts. On 2026-10-12,
-`loadout hook claude` took a median 1.5 s with the library scan cache and
-1.8 s without it; how much of that gap is the scan: not shown
+`loadout hook claude` as a new process took a median 1.5 s with the library
+scan cache and 1.8 s without it; how much of that gap is the scan: not shown
 ([RESULTS](../bench/RESULTS.md#routed-prompts-with-the-library-scan-cache-d11-2026-10-12)).
-One WSL machine, the 1,262-skill library, 20 prompts per build. The Codex hook
-is not measured.
+One WSL machine, the 1,262-skill library, 20 dev prompts per build, real Jev.
+Other machines and the Codex hook: not measured.
 
 ## Privacy
 

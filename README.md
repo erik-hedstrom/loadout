@@ -1,18 +1,19 @@
 [![CI](https://github.com/erik-hedstrom/loadout/actions/workflows/ci.yml/badge.svg)](https://github.com/erik-hedstrom/loadout/actions/workflows/ci.yml)
 # loadout
 
-Agents list your installed skills in their requests, needed or not. In
-Claude Code (Haiku, isolated config), 1,232 skills under generated names added
-**12,283 input tokens** to a fresh session's first request, about 10 per
-skill; with real names, and in later turns: not shown. Codex 0.160.1 caps its
-listing instead: of 1,262 installed skills, it showed 424 in an offline render
+Claude Code and Codex list your installed skills in their requests, needed or
+not. In Claude Code (Haiku, isolated config), 1,232 skills under generated
+names added **12,283 input tokens** to a fresh session's first request, about
+10 per skill between 50 and 1,232 skills. Real names, later turns and other
+hosts: not shown. Codex 0.160.1 caps its listing instead: of 1,262 installed
+skills, it showed 424 in an offline render, and its token cost is not shown
 ([B1](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request)).
 
 loadout keeps your skills in a separate library, and a prompt hook in Claude
 Code or Codex adds the ones predicted to fit each substantive prompt. A cheap
 model (TypeSafe's [Jev](https://typesafe.ai/blog/introducing-system-one-models-and-jev))
 makes the prediction, for about $0.001 per routing decision on the v4
-benchmark
+benchmark's requests
 ([RESULTS](bench/RESULTS.md#v4-2026-10-06-realistic-requests-on-the-real-library-judged)).
 
 ## Quickstart
@@ -55,8 +56,6 @@ TypeSafe's Jev API with repository and skill details. `"router": "lexical"` in
 adds context only for prompts that name a skill. What is sent, and from where:
 [privacy](docs/hook.md#privacy).
 
-What has been checked in each host: [hosts](docs/hosts.md).
-
 ## What is measured
 
 All numbers, caveats and negative results: [bench/RESULTS.md](bench/RESULTS.md).
@@ -66,8 +65,8 @@ All numbers, caveats and negative results: [bench/RESULTS.md](bench/RESULTS.md).
   by Claude Opus: a useful skill was loaded for 73% (62–81) of the requests
   that need one; 64% (55–72) of loaded skills were useful and 7% (4–13) would
   mislead; these two intervals ignore within-request correlation
-  ([C1](bench/RESULTS.md#c1-2026-10-08-new-held-out-requests)). It loads too
-  readily on general business requests.
+  ([C1](bench/RESULTS.md#c1-2026-10-08-new-held-out-requests)). On C1's general
+  business requests it loaded too readily.
 - **Agents use what they get,** in headless runs capped at 4 minutes
   (Claude Code on Sonnet 5.5, also capped at 8 turns; Codex on gpt-6.1-sol):
   when the launcher loaded a skill, Claude Code opened one in 9 of 10 sessions
@@ -79,9 +78,9 @@ All numbers, caveats and negative results: [bench/RESULTS.md](bench/RESULTS.md).
   Codex (gpt-6.1-sol, 6-minute cap), where the loadout arm got the judge's
   top skill, it won 4 (22–78%), lost 3 (14–69%) and split 1 (2–47%)
   ([pilot](bench/RESULTS.md#is-the-work-better-outcome-pilot-2026-10-07)).
-- **Small libraries:** the MCP search tools can cost more than a native
-  listing ([cost](docs/mcp.md#cost-and-privacy)). The Claude Code plugin adds only the hook; the Codex plugin also attaches
-  the search tools, whose cost in Codex is not measured.
+- **Search tools:** their token cost (measured only in the first request of
+  fresh Claude Code sessions) and how often agents used them:
+  [library search](docs/mcp.md#cost-and-privacy).
 
 How it decides: [DESIGN.md](DESIGN.md). Security model: [SECURITY.md](SECURITY.md).
 It works only through official extension points (plugins, hooks, MCP, CLI
@@ -104,9 +103,7 @@ loadout codex "<task>"           # launch Codex with one up-front decision
 - [The library](docs/library.md): adding skills and MCP servers, configuration.
 - [The hook plugins](docs/hook.md): Claude Code and Codex, WSL, latency, privacy.
 - [Library search over MCP](docs/mcp.md): `find_skills` and `load_skill`
-  mid-session, in Claude Code, Codex, Claude Desktop, Cursor, OpenCode and
-  ChatGPT. Search was checked only in the Claude Code and Codex CLIs
-  ([hosts](docs/hosts.md)).
+  mid-session, and how to set it up per host.
 - [The launcher](docs/launcher.md): `loadout claude|codex`, one decision up
   front, including a model tier; used by the benchmarks.
 - [Hosts](docs/hosts.md): what was checked in which host.
