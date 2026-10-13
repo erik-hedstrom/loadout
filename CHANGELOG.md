@@ -38,5 +38,5 @@
 
 ### Security
 
-- MCP credential relay: env and header values stay out of the agent's argv, environment and session files. Reports show only MCP type, command, cwd, URL origin and key names. Diagnostics carry fixed text only. Skill copies reject links and keep a pinned root and size budgets. Jev prompts frame library text as third-party data. Session `mcp.json` files are written 0600 ([#4](https://github.com/erik-hedstrom/loadout/pull/4), [#10](https://github.com/erik-hedstrom/loadout/pull/10)).
+- MCP credential relay for the Codex launcher: env and header values stay out of Codex's argv, environment and session files. The Claude launcher writes them into the session's `mcp.json`, which is created 0600. Reports show only MCP type, command, cwd, URL origin and key names. Diagnostics carry fixed text only. Skill copies reject links and keep a pinned root and size budgets. Jev prompts frame library text as third-party data ([#4](https://github.com/erik-hedstrom/loadout/pull/4), [#10](https://github.com/erik-hedstrom/loadout/pull/10)).
 - `loadout doctor` runs no CLI from a relative `PATH` entry and gives its version checks an allowlisted environment only ([#20](https://github.com/erik-hedstrom/loadout/pull/20)).
