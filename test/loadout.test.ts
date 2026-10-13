@@ -75,7 +75,7 @@ describe('E9 security', () => {
     return route({ task: TASK, repo: REPO, library, config, client });
   };
 
-  it('ignores an empty LOADOUT_HOME and refuses a relative one, so the working directory cannot supply the config', () => {
+  it('ignores an empty LOADOUT_HOME and refuses a relative one or a relative home fallback, so the working directory cannot supply the config', () => {
     try {
       vi.stubEnv('LOADOUT_HOME', '');
       expect(loadoutHome()).toBe(join(homedir(), '.loadout'));
@@ -83,6 +83,13 @@ describe('E9 security', () => {
         vi.stubEnv('LOADOUT_HOME', relative);
         expect(() => loadoutHome()).toThrow('absolute');
       }
+      vi.stubEnv('LOADOUT_HOME', '');
+      for (const relative of ['.', '', 'repo']) {
+        vi.stubEnv('HOME', relative);
+        vi.stubEnv('USERPROFILE', relative);
+        expect(() => loadoutHome(), relative).toThrow('absolute');
+      }
+      vi.unstubAllEnvs();
       const absolute = join(tmpdir(), 'loadout-home');
       vi.stubEnv('LOADOUT_HOME', absolute);
       expect(loadoutHome()).toBe(absolute);
