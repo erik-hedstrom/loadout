@@ -60,7 +60,7 @@ flowchart TB
         FSR["find_skills result<br/>returned to the agent: Jev-ranked matches with a fit score,<br/>or keyword matches when lexical (skills, then servers),<br/>or a note that nothing fits"]
         LS["load_skill result<br/>one skill's SKILL.md (past 40,000 characters, cut with a pointer to the file)<br/>and up to 60 file names, or one text file up to 256 KB; no routing"]
         GW["Gateway: server_tools, call_server_tool<br/>library servers marked gateway: true; not over --http"]
-        WARN["Warning, CLI and search server: on stderr or before the find_skills result<br/>no key, Jev fell back to keywords, or more than 3 skills named<br/>hook: only a fixed note when Jev fell back"]
+        WARN["Warning: no key, Jev fell back to keywords, or more than 3 skills named<br/>launcher: in the decision summary on stderr; route: in the decision report;<br/>find_skills: before the result; a missing key also a stderr notice<br/>hook: only a fixed note when Jev fell back"]
         DR["Decision report, loadout route<br/>text, or --json"]
     end
 
