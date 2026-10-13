@@ -146,6 +146,7 @@ describe('benchmark backends', () => {
         expect(rows).toHaveLength(1);
         expect(calls).toHaveLength(1);
         expect(rows[0]).toMatchObject({ id: 'a', invalid: reason, costUsd: problem === 'auth failure' ? 0 : 0.05, exit: problem === 'no init' ? 1 : 0, timedOut: false, invoked: ['skill-a'], tools: ['Read'], inventory: problem === 'no init' || problem === 'bad init' ? null : inventories[0], hookInvocations: hookCounts[0]!, hookEventCount: hookCounts[0]! + (ambient === 'absolute' ? 1 : 0) });
+        if (problem === 'auth failure') expect(rows[0].outcome).toEqual({ isError: true, subtype: 'success' });
         expect(rows[0].hooks).toHaveLength(hookCounts[0]! + (ambient === 'absolute' ? 1 : 0));
         return;
       }
