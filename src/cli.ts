@@ -316,6 +316,7 @@ async function main(): Promise<number> {
         library,
         config,
         client,
+        toolIndex: paths.index(),
         repo: repoSignals(process.cwd()),
         // Loaded in the background: the host's startup timeout must not wait for the model.
         embeddings: client ? embeddingsFor(library, config) : undefined,

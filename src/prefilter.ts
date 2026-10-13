@@ -1,4 +1,4 @@
-import type { Capability } from './types.js';
+import { toolsText, type Capability } from './types.js';
 
 const STOPWORDS = new Set(
   ('a an and are as at be by for from has have how i in is it its of on or that the this to was ' +
@@ -31,7 +31,7 @@ function analyze(capability: Capability): Doc {
   let doc = analyzed.get(capability);
   if (!doc) {
     const nameTokens = tokenize(capability.name.replace(/[-_]/g, ' '));
-    const tokens = [...Array<string[]>(NAME_WEIGHT).fill(nameTokens).flat(), ...tokenize(capability.description)];
+    const tokens = [...Array<string[]>(NAME_WEIGHT).fill(nameTokens).flat(), ...tokenize(capability.description), ...tokenize(toolsText(capability.tools ?? []))];
     const tf = new Map<string, number>();
     for (const t of tokens) tf.set(t, (tf.get(t) ?? 0) + 1);
     doc = { capability, tf, length: tokens.length };

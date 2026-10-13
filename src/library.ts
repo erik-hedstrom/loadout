@@ -23,7 +23,7 @@ import {
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { parse as parseYaml } from 'yaml';
-import { loadoutHome } from './config.js';
+import { paths } from './config.js';
 import type { Capability, McpServerConfig } from './types.js';
 
 const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---/;
@@ -220,17 +220,18 @@ function readScanCache(dir: string, root: string): ScanCache | undefined {
   }
 }
 
-function writeScanCache(dir: string, cache: ScanCache): void {
-  const tmp = join(dir, `${SCAN_CACHE_FILE}.${randomUUID()}.tmp`);
+/** Write a cache file next to its siblings: a unique temp name, then one atomic rename. Never throws. */
+export function writeCacheFile(dir: string, file: string, body: string, what: string): void {
+  const tmp = join(dir, `${file}.${randomUUID()}.tmp`);
   try {
     mkdirSync(dir, { recursive: true });
-    writeFileSync(tmp, JSON.stringify(cache), { flag: 'wx' });
-    renameSync(tmp, join(dir, SCAN_CACHE_FILE));
+    writeFileSync(tmp, body, { flag: 'wx' });
+    renameSync(tmp, join(dir, file));
   } catch (err) {
     // Cache persistence cannot prevent routing, and errors may quote untrusted paths or contents.
     const code = (err as NodeJS.ErrnoException).code;
     // Another Windows hook may still hold the destination open; a later scan can retry quietly.
-    if (code !== 'EPERM' && code !== 'EBUSY') console.error('loadout: library metadata cache could not be saved');
+    if (code !== 'EPERM' && code !== 'EBUSY') console.error(`loadout: ${what} cache could not be saved`);
     // The failure is reported once above. A cleanup error (ENOTDIR on Linux when the index
     // path is a file) adds nothing, and a leftover temp file has a unique name.
     try {
@@ -239,10 +240,12 @@ function writeScanCache(dir: string, cache: ScanCache): void {
   }
 }
 
+const writeScanCache = (dir: string, cache: ScanCache) => writeCacheFile(dir, SCAN_CACHE_FILE, JSON.stringify(cache), 'library metadata');
+
 export function scanLibrary(libraryDir: string, options: { cache?: boolean } = {}): Capability[] {
   const dirs = subdirs(join(libraryDir, 'skills'));
   // Routing opts in; audit, doctor and other read-only callers must neither create nor refresh the cache.
-  const cacheDir = options.cache ? join(loadoutHome(), 'index') : undefined;
+  const cacheDir = options.cache ? paths.index() : undefined;
   const root = cacheDir && existsSync(join(libraryDir, 'skills')) ? realpathSync(join(libraryDir, 'skills')) : '';
   const cache = cacheDir ? readScanCache(cacheDir, root) : undefined;
   const cutoffNs = BigInt(Date.now() - RACY_WINDOW_MS) * 1_000_000n;
