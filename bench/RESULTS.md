@@ -48,7 +48,8 @@ Revised 2026-10-07 after PR #6 round 4, before any paid call. Results: [B1 resul
 ## B7 method (not run yet): what configured MCP servers cost per request
 
 No measurement exists for this study; this section holds the method only, and
-the harness is `bench/mcp-overhead.ts` (plan and estimate in the backlog, B7).
+the harness is `bench/mcp-overhead.ts` (plan, estimate and controls in the
+backlog, B7).
 
 - Fixture stdio MCP servers (issue tracker, database, browser, docs shapes) in
   three configurations: 1 server (10 tools), 5 (110), 20 (485).
@@ -56,10 +57,21 @@ the harness is `bench/mcp-overhead.ts` (plan and estimate in the backlog, B7).
   the built-in tool search tool is not removed. Arms: no MCP; native with
   `ENABLE_TOOL_SEARCH` default, `false` and `auto`; the servers behind
   loadout's gateway (default and `false`). Codex: no MCP, native, gateway.
-- Two fresh sessions per arm, two requests per session (the second resumes the
-  first). Per request: uncached, cache creation and cache read input tokens.
+- Two fresh sessions per arm. Claude sends two requests in one process
+  (`--input-format stream-json`, `--no-session-persistence`); the counters of
+  each request are those of its assistant message: uncached, cache creation and
+  cache read input tokens. Codex sends one `--ephemeral` request: a second turn
+  would need a persisted session.
 - Deferral is inferred from the init tool list and the input delta against
-  fixture characters; the hosts do not report it.
+  fixture characters; the hosts do not report it. A row is invalid, and not
+  recorded, unless it passes its controls: every MCP arm has a positive input
+  delta over the same host's baseline; with tool search off every fixture tool
+  is listed; with the default or `auto` either ToolSearch or every tool is
+  listed; behind the gateway loadout's four tools are listed; all servers are
+  connected and no others; Codex's `app-server` lists exactly the declared
+  servers and tools. The host version is stored on each row and may not change
+  during the study; Claude's plugin, skill and command inventory and Codex's
+  rendered context may not drift.
 
 ## B1 results (2026-10-07): what installed skills cost per request
 

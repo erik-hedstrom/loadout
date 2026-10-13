@@ -184,7 +184,12 @@ deferred them. A user's cost depends on the host and its settings:
   on Microsoft Foundry, with older Google Cloud models, or with
   `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS`. `ENABLE_TOOL_SEARCH` can be true,
   false, auto or auto:N (code.claude.com/docs/en/mcp, "Configure tool search").
-- Codex defers MCP tools when the model supports `tool_search`.
+- Codex defers MCP tools when the model's `supports_search_tool` is set. Source:
+  openai/codex `codex-rs/core/src/tools/spec_plan.rs` (deferred exposure only
+  when `model_info.supports_search_tool`) and `codex-rs/features/src/lib.rs`
+  ("MCP tools are always deferred when tool_search is available"), at commit
+  cf0ed4c (main, 2026-10-13). That is not the installed 0.160.1, so the pilot
+  has to confirm it.
 
 Two baselines per configuration, because both exist in practice: every schema
 loaded (hosts or models without tool search; `ENABLE_TOOL_SEARCH=false`), and
@@ -198,17 +203,11 @@ loaded and 218.1k deferred, and 180 tools totalling 163k with 20.4k loaded and
 already defers most schemas here, so a saving from loadout's gateway has to be
 shown against the deferred baseline, not the all-loaded one.
 
-Built: `bench/mcp-fixtures.ts` (deterministic catalogues shaped like an issue
-tracker, a database, a browser and a docs server, written for this repo),
-`bench/mcp-fixture-server.ts` (stdio), `bench/mcp-overhead.ts` (harness, built
-on B1's isolation and parsers in `bench/overhead.ts`), `test/mcp-overhead.test.ts`.
-Configurations: n1 = 1 server, 10 tools; n5 = 5 servers, 110 tools; n20 = 20
-servers, 485 tools (10, 25 or 40 tools per server). Arms: Claude with no MCP;
-native at tool search default, false and auto; the same servers in the loadout
-library behind the gateway (default and false), where only `loadout mcp` is
-configured; Codex with no MCP, native and gateway. Each run is a fresh session:
-request 1, then request 2 resumed in the same session, with uncached, cache
-creation and cache read tokens for each.
+Built: `bench/mcp-fixtures.ts` and `bench/mcp-fixture-server.ts` (deterministic
+stdio servers shaped like an issue tracker, a database, a browser and a docs
+server, written for this repo), `bench/mcp-overhead.ts` (harness, on B1's
+isolation and parsers in `bench/overhead.ts`), `test/mcp-overhead.test.ts`.
+Method, arms, configurations and controls: [RESULTS, "B7 method"](../../bench/RESULTS.md#b7-method-not-run-yet-what-configured-mcp-servers-cost-per-request).
 
 loadout's own fixed cost counts in the gateway arms: its tool definitions plus
 server instructions. Fixture facts from `--offline`: with library servers it
@@ -225,11 +224,11 @@ Acceptance:
 - Both baselines reported for every configuration, and for each arm whether
   tools looked deferred, from the init tool list and the input delta against
   the fixture characters. Neither host reports deferral directly.
-- Not claimed without a measurement: any MCP saving, any Codex number, and
-  the cost of using the gateway (find, list, call turns). The first live run
-  also has to confirm the unverified argv: Claude `--resume` with the
-  isolated flags, Codex `exec resume`, and whether `ToolSearch` stays in
-  the tool list.
+- Not claimed without a measurement: any MCP saving, any Codex second-turn
+  number, and the cost of using the gateway (find, list, call turns).
+- The pilot confirms the argv the harness could not check here: Claude
+  `--input-format stream-json` with the isolated flags and the listing in
+  `init.tools`, and Codex's `app-server` inventory.
 
 How to run locally (a machine with `claude` and `codex` logged in; unset
 `ANTHROPIC_BASE_URL`, `CLAUDE_CODE_USE_FOUNDRY`, `CLAUDE_CODE_USE_VERTEX`
@@ -237,20 +236,44 @@ and `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS`, or the plan reports a blocker):
 
 ```bash
 npx tsx bench/mcp-overhead.ts --offline          # characters per arm, $0, no CLI
-npx tsx bench/mcp-overhead.ts                    # plan, argv and estimate, $0
-npx tsx bench/mcp-overhead.ts --run --hosts claude --configs n1 --repeats 1   # pilot
+npx tsx bench/mcp-overhead.ts                    # plan, argv, env and estimate, $0
+npx tsx bench/mcp-overhead.ts --run --hosts claude --configs n1 --repeats 1   # Claude pilot
+npx tsx bench/mcp-overhead.ts --run --hosts codex --configs n1 --repeats 1    # Codex pilot
 npx tsx bench/mcp-overhead.ts --run              # all arms, after approval
 ```
 
 Estimate (not observed; Erik approves before `--run`, ORCHESTRATOR budgets
-apply): 46 runs, 92 paid requests (64 Claude haiku, 28 Codex, those only if the
-free Codex preflight passes). B1 used about 8.5k input tokens a call (136k over
-16). Low 0.8M input tokens if tool search defers everything, high 3.2M if every
-native arm loads all definitions (an assumed 3 characters a token). Subscription
-quota, no Jev. Time at most 184 minutes (the 120 s timeout), about 46 at an
-assumed 30 s a call. The pilot is 12 requests, about 0.1M tokens, 6 to 24
-minutes. Decisions for Erik: approve the pilot, then the full run; whether the
-Codex arms wait for `unified_exec` as in B1.
+apply): 46 runs, 78 paid requests: 32 Claude runs with two requests each (64,
+haiku) and 14 Codex runs with one (only if the free Codex preflight passes).
+B1 used about 8.5k input tokens a call (136k over 16), measured with
+`--tools Skill`; B7 keeps every built-in tool, so the low figure probably
+undercounts and the pilot calibrates it. Low 0.66M input tokens if tool search
+defers everything, high 2.8M if every native arm loads all definitions (an
+assumed 3 characters a token). Subscription quota, no Jev. Time about 39
+minutes at an assumed 30 s a request, at most 156 (the 120 s cap per request).
+The Claude pilot is 12 requests (0.10 to 0.12M tokens, 6 to 24 minutes); the
+Codex pilot is 3 requests (0.03M tokens, 2 to 6 minutes).
+
+Host state: no flag stops Claude Code from keeping bookkeeping in `~/.claude.json`
+or Codex from writing logs, and both need the real config directory for login,
+so the harness does not redirect them (copying credentials is excluded). It does
+stop transcripts: Claude runs with `--no-session-persistence` (both requests in
+one process), Codex with `--ephemeral`, which is why Codex gets one request per
+session. Ambient config that no flag removes: managed settings, `CLAUDE.md` and
+`AGENTS.md` files in the user directories or parents of the temp directory. They
+are the same in every arm, so they cancel in the deltas; Claude's plugin,
+skill and command inventory and Codex's rendered context and version are
+checked for drift. Codex runs with `--ignore-user-config --ignore-rules`
+(exec-only flags, `codex-rs/exec/src/cli.rs` at cf0ed4c); its free commands
+cannot take them, so the preflight refuses the Codex arms if `app-server` lists
+any MCP server or tool the arm did not declare (openai/codex#16045: user servers
+merge with `-c mcp_servers`). B1's Codex commands lack those flags (its Codex
+baseline was meant to be ambient and its paid Codex runs are deferred); revisit
+before running them.
+
+Decisions for Erik: approve the pilots, then the full run; whether the Codex arms
+wait for `unified_exec` as in B1; whether a Codex with MCP servers in its own
+config should be allowed to run these arms (today: refused).
 
 ## C. Skill decision-making (router quality)
 
