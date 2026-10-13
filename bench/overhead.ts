@@ -273,7 +273,8 @@ export function parseClaude(stdout: string): Usage {
     modelUsage,
     inventory: initInventory(init) };
 }
-export interface ToolCall { name: string; input: unknown; result: string }
+/** A tool result as the host sent it: `isError` from its tool_result block, `content` the blocks, each with its type and its text or tool_name. */
+export interface ToolCall { name: string; input: unknown; isError: boolean; content: { type: string; text?: string; tool_name?: string }[] }
 export interface ClaudeSession { inventory: Inventory; tools: string[]; version: string; model: string | null; turns: Pick<Usage, 'input' | 'uncached' | 'cacheCreation' | 'cacheRead' | 'output'>[]; calls: ToolCall[] | null }
 /**
  * One process, several turns (stream-json input). The first `measured` turns must use no tool; each one's counters
@@ -297,11 +298,17 @@ export function parseClaudeTurns(stdout: string, measured: number, canary?: { al
       for (const c of e.message?.content ?? []) {
         if (c.type !== 'tool_use') continue;
         if (!inCanary || !canary!.allow.includes(c.name)) throw new Error('unexpected tool use; measurement invalid');
-        calls.set(c.id, { name: c.name, input: c.input, result: '' });
+        calls.set(c.id, { name: c.name, input: c.input, isError: false, content: [] });
       }
       last = e.message;
     } else if (e.type === 'user' && inCanary) {
-      for (const c of e.message?.content ?? []) if (c.type === 'tool_result' && calls.has(c.tool_use_id)) calls.get(c.tool_use_id)!.result += JSON.stringify(c.content);
+      for (const c of e.message?.content ?? []) {
+        if (c.type !== 'tool_result' || !calls.has(c.tool_use_id)) continue;
+        const call = calls.get(c.tool_use_id)!;
+        call.isError ||= c.is_error === true;
+        const blocks = typeof c.content === 'string' ? [{ type: 'text', text: c.content }] : Array.isArray(c.content) ? c.content : [];
+        for (const b of blocks) call.content.push({ type: String(b?.type), ...(typeof b?.text === 'string' ? { text: b.text } : {}), ...(typeof b?.tool_name === 'string' ? { tool_name: b.tool_name } : {}) });
+      }
     } else if (e.type === 'result') {
       if (e.subtype !== 'success' || e.is_error || (!inCanary && (![1, seen + 1].includes(e.num_turns) || !last))) throw new Error(`Claude turn ${seen + 1} failed or did not produce one request`);
       if (!inCanary) {
@@ -337,7 +344,7 @@ export function execute(command: Command): Promise<string> {
     const child = spawn(command.bin, command.args, { cwd: command.cwd, env: command.env, stdio: [command.stdin ? 'pipe' : 'ignore', 'pipe', 'ignore'], shell: false, windowsHide: true });
     let output = '';
     let exceeded = false;
-    // The whole process gets 120 s for each message it is sent, not a timer per message.
+    // One timer for the process: 120 s for each stdin message it is sent (one message when there is no stdin).
     const timer = setTimeout(() => { exceeded = true; child.kill(); }, 120_000 * (command.stdin?.length ?? 1));
     const pending = [...(command.stdin ?? [])];
     const send = () => { const next = pending.shift(); if (next === undefined) child.stdin?.end(); else child.stdin?.write(next + '\n'); };
@@ -385,7 +392,7 @@ export function parsePromptInput(stdout: string, cwd: string): Visibility {
 type AppServerRequest = (method: string, params: unknown) => Promise<any>;
 /** A model-free Codex app-server session: initialize, then `body` makes requests; never creates a thread or turn. */
 export async function withAppServer<T>(command: Command, body: (request: AppServerRequest) => Promise<T>): Promise<T> {
-  const child = spawn(command.bin, command.args, { cwd: command.cwd, stdio: ['pipe', 'pipe', 'ignore'], shell: false, windowsHide: true });
+  const child = spawn(command.bin, command.args, { cwd: command.cwd, env: command.env, stdio: ['pipe', 'pipe', 'ignore'], shell: false, windowsHide: true });
   const lines = createInterface({ input: child.stdout });
   const pending = new Map<number, { resolve: (value: any) => void; reject: (error: Error) => void }>();
   let id = 0;

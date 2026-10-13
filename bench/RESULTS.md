@@ -48,7 +48,7 @@ Revised 2026-10-07 after PR #6 round 4, before any paid call. Results: [B1 resul
 ## B7 method (not run yet): what configured MCP servers cost per request
 
 No measurement exists for this study; this section holds the method only, and
-the harness is `bench/mcp-overhead.ts` (plan, estimate and controls in the
+the harness is `bench/mcp-overhead.ts` (plan, estimate and decisions in the
 backlog, B7).
 
 - Fixture stdio MCP servers (issue tracker, database, browser, docs shapes) in
@@ -57,27 +57,45 @@ backlog, B7).
   the built-in tool search tool is not removed. Arms: no MCP; native with
   `ENABLE_TOOL_SEARCH` default, `false` and `auto`; the servers behind
   loadout's gateway (default and `false`). Codex: no MCP, native, gateway.
-- Two fresh sessions per arm. Claude sends two requests in one process
+- Two fresh sessions per arm, strictly one command at a time, every command of
+  every arm in one working directory that is emptied before it (both hosts put
+  the working directory in the prompt). Claude sends two requests in one process
   (`--input-format stream-json`, `--no-session-persistence`); the counters of
   each request are those of its assistant message: uncached, cache creation and
   cache read input tokens. Codex sends one `--ephemeral` request with
   `--ignore-user-config --ignore-rules`: a second turn would need a persisted
-  session. Every arm's working directory name has the same length, because both
-  hosts put it in the prompt.
-- Deferral is inferred from the init tool list and the input delta against
-  fixture characters; the hosts do not report it. A row is invalid, and not
-  recorded, unless it passes its controls: every MCP arm has a positive input
-  delta over the same host's baseline; with tool search off every fixture tool
-  is listed; with the default or `auto`, either every tool is listed or
-  ToolSearch is listed and a third message (a canary) asking for the last tool
-  of the last server returns it in a ToolSearch result; behind the gateway
-  loadout's four tools are listed and `server_tools` lists the canary tool for
-  its server; all servers are connected and no others; Codex's `app-server`
-  lists exactly the declared servers and tools. A default or `auto` row where
-  every tool is listed is labelled "all loaded", with or without ToolSearch. The
-  canary turn is not measured. The host version is stored on each row and may
-  not change during the study; Claude's plugin, skill and command inventory and
-  Codex's rendered context may not drift.
+  session.
+- Deferral is inferred, not reported by the host. A row is invalid, and not
+  recorded, unless it passes its controls:
+  - every MCP arm has a positive input delta over the same host's baseline;
+  - all servers are connected and no others;
+  - Claude with tool search off lists every fixture tool;
+  - Claude with the default or `auto` lists every tool, or lists ToolSearch and
+    answers a canary: a third message, not measured and bounded by
+    `--max-turns 4`, asks for the last tool of the last server. Its lookup must
+    be a non-error ToolSearch result with a `tool_reference` block whose
+    `tool_name` is exactly the qualified tool; text that mentions the tool does
+    not count;
+  - the gateway lists loadout's four tools, or lists ToolSearch (tool search
+    defers loadout's own tools too), and a non-error `server_tools` result for
+    the canary's server has the tool's own line; `find_skills` may be tried
+    first;
+  - Codex's `app-server` lists exactly the declared servers and tools; its
+    free commands run on empty temporary `CODEX_HOME`s.
+- Reading column: Claude rows read "all loaded" with tool search off, "all
+  loaded (ToolSearch present)" or "(no ToolSearch)" where the default or `auto`
+  listed every tool, "deferred (canary found)" where fewer were listed, and
+  "gateway" for the gateway arms (the listed-tool columns show whether loadout's
+  own tools were deferred). Codex rows read "not shown": `exec` reports no tool
+  list. No model-free tool inventory was found for Claude (`init.tools` lists
+  what is loaded; whether `/context` runs under `-p` is unverified); Codex's
+  `mcpServerStatus/list` is one.
+- The host version is stored on each row and may not change during the study;
+  Claude's plugin, skill and command inventory and Codex's version may not
+  drift.
+- Host state a `--run` leaves in the real homes is printed by the plan; the flags
+  that stop it do not exist for `~/.claude.json` bookkeeping or the Codex
+  databases, and the API-key alternatives are Erik's decision (backlog, B7).
 
 ## B1 results (2026-10-07): what installed skills cost per request
 

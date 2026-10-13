@@ -10,7 +10,7 @@
  */
 import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
@@ -31,8 +31,9 @@ const B1_INPUT_PER_CALL = 8_500;
 // Assumptions, not measurements: characters per token, and seconds per request (the hard cap is execute()'s 120 s).
 const CHARS_PER_TOKEN = 3;
 const SECONDS_PER_REQUEST = 30;
-// A canary lookup is a tool call and the answer, plus one more call when the loadout tools themselves are deferred.
-const CANARY_REQUESTS = 3;
+// `--max-turns` applies to each stdin message (code.claude.com/docs/en/cli-reference), so it bounds the canary lookup: a
+// ToolSearch for loadout's tool, find_skills, server_tools and the answer. Reaching it is an error, so a row fails loudly.
+const MAX_TURNS = 4;
 // Claude Code turns tool search off or unavailable for these (code.claude.com/docs/en/mcp, "Configure tool search").
 const TOOL_SEARCH_OFF = ['ANTHROPIC_BASE_URL', 'CLAUDE_CODE_USE_FOUNDRY', 'CLAUDE_CODE_USE_VERTEX', 'CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS'];
 
@@ -102,7 +103,7 @@ export function formatOffline(rows: OfflineRow[]): string {
 
 export interface Canary { server: string; tool: string; qualified: string }
 export interface Run { arm: Arm; repeat: number; servers: string[]; requests: number; command: Command; canary?: Canary; free?: { features: Command; prompt: Command; version: Command; inventory: Command } }
-export interface Plan { runs: Run[]; blockers: string[]; root: string }
+export interface Plan { runs: Run[]; blockers: string[]; root: string; work: string }
 export interface Only { hosts?: Host[]; configs?: ConfigName[]; repeats?: number }
 
 /** The child environment for Claude: the tool search setting is explicit in every arm, never inherited. */
@@ -121,12 +122,20 @@ export function canaryOf(config: ConfigName): Canary {
   return { server: spec.name, tool, qualified: `mcp__${spec.name}__${tool}` };
 }
 const canaryPrompt = (c: Canary) => `Find the tool "${c.tool}" of the MCP server "${c.server}" with the tool lookup available to you, and reply with exactly its name. Do not use any other tool.`;
-const CANARY_TOOLS = ['ToolSearch', 'mcp__loadout__server_tools'];
-/** Tool search must have returned the tool by its qualified name; the gateway's server_tools must have listed it for the right server. */
+const CANARY_TOOLS = ['ToolSearch', 'mcp__loadout__find_skills', 'mcp__loadout__server_tools'];
+/**
+ * The lookup must have answered in the host's own structure, not in text that mentions the tool (a reply, an error or an
+ * echoed query could): tool search, a tool_reference block naming exactly the qualified tool; the gateway, a server_tools
+ * result for the canary's server with the tool's own line (`- <tool>: ` in a listing, `<tool>: ` for one tool). Errors never count.
+ */
 export function canaryFound(arm: Arm, canary: Canary, calls: ToolCall[]): boolean {
-  return arm.kind === 'gateway'
-    ? calls.some((c) => c.name === 'mcp__loadout__server_tools' && String((c.input as { server?: unknown })?.server ?? '').replace(/^mcp:/, '') === canary.server && c.result.includes(canary.tool))
-    : calls.some((c) => c.name === 'ToolSearch' && c.result.includes(canary.qualified));
+  return calls.some((c) => {
+    if (c.isError) return false;
+    if (arm.kind !== 'gateway') return c.name === 'ToolSearch' && c.content.some((b) => b.type === 'tool_reference' && b.tool_name === canary.qualified);
+    const server = String((c.input as { server?: unknown } | null)?.server ?? '').replace(/^mcp:/, '');
+    return c.name === 'mcp__loadout__server_tools' && server === canary.server
+      && c.content.some((b) => b.type === 'text' && (b.text ?? '').split('\n').some((line) => line.startsWith(`- ${canary.tool}: `) || line.startsWith(`${canary.tool}: `)));
+  });
 }
 
 function gatewayServer(root: string, config: ConfigName) {
@@ -139,23 +148,40 @@ function gatewayServer(root: string, config: ConfigName) {
   return { command: process.execPath, args: ['--import', import.meta.resolve('tsx'), fileURLToPath(new URL('../src/cli.ts', import.meta.url)), 'mcp', '--lexical'], env: { LOADOUT_HOME: home } };
 }
 
+/** Every command of every arm runs here, emptied before each: both hosts put the working directory in the prompt, and a host may write into it. */
+export function resetWork(work: string) {
+  assertTemporary(work);
+  rmSync(work, { recursive: true, force: true });
+  mkdirSync(work, { recursive: true });
+}
+
 const userMessage = (text: string) => JSON.stringify({ type: 'user', message: { role: 'user', content: [{ type: 'text', text }] } });
 
 export function buildPlan(root: string, only: Only = {}, env: NodeJS.ProcessEnv = process.env): Plan {
   assertTemporary(root);
+  const work = join(root, 'work');
+  resetWork(work);
   const hosts = only.hosts ?? ['claude', 'codex'];
   const blockers = hosts.includes('claude') ? toolSearchBlockers(env) : [];
   const runs: Run[] = [];
-  for (const [index, arm] of arms().entries()) {
+  for (const arm of arms()) {
     if (!hosts.includes(arm.host) || (arm.config && only.configs && !only.configs.includes(arm.config))) continue;
-    // Both hosts put the working directory in the prompt, so every arm gets a name of the same length.
-    const cwd = join(root, `run-${String(index).padStart(2, '0')}`);
-    assertTemporary(cwd);
-    mkdirSync(cwd, { recursive: true });
     const servers: Record<string, object> = arm.kind === 'native' ? Object.fromEntries(serverSpecs(CONFIGS[arm.config!]).map((s) => [s.name, serverConfig(s)]))
       : arm.kind === 'gateway' ? { loadout: gatewayServer(root, arm.config!) } : {};
     const binary = cli(arm.host);
-    const command = (args: string[], extra: Partial<Command> = {}): Command => ({ bin: binary.bin, args: [...binary.prefix, ...args], cwd, ...extra });
+    const command = (args: string[], extra: Partial<Command> = {}): Command => ({ bin: binary.bin, args: [...binary.prefix, ...args], cwd: work, ...extra });
+    // A free Codex command gets its own empty CODEX_HOME and no CODEX_SQLITE_HOME, so it reads nothing of the user's and
+    // writes nothing there: prompt-input takes global instructions from the home (codex-rs/cli/src/main.rs), and the
+    // app-server and exec open their state databases in it (codex-rs/state/src/runtime.rs; config_toml.rs for sqlite_home).
+    // The MCP inventory takes auth as optional (codex-rs/app-server/src/request_processors/mcp_processor.rs): the pilot confirms it lists without a login.
+    const free = (name: string, args: string[]): Command => {
+      const home = join(root, 'codex-homes', `${armId(arm).replaceAll('/', '-')}-${name}`);
+      assertTemporary(home);
+      mkdirSync(home, { recursive: true });
+      const freeEnv: NodeJS.ProcessEnv = { ...env, CODEX_HOME: home };
+      delete freeEnv.CODEX_SQLITE_HOME;
+      return command(args, { env: freeEnv });
+    };
     // Codex starts every configured server at startup; required makes a failed start fail the run, not shrink the arm.
     const settings = codexSettings(Object.fromEntries(Object.entries(servers).map(([name, s]) => [name, { ...s, required: true }])));
     // Where an arm may claim deferral, a third message asks for a distinctive tool through the host's lookup; its
@@ -169,35 +195,43 @@ export function buildPlan(root: string, only: Only = {}, env: NodeJS.ProcessEnv 
       // one while `-c` overrides are a separate layer (codex-rs/config/src/loader/mod.rs), so mcp_servers survive. The free
       // commands cannot take the flags, so their inventory is checked against the arm's declaration instead.
       runs.push(arm.host === 'claude'
-        ? { arm, repeat, servers: Object.keys(servers), canary, requests: canary ? 2 + CANARY_REQUESTS : 2,
-            command: command([...claudeIsolation(servers), '--input-format', 'stream-json', '--model', MODELS.claude], { env: claudeEnv(env, arm.toolSearch), stdin: [...PROMPTS, ...(canary ? [canaryPrompt(canary)] : [])].map(userMessage) }) }
+        ? { arm, repeat, servers: Object.keys(servers), canary, requests: canary ? 2 + MAX_TURNS : 2,
+            command: command([...claudeIsolation(servers), '--input-format', 'stream-json', '--max-turns', String(MAX_TURNS), '--model', MODELS.claude], { env: claudeEnv(env, arm.toolSearch), stdin: [...PROMPTS, ...(canary ? [canaryPrompt(canary)] : [])].map(userMessage) }) }
         : { arm, repeat, servers: Object.keys(servers), requests: 1, command: command(['exec', '--json', '--ephemeral', '--ignore-user-config', '--ignore-rules', '--skip-git-repo-check', ...settings, PROMPTS[0]]),
-            ...(repeat === 1 ? { free: { features: command(['features', 'list', ...settings]), prompt: command(['debug', 'prompt-input', ...settings, PROMPTS[0]]), version: command(['--version']), inventory: command(['app-server', ...settings]) } } : {}) });
+            ...(repeat === 1 ? { free: { features: free('features', ['features', 'list', ...settings]), prompt: free('prompt', ['debug', 'prompt-input', ...settings, PROMPTS[0]]), version: free('version', ['--version']), inventory: free('inventory', ['app-server', ...settings]) } } : {}) });
     }
   }
   runs.sort((a, b) => Number(a.arm.host === 'codex') - Number(b.arm.host === 'codex') || Number(a.arm.kind !== 'baseline') - Number(b.arm.kind !== 'baseline'));
-  return { runs, blockers, root };
+  return { runs, blockers, root, work };
 }
 
 export interface Estimate { requests: number; inputTokens: [number, number]; seconds: [number, number] }
-/** Low assumes everything deferred; high assumes every definition loads. B1's base was measured with `--tools Skill`, so low probably undercounts. */
+/**
+ * Low assumes everything deferred; high assumes every definition loads. B1's base was measured with `--tools Skill`, so low
+ * probably undercounts. Requests count a canary message at its --max-turns bound; the time cap is execute()'s 120 s per stdin message.
+ */
 export function estimate(runs: Run[], rows: OfflineRow[]): Estimate {
-  let requests = 0, high = 0, cap = 0;
+  let requests = 0, high = 0, messages = 0;
   for (const run of runs) {
     const facts = rows.find((r) => r.kind === run.arm.kind && r.config === run.arm.config);
     requests += run.requests;
-    cap += run.requests * 120;
+    messages += run.command.stdin?.length ?? 1;
     high += run.requests * (B1_INPUT_PER_CALL + (facts ? (facts.definitionChars + facts.instructionChars) / CHARS_PER_TOKEN : 0));
   }
-  return { requests, inputTokens: [requests * B1_INPUT_PER_CALL, Math.round(high)], seconds: [requests * SECONDS_PER_REQUEST, cap] };
+  return { requests, inputTokens: [requests * B1_INPUT_PER_CALL, Math.round(high)], seconds: [requests * SECONDS_PER_REQUEST, messages * 120] };
 }
 
-/** What a `--run` writes outside the temp root and the results folder; nothing here is redirected, because login needs these homes. */
-export const HOST_WRITES = [
-  'Claude Code, per process: a project entry for the temp working directory in ~/.claude.json (host bookkeeping, as in B1). No transcript (--no-session-persistence). Caches or logs under ~/.claude are not suppressed and not verified.',
-  'Codex, per exec, features, debug and app-server call: logs and state under ~/.codex. No rollout file (--ephemeral). Not verified.',
-  'Not implemented, because it moves the cost from subscription to cash and is Erik\'s call: a temporary CODEX_HOME with CODEX_API_KEY, or CLAUDE_CONFIG_DIR with ANTHROPIC_API_KEY (BACKLOG, B7).',
-];
+/** What a `--run` writes in the host homes, resolved for this environment; nothing is redirected, because login needs these homes. */
+export function hostWrites(env: NodeJS.ProcessEnv = process.env): string[] {
+  const home = homedir();
+  const claudeDir = env.CLAUDE_CONFIG_DIR || join(home, '.claude');
+  const cache = process.platform === 'darwin' ? join(home, 'Library', 'Caches') : process.platform === 'win32' ? (env.LOCALAPPDATA || join(home, 'AppData', 'Local')) : (env.XDG_CACHE_HOME || join(home, '.cache'));
+  const sqlite = env.CODEX_SQLITE_HOME || env.CODEX_HOME || join(home, '.codex');
+  return [
+    `Claude Code, per process: a project entry for the working directory and other usage counters in ${join(env.CLAUDE_CONFIG_DIR || home, '.claude.json')}; MCP server logs under ${join(cache, 'claude-cli-nodejs')} (one folder per working directory); anything else under ${claudeDir} is not suppressed. No transcript (--no-session-persistence). Not verified by a run.`,
+    `Codex, per exec: the state and logs SQLite databases in ${sqlite}, which exec opens even with --ephemeral (codex-rs/exec/src/lib.rs, codex-rs/state/src/runtime.rs at cf0ed4c). No rollout file. Its free commands run on empty temporary CODEX_HOMEs and write nothing here.`,
+  ];
+}
 
 // --- Measurement -----------------------------------------------------------------------------
 
@@ -219,7 +253,8 @@ export function positiveControl(arm: Arm, tools: string[] | null, delta: number,
   if (!tools) return;
   const listed = tools.filter((t) => t.startsWith('mcp__')).length;
   if (arm.kind === 'gateway') {
-    if (!LOADOUT_TOOLS.every((t) => tools.includes(`mcp__loadout__${t}`))) throw new Error(`${armId(arm)}: loadout's tools are not listed; measurement invalid`);
+    // Under tool search loadout's own four tools may be deferred; the successful server_tools lookup then went through ToolSearch.
+    if (!LOADOUT_TOOLS.every((t) => tools.includes(`mcp__loadout__${t}`)) && (arm.toolSearch === 'false' || !tools.includes('ToolSearch'))) throw new Error(`${armId(arm)}: loadout's tools are not listed and ToolSearch cannot reach them; measurement invalid`);
     if (!canary) throw new Error(`${armId(arm)}: server_tools did not list the canary tool; measurement invalid`);
     return;
   }
@@ -281,7 +316,9 @@ async function codexPreflight(plan: Plan, deps: Required<Deps>, out: string): Pr
 
 export async function runStudy(plan: Plan, out: string, deps: Deps = {}): Promise<{ rows: Row[]; notes: string[] }> {
   if (plan.blockers.length) throw new Error(`blocked: ${plan.blockers.join('; ')}`);
-  const full = { run: deps.run ?? execute, inventory: deps.inventory ?? codexMcpInventory };
+  // Strictly sequential, each command in the emptied work directory.
+  const fresh = <R>(f: (command: Command) => Promise<R>) => (command: Command) => { resetWork(plan.work); return f(command); };
+  const full = { run: fresh(deps.run ?? execute), inventory: fresh(deps.inventory ?? codexMcpInventory) };
   mkdirSync(out, { recursive: true });
   const rows: Row[] = [];
   const notes: string[] = [];
@@ -322,9 +359,13 @@ export async function runStudy(plan: Plan, out: string, deps: Deps = {}): Promis
   return { rows, notes };
 }
 
-/** How a Claude row's tools reached the model; "deferred" only when the host listed fewer tools than were configured and the canary was found. */
+/**
+ * How a Claude row's tools reached the model; "deferred" only when the host listed fewer tools than were configured and
+ * the canary was found. Codex shows no tool list, so its rows are "not shown".
+ */
 export function reading(r: Row): string {
-  if (r.host !== 'claude' || r.kind === 'baseline') return '';
+  if (r.kind === 'baseline') return '';
+  if (r.host === 'codex') return 'not shown';
   if (r.kind === 'gateway') return 'gateway';
   const all = r.mcpToolsListed === catalogFacts(CONFIGS[r.config!]).tools;
   if (r.toolSearch === 'false') return 'all loaded';
@@ -342,11 +383,11 @@ export function summarize(rows: Row[], notes: string[] = []): string {
   }
   if (rows.some((r) => r.kind === 'native' && r.config === 'n20' && r.toolSearch === 'default' && !r.toolSearchListed)) lines.push('Tool search was not listed for native default at n20: this model or host has none here, so those rows are "all loaded", not deferred.');
   lines.push(...notes);
-  lines.push('Codex has one request per session (a second turn needs a persisted session). Sessions per arm are few: report ranges, not intervals. Tokens, not money. Not measured: tool use through the gateway beyond the canary lookup, output quality, other models.');
+  lines.push('Codex has one request per session (a second turn needs a persisted session), and exec reports no tool list: whether it deferred is not shown. Sessions per arm are few: report ranges, not intervals. Tokens, not money. Not measured: tool use through the gateway beyond the canary lookup, output quality, other models.');
   return lines.join('\n');
 }
 
-export async function main(args: string[], deps: { print?: (s: string) => void; run?: Deps['run'] } = {}) {
+export async function main(args: string[], deps: { print?: (s: string) => void; run?: Deps['run']; out?: string } = {}) {
   const print = deps.print ?? console.log;
   const { values } = parseArgs({ args, options: { offline: { type: 'boolean' }, run: { type: 'boolean' }, hosts: { type: 'string' }, configs: { type: 'string' }, repeats: { type: 'string' } } });
   const list = <T extends string>(text: string | undefined, allowed: readonly T[]) => text?.split(',').map((x) => { if (!allowed.includes(x as T)) throw new Error(`unknown value ${x}`); return x as T; });
@@ -358,25 +399,26 @@ export async function main(args: string[], deps: { print?: (s: string) => void; 
   try {
     const plan = buildPlan(root, only);
     const e = estimate(plan.runs, facts);
-    print(`${plan.runs.length} runs, ${e.requests} paid requests (Codex only if its preflight passes; each canary lookup counted as up to ${CANARY_REQUESTS}). Estimate: ${e.inputTokens[0]} to ${e.inputTokens[1]} input tokens; ${Math.round(e.seconds[0] / 60)} to ${Math.round(e.seconds[1] / 60)} minutes. Subscription quota; no Jev. Needs Erik's approval before --run.`);
+    print(`${plan.runs.length} runs, ${e.requests} paid requests (Codex only if its preflight passes; each canary lookup counted at its --max-turns bound of ${MAX_TURNS}). Estimate: ${e.inputTokens[0]} to ${e.inputTokens[1]} input tokens; ${Math.round(e.seconds[0] / 60)} to ${Math.round(e.seconds[1] / 60)} minutes. Subscription quota; no Jev. Needs Erik's approval before --run.`);
     print('The low figure uses B1\'s 8.5k tokens a call, measured with `--tools Skill`; B7 keeps every built-in tool, so it probably undercounts. The pilot calibrates it.');
-    print('The Claude pilot must also confirm that ToolSearch is listed for native default at n20; if it is not, those rows are labelled "all loaded", not deferred.');
     for (const blocker of plan.blockers) print(`BLOCKED: ${blocker}`);
-    for (const write of HOST_WRITES) print(`HOST STATE: ${write}`);
+    for (const write of hostWrites()) print(`HOST STATE: ${write}`);
     if (!values.run) {
-      print('Illustrative: the temp root below is deleted when this exits, so use --run rather than replaying these lines. Claude is sent its stdin lines one at a time, each after the previous result.');
+      print('Illustrative: the temp root below is deleted when this exits, so use --run rather than replaying these lines. Every command runs in the one cwd shown, emptied before each. Claude is sent its stdin lines one at a time, each after the previous result.');
       for (const r of plan.runs) {
         const env = r.arm.host === 'claude' ? ` env=ENABLE_TOOL_SEARCH=${r.command.env?.ENABLE_TOOL_SEARCH ?? '(unset)'},MCP_TIMEOUT=${r.command.env?.MCP_TIMEOUT}` : '';
         print(`PAID ${armId(r.arm)}/${r.repeat}: cwd=${JSON.stringify(r.command.cwd)}${env} argv=${JSON.stringify([r.command.bin, ...r.command.args])}${r.command.stdin ? ` stdin=${JSON.stringify(r.command.stdin)}` : ''}`);
       }
       return;
     }
-    // The only write outside the temp root: committed raw rows, as in B1.
-    const out = fileURLToPath(new URL(`./results/${new Date().toISOString().replace(/[:.]/g, '-')}-b7-mcp-overhead/`, import.meta.url));
+    // Raw rows are committed, as in B1. A run that stops early leaves INCOMPLETE beside its partial rows.jsonl: delete the folder.
+    const out = deps.out ?? fileURLToPath(new URL(`./results/${new Date().toISOString().replace(/[:.]/g, '-')}-b7-mcp-overhead/`, import.meta.url));
     mkdirSync(out, { recursive: true });
+    writeFileSync(join(out, 'INCOMPLETE'), 'This run did not finish: delete this folder; its rows are not a result.\n');
     writeFileSync(join(out, 'offline.json'), JSON.stringify(facts, null, 1));
     const { rows, notes } = await runStudy(plan, out, { run: deps.run });
     writeFileSync(join(out, 'summary.md'), summarize(rows, notes) + '\n');
+    rmSync(join(out, 'INCOMPLETE'));
     print(`Raw metrics: ${out}`);
   } finally { rmSync(root, { recursive: true, force: true }); }
 }

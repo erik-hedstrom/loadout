@@ -207,7 +207,10 @@ Built: `bench/mcp-fixtures.ts` and `bench/mcp-fixture-server.ts` (deterministic
 stdio servers shaped like an issue tracker, a database, a browser and a docs
 server, written for this repo), `bench/mcp-overhead.ts` (harness, on B1's
 isolation and parsers in `bench/overhead.ts`), `test/mcp-overhead.test.ts`.
-Method, arms, configurations and controls: [RESULTS, "B7 method"](../../bench/RESULTS.md#b7-method-not-run-yet-what-configured-mcp-servers-cost-per-request).
+Arms, configurations, controls and what each flag does:
+[RESULTS, "B7 method"](../../bench/RESULTS.md#b7-method-not-run-yet-what-configured-mcp-servers-cost-per-request).
+The files a `--run` writes in the host homes are printed by the plan
+(`hostWrites()` in the harness), resolved for the environment it runs in.
 
 loadout's own fixed cost counts in the gateway arms: its tool definitions plus
 server instructions. Fixture facts from `--offline`: with library servers it
@@ -220,30 +223,18 @@ not tokens and not results.
 Acceptance:
 - Raw rows under `bench/results/<timestamp>-b7-mcp-overhead/` and a RESULTS
   entry ("B7 results") with ranges where the sample allows (two sessions per
-  arm: ranges, not intervals) and "not shown" where it does not.
-- Both baselines reported for every configuration, and for each arm whether
-  tools looked deferred, from the init tool list and the input delta against
-  the fixture characters. Neither host reports deferral directly.
+  arm: ranges, not intervals) and "not shown" where it does not. A folder with
+  an `INCOMPLETE` file is a run that stopped: delete it.
+- Both baselines reported for every configuration, and for each Claude arm
+  whether tools looked deferred, from the init tool list and a canary lookup.
+  Neither host reports deferral directly; for Codex it is "not shown".
 - Not claimed without a measurement: any MCP saving, any Codex second-turn
   number, and the cost of using the gateway (find, list, call turns).
-- The pilot confirms the argv the harness could not check here: Claude
-  `--input-format stream-json` with the isolated flags and the listing in
-  `init.tools`, and Codex's `app-server` inventory.
-
-Controls that make a row exact (details: RESULTS, "B7 method"): every MCP arm
-needs a positive input delta, and the run directories have equal names so no
-arm gains tokens from a longer path. Where an arm may claim deferral (Claude
-native with tool search default or auto, and the gateway), a third message asks
-for the last tool of the last fixture server through the host's lookup
-(ToolSearch, or loadout's `server_tools`); the tool result must name it, or the
-row is invalid. Codex has no canary: its one request would absorb the lookup, so
-its control is the `app-server` inventory plus the delta. No model-free tool
-inventory was found for Claude (`init.tools` lists what is loaded; whether
-`/context` runs under `-p` is unverified); Codex's `mcpServerStatus/list` is one.
-Codex `-c mcp_servers` survives `--ignore-user-config`: that flag only empties
-the user config layer, and `-c` overrides are a separate layer
-(`codex-rs/config/src/loader/mod.rs` at cf0ed4c); the Codex pilot confirms it
-with the native n1 delta over the baseline.
+- The pilot confirms what the harness could not check here: Claude
+  `--input-format stream-json` with the isolated flags, `--max-turns` per
+  stdin message and the listing in `init.tools`; Codex `-c mcp_servers`
+  surviving `--ignore-user-config` (the n1 delta over the baseline), and the
+  `app-server` inventory listing without a login on an empty `CODEX_HOME`.
 
 How to run locally (a machine with `claude` and `codex` logged in; unset
 `ANTHROPIC_BASE_URL`, `CLAUDE_CODE_USE_FOUNDRY`, `CLAUDE_CODE_USE_VERTEX`
@@ -258,40 +249,29 @@ npx tsx bench/mcp-overhead.ts --run --hosts codex --configs n1 --repeats 1     #
 npx tsx bench/mcp-overhead.ts --run              # all arms, after approval
 ```
 
-Pilot 2 must confirm `toolSearchListed` for native default at n20. If Haiku or
-the host has no tool search, those rows are labelled "all loaded", not deferred.
-
 Estimate (not observed; Erik approves before `--run`, ORCHESTRATOR budgets
-apply): 46 runs, 150 paid requests. Claude: 32 runs of 2 measured requests, and
-24 of them also a canary lookup counted as up to 3 more (136 in all); Codex: 14
-runs of 1 (only if the free preflight passes). B1 used about 8.5k input tokens a
-call (136k over 16), measured with `--tools Skill`; B7 keeps every built-in
-tool, so the low figure probably undercounts and the pilots calibrate it. Low
-1.3M input tokens if tool search defers everything, high 5.2M if every arm loads
-all definitions on every request (an assumed 3 characters a token). Subscription
-quota, no Jev. Time about 75 minutes at an assumed 30 s a request, at most 300
-(the 120 s cap). Claude pilot 1: 24 requests, 0.20 to 0.25M tokens, 12 to 48
-minutes. Claude pilot 2 (n20): 24 requests, 0.20 to 1.65M tokens, 12 to 48
-minutes. Codex pilot: 3 requests, 0.03M tokens, 2 to 6 minutes.
+apply): 46 runs, 174 paid requests. Claude: 32 runs of 2 measured requests, and
+24 of them also a canary lookup bounded by `--max-turns 4` (160 in all); Codex:
+14 runs of 1 (only if the free preflight passes). B1 used about 8.5k input
+tokens a call (136k over 16), measured with `--tools Skill`; B7 keeps every
+built-in tool, so the low figure probably undercounts and the pilots calibrate
+it. Low 1.5M input tokens if tool search defers everything, high 6.1M if every
+arm loads all definitions on every request (an assumed 3 characters a token).
+Subscription quota, no Jev. Time about 87 minutes at an assumed 30 s a request,
+at most 204 (102 stdin messages at the 120 s cap each). Claude pilot 1: 28
+requests, 0.24 to 0.29M tokens, 14 to 32 minutes. Claude pilot 2 (n20): 28
+requests, 0.24 to 1.93M tokens, 14 to 32 minutes. Codex pilot: 3 requests,
+0.03M tokens, 2 to 6 minutes.
 
-Host state a `--run` causes (printed by the plan; flags in RESULTS, "B7 method"):
-- `~/.claude.json`: a project entry for each temp working directory (host
-  bookkeeping, as in B1). No transcript. Other files under `~/.claude` are not
-  suppressed and not verified.
-- `~/.codex`: logs and state from each `exec`, `features`, `debug` and
-  `app-server` call. No rollout file. Not verified.
-- Ambient `CLAUDE.md`/`AGENTS.md` in the user directories or parents, and managed
-  Claude settings, cannot be turned off by any flag; they are the same in every
-  arm, and Claude's plugin, skill and command inventory and Codex's rendered
-  context and version are checked for drift.
-- Codex's own MCP servers: the free preflight refuses the Codex arms if
-  `app-server` lists any server or tool the arm did not declare (the flags
-  that ignore user config are exec-only; RESULTS has them, with openai/codex#16045).
-  B1's Codex commands lack those flags (its Codex baseline was meant to be
-  ambient and its paid Codex runs are deferred); revisit before running them.
+Ambient `CLAUDE.md`/`AGENTS.md` in the user directories or parents, and managed
+Claude settings, cannot be turned off by any flag; they are the same in every
+arm, and Claude's plugin, skill and command inventory and Codex's version are
+checked for drift. B1's Codex commands lack `--ignore-user-config` and
+`--ignore-rules` (its Codex baseline was meant to be ambient and its paid Codex
+runs are deferred); revisit before running them.
 
 Decisions for Erik:
-- Approve the pilots, then the full run, with the host-state writes above.
+- Approve the pilots, then the full run, with the host-state writes the plan prints.
 - Whether to move the host state out of the real homes. Two options, both
   verified only in source or docs, neither implemented, and both **switch the cost
   from subscription quota to API cash**: (a) Codex with a temporary `CODEX_HOME`
@@ -303,6 +283,11 @@ Decisions for Erik:
   `ANTHROPIC_API_KEY`, which the Claude Code docs say is always used under `-p`
   (code.claude.com/docs/en/env-vars); whether a fresh config dir blocks `-p` on
   first-run state is unverified. Neither was run here.
+- The free Codex commands run on empty temporary `CODEX_HOME`s, so `debug
+  prompt-input` no longer sees the user's global `AGENTS.md` (read from that
+  home, `codex-rs/cli/src/main.rs`). The paid exec still does, in every arm; the
+  drift check covers the built-in context only. Accept, or supply the key
+  options above.
 - Whether the Codex arms wait for `unified_exec` as in B1.
 - A Codex with MCP servers in its own config is refused (the `app-server`
   inventory sees them). If the D12 Codex plugin is installed, its `loadout`
