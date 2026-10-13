@@ -318,6 +318,7 @@ Acceptance: a third row in that RESULTS table, with raw results. The README's
 | D6 | P2 | HTTP: cancellation reaches Jev | Claude | cloud | done ([#19](https://github.com/erik-hedstrom/loadout/pull/19)) |
 | D8 | P1 | Host capability matrix (verified vs generated) | Claude | cloud | done ([#18](https://github.com/erik-hedstrom/loadout/pull/18)) |
 | D9 | P1 | Codex parity: neutral session skill dir, tier presets | Claude | cloud | done ([#21](https://github.com/erik-hedstrom/loadout/pull/21)); Codex launch not re-run live |
+| D15 | P0 | MCP discovery: make library MCP servers findable and usable through the search server | Claude | cloud + local | in progress (code and tests done; the live check is left) |
 | D12 | P0 | Codex: install the hook and search as one step, if Codex allows it | Codex | local | done ([#23](https://github.com/erik-hedstrom/loadout/pull/23)): `plugins/loadout-codex` through `.agents/plugins/marketplace.json`; install checked offline; the hook still needs `/hooks` trust; the live run is D2 |
 
 **D10. In-host first: loadout as a Claude Code plugin.**
@@ -540,6 +541,54 @@ throwaway `CODEX_HOME`):
   cannot carry the `wsl.exe` wrapper.
 - Left: `marketplace add erik-hedstrom/loadout` from GitHub (after merge); the
   live hook (D2); desktop and T3 Code.
+
+**D15. MCP discovery.**
+
+Why (Erik, 2026-10-13): MCP servers are a bigger part of his context than
+skills, and MCP is a launch priority. `find_skills` already ranked gateway
+servers, but everything the agent read talked about skills, so nothing cued a
+search for a tool and a match gave no clear next step. Library servers are not
+configured in the host, so they cost nothing until needed, and one search
+covers skills and servers. For scale, one user's `/context` readings
+(not a benchmark, two Claude Code sessions): 292 MCP tools at 230.8k tokens,
+12.4k loaded and 218.1k deferred; 180 tools at 163k tokens, 20.4k loaded and
+142.6k deferred. Claude Code's own tool search already defers most schemas;
+what remains is the loaded share, the deferred name list and server
+instructions. Codex has `tool_search` where the model supports it. Nothing
+here is measured against them yet (B7).
+
+Acceptance:
+- The search text, result lines and `server_tools` output cover MCP servers
+  (src/mcp.ts), the tool names and descriptions of a server are searchable
+  without starting it, and tests cover the cases in the PR.
+- Local check, not done in the PR: in a stock Claude Code CLI, an unprompted
+  task that needs a fixture server reaches the right tool, respects
+  approvals, and returns a checked result, compared with native deferred tool
+  search.
+
+Learnings (2026-10-13):
+- `find_skills` keeps its name: the launcher's `SEARCH_TOOLS`, the Codex
+  plugin's approval list, the hook text, `bench/invoke.ts`, the docs and the
+  tests all name it.
+- Sizes, with one gateway server: server instructions 337 → 424 characters,
+  `find_skills` description 473 → 556, `server_tools` 76 → 120 (plus the
+  server names). A skills-only library gets byte-identical text, so the B1
+  figure still describes it. The with-server figure is not remeasured in
+  tokens.
+- A declared tool list in `mcp.json` was not added: nothing in the standard
+  format carries one, and a second field would drift from the server. The
+  index is filled by `server_tools` instead; before that call, search sees only
+  the library description.
+- The index is untrusted on read (shape and size checks, fingerprint of the
+  server's command or URL, no env or headers), and tool text is escaped
+  before it reaches Jev. `SEARCH_HINT` (hook and launcher text) still says
+  "skill library"; changing it alters measured behaviour, so it waits for B7.
+- `server_tools` was unbounded (up to 3,000 characters of schema per tool).
+  Past 12,000 characters, tools show argument names, and one tool's full
+  schema is one call away. Whether agents call correctly from the compact form
+  is not measured; it is part of the local check.
+- Possible follow-up, only if the local check shows agents struggling with
+  the generic `call_server_tool`: D4 (`tools/list_changed`).
 
 **D7. `loadout doctor`.**
 

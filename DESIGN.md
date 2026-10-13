@@ -195,8 +195,14 @@ session turns into "now write the release notes"), the agent can search the
 library itself, in its own words, through MCP:
 
 - **`find_skills(goal, keywords?)`** runs the same two Jev requests on the
-  agent's goal. It returns at most 5 matches with fit ≥ 0.5, one line each
-  (key, fit, a 180-character description), with the exact next call. The need
+  agent's goal, over the library's skills and its gateway MCP servers. It
+  returns at most 5 matches with fit ≥ 0.5, one line each (key, fit, a
+  180-character description; "MCP server" and its tool count for a server),
+  with the exact next call: `load_skill` for a skill, `server_tools` then
+  `call_server_tool` for a server. The name stays `find_skills`: the launcher's
+  pre-approval, the Codex plugin, the hook text, the benchmarks and users'
+  own approval rules all name it, and a rename would break them for no gain
+  in what the agent does. The need
   gate is softened, since the agent asked: when Jev judges the goal to be
   general work, only near-certain exact fits (P ≥ 0.8) are shown. Otherwise
   the answer says nothing fits and names the closest skill, so the agent does
@@ -211,7 +217,22 @@ library itself, in its own words, through MCP:
   absolute paths, no links, no binaries, 256 KB at most.
 - **Gateway**: `server_tools` / `call_server_tool` reach the library's MCP
   servers, started on first use and kept for the session. Registered only when
-  the library has servers, so a skills-only library costs two tool definitions.
+  the library has servers, so a skills-only library costs two tool definitions
+  and its tool text is unchanged; only a library with gateway servers adds MCP
+  wording to the instructions and descriptions (+214 characters in all, with
+  one server).
+- **Tool index.** A server's tools are known only once it has run. After a
+  successful `server_tools`, the names and clipped descriptions are written to
+  `~/.loadout/index/mcp-tools.json`, keyed by the server and a hash of its
+  command or URL (never env or headers). Search reads the file as untrusted:
+  it checks the shape and the sizes (1 MB file, 100 tools, 100/200 characters),
+  drops what fails, and escapes the text before it reaches Jev. Matching
+  uses it in BM25 and in the Jev question; the embedding index does not.
+  Search never starts a server to fill it.
+- **Listing size.** `server_tools` prints each tool's input schema until the
+  listing reaches 12,000 characters; further tools show their argument names
+  and point to `server_tools` with `tool` for the schema. The tool text is
+  escaped like other third-party text.
 
 The search tools add **546 input tokens** per request in Claude Code. A
 native listing of 50 skills with generated names adds about 477; B1
@@ -260,6 +281,8 @@ Measurements and caveats: [bench/RESULTS.md](bench/RESULTS.md).
 - **Dynamic tool exposure.** The gateway exposes library MCP servers through
   one generic `call_server_tool`. MCP's `tools/list_changed` could add a
   server's real tools to the session instead (native schemas, per-tool
-  approvals) on hosts that honour it.
+  approvals) on hosts that honour it ([D4](docs/loop/BACKLOG.md)). Whether it
+  is worth doing depends on how agents use the current path (D15's local
+  check).
 - **Independent evaluation.** New held-out requests: [backlog C1](docs/loop/BACKLOG.md#c-skill-decision-making-router-quality).
 - **The model tier.** Jev's tier choice is not evaluated yet.

@@ -23,9 +23,11 @@ The columns:
   a launch keep the user's model.
 - **Hook:** a prompt hook routes every prompt and adds the skills that fit as
   context.
-- **Search:** `find_skills` and `load_skill` over MCP.
+- **Search:** `find_skills` and `load_skill` over MCP. `find_skills` covers
+  the library's skills and its gateway servers.
 - **Gateway:** `server_tools` and `call_server_tool`, for library servers
-  marked `"gateway": true`.
+  marked `"gateway": true`. A server match from `find_skills` names these as
+  the next call.
 
 Notes:
 1. Headless `claude -p` and `codex exec`, 2026-10-06: the selected skill was
