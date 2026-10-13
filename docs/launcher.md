@@ -12,25 +12,11 @@ loadout codex  "<task>" [-- <codex args>]                # launch Codex with the
 loadout codex --headless "<task>" -- --skip-git-repo-check   # run once and exit (codex exec / claude -p)
 ```
 
-Output format (illustrative, not a recorded run):
-
-```
-$ loadout route "Lay out our services as a canvas file I can open in Obsidian"
-router: jev — 200/1,262 candidates in … ms, … tokens, $…
-need:   … — a specialised skill is likely useful
-tier:   small  (large …, medium …, small …)
-skills: (fit: how well each matches the request, 0-1)
-  ◆ …  json-canvas        loaded, injected (clear winner)  share …
-  ○ …  obsidian-markdown  offered  share …
-  ○ …  obsidian-cli       offered  share …
-```
-
 How the decision is made: [DESIGN.md](../DESIGN.md#router).
 
 Flags: `--dry-run` prints the command instead of launching; `--lexical` routes
-offline without Jev; `--headless` runs once and exits. If Jev is unreachable,
-loadout falls back to keyword ranking and says so: an unreachable Jev delays
-a launch but does not stop it.
+offline without Jev. If Jev is unreachable, loadout falls back to keyword
+ranking and says so: an unreachable Jev delays a launch but does not stop it.
 Each launch writes its decision, copies of the selected and offered skills
 and any generated config to `~/.loadout/sessions/<id>/` (under
 `$LOADOUT_HOME` when set).

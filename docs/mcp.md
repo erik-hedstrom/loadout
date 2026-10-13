@@ -3,9 +3,10 @@
 `loadout mcp` serves the library as an MCP server, so an agent can look for
 know-how when the work drifts away from what the session started with:
 
-- `find_skills(goal, keywords?)`: a Jev-ranked handful of skills, and
-  gateway MCP servers, predicted to fit, with their fit; "nothing fits" when
-  nothing does;
+- `find_skills(goal, keywords?)`: a handful of skills, and gateway MCP
+  servers, predicted to fit, with their fit; "nothing fits" when nothing
+  does. Jev ranks them; without a key, with `--lexical` or when Jev fails,
+  keyword ranking does;
 - `load_skill(skill, file?)`: the skill's instructions as attributed
   third-party reference material, or one of its files (so hosts without file
   access, like Claude Desktop, can still use scripts and references);
@@ -18,9 +19,10 @@ know-how when the work drifts away from what the session started with:
 ## Cost and privacy
 
 In Claude Code, the one host measured, its tool definitions added tokens to a
-fresh session's first request, and for a small library they cost more than
-the native skill listing they replace. Later turns and other hosts are not
-measured. The figures and crossover are in [DESIGN.md](../DESIGN.md#search-server-loadout-mcp). In the
+fresh session's first request, more than a native listing of 50 skills under
+generated names; with real names: not shown
+([B1](../bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request)).
+Later turns and other hosts are not measured. In the
 measured headless runs, agents also searched less often than they should
 ([RESULTS](../bench/RESULTS.md#do-agents-use-what-they-are-given)). So the
 [hook plugins](hook.md) are the main path and search is the supplement.
@@ -35,7 +37,7 @@ files.
 | Host | How |
 |---|---|
 | Claude Code | `loadout setup claude-code` (a `claude mcp add` command, after the plugin commands) |
-| Codex CLI | the `loadout-codex` plugin attaches it (`loadout setup codex`); WSL behind Windows Codex: `--windows` prints TOML |
+| Codex CLI | the `loadout-codex` plugin attaches it (`loadout setup codex`); WSL behind Windows Codex: [hook plugins](hook.md#codex-cli) |
 | Codex tab of the ChatGPT desktop app, T3 Code | Codex plugin support untested |
 | Claude Desktop | `loadout setup claude-desktop` |
 | Cursor | `loadout setup cursor` |
@@ -55,7 +57,7 @@ serves the same search, skills only, on `http://127.0.0.1:8787/mcp`. Its
 token, Host and gateway safeguards: [SECURITY.md](../SECURITY.md#http-mcp).
 
 ```bash
-(umask 077; openssl rand -hex 32 > ~/.loadout/mcp-token)
+(umask 077; openssl rand -hex 32 > ~/.loadout/mcp-token)   # or any path only you can read
 loadout mcp --http --token-file ~/.loadout/mcp-token --allowed-host <your-tunnel-domain>
 ```
 

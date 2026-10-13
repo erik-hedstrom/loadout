@@ -13,8 +13,10 @@ claude plugin marketplace add erik-hedstrom/loadout
 claude plugin install loadout@loadout
 ```
 
-You can also use `/plugin` inside a session. Checked in the CLI; the desktop
-app's Code tab: untested.
+You can also use `/plugin` inside a session. Checked in one headless
+`claude -p --plugin-dir plugins/loadout` run
+([RESULTS](../bench/RESULTS.md#the-hook-plugin-in-the-claude-code-cli-2026-10-08));
+the marketplace install and the desktop app's Code tab: untested.
 
 For loadout running in WSL behind Windows Claude Code, use `loadout setup
 claude-code --windows` and merge its settings.json hook snippet into
@@ -29,20 +31,21 @@ codex plugin add loadout-codex@loadout
 ```
 
 Then trust the hook with `/hooks` in Codex. The `loadout-codex` plugin also
-attaches the [library search](mcp.md). WSL behind Windows Codex needs
-`loadout setup codex --windows`.
+attaches the [library search](mcp.md). For loadout in WSL behind Windows
+Codex, merge the TOML from `loadout setup codex --windows` into Codex's
+config instead: it carries the `wsl.exe` wrapper for the hook and the search
+server, which the plugin's fixed commands cannot. Untested in a host.
 
 What the hook adds, and when: [DESIGN.md](../DESIGN.md#prompt-hook).
 
 ## Latency
 
-Each routed prompt waits before the agent starts: a median 2.6 s on
-2026-10-08
-([RESULTS](../bench/RESULTS.md#the-hook-plugin-in-the-claude-code-cli-2026-10-08)),
-and 1.5 s on 2026-10-12 after the library scan cache
+Each routed prompt waits before the agent starts. On 2026-10-12,
+`loadout hook claude` took a median 1.5 s with the library scan cache and
+1.8 s without it; how much of that gap is the scan: not shown
 ([RESULTS](../bench/RESULTS.md#routed-prompts-with-the-library-scan-cache-d11-2026-10-12)).
-Both: one WSL machine, the 1,262-skill library, 20 prompts each. Only
-`loadout hook claude` was timed; the Codex hook is not measured.
+One WSL machine, the 1,262-skill library, 20 prompts per build. The Codex hook
+is not measured.
 
 ## Privacy
 
@@ -52,13 +55,13 @@ These commands send text to TypeSafe's Jev API through loadout's router:
   and `/loop` iterations, background subagents reporting back and messages
   from other sessions, and pasted text arrives expanded
   ([UserPromptSubmit](https://code.claude.com/docs/en/hooks#userpromptsubmit)).
-  Events under three words without a `/`, `@` or `$` skill mention ("yes",
-  "go on") are skipped;
+  Events under three words with no word starting with `/`, `@` or `$`
+  ("yes", "go on") are skipped;
 - the [launcher](launcher.md) and `loadout route`: the task, once per
-  launch;
+  command, `--dry-run` included;
 - [`find_skills`](mcp.md): the agent's goal plus any keywords it passes.
 
-Each routing makes two Jev requests, and both carry:
+Each routing makes up to two Jev requests, and both carry:
 - that text;
 - the name, top-level file names, dependency names and language extensions
   of the folder the command runs in: the session's folder for the hook, the
@@ -68,14 +71,16 @@ Each routing makes two Jev requests, and both carry:
 The first (wide) request adds the names and descriptions of up to 200
 candidates (by default), drawn from skills (hook), skills and library MCP
 servers (launcher, `loadout route`), or skills and gateway MCP servers
-(`find_skills`; skills only over HTTP). The second (close) request repeats
-the names and descriptions of up to 8 shortlisted candidates (by default) and
-is the only one that adds the opening of their `SKILL.md`.
+(`find_skills`; skills only over HTTP), with descriptions cut at 300
+characters. The second (close) request sends up to 8 shortlisted candidates
+(by default) with descriptions cut at 700 characters, and is the only one that
+adds the opening of their `SKILL.md`.
 
 A candidate's name normally goes as is. When candidates share a name, the
 first keeps it and the duplicates are qualified by where they came from: a
 GitHub `owner/repo`, or, for a skill added from a local folder, that folder's
-absolute path, which can include your username.
+absolute path, which can include your username. Without a recorded source,
+they get their kind or a number (`#2`).
 
 The launcher, `loadout route` and `find_skills` send a request again, once,
 after a network error, a timeout, a 429 or a 5xx; the hook does not retry.
@@ -86,3 +91,5 @@ Code-level detail: [SECURITY.md](../SECURITY.md#prompt-hook).
 
 To keep prompts local, set `"router": "lexical"` in loadout's config; the hook
 then adds context only for prompts that name a skill. Or leave the hook out.
+The Codex plugin's search server reads `~/.loadout/config.json` even when
+`LOADOUT_HOME` is set.

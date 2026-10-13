@@ -225,9 +225,9 @@ prompt, which shows the server, tool and arguments.
 
 ### Prompt hook
 
-[Search plus hook](bench/RESULTS.md#do-agents-use-what-they-are-given) raised
-Claude Code's useful-skill use from **2 of 10** to **6 of 10** sessions. The
-hook alone is not measured:
+The hook was measured only together with search
+([RESULTS](bench/RESULTS.md#do-agents-use-what-they-are-given)); the hook
+alone is not measured:
 - each substantive prompt (not "yes" or "go on") is routed with the same two
   Jev requests;
 - the skills that fit are listed once per session, as third-party metadata,

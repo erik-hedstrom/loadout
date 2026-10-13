@@ -75,9 +75,6 @@ Acceptance:
 - Reviewed for honesty: the outcome pilot is mixed, so the README must not
   claim better results.
 
-Note (E8 find pass, 2026-10-08): README still leads with the launcher; the
-plugin appears only under "Search mid-session".
-
 A1 learnings (2026-10-12): the README now leads with B1's number, the
 plugins and a from-source install (no npm name yet, A4); launcher, library,
 hook and MCP details moved to `docs/launcher.md`, `docs/library.md`,

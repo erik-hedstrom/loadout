@@ -55,9 +55,7 @@ Notes:
    starting it.
    The Codex plugin attaches search on every request; its per-request token
    cost in Codex is not measured.
-   WSL loadout behind Windows Codex needs `loadout setup codex --windows`:
-   its TOML supplies the machine-specific `wsl.exe` wrapper the plugin's
-   fixed PATH commands cannot carry. This fallback is untested in a host.
+   For WSL behind Windows Codex: [hook plugins](hook.md#codex-cli).
 8. `loadout mcp --http`; see [library search over MCP](mcp.md#chatgpt-over-http).
 
 Backlog D3 tests the desktop and IDE hosts by hand and updates this table.
