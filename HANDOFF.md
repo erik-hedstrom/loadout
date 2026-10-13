@@ -169,8 +169,8 @@ native machine:
 
 - **Gateway approvals:** the gateway exposes library servers through one
   generic `call_server_tool`. Native per-tool approvals need `tools/list_changed`.
-- **Host verification gaps** (Codex hook D2, desktop app D10):
-  [docs/hosts.md](docs/hosts.md).
+- **Host verification:** [docs/hosts.md](docs/hosts.md) tracks what is not yet
+  verified per host.
 - **Native Windows:** `which()` ignores PATHEXT, so `claude.exe` and `.cmd`
   shims read as not on PATH, in `loadout run` and `doctor` (D7).
 - **Outcome evaluation:** the arms invent their own inputs, the runs inherit

@@ -36,9 +36,9 @@ codex plugin marketplace add erik-hedstrom/loadout && codex plugin add loadout-c
 ```
 
 - **Before step 2,** `loadout audit` estimates, per host, the tokens your
-  installed skills' descriptions add (about 4 characters per token, before
-  host caps) and lists your MCP servers without counting their schemas. It
-  only reads.
+  installed skills' descriptions add (characters divided by 4, a fixed rule
+  of thumb that is not measured, before host caps) and lists your MCP servers
+  without counting their schemas. It only reads.
 - **After step 3,** `loadout doctor` checks the key (one Jev call when Jev
   routing is on and a key is found), library, index and hosts, and prints a
   fix for each gap.
