@@ -90,3 +90,9 @@ are then routed and judged as above, with `--requests bench/data/requests-c1.jso
   cached: about $0.10 per 20-request batch instead of $0.90.
 - `invoke.ts` runs the real agents headless, which takes minutes per request
   and uses your subscriptions.
+
+## MCP overhead (B7)
+
+`npx tsx bench/mcp-overhead.ts --offline` prints the characters each arm puts
+in front of the host from local fixture MCP servers (no CLI, no network). The
+plan, the cost estimate and the live runs are described in the backlog (B7).

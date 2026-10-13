@@ -115,6 +115,7 @@ Acceptance:
 | B4 | P1 | Repo polish: description, topics, social preview, badges | Claude | cloud + erik | todo |
 | B6 | P2 | GitHub profile README draft | Claude | cloud | todo |
 | B5 | P2 | Awesome-list and directory submissions (drafts) | Codex | erik | todo (repo public since 2026-10-12; agents draft, Erik submits) |
+| B7 | P1 | MCP overhead study: what configured MCP servers cost per request, natively and through loadout | Claude | cloud (harness, done) + local (runs) | review: harness and offline mode built; live runs wait for Erik's approval of the estimate |
 
 **B1. Token-waste study.**
 
@@ -171,6 +172,85 @@ Acceptance:
 Acceptance: `docs/launch/profile-README.md` for github.com/erik-hedstrom,
 presenting loadout and the engineering behind it (benchmarks, reviews,
 cross-vendor agents). Erik publishes.
+
+**B7. MCP overhead study.**
+
+Why: Erik reports that MCP servers take more of his context than skills, and
+nothing in RESULTS measures MCP overhead. B1 measured skill listings and
++546 tokens for loadout's own tools, but did not record whether tool search
+deferred them. A user's cost depends on the host and its settings:
+- Claude Code defers MCP tool definitions by default (names and server
+  instructions load). It does not with a non-first-party `ANTHROPIC_BASE_URL`,
+  on Microsoft Foundry, with older Google Cloud models, or with
+  `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS`. `ENABLE_TOOL_SEARCH` can be true,
+  false, auto or auto:N (code.claude.com/docs/en/mcp, "Configure tool search").
+- Codex defers MCP tools when the model supports `tool_search`.
+
+Two baselines per configuration, because both exist in practice: every schema
+loaded (hosts or models without tool search; `ENABLE_TOOL_SEARCH=false`), and
+the host's tool search on (the cost is the loaded share, the deferred-name list
+and the server instructions).
+
+One user's observations, not a benchmark result: `/context` in two of Erik's
+Claude Code sessions showed 292 MCP tools totalling 230.8k tokens with 12.4k
+loaded and 218.1k deferred, and 180 tools totalling 163k with 20.4k loaded and
+142.6k deferred. What `/context` counts as loaded was not verified. The host
+already defers most schemas here, so a saving from loadout's gateway has to be
+shown against the deferred baseline, not the all-loaded one.
+
+Built: `bench/mcp-fixtures.ts` (deterministic catalogues shaped like an issue
+tracker, a database, a browser and a docs server, written for this repo),
+`bench/mcp-fixture-server.ts` (stdio), `bench/mcp-overhead.ts` (harness, built
+on B1's isolation and parsers in `bench/overhead.ts`), `test/mcp-overhead.test.ts`.
+Configurations: n1 = 1 server, 10 tools; n5 = 5 servers, 110 tools; n20 = 20
+servers, 485 tools (10, 25 or 40 tools per server). Arms: Claude with no MCP;
+native at tool search default, false and auto; the same servers in the loadout
+library behind the gateway (default and false), where only `loadout mcp` is
+configured; Codex with no MCP, native and gateway. Each run is a fresh session:
+request 1, then request 2 resumed in the same session, with uncached, cache
+creation and cache read tokens for each.
+
+loadout's own fixed cost counts in the gateway arms: its tool definitions plus
+server instructions. Fixture facts from `--offline`: with library servers it
+registers 4 tools (2,673 to 2,866 characters of definitions with 1 to 20
+servers, since `server_tools` lists the server names) and 337 characters of
+instructions; the servers' own definitions (8,012 / 81,434 / 355,934
+characters for n1 / n5 / n20) stay behind the gateway. These are characters,
+not tokens and not results.
+
+Acceptance:
+- Raw rows under `bench/results/<timestamp>-b7-mcp-overhead/` and a RESULTS
+  entry ("B7 results") with ranges where the sample allows (two sessions per
+  arm: ranges, not intervals) and "not shown" where it does not.
+- Both baselines reported for every configuration, and for each arm whether
+  tools looked deferred, from the init tool list and the input delta against
+  the fixture characters. Neither host reports deferral directly.
+- Not claimed without a measurement: any MCP saving, any Codex number, and
+  the cost of using the gateway (find, list, call turns). The first live run
+  also has to confirm the unverified argv: Claude `--resume` with the
+  isolated flags, Codex `exec resume`, and whether `ToolSearch` stays in
+  the tool list.
+
+How to run locally (a machine with `claude` and `codex` logged in; unset
+`ANTHROPIC_BASE_URL`, `CLAUDE_CODE_USE_FOUNDRY`, `CLAUDE_CODE_USE_VERTEX`
+and `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS`, or the plan reports a blocker):
+
+```bash
+npx tsx bench/mcp-overhead.ts --offline          # characters per arm, $0, no CLI
+npx tsx bench/mcp-overhead.ts                    # plan, argv and estimate, $0
+npx tsx bench/mcp-overhead.ts --run --hosts claude --configs n1 --repeats 1   # pilot
+npx tsx bench/mcp-overhead.ts --run              # all arms, after approval
+```
+
+Estimate (not observed; Erik approves before `--run`, ORCHESTRATOR budgets
+apply): 46 runs, 92 paid requests (64 Claude haiku, 28 Codex, those only if the
+free Codex preflight passes). B1 used about 8.5k input tokens a call (136k over
+16). Low 0.8M input tokens if tool search defers everything, high 3.2M if every
+native arm loads all definitions (an assumed 3 characters a token). Subscription
+quota, no Jev. Time at most 184 minutes (the 120 s timeout), about 46 at an
+assumed 30 s a call. The pilot is 12 requests, about 0.1M tokens, 6 to 24
+minutes. Decisions for Erik: approve the pilot, then the full run; whether the
+Codex arms wait for `unified_exec` as in B1.
 
 ## C. Skill decision-making (router quality)
 

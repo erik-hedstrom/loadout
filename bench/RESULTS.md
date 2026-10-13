@@ -45,6 +45,22 @@ Revised 2026-10-07 after PR #6 round 4, before any paid call. Results: [B1 resul
   No config edits or credential copying. Host-owned state: Claude adds temp-cwd entries to
   ~/.claude.json; Codex writes logs. Outcome quality is not measured.
 
+## B7 method (not run yet): what configured MCP servers cost per request
+
+No measurement exists for this study; this section holds the method only, and
+the harness is `bench/mcp-overhead.ts` (plan and estimate in the backlog, B7).
+
+- Fixture stdio MCP servers (issue tracker, database, browser, docs shapes) in
+  three configurations: 1 server (10 tools), 5 (110), 20 (485).
+- Claude Code, haiku, isolated configuration as in B1 but without `--tools`, so
+  the built-in tool search tool is not removed. Arms: no MCP; native with
+  `ENABLE_TOOL_SEARCH` default, `false` and `auto`; the servers behind
+  loadout's gateway (default and `false`). Codex: no MCP, native, gateway.
+- Two fresh sessions per arm, two requests per session (the second resumes the
+  first). Per request: uncached, cache creation and cache read input tokens.
+- Deferral is inferred from the init tool list and the input delta against
+  fixture characters; the hosts do not report it.
+
 ## B1 results (2026-10-07): what installed skills cost per request
 
 Raw rows: [bench/results/2026-10-07T21-04-16-645Z-overhead/](results/2026-10-07T21-04-16-645Z-overhead/).
