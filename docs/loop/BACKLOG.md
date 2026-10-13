@@ -235,6 +235,9 @@ Learnings (cloud half): [fixtures and protocol](../../bench/fixtures/c2/PROTOCOL
 - Anything `claude` writes to stdout is forgeable by `Bash` (same user, via
   `/proc/<pid>/fd/1`), so validity and cost come only from the gateway, by
   conversation structure ([GATEWAY.md](../../bench/fixtures/c2/GATEWAY.md)).
+- The gateway sorts every request into one of four classes (next link, exact
+  retry, pinned side-call template, off-chain) by its body, whatever its status,
+  and reads each to the end for usage. Auto-compaction is off in all arms.
 
 **C3. Tier choice.**
 

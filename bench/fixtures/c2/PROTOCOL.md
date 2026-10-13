@@ -1,28 +1,26 @@
 # C2 protocol: does the small tier plus loadout match the large tier?
 
-Backlog item C2. The fixtures in this folder and this protocol were written
-before any run.
+Backlog item C2. The fixtures and this protocol were written before any run.
 
 ## Provenance of the tasks
 
 - Claude Opus 5.5 (a Claude Code worker session; model from the commit's
   Co-Authored-By line) wrote all 18 tasks, their inputs and `KEY.md` on
-  2026-10-12.
-- It did not read the skill library (`bench/data/library*`, skill lists) or
-  `requests*.jsonl`. It did have `bench/RESULTS.md` in context, and RESULTS
-  names library skills (`contract-review`, `xlsx`, `statistical-analysis`
-  and others). So the tasks are not independent of the library:
+  2026-10-12. It did not read the skill library (`bench/data/library*`, skill
+  lists) or `requests*.jsonl`, but it had `bench/RESULTS.md` in context, which
+  names library skills (`contract-review`, `xlsx`, `statistical-analysis` and
+  others). So the tasks are not independent of the library:
   - `data-ab-test` repeats the outcome pilot's A/B task;
   - the office tasks mirror the docx, xlsx, pptx and pdf skills in
     anthropics/skills.
-- The tasks sit in areas where skills exist. Results say nothing about work
-  outside those areas.
-- Inputs are hand-written or produced by [make_inputs.py](make_inputs.py)
-  (seeded, byte-for-byte repeatable). Names, companies and numbers are invented.
-- 4 tasks are controls (`ctl-*`): plain code or writing where no skill should
-  help. A gain there points at the harness or the judge, not at a skill.
-- Split: no tuning happens on these tasks, so all 18 are test tasks and none
-  is dev. A change that follows from the results is re-tested on new tasks.
+- The tasks sit in areas where skills exist; results say nothing about work
+  outside them. Inputs are hand-written or produced by
+  [make_inputs.py](make_inputs.py) (seeded, repeatable byte for byte). Names,
+  companies and numbers are invented.
+- 4 tasks are controls (`ctl-*`) where no skill should help; a gain there
+  points at the harness or the judge. No tuning happens on these tasks, so all
+  18 are test tasks; a change that follows from the results is re-tested on
+  new tasks.
 
 ## Isolation
 
@@ -45,17 +43,17 @@ not start until the sandbox meets all of this:
   inside it). The only route is to the harness gateway (see Credentials), by its
   exact address. Denied: everything else, the host, other containers, private
   and link-local addresses (cloud metadata included), and any direct route to
-  the Anthropic and Jev APIs. WebFetch and WebSearch are also disallowed, but
-  that is a tool setting, not isolation.
+  the Anthropic and Jev APIs. WebFetch and WebSearch are disallowed too, as a
+  tool setting only.
 - **Name resolution is egress too.** A lookup of `<secret>.attacker.example`
-  reaches the attacker's name server without any connection from the
-  container. The only resolver the container can reach is one the harness
-  controls. It answers the gateway's name exactly (no wildcard or suffix match)
-  and answers REFUSED for every other name without forwarding it. It keeps
-  counters, never names (answered, refused and forwarded, which must stay 0,
-  per run, and one flag set when a query equals the self-check's canary),
-  since a skill can encode a credential into DNS labels. The egress rule denies
-  port 53, DNS over TLS (853) and DNS over HTTPS to any other address.
+  reaches the attacker's name server with no connection from the container, and
+  a skill can encode a credential into DNS labels. The only resolver the
+  container can reach is the harness's. It answers the gateway's name exactly
+  (no wildcard or suffix match) and REFUSED for every other name, forwarding
+  nothing. It keeps counters, never names (answered, refused, forwarded, which
+  must stay 0, per run, and a flag set when a query equals the self-check's
+  canary). The egress rule denies port 53, DNS over TLS (853) and DNS over
+  HTTPS to any other address.
 - Each run starts in a fresh folder holding a copy of only that task's `inputs`
   from [index.json](index.json) (not `task.md`, not `KEY.md`).
 - The plugin is a copy of `plugins/loadout` outside the checkout; `loadout`
@@ -64,18 +62,15 @@ not start until the sandbox meets all of this:
   comes with Node 22+, Python 3 with python-docx, openpyxl, python-pptx, pypdf,
   pdfplumber, pandas and matplotlib, and sqlite3. Versions go into the results.
 - **Collection, checks and text extraction run in a second sandbox.** When
-  `claude` exits, the run ends in the order in [GATEWAY.md](GATEWAY.md) (key
-  revoked, sandbox stopped, requests drained). The sandbox state must read
-  stopped, with
-  no process left in its cgroup, before anything else happens; that kills every
-  process the agent started, background ones included. A fresh sandbox from the
-  same image then gets the run volume mounted read-only, with no network at all,
-  no credentials and the limits in the table below. It runs three stages: the
-  collector, the text extraction and the check script. They execute or parse
-  what the agent
-  wrote (`node --test`, unittest, docx and pptx files), so they never run on
-  Erik's machine, and the host never walks, opens or parses the agent's
-  folder itself.
+  `claude` exits, the run ends in the order in [GATEWAY.md](GATEWAY.md). The
+  sandbox state must read stopped, with no process left in its cgroup, before
+  anything else happens; that kills every process the agent started,
+  background ones included. A fresh sandbox from the same image then gets the
+  run volume mounted read-only, with no network at all, no credentials and the
+  limits in the table below. It runs three stages: the collector, the text
+  extraction and the check script. They execute or parse what the agent wrote
+  (`node --test`, unittest, docx and pptx files), so they never run on Erik's
+  machine, and the host never walks, opens or parses the agent's folder itself.
 - **The collector looks before it opens.** It works in this order:
   1. It walks the run folder with `lstat` only, opening nothing, and prunes
      `node_modules`, `.venv` and `__pycache__` when they are real directories
@@ -94,17 +89,16 @@ not start until the sandbox meets all of this:
      that many bytes.
   4. It writes a tar stream of regular files and directories, with names it has
      checked, to its stdout, and is killed after 32 MiB plus headers. The host
-     never uses `docker cp` or any copy that follows links, and reads only that
+     never uses `docker cp` or any copy that follows links; it reads only that
      stream, with a bounded parser, into a fresh folder under names it
-     generated (`O_EXCL`, `O_NOFOLLOW`). An entry type other than file or
-     directory, an unchecked name, a size that disagrees with its header and a
-     stream over its cap fail the same way.
+     generated (`O_EXCL`, `O_NOFOLLOW`). Another entry type, an unchecked name,
+     a size that disagrees with its header and a stream over its cap fail the
+     same way.
 
   Any violation fails the run as `output rejected`: nothing from its folder is
-  scanned, extracted or judged, and the run is counted per arm and reported.
-  It is not rerun (see [Arms](#arms)).
-- Runs and judging happen on a local machine where the CLIs are logged in, not
-  in a cloud session.
+  scanned, extracted or judged; the run is counted per arm, not rerun (see
+  [Arms](#arms)).
+- Runs and judging happen on a local machine where the CLIs are logged in.
 
 Every later step that touches bytes or metadata the agent controls has a bound
 too, or runs in the sandbox without network. A step that hits its bound fails
@@ -118,16 +112,16 @@ the run as `output rejected` (collect) or fails that check or extraction
 | PDF, SQLite, CSV | extraction and check stages | 200 pages; databases opened read-only; the limits in the next row |
 | Extraction and checks, as processes | second sandbox | 60 s CPU and 1 GiB memory per file or check, 10 minutes per run, no network. Over the limit, the extraction or check fails and is counted. The host reads at most 1 MiB of stdout from each and 8 MiB per run, kills the sandbox past either, and counts the extractions it skipped |
 | Judge input | host | extracted text cut at 256 KiB per output, the cut counted and reported; the same text rules for both arms; redaction runs on that text |
-| Stream JSON | host | read line by line with no whole-file parse. A line over 4 MiB (`claude` itself cuts tool output near 30 KB) is skipped, not parsed, and counted. Only the top-level events `system` (init, and the hook events `--include-hook-events` adds), `assistant` and `result` are parsed, after a prefix test and a nesting-depth scan (64 at most); tool results are never parsed. Numbers are taken from named fields and must be finite and not negative. The stream is cut at 128 MiB, and stderr and the final message at 1 MiB each. It is sandbox-written evidence (see Evidence in [GATEWAY.md](GATEWAY.md)): an out-of-order event or a second or missing `result` is counted and decides nothing |
+| Stream JSON | host | read line by line with no whole-file parse. A line over 4 MiB (`claude` itself cuts tool output near 30 KB) is skipped, not parsed, and counted. Only the top-level events `system` (init, and the hook events `--include-hook-events` adds), `assistant` and `result` are parsed, after a prefix test and a nesting-depth scan (64 at most); tool results are never parsed. Numbers are taken from named fields and must be finite and not negative. The stream is cut at 128 MiB, stderr and the final message at 1 MiB each. An out-of-order event or a second or missing `result` is counted (see Evidence in [GATEWAY.md](GATEWAY.md)) |
 | Freeze and HMAC | host | built from the validated copy and the capped stream, streamed with an incremental HMAC, never held in memory. A run is at most about 170 MiB (32 MiB files, 128 MiB stream, 8 MiB extracted text); the runner stops if free disk is below that |
 
 The collector, the host's tar parser and its stream parser have tests on
 made-up inputs before the smoke run, as the check script does. Collector: one
 folder per violation (symlink, FIFO, socket, hard link, sparse file over the
 limit, too many files, too deep, a long name, a symlink named `node_modules`),
-each rejected inside 60 s without hanging. Tar: a wrong entry type, a size
-mismatch, an oversize stream, an unchecked name. Stream: an over-long line,
-deep nesting, a bad number, an oversize stream, no `result`.
+each rejected inside 60 s. Tar: a wrong entry type, a size mismatch, an
+oversize stream, an unchecked name. Stream: an over-long line, deep nesting, a
+bad number, an oversize stream, no `result`.
 
 The smoke run starts with a self-check from inside the sandbox, as the agent's
 `Bash` would see it. It passes when all of these hold:
@@ -135,40 +129,31 @@ The smoke run starts with a self-check from inside the sandbox, as the agent's
   or to a metadata address.
 - Connection: a TCP connect to a literal outside IP address fails. (A literal
   address takes name resolution out of the test.)
-- Resolution, tested apart from connection: a lookup of a canary name through
-  the container's resolver fails or is refused; the same lookup sent straight
-  to a public resolver, over port 53 and over 853, gets no answer; and the
-  harness resolver's counters show the canary flag set, refused up by the
-  number of lookups made and forwarded still 0. The canary is a random label
-  under a domain the operator controls, when the operator has a name server
-  that logs queries for it (it must see nothing), plus a name that does not
+- Resolution, apart from connection: a lookup of a canary name through the
+  container's resolver fails or is refused; the same lookup sent to a public
+  resolver, over port 53 and 853, gets no answer; and the resolver's counters
+  show the canary flag set, refused up by the lookups made and forwarded still
+  0. The canary is a random label under a domain the operator controls, if its
+  name server logs queries (it must see nothing), plus a name that does not
   exist.
 - Control: the gateway's name resolves and a minimal request through it
   succeeds, so a dead network cannot pass.
-- Forging: from `Bash`, a write to `/proc/$PPID/fd/1` or `fd/2`, and `ptrace`,
-  `process_vm_readv` and `pidfd_getfd` on the parent, all fail. `claude`'s
-  stdout and stderr are sockets, since `open()` on a socket through `/proc`
-  fails with ENXIO (untested here; this check confirms it); a pipe could be
-  written and read. No decision depends on it ([Evidence](GATEWAY.md)); it keeps
-  the
-  cross-check meaningful.
 - The configured limits show.
 
 Its output goes into the results.
 
 ## Credentials
 
-No real key goes into the sandbox, and nothing the sandbox writes decides
-whether a run is valid or what it cost: the harness gateway holds the keys and
-accounts for every request. Its rules, the run-end order, the evidence
-classification and the record handling are in [GATEWAY.md](GATEWAY.md).
+No real key goes into the sandbox: the harness gateway holds the keys and
+accounts for every request. Its rules are in [GATEWAY.md](GATEWAY.md).
 
 ## Arms
 
 One run per task and arm. `$PROMPT` is `task.md` verbatim, read by the runner
 from outside the run folder. All arms share this
-argv, and the environment `ANTHROPIC_BASE_URL=<gateway>` and a placeholder
-`ANTHROPIC_API_KEY` (see Credentials); only `small-loadout` adds to it:
+argv, and the environment `ANTHROPIC_BASE_URL=<gateway>`, a placeholder
+`ANTHROPIC_API_KEY` (see Credentials) and `DISABLE_AUTO_COMPACT=1`; only
+`small-loadout` adds to it:
 
 ```bash
 claude -p "$PROMPT" --output-format stream-json --verbose --include-hook-events \
@@ -189,45 +174,50 @@ claude -p "$PROMPT" --output-format stream-json --verbose --include-hook-events 
   `loadout mcp` with its two read-only tools pre-approved, as the launchers
   do.
 - **No subagents.** `Task` (`Agent` in builds that renamed it) is disallowed in
-  every arm. It opens conversations of its own, and recognising them would need
-  a second rule the gateway can verify. Off in every arm keeps the arms equal
-  and the chain rule single, at the cost of any gain from subagents (a stated
-  limit).
+  every arm: it opens conversations of its own, and recognising them would need
+  a second rule the gateway can verify. That keeps the arms equal and the chain
+  rule single, at the cost of any gain from subagents (a stated limit).
+- **No auto-compaction, in every arm.** A compaction rewrites the assistant
+  turns, which the chain rule cannot accept: it would make the run `invalid`,
+  mostly for `small-loadout`, whose hook context and skill text fill the window
+  sooner. `DISABLE_AUTO_COMPACT=1` is the documented switch
+  ([env-vars](https://code.claude.com/docs/en/env-vars), read 2026-10-13; the
+  smoke run confirms it on the pinned CLI). A run that fills the window ends at
+  the provider's context error and is judged as it stands, flagged `context
+  full`. A compaction that happens anyway is class (d).
 - **Pinned CLI.** The image holds one `claude` version, part of the treatment
   hashes, with auto-update off (`DISABLE_AUTOUPDATER=1`).
 - **Caps.** 15 minutes wall clock per run, measured by the runner. On a timeout
   the folder as it stands is judged and the run is flagged `capped`; the rate
-  per arm is reported. In the pilot, loadout runs hit the 6-minute cap 4 times
-  and bare runs twice, and two of loadout's three losses were capped runs.
-- **Collected per run, kept local:** the stream (init event, hook events, tool
-  results, result event with `total_cost_usd`, tokens, turns and duration; all
-  written inside the sandbox), the `claude` stderr, the final message (the
-  `result` text, or the last assistant text when the run has no `result`),
-  every file added or changed relative to the inputs, and the gateway's
-  per-request record. They go into a folder outside the checkout that is never
-  pushed or shared.
+  per arm is reported (in the pilot, loadout runs hit the 6-minute cap 4 times,
+  bare runs twice).
+- **Collected per run, kept local** in a folder outside the checkout, never
+  pushed or shared: the stream, the `claude` stderr, the final message (the
+  `result` text, or the last assistant text when there is no `result`), every
+  file added or changed relative to the inputs, and the gateway's record.
 - **Order and concurrency.** Arms run in separate batches, resumable per
-  task, one run at a time. A run starts only after the previous run's drain is
-  done and its sandbox is destroyed (see Credentials). The wall-clock estimate
-  below assumes that; parallel runs would also change how often the cap and
-  rate limits hit.
-- **Failed runs.** A run that dies for a reason outside the agent (API error,
-  rate limit, container fault) is rerun once from a clean folder, and the count
-  is reported per arm. The reason comes from outside the sandbox: an upstream
-  429, 5xx or 529, or a cut stream, on the chain's last request at the gateway,
-  or a fault the engine reported; a `result` event saying "API error" is the
-  sandbox's word and starts no rerun. The failed attempt's chain check must be
-  clean. If the rerun fails too, the run is reported as missing and not tried
-  again. A run is never rerun because of how its output looks. The expected
-  spend includes these reruns.
-- **Invalid and rejected runs are results.** A run with off-chain or off-list
-  gateway traffic (Credentials) is `invalid`; one whose folder fails collection
-  (Isolation) is `output rejected`. The arm's skill text or the agent's own
-  commands caused both, so neither is rerun; a harness fault that caused one is
-  handled under Frozen. Both are counted per arm and task, and their cost counts
-  toward the spend. Transport events are not invalid, since `claude` itself
-  causes them: a retry, a non-2xx or cut-off request, a request in flight at the
-  end or priced at its ceiling, a missing `result`.
+  task, one run at a time (GATEWAY.md has the run-end order); parallel runs
+  would change how often the limits hit.
+- **Failed runs.** A run is rerun once from a clean folder only for a cause
+  the sandbox cannot produce, read outside it: an upstream 5xx or 529, an
+  `error` event inside a 200 stream, or an upstream close before `message_stop`
+  (not a client cut), on a request of class (a) or (b); or a fault the engine
+  reports on its own side (the sandbox failed to start, the engine or host
+  restarted). Never a 429, which the key's own usage can cause; never an
+  out-of-memory kill, a process or disk limit or a full run volume, which the
+  agent can reach; never a `result` event saying "API error", the sandbox's
+  word. The failed attempt must have no class (d) request. If the rerun fails
+  too, the run is reported as missing. A run is never rerun because of how its
+  output looks. The expected spend includes these reruns.
+- **Invalid and rejected runs are results.** A run with a class (d) request
+  or other off-list gateway traffic (GATEWAY.md) is `invalid`; one whose folder
+  fails collection (Isolation) is `output rejected`. The arm's skill text or the
+  agent's own commands caused both, so neither is rerun; a harness fault that
+  caused one is handled under Frozen. Both are counted per arm and task, and
+  their cost counts toward the spend. Status, cut and completion never make a
+  request invalid on their own: a retry, a non-2xx or cut-off request, a
+  request in flight at the end or priced at its reservation, and a missing
+  `result` are transport events. Only class (d) counts.
 
 ## What is committed
 
@@ -236,7 +226,7 @@ stream, the extracted text, the judge inputs or the judge's sentences. The repo
 is public, and an output can hold a credential in a form no scan catches
 (base64, split across files, compressed), or third-party skill text nobody has
 read. Only withholding the text is safe. This departs from AGENTS.md's "commit
-raw results", so it is listed under Open for Erik.
+raw results".
 
 Committed under `bench/results/<timestamp>-c2/`, as numbers and fixed values the
 harness computes or reads from named fields, never agent text:
@@ -244,9 +234,9 @@ harness computes or reads from named fields, never agent text:
   model calls, tokens and priced cost (as billed and uncached), the runner's
   duration, the model and tool list of the first request, whether it held the
   hook's `<skill_relevance>` context, the Jev cost, the gateway and resolver
-  counters, the chain check's result by kind with the amounts, the transport
-  events (retries, cut or aborted requests, requests priced at their ceiling),
-  `invalid` or `output rejected` with the number of violations by kind, and the
+  counters, the requests by class (a) to (d), the transport events (retries,
+  cut or aborted requests, requests priced at their reservation), `invalid` or
+  `output rejected` with the number of violations by kind, and the
   names of selected skills when each is a name in the library (read from the
   first request). Next to them, labelled as reported by the sandbox:
   `total_cost_usd`, `num_turns`, `duration_ms` and the hook's exit status;
@@ -254,7 +244,7 @@ harness computes or reads from named fields, never agent text:
   slides) and the number of files each check dropped from its copy;
 - the sandbox self-check, the credential probe, and the hashes of the treatment
   (see Smoke run first);
-- per judge call, only the verdict (`A`, `B`, `tie`) or the guess (`A`, `B`,
+- per judge call, only the verdict (`A`, `B`, `tie`) or guess (`A`, `B`,
   `unsure`), the redaction counts per arm and the extracted size in bytes;
 - the commitment below.
 
@@ -269,20 +259,20 @@ file until a hash byte matches a secret byte, and the ordered list then
 publishes the secret. One fixed-size value under a key made after the freeze
 carries nothing the agent chose.
 
-What others can recompute from the committed folder: win, tie and split counts,
+Others can recompute from the committed folder the win, tie and split counts,
 the Wilson intervals, the guess accuracy, check pass rates, and the cost, model
-call, duration and capped figures. They cannot recompute the verdicts and check
-results, which need the raw outputs and the judge. The HMAC ties the results to
-one archive; to verify it, Erik gives a reviewer the whole archive and the key.
-Publishing any raw output is a separate decision for Erik (AGENTS.md rule 4),
-taken after he has read it, and he reviews the folder before anything is pushed.
+call, duration and capped figures, not the verdicts and check results, which
+need the raw outputs and the judge. To verify the HMAC, Erik gives a reviewer
+the whole archive and the key. Publishing any raw output is a separate decision
+for Erik (AGENTS.md rule 4), taken after he has read it, and he reviews the
+folder before anything is pushed.
 
 ## Smoke run first
 
-One run per arm on [smoke/](smoke/), a fixture outside all 18 task areas that is
-not in `index.json` or `KEY.md` and is never scored or judged. Its outputs are
-not in the results. The harness (see Frozen before the first run) is committed
-before it runs.
+One run per arm on [smoke/](smoke/), a fixture outside all 18 task areas, not in
+`index.json` or `KEY.md`, never scored or judged, its outputs not in the
+results. The harness (see Frozen before the first run) is committed before it
+runs.
 
 **The treatment is frozen first.** Before the smoke run, the results record the
 SHA-256 of the packed `loadout` tarball, of the plugin copy (a tar of its files
@@ -302,17 +292,20 @@ It passes when:
   `<skill_relevance>` context, and none of a bare run does (the hook event
   shows exit 0);
 - the collector and the extraction script run on each smoke output folder;
-- the gateway's chain check passes on each smoke run with no off-chain request
-  and no compaction, and the stream cross-check agrees with it exactly on
-  message ids and token sums. The run records what the gateway saw: the side
-  calls (shape and count per arm), Jev requests per hook decision and per
-  `find_skills` call, the most requests in flight, the keys, tool types, models
-  and beta values the allowlists will hold, `claude`'s retry limit, and the
-  slowest response.
+- the gateway classes every request of each smoke run as (a), (b) or (c), and
+  the stream cross-check agrees with it exactly on message ids and token sums.
+  The run records what the gateway saw: each arm's side-call templates with
+  their slots, count and `max_tokens`, Jev requests per hook decision and per
+  `find_skills` call, the most requests in flight, the keys, tool types,
+  models, `cache_control` ttl and beta values the allowlists will hold,
+  `claude`'s `max_tokens`, context window and retry limit, the slowest
+  response, and the largest reservation of an honest request. It must fit under
+  the arm's ceiling; if not, the ceilings and the cost table change together
+  before the full run.
 
 Recorded, not a gate: whether the `small-loadout` run opened a skill
-(`load_skill` or a read of a SKILL.md). A miss is reported and the treatment is
-not changed to fix it.
+(`load_skill` or a read of a SKILL.md). A miss is reported; the treatment is
+not changed.
 
 A fault the smoke run shows in the runner, the gateway, the sandbox or the
 extraction is fixed before the first full run, and the fix and its reason go
@@ -372,6 +365,7 @@ while testing nothing, and its files can change how a check runs, so:
 - The script has tests on made-up outputs, before the smoke run; each vacuous
   case (missing, empty, no tests, edited test, local `unittest.py`, stubbed
   `assert.equal`, replaced `assertEqual`) must fail them.
+
 | Task | Check |
 |---|---|
 | docx-lease-amendment | lease-revised.docx opens with python-docx, differs from lease.docx, and has at least 246 words of paragraph text (80% of the original's 307) |
@@ -424,14 +418,13 @@ judged results. The judge does not see them.
 ## Judging
 
 - **Waits for E12.** The judge is Codex (gpt-6.1-sol), since Claude wrote the
-  tasks and runs every arm. Agent outputs can carry skill text, which is
-  third-party input, and E12 says Codex cannot judge until it can run with no
-  tool that reads files, runs commands or reaches the network. The files
-  backend is no substitute here.
+  tasks and runs every arm. Outputs can carry third-party skill text, so Codex
+  cannot judge until it can run with no tool that reads files, runs commands or
+  reaches the network (E12). The files backend is no substitute.
 - **Framing.** Outputs reach the judge escaped with `escapeSkillTags`, framed as
-  third-party content, not instructions, with provenance `unverified`.
-  `escapeSkillTags` escapes `<skill` tags only; it does not strip terminal
-  control characters, so the runner never prints agent text.
+  third-party content with provenance `unverified`. `escapeSkillTags` escapes
+  `<skill` tags only and does not strip terminal control characters, so the
+  runner never prints agent text.
 - **Blind.** Per task, three pairs: `small-loadout` vs `small-bare`,
   `small-loadout` vs `large-bare`, `small-bare` vs `large-bare`. Each pair is
   judged twice with the order swapped. The judge sees `task.md`, the extracted
@@ -441,7 +434,7 @@ judged results. The judge does not see them.
 - **Binary outputs** (docx, xlsx, pptx, pdf) are turned into text by one
   script for all arms: paragraphs and tables, sheets with formulas and their
   cached values, slides with notes. Formatting that text cannot show is not
-  judged. Text files are shown as they are, within a fixed size budget.
+  judged. Text files are shown as they are, within a size budget.
 - **Verdict call.** Which output better does what the request asks, counting
   correctness against the key first, then completeness, then clarity. Answer
   `A`, `B` or `tie`, with one sentence. The prompt says nothing about guidance,
@@ -453,16 +446,14 @@ judged results. The judge does not see them.
   question in the verdict prompt can steer the judge toward style differences.
 - **Verdict per pair and task**, as in the pilot ([outcome.ts](../../outcome.ts),
   RESULTS): a side wins only if it is preferred in both orders. Two ties are a
-  tie. Anything else is a split: opposite preferences (position bias), or a
-  preference in one order and a tie in the other. A split is never a win for
-  either side. Ties and splits are reported separately, and splits are broken
-  down into opposite preferences and preference-plus-tie.
+  tie. Anything else is a split, never a win: opposite preferences (position
+  bias), or a preference in one order and a tie in the other. Ties and splits
+  are reported separately, splits broken down into those two.
 - **Sequential.** The 216 judge calls (108 verdict, then 108 guess) run one at a
-  time (concurrency 1), not through the two-way pool `outcome.ts` uses for its
-  judge, so a judge's cached prompt stays warm. Calls are grouped by task, with
-  the fixed part of the prompt (instructions, `task.md`, inputs, the key
-  entry) first. Each call is its own process, with no session or memory carried
-  over.
+  time (concurrency 1), not through the two-way pool `outcome.ts` uses, so the
+  judge's cached prompt stays warm. Calls are grouped by task, the fixed part of
+  the prompt (instructions, `task.md`, inputs, key entry) first. Each call is
+  its own process, with no session or memory carried over.
 
 ## Template leakage
 
@@ -481,16 +472,16 @@ arm it is reading. Steps taken:
    correct / (correct + wrong) with a Wilson interval; `unsure` is left out of
    the accuracy and its rate is reported. Near 50% means no leakage is
    detected; clearly above means blindness failed, and the win rates carry that
-   caveat. For `small-bare` vs `large-bare`, neither output had guidance, so
-   every non-`unsure` guess is a false alarm; that rate is the baseline.
+   caveat. For `small-bare` vs `large-bare` no output had guidance, so every
+   non-`unsure` guess is a false alarm: that rate is the baseline.
 4. Not removed: a style a skill imposes (section order, checklists). A user
    would see it too, so it counts as part of the result, but it can reach the
-   judge. This is a stated limit.
+   judge: a stated limit.
 
 ## Analysis
 
 - **Primary set: the 14 non-control tasks.** The 4 controls are reported
-  separately, with which skills the hook loaded on each.
+  separately, with the skills the hook loaded on each.
 - **Primary comparisons, fixed before any run:** `small-loadout` vs
   `small-bare` (does loadout help the small tier) and `small-loadout` vs
   `large-bare` (does it close the gap). The third pair is context.
@@ -506,29 +497,26 @@ arm it is reading. Steps taken:
   usage at list price, as billed and uncached) plus Jev cost for
   `small-loadout`, with the CLI's `total_cost_usd` beside it as reported by the
   sandbox. The headline is the uncached figure. Also cost per task won, capped
-  rate, median model calls (the gateway's) and median duration (the runner's),
-  with `num_turns` and `duration_ms` beside them as reported by the sandbox. The
-  Codex CLI
-  reports no cost (`costLabel` in `bench/lib.ts`), so the judge's cost is not
-  reported.
-- **Per task:** a table of verdicts, so a reader sees which tasks drive any
-  difference.
+  and `context full` rates, median model calls (the gateway's) and median
+  duration (the runner's), with `num_turns` and `duration_ms` beside them as
+  reported by the sandbox. The Codex CLI reports no cost (`costLabel` in
+  `bench/lib.ts`), so the judge's cost is not reported.
+- **Per task:** a table of verdicts, to show which tasks drive a difference.
 - Negative and null results go into `bench/RESULTS.md` with the numbers.
 
 ## Frozen before the first run
 
 The commit that merges this protocol fixes the tasks, `KEY.md`, the checks,
 the redaction rules, the limits under Isolation, the accounting rules under
-Credentials, the primary comparisons and the analysis. The runner, the
-collector, the gateway with its chain check, the resolver, the sandbox
-self-check, the credential probe, the extraction script, the check script with
-its tests and both judge prompts do not exist yet; they are committed before the
-smoke run and change only as set out under Smoke run first. The treatment is
-fixed before the smoke run. After the first full run starts, none of these
-changes. A change forced by a fault in the harness, found by the smoke run or
-later, goes into RESULTS as a deviation, with the reason and the runs it
-touched; those runs are rerun once after the fix, and the originals stay
-reported. No tuning follows from these results on these tasks.
+Credentials, the primary comparisons and the analysis. The runner, collector,
+gateway, resolver, sandbox self-check, credential probe, extraction script,
+check script with its tests and both judge prompts do not exist yet; they are
+committed before the smoke run and change only as set out under Smoke run
+first. The treatment is fixed before it. After the first full run starts, none
+of these changes. A change forced by a fault in the harness goes into RESULTS as
+a deviation, with the reason and the runs it touched; those runs are rerun once
+after the fix, and the originals stay reported. No tuning follows from these
+results on these tasks.
 
 ## Expected spend (local run)
 
@@ -546,8 +534,9 @@ run. API list prices per million tokens (cache read and write at the usual
 | Haiku 5.5 | $0.01, $0.125, $0.50 | $0.02-0.08 |
 | Haiku 4.5 (if Erik picks it) | $0.10, $1.25, $5 | $0.16-0.75 |
 
-Haiku 5.5's prices rise 5x for prompts over 100k tokens; the assumed context
-stays below that.
+For Haiku 5.5, every rate rises 5x for prompts over 100k tokens. The other two
+are assumed to do the same (not confirmed; the smoke run corrects this table).
+The assumed contexts stay below 100k; the reservations below do not assume it.
 
 | Item | Count | Estimate |
 |---|---:|---|
@@ -559,62 +548,67 @@ stays below that.
 
 Prices are Anthropic's list prices as of 2026-10-06, not figures from RESULTS.
 Expected Claude cost at list price, with no reruns: about $7-31 with Haiku 5.5,
-$12-57 with Haiku 4.5. It is cash: the runs use an API key behind the gateway
-(see Credentials). The figure the runner tracks is the gateway's, so requests an
-agent made itself are in it; the CLI's `total_cost_usd` would miss them. A run's
-ceiling (Credentials) starts at about $4.50 for `large-bare` and $0.24 for Haiku
-5.5.
+$12-57 with Haiku 4.5. It is cash: the runs use an API key behind the gateway.
+
+A reservation (GATEWAY.md) is 200k input tokens at the cache-write rate plus
+32k output tokens, both at the 5x tier: for Sonnet 5.5, 0.2M x $12.50 + 0.032M
+x $50 = $2.50 + $1.60. The 200k window and 32k `max_tokens` are assumptions the
+smoke run replaces. A run's ceiling is its high per-run figure plus two
+reservations (2 requests in flight), and never below three times that figure or
+three times the largest the smoke run measured. Honest traffic fits under it by
+construction (the smoke run checks); it only stops a run that spends far more
+than an agent does.
+
+| Model | One reservation | Per-run ceiling |
+|---|---:|---:|
+| Sonnet 5.5 | $4.10 | $9.70 ($1.50 + 2 x $4.10) |
+| Haiku 5.5 | $0.21 | $0.49 ($0.075 + 2 x $0.205) |
 
 **High estimate, with the reruns.** If all 54 runs fail outside the agent and
 are rerun once, there are 108 attempts, each charged at its high figure: 36
 `large-bare` attempts $54.00, 72 small attempts $5.40 (Haiku 4.5: $54.00), Jev
 about $0.04, the smoke run $1.65 (Haiku 4.5: $3.00). That is about $61 with
-Haiku 5.5 and $111 with Haiku 4.5. Wall clock at most 108 x 17 minutes (the
-15-minute cap and a 2-minute drain; about 31 h) plus the smoke run. Neither is
-expected, and neither is a bound: the runner stops at the totals Erik approves.
-It starts no attempt once the finished runs' gateway-priced cost plus the Jev
-cost, invalid runs included, reach the approved cost, or the elapsed time
-reaches the approved hours, and it reports what it left unrun. An attempt in
-progress can overshoot by up to its ceiling; the cap on each key (Credentials)
-is the approved total for its batch, so nothing overshoots further. The smoke
-run replaces these assumptions with measured figures before the full run is
-approved.
+Haiku 5.5 and $111 with Haiku 4.5. Wall clock is about 108 x 17 minutes (the
+15-minute cap and a 2-minute drain; about 31 h) plus the smoke run, with up to
+10 minutes more per attempt for collection and extraction. That is a planning
+figure, not a maximum: the drain runs longer where the smoke run measured a
+slower response. Neither figure is expected. The runner stops at the totals
+Erik approves: it starts no attempt unless the approved cost minus the
+finished runs' priced cost (Jev included, invalid runs included) is at least
+the arm's ceiling, or once the elapsed time reaches the approved hours, and it
+reports what it left unrun. Reservations count against the cap on each key
+(GATEWAY.md), the approved total for its batch, so nothing overshoots it. The
+smoke run replaces these assumptions with measured figures before the full run
+is approved.
 
 ## Open for Erik
 
-- Which Haiku: the B1 and hook-probe runs used the `haiku` alias, and RESULTS
-  does not record which model it resolved to.
-- Sonnet 5.5 or Opus as the large tier. The `invoke.ts` agent runs used
-  Sonnet 5.5; B1 and the hook probe ran on Haiku, and the judges on Opus.
+- Which Haiku: B1 and the hook probe used the `haiku` alias, and RESULTS does
+  not record what it resolved to.
+- Sonnet 5.5 or Opus as the large tier (the `invoke.ts` runs used Sonnet 5.5).
 - The sandbox: container or VM (a throwaway user is ruled out above), and the
-  engine, the egress mechanism, the resolver, the gateway and the read-only
-  collector sandbox that enforce the rules under Isolation and Credentials. It
-  needs a kernel with `kernel.yama.ptrace_scope` of 1 or more (a container uses
-  the host's) and a socket for `claude`'s stdout, so the stream cross-check
-  means something (see the self-check).
-- Gateway abuse is detected, not prevented, except a model outside the arm's
-  set, which the gateway refuses. With the stock CLI, `Bash` can reach whatever
-  `claude` can, so the protocol counts, prices and invalidates by conversation
-  structure instead (see Credentials). Confirm, or say what else you would give
-  up for prevention.
-- Subagents are off in every arm (`Task` is disallowed; see Arms). Confirm, or
-  ask for a subagent rule the gateway can verify, which is more to build and
-  test.
-- Invalid and `output rejected` runs count as a loss for their arm in the
-  win rate, with the rate also shown without them (see Analysis). Confirm, or
-  choose to leave them out of the primary rate.
-- Raw outputs stay local and unpublished (see What is committed), which departs
-  from AGENTS.md's "commit raw results". Confirm, or say which outputs you will
-  read and publish after the run.
-- The gateway and AGENTS.md rule 1. Confirm that a harness gateway, which adds
-  a credential header inside the benchmark's own sandbox, is not "proxying an
-  agent's API traffic" in the rule's sense. If it is, the fallback is real keys
-  inside the sandbox with per-batch keys and caps, which skill text could send
-  or use under an attacker's key; the results would say so.
+  engine, egress mechanism, resolver, gateway and collector sandbox that
+  enforce Isolation and Credentials.
+- Gateway abuse is detected and priced, not prevented, apart from what it
+  refuses (GATEWAY.md). Confirm, or say what you would give up for prevention.
+- Subagents are off in every arm (see Arms). Confirm, or ask for a subagent
+  rule the gateway can verify, which is more to build and test.
+- Invalid and `output rejected` runs count as a loss for their arm in the win
+  rate, shown also without them (see Analysis). Confirm, or leave them out of
+  the primary rate.
+- Raw outputs stay local (What is committed), against AGENTS.md's "commit raw
+  results". Confirm, or say which you will read and publish.
+- AGENTS.md rule 1: is a harness gateway that adds a credential header inside
+  the benchmark's sandbox "proxying an agent's API traffic"? If so, the
+  fallback is real keys in the sandbox (GATEWAY.md).
+- Auto-compaction is off in every arm (see Arms): a run that fills the window
+  stops instead of compacting. Confirm, or ask for a compaction rule the
+  gateway can verify.
+- The prompt cache is shared between runs (GATEWAY.md): accept it as a stated
+  limit, or pay for a provider workspace per run.
 - The credentials. The Anthropic credential is an API key with a spend cap
-  (cash). A subscription token is not assumed to work behind the gateway and is
-  untested. The Jev key is dedicated to the `small-loadout` batch. Routing with
-  the lexical router needs no Jev key but measures a different product, so it
-  cannot be the primary comparison.
-- A Codex-family replication (gpt-5.6-luna against gpt-6.1-sol), which would
-  need a Claude judge for the Codex outputs. Not in this protocol.
+  (cash); a subscription token is untested behind the gateway. The Jev key is
+  dedicated to the `small-loadout` batch. The lexical router needs no Jev key but
+  measures a different product, so it is not the primary comparison.
+- A Codex-family replication (gpt-5.6-luna against gpt-6.1-sol) needs a Claude
+  judge and is not in this protocol.
