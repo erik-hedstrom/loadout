@@ -58,8 +58,11 @@ const FILE_MAX_BYTES = 256 * 1024;
 const LIST_MAX_FILES = 60;
 const MAX_TOOL_PAGES = 20;
 const SCHEMA_MAX_CHARS = 3000;
-/** Past this much listing, further tools show only their argument names (full schema on request). */
+/** A server_tools listing: schemas inline up to this much, then argument names up to the next, then bare names up to the last. */
 const LISTING_MAX_CHARS = 12_000;
+const COMPACT_MAX_CHARS = 8_000;
+const NAMES_MAX_CHARS = 4_000;
+const NAME_CHARS = 128;
 const COMPACT_DESCRIPTION_CHARS = 120;
 const COMPACT_ARGUMENTS = 8;
 const EMBEDDINGS_WAIT_MS = 3000;
@@ -180,30 +183,53 @@ export function loadSkill(deps: SearchDeps, skill: string, file?: string): strin
 
 type ListedTool = Awaited<ReturnType<Client['listTools']>>['tools'][number];
 
-/** A tool's argument names, optional ones marked with `?`, from an untrusted schema. */
+/** Schema keywords that add or define arguments somewhere other than `properties`. */
+const COMPOSING = ['$ref', 'oneOf', 'anyOf', 'allOf', 'not', 'if', 'patternProperties'];
+
+/**
+ * A tool's argument names, optional ones marked with `?`, from an untrusted schema. "none" only when the
+ * schema has no properties and nothing that could add some; otherwise the agent is told to fetch the schema.
+ */
 function argumentNames(schema: ListedTool['inputSchema']): string {
   const names = Object.keys(schema.properties ?? {});
+  const composing = [...COMPOSING.filter((k) => k in schema), ...(schema.additionalProperties && schema.additionalProperties !== false ? ['additionalProperties'] : [])];
   const required = new Set(schema.required);
   const shown = names.slice(0, COMPACT_ARGUMENTS).map((n) => `${oneLine(n, 40)}${required.has(n) ? '' : '?'}`);
-  return names.length ? `${shown.join(', ')}${names.length > shown.length ? ', …' : ''}` : 'none';
+  const list = `${shown.join(', ')}${names.length > shown.length ? ', …' : ''}`;
+  if (composing.length === 0) return names.length ? list : 'none';
+  return `${names.length ? `${list}, and more via` : 'not listed, the schema uses'} ${composing.join('/')}`;
 }
 
 /**
- * One entry per tool, with its input schema verbatim ($defs, oneOf, enums untouched). Schemas stay inline
- * until the listing reaches LISTING_MAX_CHARS, and one too long for it is never inline: those tools show
- * their argument names, and server_tools with `tool` gives the complete schema.
+ * One entry per tool, in three sizes so a long listing stays small. Its input schema comes verbatim ($defs,
+ * oneOf, enums untouched) while the schemas shown so far total under LISTING_MAX_CHARS and it is under
+ * SCHEMA_MAX_CHARS. Otherwise the tool shows its argument names, up to COMPACT_MAX_CHARS of those, and then
+ * just its name, up to NAMES_MAX_CHARS. server_tools with `tool` gives any one tool's complete schema.
  */
 function formatTools(tools: ListedTool[]): string {
-  let size = 0;
-  const lines = tools.map((t) => {
+  const used = { full: 0, compact: 0, names: 0 };
+  const lines: string[] = [];
+  const names: string[] = [];
+  let hidden = 0;
+  for (const t of tools) {
+    const name = oneLine(t.name, NAME_CHARS);
     const schema = JSON.stringify(t.inputSchema);
-    const full = `- ${t.name}: ${oneLine(t.description ?? '', 300)}\n  input schema: ${schema}`;
-    if (schema.length <= SCHEMA_MAX_CHARS && size + full.length <= LISTING_MAX_CHARS) {
-      size += full.length;
-      return full;
+    const full = `- ${name}: ${oneLine(t.description ?? '', 300)}\n  input schema: ${schema}`;
+    const compact = `- ${name}: ${oneLine(t.description ?? '', COMPACT_DESCRIPTION_CHARS)}\n  arguments: ${argumentNames(t.inputSchema)} (full schema: server_tools with tool ${JSON.stringify(name)})`;
+    if (schema.length <= SCHEMA_MAX_CHARS && used.full + full.length <= LISTING_MAX_CHARS) {
+      used.full += full.length;
+      lines.push(full);
+    } else if (used.compact + compact.length <= COMPACT_MAX_CHARS) {
+      used.compact += compact.length;
+      lines.push(compact);
+    } else if (used.names + name.length + 2 <= NAMES_MAX_CHARS) {
+      used.names += name.length + 2;
+      names.push(name);
+    } else {
+      hidden++;
     }
-    return `- ${t.name}: ${oneLine(t.description ?? '', COMPACT_DESCRIPTION_CHARS)}\n  arguments: ${argumentNames(t.inputSchema)} (full schema: server_tools with tool ${JSON.stringify(t.name)})`;
-  });
+  }
+  if (names.length || hidden) lines.push(`- more tools, names only (server_tools with tool gives one in full): ${names.join(', ')}${hidden ? `${names.length ? ', ' : ''}… and ${hidden} more not shown` : ''}`);
   return lines.join('\n');
 }
 
@@ -279,10 +305,7 @@ export class Gateway {
     }
     if (tools.length === 0) return 'the server has no tools.';
     // connect() found the server, so it is in the library with its config.
-    if (this.toolIndex) {
-      const c = this.find(name)!;
-      rememberTools(this.toolIndex, c.name, c.server!, tools);
-    }
+    if (this.toolIndex) rememberTools(this.toolIndex, this.find(name)!, this.servers, tools);
     if (tool) {
       const t = tools.find((x) => x.name === tool);
       if (!t) throw new Error('no such tool; list them with server_tools');
@@ -313,29 +336,24 @@ const textTool = async (run: () => string | Promise<string>) => {
   }
 };
 
-/** What the agent reads about the search tool. Only a library with gateway servers pays for the MCP wording. */
-function searchTexts(mcp: boolean) {
-  return {
-    instructions: `The user keeps a library of skills${mcp ? ' and MCP servers' : ''} here that is not loaded into this session. Before your first step that involves a specific file format, product, API, service or domain procedure${mcp ? ', or that needs a tool you lack (an issue tracker, a database, a docs service)' : ''}, even a familiar one, check it with find_skills, and again when the task moves to a new domain: the user installed ${mcp ? 'these' : 'these skills'} because they want them used.`,
-    description: `Search the user's library of skills${mcp ? ' and MCP servers' : ''}: instructions for specific file formats, products, APIs, services and domain procedures (legal, finance, science, design…)${mcp ? ', and tools for services such as issue trackers, databases and docs' : ''}, installed but not loaded in this session. Call it before your first specialised step, even in a domain you know (the user's skills hold their preferred way of doing it), and again when the task moves to a new domain. Describe the current goal in your own words. Returns a few ranked matches, or says nothing fits.`,
-  };
-}
-
 export function createServer(deps: SearchDeps): { server: McpServer; gateway: Gateway } {
   // Only servers the user opted in: approving call_server_tool approves every tool behind it.
   const servers = deps.library.filter((c) => c.kind === 'mcp' && c.gateway);
   const gateway = new Gateway(servers, deps.toolIndex);
-  const texts = searchTexts(servers.length > 0);
+  // Only a library with gateway servers pays for the MCP wording.
+  const mcp = servers.length > 0;
   const server = new McpServer(
     { name: 'loadout', version: '0.1.0' },
-    // Hosts that support server instructions (Claude Code does) add this to the system prompt.
-    { instructions: texts.instructions },
+    {
+      // Hosts that support server instructions (Claude Code does) add this to the system prompt.
+      instructions: `The user keeps a library of skills${mcp ? ' and MCP servers' : ''} here that is not loaded into this session. Before your first step that involves a specific file format, product, API, service or domain procedure${mcp ? ', or that needs a tool you lack (an issue tracker, a database, a docs service)' : ''}, even a familiar one, check it with find_skills, and again when the task moves to a new domain: the user installed ${mcp ? 'these' : 'these skills'} because they want them used.`,
+    },
   );
 
   server.registerTool(
     'find_skills',
     {
-      description: texts.description,
+      description: `Search the user's library of skills${mcp ? ' and MCP servers' : ''}: instructions for specific file formats, products, APIs, services and domain procedures (legal, finance, science, design…)${mcp ? ', and tools for services such as issue trackers, databases and docs' : ''}, installed but not loaded in this session. Call it before your first specialised step, even in a domain you know (the user's skills hold their preferred way of doing it), and again when the task moves to a new domain. Describe the current goal in your own words. Returns a few ranked matches, or says nothing fits.`,
       inputSchema: {
         goal: z.string().min(3).max(4000).describe('What you are trying to do now, in a sentence or two'),
         keywords: z.array(z.string().max(80)).max(12).optional().describe('Names of products, formats, frameworks or tools involved'),
@@ -359,7 +377,7 @@ export function createServer(deps: SearchDeps): { server: McpServer; gateway: Ga
     ({ skill, file }) => textTool(() => loadSkill(deps, skill, file)),
   );
 
-  if (servers.length > 0) {
+  if (mcp) {
     server.registerTool(
       'server_tools',
       {

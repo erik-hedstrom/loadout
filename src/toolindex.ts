@@ -1,67 +1,92 @@
 import { createHash } from 'node:crypto';
+import { readdirSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { isPlainFolder } from './config.js';
 import { oneLine } from './launch.js';
 import { readConfined, writeCacheFile } from './library.js';
 import type { Capability, McpServerConfig, ToolSummary } from './types.js';
 
 /**
  * What `server_tools` learned about each gateway server, kept so a later search can match a goal to a
- * server by what its tools do without starting it. The server's own words are untrusted when written and
- * again when read: a tampered file can only be dropped, never trusted, and only the checked fields are used.
+ * server by what its tools do without starting it. The text came from a third-party server and sits in
+ * files anyone with write access to the loadout home can change, so it is read as untrusted: checked for
+ * shape and size, only ever used to rank servers and in escaped Jev questions, never shown as instructions.
+ *
+ * One file per server, so sessions that list different servers at the same time cannot overwrite each
+ * other, and no entry can crowd another out of a shared size cap.
  */
-const FILE = 'mcp-tools.json';
+const FOLDER = 'mcp-tools';
 const VERSION = 1;
-const FILE_MAX_BYTES = 1024 * 1024;
+/** What the writer keeps per server; JSON escaping of control characters can make 100 tools several times this raw size. */
+const ENTRY_MAX_BYTES = 64 * 1024;
+const FILE_MAX_BYTES = 2 * ENTRY_MAX_BYTES;
 const MAX_TOOLS = 100;
 const NAME_CHARS = 100;
 const DESCRIPTION_CHARS = 200;
 
-interface Entry {
-  fingerprint: string;
-  tools: ToolSummary[];
-}
+const entryFile = (name: string) => `${createHash('sha256').update(name).digest('hex').slice(0, 32)}.json`;
 
-/** Ties an entry to the command or URL that produced it; env and headers are left out because they hold secrets. */
-const fingerprint = (s: McpServerConfig) => createHash('sha256').update(JSON.stringify([s.command, s.args, s.cwd, s.url, s.type])).digest('hex');
+/** Env and headers in a fixed order, so the same config always gives the same fingerprint. */
+const sorted = (o: Record<string, string> | undefined) => Object.entries(o ?? {}).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+
+/**
+ * Marks an entry stale when the server's command, URL, env or headers change: they often pick the account, tenant
+ * or tool set. Not a check on the file, since anyone can compute it. Only the hash is stored, so no secret is
+ * written; mcp.json already holds the same values in plain text beside it.
+ */
+const fingerprint = (s: McpServerConfig) =>
+  createHash('sha256').update(JSON.stringify([s.command, s.args, s.cwd, s.url, s.type, sorted(s.env), sorted(s.headers)])).digest('hex');
 
 const isTool = (t: unknown): t is ToolSummary => {
   const { name, description } = (t ?? {}) as Partial<ToolSummary>;
   return typeof name === 'string' && name.length <= NAME_CHARS && typeof description === 'string' && description.length <= DESCRIPTION_CHARS;
 };
 
-function readIndex(dir: string): Map<string, Entry> {
-  const entries = new Map<string, Entry>();
+/** The remembered tools of a library server, or nothing when the file is missing, malformed, oversized, for another server or stale. */
+function readEntry(folder: string, c: Capability): ToolSummary[] | undefined {
   try {
-    const file: unknown = JSON.parse(readConfined(dir, FILE, FILE_MAX_BYTES).toString('utf8'));
-    const { version, servers } = (file ?? {}) as { version?: unknown; servers?: unknown };
-    if (version !== VERSION || !servers || typeof servers !== 'object') return entries;
-    for (const [name, e] of Object.entries(servers)) {
-      const { fingerprint: f, tools } = (e ?? {}) as Partial<Entry>;
-      if (typeof f === 'string' && Array.isArray(tools) && tools.length > 0 && tools.length <= MAX_TOOLS && tools.every(isTool)) {
-        entries.set(name, { fingerprint: f, tools: tools.map(({ name, description }) => ({ name, description })) });
-      }
-    }
+    const entry = JSON.parse(readConfined(folder, entryFile(c.name), FILE_MAX_BYTES).toString('utf8')) as Record<string, unknown>;
+    const { version, name, fingerprint: f, tools } = entry ?? {};
+    if (version !== VERSION || name !== c.name || f !== fingerprint(c.server!)) return undefined;
+    if (!Array.isArray(tools) || tools.length === 0 || tools.length > MAX_TOOLS || !tools.every(isTool)) return undefined;
+    return tools.map(({ name, description }) => ({ name, description }));
   } catch {
-    // Missing, oversized or unreadable: search just has less to go on.
+    return undefined;
   }
-  return entries;
 }
 
-/** Remember a server's tools after a successful listing. */
-export function rememberTools(dir: string, name: string, server: McpServerConfig, tools: { name: string; description?: string }[]): void {
-  const index = readIndex(dir);
-  index.set(name, {
-    fingerprint: fingerprint(server),
-    tools: tools.slice(0, MAX_TOOLS).map((t) => ({ name: oneLine(t.name, NAME_CHARS), description: oneLine(t.description ?? '', DESCRIPTION_CHARS) })),
-  });
-  writeCacheFile(dir, FILE, JSON.stringify({ version: VERSION, servers: Object.fromEntries(index) }), 'MCP tool index');
+/**
+ * Remember a server's tools after a successful listing, and forget servers that are no longer gateway
+ * servers in the library.
+ */
+export function rememberTools(dir: string, server: Capability, gateway: Capability[], tools: { name: string; description?: string }[]): void {
+  const folder = join(dir, FOLDER);
+  const kept: ToolSummary[] = [];
+  let bytes = 0;
+  for (const t of tools.slice(0, MAX_TOOLS)) {
+    const tool = { name: oneLine(t.name, NAME_CHARS), description: oneLine(t.description ?? '', DESCRIPTION_CHARS) };
+    bytes += Buffer.byteLength(JSON.stringify(tool)) + 1;
+    if (bytes > ENTRY_MAX_BYTES) break;
+    kept.push(tool);
+  }
+  if (kept.length > 0) {
+    writeCacheFile(folder, entryFile(server.name), JSON.stringify({ version: VERSION, name: server.name, fingerprint: fingerprint(server.server!), tools: kept }), 'MCP tool index');
+  }
+  if (!isPlainFolder(folder)) return;
+  const current = new Set(gateway.map((c) => entryFile(c.name)));
+  try {
+    for (const f of readdirSync(folder)) if (f.endsWith('.json') && !current.has(f)) rmSync(join(folder, f), { force: true });
+  } catch {
+    // No folder yet, or another session already removed it.
+  }
 }
 
 /** The library with remembered tools attached to the servers they still describe. */
 export function withTools(library: Capability[], dir: string | undefined): Capability[] {
-  if (!dir || !library.some((c) => c.kind === 'mcp')) return library;
-  const index = readIndex(dir);
+  const folder = dir && join(dir, FOLDER);
+  if (!folder || !library.some((c) => c.kind === 'mcp') || !isPlainFolder(folder)) return library;
   return library.map((c) => {
-    const e = c.kind === 'mcp' && c.server ? index.get(c.name) : undefined;
-    return e && e.fingerprint === fingerprint(c.server!) ? { ...c, tools: e.tools } : c;
+    const tools = c.kind === 'mcp' && c.server ? readEntry(folder, c) : undefined;
+    return tools ? { ...c, tools } : c;
   });
 }

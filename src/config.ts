@@ -1,6 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { isAbsolute, join, relative, sep } from 'node:path';
 import type { FitMeasure } from './route.js';
 import type { Tier } from './types.js';
 
@@ -92,6 +92,27 @@ export const DEFAULT_CONFIG: Config = {
 
 export function loadoutHome(): string {
   return process.env.LOADOUT_HOME ?? join(homedir(), '.loadout');
+}
+
+/**
+ * False when a link, or anything but a folder, stands where a folder of the loadout home should be. Cache and
+ * state writes (and the reads that trust them) would otherwise follow it somewhere else. The home itself may
+ * be a link, which is the user's choice; folders outside the home are not checked.
+ */
+export function isPlainFolder(dir: string): boolean {
+  const rel = relative(loadoutHome(), dir);
+  if (rel === '' || rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) return true;
+  let current = loadoutHome();
+  for (const part of rel.split(sep)) {
+    current = join(current, part);
+    try {
+      if (!lstatSync(current).isDirectory()) return false;
+    } catch (err) {
+      // Not created yet: creating it makes a real folder.
+      return (err as NodeJS.ErrnoException).code === 'ENOENT';
+    }
+  }
+  return true;
 }
 
 export const paths = {

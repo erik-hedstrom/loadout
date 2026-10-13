@@ -8,8 +8,8 @@
  */
 import { createHash } from 'node:crypto';
 import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-import type { Config } from './config.js';
+import { dirname, join } from 'node:path';
+import { isPlainFolder, type Config } from './config.js';
 import type { EmbeddingStore } from './embed.js';
 import type { SystemOneClient } from './jev.js';
 import { escapeSkillTags, injectionBlock, oneLine } from './launch.js';
@@ -51,6 +51,7 @@ interface SessionState {
 
 function readState(file: string | undefined): SessionState {
   try {
+    if (!isPlainFolder(dirname(file!))) throw new Error('state folder is a link');
     const raw = JSON.parse(readFileSync(file!, 'utf8')) as { offered?: string[]; injected?: string[] };
     return { offered: new Set(raw.offered ?? []), injected: new Set(raw.injected ?? []) };
   } catch {
@@ -62,6 +63,7 @@ function readState(file: string | undefined): SessionState {
 const STATE_TTL_MS = 7 * 24 * 3600 * 1000;
 
 function writeState(dir: string, file: string, state: SessionState): void {
+  if (!isPlainFolder(dir)) return;
   mkdirSync(dir, { recursive: true });
   // Write then rename, so a concurrent reader never sees half a file.
   const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;

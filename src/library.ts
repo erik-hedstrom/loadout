@@ -23,7 +23,7 @@ import {
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { parse as parseYaml } from 'yaml';
-import { paths } from './config.js';
+import { isPlainFolder, paths } from './config.js';
 import type { Capability, McpServerConfig } from './types.js';
 
 const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---/;
@@ -207,6 +207,7 @@ function manifestStamp(dir: string, cutoffNs: bigint): string | undefined {
 
 function readScanCache(dir: string, root: string): ScanCache | undefined {
   try {
+    if (!isPlainFolder(dir)) return undefined;
     const cache: unknown = JSON.parse(readConfined(dir, SCAN_CACHE_FILE, SCAN_CACHE_BYTES).toString('utf8'));
     if (!cache || typeof cache !== 'object') return undefined;
     const c = cache as Partial<ScanCache>;
@@ -224,6 +225,7 @@ function readScanCache(dir: string, root: string): ScanCache | undefined {
 export function writeCacheFile(dir: string, file: string, body: string, what: string): void {
   const tmp = join(dir, `${file}.${randomUUID()}.tmp`);
   try {
+    if (!isPlainFolder(dir)) throw Object.assign(new Error('folder is a link'), { code: 'ELOOP' });
     mkdirSync(dir, { recursive: true });
     writeFileSync(tmp, body, { flag: 'wx' });
     renameSync(tmp, join(dir, file));
@@ -239,8 +241,6 @@ export function writeCacheFile(dir: string, file: string, body: string, what: st
     } catch {}
   }
 }
-
-const writeScanCache = (dir: string, cache: ScanCache) => writeCacheFile(dir, SCAN_CACHE_FILE, JSON.stringify(cache), 'library metadata');
 
 export function scanLibrary(libraryDir: string, options: { cache?: boolean } = {}): Capability[] {
   const dirs = subdirs(join(libraryDir, 'skills'));
@@ -271,7 +271,7 @@ export function scanLibrary(libraryDir: string, options: { cache?: boolean } = {
     capabilities.push({ id: `mcp:${name}`, kind: 'mcp', name, description, source: mcpFile, server, autoApprove: autoApprove === true, gateway: gateway === true });
   }
 
-  if (cacheDir && (changed || skills.length !== cache?.skills.length)) writeScanCache(cacheDir, { version: SCAN_CACHE_VERSION, root, skills });
+  if (cacheDir && (changed || skills.length !== cache?.skills.length)) writeCacheFile(cacheDir, SCAN_CACHE_FILE, JSON.stringify({ version: SCAN_CACHE_VERSION, root, skills }), 'library metadata');
   return capabilities;
 }
 

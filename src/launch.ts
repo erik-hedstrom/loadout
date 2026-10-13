@@ -2,7 +2,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { accessSync, constants, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { basename, delimiter, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { tierTarget, type Config } from './config.js';
+import { isPlainFolder, tierTarget, type Config } from './config.js';
 import { capabilityKey, copySkillConfined, skillBody } from './library.js';
 import { reportJson, type Capability, type McpServerConfig, type RouteDecision } from './types.js';
 
@@ -156,6 +156,8 @@ export function materialize(
 ): Session {
   const id = `${new Date().toISOString().replace(/[:.]/g, '-')}-${Math.random().toString(36).slice(2, 6)}`;
   const dir = join(sessionsDir, id);
+  // Session files can hold MCP server credentials, so they never go through a link.
+  if (!isPlainFolder(sessionsDir)) throw new Error('the loadout sessions folder is a link; refusing to write session files there');
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   writeFileSync(join(dir, 'decision.json'), reportJson(decision));
 

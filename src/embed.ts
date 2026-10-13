@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { isPlainFolder } from './config.js';
 import type { Capability } from './types.js';
 
 /**
@@ -62,7 +63,7 @@ export class EmbeddingStore {
    */
   constructor(private readonly dir: string) {
     const file = join(dir, CACHE_FILE);
-    if (!existsSync(file)) return;
+    if (!isPlainFolder(dir) || !existsSync(file)) return;
     try {
       const buf = readFileSync(file);
       const headerLength = buf.readUInt32LE(0);
@@ -119,7 +120,7 @@ export class EmbeddingStore {
   }
 
   save(): void {
-    if (!this.dirty) return;
+    if (!this.dirty || !isPlainFolder(this.dir)) return;
     mkdirSync(this.dir, { recursive: true });
     const keys = [...this.vectors.keys()];
     const header = Buffer.from(JSON.stringify({ model: EMBED_MODEL, dim: DIM, keys }), 'utf8');

@@ -567,9 +567,7 @@ Acceptance:
   search.
 
 Learnings (2026-10-13):
-- `find_skills` keeps its name: the launcher's `SEARCH_TOOLS`, the Codex
-  plugin's approval list, the hook text, `bench/invoke.ts`, the docs and the
-  tests all name it.
+- `find_skills` keeps its name (reason in DESIGN, search server).
 - Sizes, with one gateway server: server instructions 337 → 424 characters,
   `find_skills` description 473 → 556, `server_tools` 76 → 120 (plus the
   server names). A skills-only library gets byte-identical text, so the B1
@@ -579,13 +577,18 @@ Learnings (2026-10-13):
   format carries one, and a second field would drift from the server. The
   index is filled by `server_tools` instead; before that call, search sees only
   the library description.
-- The index is untrusted on read (shape and size checks, fingerprint of the
-  server's command or URL, no env or headers), and tool text is escaped
-  before it reaches Jev. `SEARCH_HINT` (hook and launcher text) still says
+- The index is untrusted on read (shape and size checks; its fingerprint of
+  command, URL, env and headers only marks staleness), and tool text is
+  escaped before it reaches Jev. It is one file per server, so concurrent
+  sessions cannot overwrite each other. Codex's review (PR #39) found the
+  single shared file lost entries under concurrent writers, and that a
+  linked index folder redirected reads and writes; every cache and state
+  folder under the loadout home is now checked to be a real folder. `SEARCH_HINT` (hook and launcher text) still says
   "skill library"; changing it alters measured behaviour, so it waits for B7.
 - `server_tools` was unbounded (up to 3,000 characters of schema per tool).
-  Past 12,000 characters, tools show argument names, and one tool's full
-  schema is one call away. Whether agents call correctly from the compact form
+  Past 12,000 characters of schemas, tools show argument names (up to 8,000
+  more), then bare names (up to 4,000), then a count of the rest, and one
+  tool's full schema is one call away. Whether agents call correctly from the compact form
   is not measured; it is part of the local check.
 - Possible follow-up, only if the local check shows agents struggling with
   the generic `call_server_tool`: D4 (`tools/list_changed`).

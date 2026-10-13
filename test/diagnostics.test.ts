@@ -212,11 +212,48 @@ describe('E11 diagnostics', () => {
     expect(text.length).toBeLessThan(20_000);
     const entry = (name: string) => text.split('\n- ').find((e) => e.replace(/^- /, '').startsWith(`${name}:`))!;
     expect(entry('tool-0')).toContain('input schema: {"type":"object"');
-    expect(entry('tool-39')).toContain('arguments: p0, p1?, p2?, p3?, p4?, p5?, p6?, p7?, … (full schema: server_tools with tool "tool-39")');
+    expect(entry('tool-10')).toContain('arguments: p0, p1?, p2?, p3?, p4?, p5?, p6?, p7?, … (full schema: server_tools with tool "tool-10")');
     expect(entry('no-args')).toContain('input schema: {"type":"object","properties":{}');
     // A single tool still returns its complete schema.
     const one = ((await call('server_tools', { server: 'fixture', tool: 'tool-39' })) as { content: { text: string }[] }).content[0]!.text;
     expect(one).toContain('"p9":{"type":"string"');
+  });
+
+  it('server_tools never reports "arguments: none" for a schema that composes or references others', async () => {
+    // A big $defs pushes each schema past the inline limit, so the listing shows the compact form.
+    const bulky = { big: { description: 'x'.repeat(3100) } };
+    const schemas: Record<string, object> = {
+      refd: { type: 'object', $ref: '#/$defs/args', $defs: bulky, properties: {} },
+      either: { type: 'object', oneOf: [{ required: ['a'] }, { required: ['b'] }], $defs: bulky, properties: {} },
+      allof: { type: 'object', allOf: [{ properties: { a: { type: 'string' } } }], $defs: bulky },
+      anyof: { type: 'object', anyOf: [{ properties: { a: { type: 'string' } } }], $defs: bulky },
+      open: { type: 'object', additionalProperties: true, $defs: bulky },
+      mixed: { type: 'object', properties: { a: { type: 'string' } }, required: ['a'], oneOf: [{ required: ['a'] }], $defs: bulky },
+      empty: { type: 'object', properties: {}, additionalProperties: false, $defs: bulky },
+    };
+    const tools = Object.entries(schemas).map(([name, inputSchema]) => ({ name, description: name, inputSchema: inputSchema as { type: 'object' } }));
+    const call = await host({ library: [capability({ command: 'unused' })] });
+    await upstream((server) => server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools })));
+    const text = ((await call('server_tools', { server: 'fixture' })) as { content: { text: string }[] }).content[0]!.text;
+    const args = (name: string) => text.split('\n- ').find((e) => e.replace(/^- /, '').startsWith(`${name}:`))!.split('\n')[1]!;
+    expect(args('refd')).toContain('arguments: not listed, the schema uses $ref (full schema: server_tools with tool "refd")');
+    expect(args('either')).toContain('arguments: not listed, the schema uses oneOf ');
+    expect(args('allof')).toContain('arguments: not listed, the schema uses allOf ');
+    expect(args('anyof')).toContain('arguments: not listed, the schema uses anyOf ');
+    expect(args('open')).toContain('arguments: not listed, the schema uses additionalProperties ');
+    expect(args('mixed')).toContain('arguments: a, and more via oneOf ');
+    expect(args('empty')).toContain('arguments: none ');
+    expect(text.match(/arguments: none/g)).toHaveLength(1);
+  });
+
+  it('server_tools caps even a very long listing, and says how many tools it left out', async () => {
+    const tools = Array.from({ length: 1000 }, (_, i) => ({ name: `tool-${i}`, description: `does thing ${i}`, inputSchema: { type: 'object' as const, properties: { a: { type: 'string' } }, required: ['a'] } }));
+    const call = await host({ library: [capability({ command: 'unused' })] });
+    await upstream((server) => server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools })));
+    const text = ((await call('server_tools', { server: 'fixture' })) as { content: { text: string }[] }).content[0]!.text;
+    // Uncapped, a thousand tools would be well over 100 000 characters.
+    expect(text.length).toBeLessThan(25_000);
+    expect(text).toMatch(/\n- more tools, names only \(server_tools with tool gives one in full\): tool-\d+, .*… and \d+ more not shown$/);
   });
 
   it('server_tools remembers a listing in the given folder, and nothing from an empty one', async () => {

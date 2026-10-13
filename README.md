@@ -158,9 +158,9 @@ loadout library (`loadout add <dir>`).
 ## Search mid-session, from any MCP host
 
 `loadout mcp` serves the library as an MCP server (**546 input tokens** of
-tool definitions in Claude Code for a skills-only library; gateway servers add
-127 characters of tool text, not remeasured,
-[B1](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request)),
+tool definitions in Claude Code for a skills-only library,
+[B1](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request);
+gateway servers add some text, see [D15](docs/loop/BACKLOG.md)),
 so an agent can look for know-how when the work drifts away from what the
 session started with, in its own words:
 
@@ -176,11 +176,12 @@ session started with, in its own words:
   servers marked `"gateway": true`, registered only when there are some. Each
   call goes through the host's approval prompt, which shows the server, tool
   and arguments. A server is not configured in the host, so its tool
-  definitions are not in the host's context; `server_tools` starts it on first use. After that call, loadout remembers the
-  server's tool names and descriptions in `~/.loadout/index/mcp-tools.json`,
-  and later searches match a goal against them as well. A server is never
-  started just to be searched, and a long tool list shows argument names
-  instead of full schemas (`server_tools` with `tool` returns one in full).
+  definitions are not in the host's context; `server_tools` starts it on
+  first use. After that call, loadout remembers the server's tool names and
+  descriptions under `~/.loadout/index/mcp-tools/`, and later searches match a
+  goal against them as well. A server is never started just to be searched,
+  and a long tool list shows argument names instead of full schemas
+  (`server_tools` with `tool` returns one in full).
 
 `loadout claude` / `loadout codex` attach it automatically (turn off with
 `"search": false`), with only the two read-only tools pre-approved. For

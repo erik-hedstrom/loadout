@@ -31,9 +31,12 @@ function analyze(capability: Capability): Doc {
   let doc = analyzed.get(capability);
   if (!doc) {
     const nameTokens = tokenize(capability.name.replace(/[-_]/g, ' '));
-    const tokens = [...Array<string[]>(NAME_WEIGHT).fill(nameTokens).flat(), ...tokenize(capability.description), ...tokenize(toolsText(capability.tools ?? []))];
+    const tokens = [...Array<string[]>(NAME_WEIGHT).fill(nameTokens).flat(), ...tokenize(capability.description)];
     const tf = new Map<string, number>();
     for (const t of tokens) tf.set(t, (tf.get(t) ?? 0) + 1);
+    // A server's remembered tool words count once each and add nothing to its length: dozens of tools
+    // must not dilute a name or description match, or outweigh it.
+    for (const t of new Set(tokenize(toolsText(capability.tools ?? [])))) tf.set(t, (tf.get(t) ?? 0) + 1);
     doc = { capability, tf, length: tokens.length };
     analyzed.set(capability, doc);
   }
