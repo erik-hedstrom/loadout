@@ -64,20 +64,70 @@ not start until the sandbox meets all of this:
 - Nothing can be installed during a run, so the image, the same for all arms,
   comes with Node 22+, Python 3 with python-docx, openpyxl, python-pptx, pypdf,
   pdfplumber, pandas and matplotlib, and sqlite3. Versions go into the results.
-- **Checks and text extraction run in a second sandbox.** When `claude` exits,
-  the run sandbox is stopped, which kills every process the agent started,
-  background ones included. The check script and the text extraction run in a
-  fresh sandbox from the same image with no network at all, no credentials and
-  the same limits, holding a copy of the run folder. They execute or parse what
-  the agent wrote (`node --test`, unittest, docx and pptx files), so they never
-  run on Erik's machine.
-- **The copy out is data only.** The runner copies the run folder as an archive
-  and leaves out `node_modules`, `.venv` and `__pycache__`. It rejects
-  symlinks, hard links, device files and paths that leave the folder, and never
-  executes the archive. The host only archives, scans for credentials,
-  computes the commitment (see What is committed) and parses the stream JSON.
+- **Collection, checks and text extraction run in a second sandbox.** When
+  `claude` exits, the run sandbox is stopped (its state must read stopped, with
+  no process left in its cgroup, before anything else happens), which kills every
+  process the agent started, background ones included. A fresh sandbox from the
+  same image then gets the run volume mounted read-only, with no network at all,
+  no credentials and the same limits. It runs three stages: the collector, the
+  text extraction and the check script. They execute or parse what the agent
+  wrote (`node --test`, unittest, docx and pptx files), so they never run on
+  Erik's machine, and the host never walks, opens or parses the agent's
+  folder itself.
+- **The collector looks before it opens.** It is a small program in that
+  sandbox, and it works in this order:
+  1. It walks the run folder with `lstat` only, opening nothing, and prunes
+     `node_modules`, `.venv` and `__pycache__` when they are real directories
+     (a symlink with such a name is a violation). It accepts regular files and
+     directories only. A symlink, FIFO, socket, device, a file with `st_nlink`
+     above 1, a name that is not valid UTF-8 or holds a control character, and a
+     path over the limits below are violations. Hard links are rejected because
+     `nlink` is the only sign of a second name for a file outside the folder.
+  2. Limits come from the fixtures: the largest task input is 38 KB and 5 files
+     (the task inputs hold at most 50 zip entries, the largest 438 KB inflated).
+     The collector allows 500 entries (files and directories), depth 6, a
+     relative path of 200 bytes and a name of 100 bytes, 8 MiB per file and 32 MiB
+     in all. Sizes are `st_size`, the logical size, so a sparse file counts at
+     full length, and a file is never read to measure it.
+  3. Only then does it open each file: `O_RDONLY|O_NOFOLLOW|O_NONBLOCK` (a FIFO
+     swapped in cannot block the open), then `fstat` on the descriptor, and a
+     second check that it is a regular file with `nlink` 1 and the size the walk
+     saw, and it reads at most that many bytes. The sandbox is stopped by now, so
+     nothing can swap a file between the walk and the open; the second check is
+     there for a stop that did not take effect.
+  4. It writes a tar stream of regular files and directories, with names it has
+     checked, to its stdout, and is killed after 32 MiB plus headers. The host
+     never uses `docker cp` or any copy that follows links out of a stopped
+     container, and reads only that stream.
+  5. The host reads the stream with a bounded parser. Entry types other than
+     regular file and directory, names that were not checked, sizes that
+     disagree with the headers and a stream over its cap fail the same way, and
+     it writes files into a fresh folder under names it generated (`O_EXCL`,
+     `O_NOFOLLOW`), never the agent's.
+
+  Any violation fails the run as `output rejected`: nothing from its folder is
+  scanned, extracted or judged, the run is counted per arm and reported, and it
+  is not rerun unless the smoke run shows the harness caused it. See Failed
+  runs.
 - Runs and judging happen on a local machine where the CLIs are logged in, not
   in a cloud session.
+
+Every later step that touches bytes or metadata the agent controls has a bound
+too, or runs in the sandbox without network. A step that hits its bound fails
+the run as `output rejected` (collect) or fails that check or extraction
+(counted, never named); it does not stall the batch.
+
+| Step | Where | Bound |
+|---|---|---|
+| Collect | collector, second sandbox | the walk, limits and open rules above |
+| Credential scan, pass one | host, on the validated copy | streams each file, constant memory. The patterns in [scan-patterns.json](scan-patterns.json) must be linear time (one literal and one character-class run, no nested quantifier); the runner refuses a pattern that is not |
+| Office files (zip) | extraction stage | reads entries in memory, never writes an entry to disk by name. At most 200 entries; 16 MiB inflated per entry and 64 MiB in all (the fixtures' largest is 438 KB and 0.83 MB); inflation stops at the limit whatever the header says; a ratio above 100:1 for an entry over 1 MiB, or 50:1 for the archive, fails it; a nested archive is not opened; a part holding `<!DOCTYPE` or `<!ENTITY` is not parsed |
+| PDF, SQLite, CSV | extraction and check stages | 200 pages; databases opened read-only; the limits in the next row |
+| Extraction and checks, as processes | second sandbox | 60 s CPU and 1 GiB memory per file or check, 10 minutes per run, no network. Over the limit, the extraction or check fails and is counted. The host reads at most 1 MiB of stdout from each and kills the sandbox past it |
+| Judge input | host | extracted text cut at 256 KiB per output, the cut counted and reported; the same text rules for both arms; redaction runs on that text |
+| Stream JSON | host | read line by line with no whole-file parse. A line over 4 MiB (`claude` itself cuts tool output near 30 KB) is skipped, not parsed, and counted. Only top-level events `system` init, `assistant` and `result` are parsed, after a prefix test and a nesting-depth scan (64 at most); tool results are never parsed. The first event must be init and there is one `result`; anything else is `output rejected`. Numbers are taken from named fields and must be finite and not negative. The stream is cut at 128 MiB, and stderr and the final message at 1 MiB each |
+| Names and strings | host | a string from the agent reaches a log, a terminal or a prompt only escaped (`escapeSkillTags` for prompts); results hold fixed values, library skill names and numbers |
+| Freeze and HMAC | host | built from the validated copy and the capped stream, streamed with an incremental HMAC, never held in memory. A run is at most about 160 MiB (32 MiB files, 128 MiB stream); the runner stops if free disk is below that |
 
 The smoke run starts with a self-check from inside the sandbox, as the agent's
 `Bash` would see it. It passes when all of these hold:
@@ -121,12 +171,61 @@ TLS. So no real key goes into the sandbox:
   `jev.baseUrl` to it, and the file `jev.apiKeyFile` names holds a placeholder.
   The gateway drops any credential header on a request, adds the real one, and
   forwards each route to one fixed upstream host over its own TLS connection.
-  It allows only the
-  paths the smoke run shows `claude` needs (the messages endpoint, not the
-  batches or files APIs) and, for Jev, `POST /v1/systemone`, the one path
-  `jevClient` calls. Everything else is refused and counted. An attacker's key
+  It allows only the paths the smoke run shows `claude` needs (the messages
+  endpoint, not the batches or files APIs) and, in the `small-loadout` batch
+  only, `POST /v1/systemone`, the one path `jevClient` calls; the bare batches
+  have no Jev route. Everything else is refused and counted. An attacker's key
   in a request is overwritten, so nothing the sandbox sends reaches another
-  account. It needs an Anthropic API key: the protocol assumes one.
+  account. It also reads each Anthropic request body, within a size limit (16
+  MiB, Jev 4 MiB; the smoke run may lower them), and refuses a body whose
+  top-level keys, tool `type` values or `anthropic-beta` header values are not
+  among the ones the smoke run saw `claude` send. That closes the server-side
+  tools (web search, web fetch, code execution) and `mcp_servers`, which would
+  give `Bash` web access and remote tools through the allowed path. It needs an
+  Anthropic API key: the protocol assumes one.
+- **The gateway cannot tell `claude` from `Bash`.** `Bash` is a child of
+  `claude` and inherits its environment, so the placeholder key, the base URL
+  and anything else `claude` holds (a nonce header, a client certificate) are
+  readable by `Bash` from `env` or `/proc/<ppid>/environ`, as the same user. A
+  secret only `claude` has does not exist. The placeholder key is unique per
+  run, which attributes each request to its run and refuses a straggler from an
+  earlier run, and binds nothing more. So a skill can POST to the allowed paths
+  itself, to get model help the arm should not have or to spend the cap. The
+  protocol does not prevent that; it makes it visible, counts it and prices it
+  (next bullet).
+- **Reconciled.** For each run the gateway records, per forwarded request: the
+  path, the status, the model (kept only if it is one of the models in the
+  arms table, else `other`), and the usage the upstream reports in the response
+  (input, output, cache-read and cache-write tokens, read from the `usage`
+  field of the body or the final event of the stream, in constant memory).
+  Bodies are parsed, never stored. After the run, before anything is
+  collected, the runner compares these with what the run itself reports:
+  - Anthropic requests, per model: the gateway count equals the number of
+    distinct assistant message ids in the stream per model, plus the fixed
+    overhead calls (title, summary) the smoke run measures per arm. A run that
+    hit the 15-minute cap or was killed may show one more at the gateway, the
+    request in flight; that one is left out of the comparison.
+  - Anthropic tokens, per model and per category: within the larger of 1% and
+    100 tokens of `modelUsage` in the `result` event (or, with no `result`
+    event, of the assistant events' usage). A model the stream does not list
+    is a mismatch. If the smoke run shows the stream's per-message usage is
+    only a start-of-message figure, totals are compared and per-message values
+    are not.
+  - Jev requests: the requests whose status is not 429 or 5xx equal the Jev
+    calls loadout made, which are the hook events and the `find_skills` calls
+    in the stream (the smoke run measures requests per hook decision and per
+    `find_skills` call; one is expected), and retried requests (`jevClient`
+    retries once on 429 or 5xx) do not exceed that count.
+  - A refused request, a path or request shape off the list, a Jev request in a
+    bare arm, an unreadable usage or any request left unmatched makes the run
+    **invalid**. It is counted per arm and reported with the amounts, it is not
+    rerun, and it stays in the results as that arm's outcome: its skill text,
+    not the harness, drove the traffic. How it enters the win rate is under
+    Analysis.
+  - The cost reported per run is the gateway's upstream usage priced at list
+    prices (the table under Expected spend, with the over-100k tier applied per
+    request), plus the Jev cost; `total_cost_usd` is reported next to it. A gap
+    between them beyond the token tolerance is reported.
 - **Not loadout proxying.** AGENTS.md rule 1 keeps the product from proxying
   or intercepting an agent's API traffic, so a user's traffic never passes
   through loadout. This gateway is part of the benchmark harness: it is not in
@@ -138,15 +237,23 @@ TLS. So no real key goes into the sandbox:
   its own Anthropic key, and the `small-loadout` batch its own Jev key. A key is used nowhere
   else and has a spend cap at the provider, set to the approved total for its
   batch. Where a provider offers no cap, the gateway refuses requests past a
-  count the runner sets from that total.
+  count the runner sets from that total. Each run also has a ceiling at the
+  gateway, on requests and on priced usage: three times the arm's high per-run
+  figure under Expected spend until the smoke run replaces it with three times
+  the largest it measured. A run that reaches it is flagged `ceiling`, reported
+  like `capped`, and its later requests are refused. Without it, one run's
+  own requests could use the batch cap and starve the runs after it; with it,
+  the traffic is bounded and shows up in the reconciliation.
 - **Probed.** Before the smoke run a script, running as the agent's user in
   the run sandbox, prints yes or no for each of: a string shaped like a
   credential (the patterns in [scan-patterns.json](scan-patterns.json)) other
   than the placeholders in `env`, in the key file, in `/proc/*/environ` and in
   the home folder; and a connection straight to an API's address getting an
   answer. Against a stub upstream the gateway is shown to replace a credential
-  header the sandbox sets and to refuse a path off its list. The answers go
-  into the results.
+  header the sandbox sets, to refuse a path, a tool type and a body off its
+  lists, and to count a request the sandbox makes itself; the reconciliation is
+  shown to flag that request as unmatched on a stream that does not hold it, and
+  to pass a clean one. The answers go into the results.
 - **Revoked, and confirmed.** A batch's keys are revoked when its last run
   (reruns included) ends, before any of its output is scanned, extracted,
   judged or committed, and one request per key that must now be refused
@@ -170,7 +277,7 @@ them, so each is counted, scanned or not kept:
 | Record | Handling |
 |---|---|
 | Resolver | Counters and one canary flag. No name is written, not even to its own stderr. |
-| Gateway | Counters per run: requests per allowed path, refused requests, bytes, status codes. No body, header, query string or refused path is logged. |
+| Gateway | Per run: requests per allowed path, refused requests, bytes, status codes, and per request the model (from the fixed set) and the usage integers. No body, header, query string or refused path is logged. Local; only sums are committed. |
 | Firewall drop log | Not kept. A refused destination (an address and port carry bits) is counted only. |
 | Container engine log | Not kept: the log driver is off for the run container. |
 | Stream JSON with hook events, final message, `claude` stderr | Local, never committed; scanned in pass one. |
@@ -179,10 +286,26 @@ them, so each is counted, scanned or not kept:
 | Committed results | Numbers and fixed values only (see What is committed). |
 
 Numbers the agent influences (duration, turns, tokens, cost, test and row
-counts, the dropped-file counts, the refused-request counts) are a thin
-channel too, a few bits per run.
-The control is the same: no real key in the sandbox, and revocation before
+counts, the dropped-file counts, the refused-request and unmatched-request
+counts, the rejected and invalid flags) are a thin channel too, a few bits per
+run. The control is the same: no real key in the sandbox, and revocation before
 anything is committed.
+
+Resources and influence the measurement could miss, each prevented or
+reconciled, and reported:
+
+| Route | Handling |
+|---|---|
+| Anthropic messages path | Reachable by `Bash` with the placeholder key. Reconciled against the stream; extra requests invalidate the run. |
+| Other Anthropic paths, server-side tools, `mcp_servers`, beta features | Refused by path and body allowlist; every refusal is counted and invalidates the run. |
+| Jev path | Only in the `small-loadout` batch, reconciled against the hook and `find_skills` calls. Absent in the bare batches. |
+| Name resolution | The resolver's counters; forwarded must be 0. |
+| Wall clock | Measured by the runner from outside the sandbox; the agent cannot stop or extend it. The cap is the same for all arms, and `capped` is reported. |
+| Compute, disk, processes | The same limits for every arm; the extra processes the loadout arm runs (the hook, `loadout mcp`) are part of its treatment. |
+| One run affecting the next | Each run has a new sandbox, a new run volume, a new loadout home copied from the snapshot, and its own placeholder key, ceiling and counters. The gateway and resolver keep nothing but those counters between runs. Provider state beyond the prompt cache is off the path list (files, batches). |
+| Prompt cache | Shared by runs on a key within the cache lifetime: a run may start warm because of the one before it, and the arms differ in run order. Cache-read and cache-write tokens are reported per run. The cost is reported as billed and as if every input token were uncached. A run could warm the next one's prefix by sending it through `Bash`; that changes cost and speed, not content, and the extra request invalidates the run. Order effects remain and are stated as a limit. |
+| Reruns | A rerun happens only when the failed attempt's reconciliation was clean and the failure came from the provider or the harness. An attempt with unmatched traffic is invalid, not failed. |
+| Judge | Each call is a new process with no session or memory carried over, so no output reaches another call's context; outputs are escaped and framed (see Judging). |
 
 ## Arms
 
@@ -216,8 +339,8 @@ claude -p "$PROMPT" --output-format stream-json --verbose --include-hook-events 
 - **Collected per run, kept local:** the full stream (init event, hook events,
   tool results, result event with `total_cost_usd`, tokens, turns and
   duration), the `claude` stderr, the final message, every file added or
-  changed relative to the inputs, and for `small-loadout` the hook's selection
-  and Jev cost. They go into a folder outside the checkout that is never pushed
+  changed relative to the inputs, the gateway's per-request record, and for
+  `small-loadout` the hook's selection and Jev cost. They go into a folder outside the checkout that is never pushed
   or shared.
 - **Order and concurrency.** Arms run in separate batches, resumable per
   task, one run at a time. The wall-clock estimate below assumes that; parallel
@@ -227,6 +350,13 @@ claude -p "$PROMPT" --output-format stream-json --verbose --include-hook-events 
   count is reported per arm. If the rerun fails too, the run is reported as
   missing and not tried again. A run is never rerun because of how its output
   looks. The expected spend below includes these reruns.
+- **Invalid and rejected runs are results.** A run whose gateway traffic does
+  not reconcile (Credentials) is `invalid`; one whose folder fails collection
+  (Isolation) is `output rejected`. Neither is a failure outside the agent,
+  because the arm's skill text or the agent's own commands caused it. Neither
+  is rerun, unless the smoke run shows the harness itself produces it. A
+  rerun is also refused when the failed attempt had unmatched traffic. Both are
+  counted per arm and task, and their cost counts toward the spend.
 
 ## What is committed
 
@@ -243,8 +373,10 @@ harness computes or reads from named fields, never agent text:
 - per run: arm, task, `capped`, number of reruns, `total_cost_usd`, tokens,
   turns, duration, the model named in the init event, its tool list, whether
   the hook exited 0 and added `<skill_relevance>`, the Jev cost, the gateway
-  and resolver counters, and the names of selected skills when each is a name
-  in the library;
+  and resolver counters, the gateway's usage sums per model and the priced cost
+  (as billed and uncached), the reconciliation result with the amounts that did
+  not match, `invalid` or `output rejected` with the number of violations by
+  kind, and the names of selected skills when each is a name in the library;
 - every check result, with the counts the check reads (tests run, rows,
   slides) and the number of files each check dropped from its copy;
 - the sandbox self-check, the credential probe, and the hashes of the treatment
@@ -297,7 +429,13 @@ It passes when:
   hook and the two loadout tools in `small-loadout`;
 - the init event shows the model asked for;
 - the hook event exits 0 and adds `<skill_relevance>` context;
-- the extraction script runs on each smoke output folder.
+- the collector and the extraction script run on each smoke output folder, and
+  the collector rejects a made-up folder holding each violation (symlink, FIFO,
+  socket, hard link, sparse file over the size limit, too many files, too deep)
+  inside the 60 s limit, without hanging;
+- the gateway reconciliation passes on each smoke run with no unmatched
+  request, and its measured overhead calls, Jev requests per decision and the
+  tolerance it needed are recorded.
 
 Recorded, not a gate: whether the `small-loadout` run opened a skill
 (`load_skill` or a read of a SKILL.md). A miss is reported and the treatment is
@@ -453,7 +591,8 @@ judged results. The judge does not see them.
   time (concurrency 1), not through the two-way pool `outcome.ts` uses for its
   judge, so a judge's cached prompt stays warm. Calls are grouped by task, with
   the fixed part of the prompt (instructions, `task.md`, inputs, the key
-  entry) first.
+  entry) first. Each call is its own process, with no session or memory carried
+  over from another call.
 
 ## Template leakage
 
@@ -487,11 +626,15 @@ arm it is reading. Steps taken:
   `large-bare` (does it close the gap). The third pair is context.
 - **Win rate:** wins / (wins + losses), with a 95% Wilson interval. Ties and
   splits are left out of the rate but always shown next to it, so a reader can
-  see how many tasks it rests on. With 14 decided tasks the interval clears
+  see how many tasks it rests on. A pair with an `invalid` or `output rejected`
+  run is not judged. It counts as a loss for the arm that has the bad run (a
+  tie if both do), and the rate is also shown with those pairs left out, with
+  their number beside it. With 14 decided tasks the interval clears
   50% only from 11 wins (79%); with fewer decided tasks the bar is higher (7 of
   8, 9 of 10, 10 of 12). Anything smaller is "not shown".
-- **Cost per task:** mean and median `total_cost_usd` per arm (list price from
-  the result event), plus Jev cost for `small-loadout`. Also cost per
+- **Cost per task:** mean and median per arm of the gateway-priced cost (upstream
+  usage at list price, as billed and uncached) plus Jev cost for
+  `small-loadout`, with the CLI's `total_cost_usd` beside it. Also cost per
   task won, capped rate, median turns and median duration. The Codex CLI
   reports no cost (`costLabel` in `bench/lib.ts`), so the judge's cost is not
   reported.
@@ -502,9 +645,10 @@ arm it is reading. Steps taken:
 ## Frozen before the first run
 
 The commit that merges this protocol fixes the tasks, `KEY.md`, the checks,
-the redaction rules, the primary comparisons and the analysis. The runner, the
-gateway, the resolver, the sandbox self-check, the credential probe, the
-extraction script, the check script with its tests and both judge prompts do not
+the redaction rules, the limits under Isolation, the reconciliation rules under
+Credentials, the primary comparisons and the analysis. The runner, the
+collector, the gateway with its reconciliation, the resolver, the sandbox
+self-check, the credential probe, the extraction script, the check script with its tests and both judge prompts do not
 exist yet; they are committed before the smoke run and change only as set out
 under Smoke run first. The treatment is fixed before the smoke run. After the first
 full run starts, none of these changes. A change forced by a fault in the
@@ -541,7 +685,11 @@ stays below that.
 Prices are Anthropic's list prices as of 2026-10-06, not figures from RESULTS.
 Expected Claude cost at list price, with no reruns: about $7-31 with Haiku 5.5,
 $12-57 with Haiku 4.5. It is cash: the runs use an API key behind the gateway
-(see Credentials).
+(see Credentials). The figure the runner tracks is the gateway's, upstream usage
+at these prices, so requests an agent made itself are in it; the CLI's
+`total_cost_usd` would miss them. A run that reaches its ceiling (about $4.50
+for `large-bare`, $0.24 for Haiku 5.5, until the smoke run measures) is bounded
+there.
 
 **High estimate, with the reruns.** If all 54 runs fail outside the agent and are
 rerun once, there are 108 attempts, and each is charged at its high figure: 36
@@ -550,9 +698,10 @@ about $0.04, the smoke run $1.65 (Haiku 4.5: $3.00). That is about $61 with
 Haiku 5.5 and $111 with Haiku 4.5. Wall clock at most 108 x 15 minutes (27 h)
 plus the smoke run. Neither is expected, and neither is a bound: the runner
 stops at the totals Erik approves. It starts no attempt once the finished
-runs' `total_cost_usd` plus the Jev cost reach the approved cost, or the
-elapsed time reaches the approved hours, and it reports what it left unrun. An
-attempt in progress can overshoot by its own cost; the cap on each key
+runs' gateway-priced cost plus the Jev cost, invalid runs included, reach the
+approved cost, or the elapsed time reaches the approved hours, and it reports
+what it left unrun. An attempt in progress can overshoot by up to its ceiling;
+the cap on each key
 (Credentials) is the approved total for its batch, so nothing overshoots
 further. The smoke run replaces these assumptions with measured figures before
 the full run is approved.
@@ -564,8 +713,15 @@ the full run is approved.
 - Sonnet 5.5 or Opus as the large tier. The `invoke.ts` agent runs used
   Sonnet 5.5; B1 and the hook probe ran on Haiku, and the judges on Opus.
 - The sandbox: container or VM (a throwaway user is ruled out above), and the
-  engine, the egress mechanism, the resolver and the gateway that enforce the
-  rules under Isolation and Credentials.
+  engine, the egress mechanism, the resolver, the gateway and the read-only
+  collector sandbox that enforce the rules under Isolation and Credentials.
+- Gateway abuse is detected, not prevented. With the stock CLI, `Bash` can
+  reach whatever `claude` can, so the protocol counts and invalidates instead
+  (see Credentials). Confirm, or say what else you would give up for
+  prevention.
+- Invalid and `output rejected` runs count as a loss for their arm in the
+  win rate, with the rate also shown without them (see Analysis). Confirm, or
+  choose to leave them out of the primary rate.
 - Raw outputs stay local and unpublished (see What is committed), which departs
   from AGENTS.md's "commit raw results". Confirm, or say which outputs you will
   read and publish after the run.
