@@ -227,14 +227,15 @@ export function materialize(
     // Inside an IDE terminal Claude Code connects to the IDE on its own. The variables turn that and Chrome off, and set
     // here they outrank the shell and the user, project and local settings files. `/background` restarts the session
     // with `--settings` but not `--no-chrome`, so Chrome's opt-out lives here too. The built-in `computer-use` server stays
-    // on in a project where the user enabled it, so its tools are denied instead.
+    // on in a project where the user enabled it, so its tools are denied instead. Artifact comments can start a turn,
+    // so reading them is off too.
     session.settings = join(dir, 'settings.json');
     const settings = {
       disableClaudeAiConnectors: true,
       disableRemoteControl: true,
       crossSessionInbound: 'refuse',
       permissions: { deny: ['mcp__computer-use'] },
-      env: { CLAUDE_CODE_AUTO_CONNECT_IDE: 'false', CLAUDE_CODE_ENABLE_CFC: '0' },
+      env: { CLAUDE_CODE_AUTO_CONNECT_IDE: 'false', CLAUDE_CODE_ENABLE_CFC: '0', CLAUDE_CODE_ARTIFACT_COMMENTS: '0' },
     };
     writeFileSync(session.settings, JSON.stringify(settings), { mode: 0o600 });
   }

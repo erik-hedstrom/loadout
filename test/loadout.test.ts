@@ -897,7 +897,7 @@ describe('launch', () => {
       disableRemoteControl: true,
       crossSessionInbound: 'refuse',
       permissions: { deny: ['mcp__computer-use'] },
-      env: { CLAUDE_CODE_AUTO_CONNECT_IDE: 'false', CLAUDE_CODE_ENABLE_CFC: '0' },
+      env: { CLAUDE_CODE_AUTO_CONNECT_IDE: 'false', CLAUDE_CODE_ENABLE_CFC: '0', CLAUDE_CODE_ARTIFACT_COMMENTS: '0' },
     });
     // loadout's own servers still load; the flag only drops the others.
     expect(isolated).toContain('--mcp-config');

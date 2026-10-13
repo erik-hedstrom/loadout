@@ -171,7 +171,8 @@ adding official flags to the agent's command line only. It writes nothing to
   on in a project where you enabled it), `env.CLAUDE_CODE_AUTO_CONNECT_IDE=false` so an IDE terminal does
   not connect it to the IDE, and `env.CLAUDE_CODE_ENABLE_CFC=0`, which keeps
   Chrome off after `/background` (that restart keeps `--settings` but not
-  `--no-chrome`). That file outranks your user, project and local settings,
+  `--no-chrome`), and `env.CLAUDE_CODE_ARTIFACT_COMMENTS=0`, so comments on
+  an artifact cannot start a turn. That file outranks your user, project and local settings,
   but not managed settings. With `--settings` on the command line,
   `--resume` does not attach to a running background session. All are in the
   [CLI reference](https://code.claude.com/docs/en/cli-reference),
@@ -179,6 +180,7 @@ adding official flags to the agent's command line only. It writes nothing to
   [environment variables](https://code.claude.com/docs/en/env-vars),
   [cross-session messaging](https://code.claude.com/docs/en/cross-session-messaging#turn-off-cross-session-messaging),
   [computer use](https://code.claude.com/docs/en/computer-use#enable-computer-use),
+  [artifacts](https://code.claude.com/docs/en/artifacts#let-claude-reply-to-comments-on-its-own),
   [permissions](https://code.claude.com/docs/en/permissions),
   [sessions](https://code.claude.com/docs/en/sessions#resume-a-running-background-session)
   and [agent view](https://code.claude.com/docs/en/agent-view#what-carries-over-when-you-background).
@@ -207,11 +209,11 @@ the isolation, which `--isolate` refuses before routing:
 
 Not hidden:
 
-- **Claude Code plugins.** `--bare` and `--safe-mode` hide installed plugins
-  (and those from `CLAUDE_CODE_PLUGIN_DIRS`), but also your hooks, skills and
-  CLAUDE.md, so `--isolate` uses neither. Whether `--strict-mcp-config` drops
-  plugin servers is not documented (not checked). An installed loadout hook
-  plugin still runs next to the launcher.
+- **Claude Code plugins' hooks, skills and commands.** `--strict-mcp-config`
+  ignores every MCP configuration but `--mcp-config`, plugin servers included,
+  but the rest of a plugin still loads. `--bare` and `--safe-mode` would hide
+  plugins, but also your own hooks, skills and CLAUDE.md, so `--isolate` uses
+  neither. An installed loadout hook plugin still runs next to the launcher.
 - Claude Code settings files (user, project, local): their hooks, permissions
   and other settings still apply. `--setting-sources` could drop them, but it
   also drops your permissions and model, so `--isolate` does not use it.
@@ -219,9 +221,9 @@ Not hidden:
   (`ListAgents`, `SendMessage`). Deny rules for both would also cut messages
   to subagents and teammates, so `--isolate` adds none.
 - Managed settings (organization policy) outrank the `--settings` file. A
-  managed `crossSessionInbound: "accept"`, `env.CLAUDE_CODE_AUTO_CONNECT_IDE=true`
-  or `env.CLAUDE_CODE_ENABLE_CFC=1` wins over the values above, so peer
-  messages, the IDE, or Chrome after `/background` can come back.
+  managed `crossSessionInbound: "accept"`, or a managed `env` that sets
+  `CLAUDE_CODE_AUTO_CONNECT_IDE`, `CLAUDE_CODE_ENABLE_CFC` or
+  `CLAUDE_CODE_ARTIFACT_COMMENTS` back on, wins over the values above.
 - A `managed-mcp.json` (organization policy): Claude Code exits at startup
   when `--strict-mcp-config` meets one.
 - Codex config layers other than `$CODEX_HOME/config.toml`
