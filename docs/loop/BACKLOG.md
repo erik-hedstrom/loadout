@@ -161,8 +161,10 @@ State what each solves and what loadout adds.
 Learnings:
 - 8 rows in `docs/comparison.md`, read 2026-10-12 and re-checked against
   the same sources on 2026-10-13. The only head-to-head numbers are B1's
-  (native listings against adding loadout's MCP server); the rest are quoted
-  from RESULTS.
+  (native listings against adding loadout's MCP server); the other loadout
+  figures are quoted from RESULTS. toolsift's recall and token figures are
+  its own, from its BENCHMARKS.md (not in RESULTS); the Wilson intervals on
+  them, and on the agent-use and pilot counts, were computed for the page.
 - `developers.openai.com` and `skills.sh` were blocked from the cloud session;
   the table marks what that left unconfirmed.
 - "toolsift" is `abdulmunimjemal/toolsift`; other searches return
