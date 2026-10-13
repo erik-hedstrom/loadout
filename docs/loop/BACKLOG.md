@@ -159,14 +159,16 @@ Acceptance: a table with sources and access dates covering:
 State what each solves and what loadout adds.
 
 Learnings:
-- 8 rows in `docs/comparison.md`, read 2026-10-12 and re-checked against
-  the same sources on 2026-10-13. The only head-to-head numbers are B1's
+- 8 rows in `docs/comparison.md`, read 2026-10-12 and read in full again on
+  2026-10-13; GitHub sources are pinned to a commit, live docs to the access
+  date. The only head-to-head numbers are B1's
   (native listings against adding loadout's MCP server); the other loadout
   figures are quoted from RESULTS. toolsift's recall and token figures are
   its own, from its BENCHMARKS.md (not in RESULTS); the Wilson intervals on
   them, and on the agent-use and pilot counts, were computed for the page.
-- `developers.openai.com` and `skills.sh` were blocked from the cloud session;
-  the table marks what that left unconfirmed.
+- `developers.openai.com` and `skills.sh` (including its audits page and API
+  docs) were blocked from the cloud session; the table marks what that left
+  not verified.
 - "toolsift" is `abdulmunimjemal/toolsift`; other searches return
   unrelated review sites.
 - Left: Erik or a local session re-reads the Codex docs and skills.sh in a
