@@ -165,13 +165,20 @@ adding official flags to the agent's command line only. It writes nothing to
 - Claude Code: `--strict-mcp-config` (loadout's own servers still load),
   `--no-chrome`, and `--settings <file>`, written to the session folder,
   with `disableClaudeAiConnectors` for the claude.ai connectors,
-  `disableRemoteControl` so Remote Control does not start, and
-  `env.CLAUDE_CODE_AUTO_CONNECT_IDE=false` so an IDE terminal does not
-  connect it to the IDE. That file outranks your user, project and local
-  settings, but not managed settings. All are in the
+  `disableRemoteControl` so Remote Control does not start,
+  `crossSessionInbound: "refuse"` so messages from your other sessions are
+  dropped, `env.CLAUDE_CODE_AUTO_CONNECT_IDE=false` so an IDE terminal does
+  not connect it to the IDE, and `env.CLAUDE_CODE_ENABLE_CFC=0`, which keeps
+  Chrome off after `/background` (that restart keeps `--settings` but not
+  `--no-chrome`). That file outranks your user, project and local settings,
+  but not managed settings. With `--settings` on the command line,
+  `--resume` does not attach to a running background session. All are in the
   [CLI reference](https://code.claude.com/docs/en/cli-reference),
-  [settings reference](https://code.claude.com/docs/en/settings-reference#disableclaudeaiconnectors)
-  and [environment variables](https://code.claude.com/docs/en/env-vars).
+  [settings reference](https://code.claude.com/docs/en/settings-reference#disableclaudeaiconnectors),
+  [environment variables](https://code.claude.com/docs/en/env-vars),
+  [cross-session messaging](https://code.claude.com/docs/en/cross-session-messaging#turn-off-cross-session-messaging),
+  [sessions](https://code.claude.com/docs/en/sessions#resume-a-running-background-session)
+  and [agent view](https://code.claude.com/docs/en/agent-view#what-carries-over-when-you-background).
 - Codex: `codex exec --ignore-user-config` skips `$CODEX_HOME/config.toml`
   (auth still uses `CODEX_HOME`). `--disable apps`, `--disable plugins` and
   `--disable skill_mcp_dependency_install` turn off the ChatGPT Apps server,
@@ -189,7 +196,8 @@ the isolation, which `--isolate` refuses before routing:
   `--channels` and `--dangerously-load-development-channels` (channel servers
   push messages and can relay permission prompts), `--cloud`, `--remote`,
   `--environment` and `--teleport` (cloud sessions bring their own
-  servers), `--remote-control` and `--rc`, and a second `--`, which would
+  servers), `--remote-control` and `--rc`, `--desktop` (the Desktop app
+  starts its own session), and a second `--`, which would
   turn the isolation flags into prompt text.
 - Codex: `--enable`, and every `-c`/`--config` override. A `projects` trust
   entry alone would turn project config files, and their servers, back on.
@@ -204,6 +212,9 @@ Not hidden:
 - Claude Code settings files (user, project, local): their hooks, permissions
   and other settings still apply. `--setting-sources` could drop them, but it
   also drops your permissions and model, so `--isolate` does not use it.
+- Sending to your other sessions: Claude can still list and message them
+  (`ListAgents`, `SendMessage`). Deny rules for both would also cut messages
+  to subagents and teammates, so `--isolate` adds none.
 - A `managed-mcp.json` (organization policy): Claude Code exits at startup
   when `--strict-mcp-config` meets one.
 - Codex config layers other than `$CODEX_HOME/config.toml`
@@ -214,7 +225,7 @@ Not hidden:
   `~/.codex/config.toml` is skipped with the rest of that file.
 - Interactive Codex: no `--ignore-user-config`. Codex skills: no flag found.
 
-Checked against the sources above on 2026-10-12; no live run (not shown).
+Checked against the sources above on 2026-10-12 and 2026-10-13; no live run (not shown).
 
 ## Search mid-session, from any MCP host
 

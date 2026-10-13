@@ -892,7 +892,12 @@ describe('launch', () => {
     expect(at).toBeLessThan(isolated.indexOf('--permission-mode'));
     if (process.platform !== 'win32') expect(statSync(claude.settings!).mode & 0o777).toBe(0o600);
     // In the session's --settings file, the IDE opt-out outranks a user, project or local settings `env` that turns it on.
-    expect(JSON.parse(readFileSync(claude.settings!, 'utf8'))).toEqual({ disableClaudeAiConnectors: true, disableRemoteControl: true, env: { CLAUDE_CODE_AUTO_CONNECT_IDE: 'false' } });
+    expect(JSON.parse(readFileSync(claude.settings!, 'utf8'))).toEqual({
+      disableClaudeAiConnectors: true,
+      disableRemoteControl: true,
+      crossSessionInbound: 'refuse',
+      env: { CLAUDE_CODE_AUTO_CONNECT_IDE: 'false', CLAUDE_CODE_ENABLE_CFC: '0' },
+    });
     // loadout's own servers still load; the flag only drops the others.
     expect(isolated).toContain('--mcp-config');
     expect(isolated).toContain('--plugin-dir');
@@ -935,7 +940,7 @@ describe('launch', () => {
   it('finds passthrough arguments that would undo --isolate, in every spelling', () => {
     for (const args of [['--settings', '{}'], ['--settings={}'], ['--mcp-config', 'a.json'], ['--mcp-config=a.json'], ['--agents', '{}'], ['--agents={}'], ['--plugin-dir', 'p'], ['--plugin-dir=p'], ['--plugin-url', 'u'], ['--plugin-url=u'], ['--chrome'], ['--ide'],
       ['--channels', 'plugin:p@m'], ['--channels=plugin:p@m'], ['--dangerously-load-development-channels', 'server:s'], ['--cloud'], ['--remote', 't'], ['--environment=e'], ['--teleport'],
-      ['--remote-control'], ['--remote-control=name'], ['--rc'], ['--']]) {
+      ['--remote-control'], ['--remote-control=name'], ['--rc'], ['--desktop'], ['--']]) {
       // The flag's name only, never the caller's value.
       expect(isolateConflict('claude', ['--permission-mode', 'plan', ...args])).toBe(args[0]!.split('=')[0]);
     }

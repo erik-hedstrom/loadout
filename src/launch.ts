@@ -224,10 +224,16 @@ export function materialize(
 
   if (agent === 'claude' && isolate) {
     // `--strict-mcp-config` is not documented to drop the claude.ai connectors the CLI fetches itself; this setting does.
-    // Inside an IDE terminal Claude Code connects to the IDE on its own. The variable turns that off, and set here it
-    // outranks the shell and the user, project and local settings files.
+    // Inside an IDE terminal Claude Code connects to the IDE on its own. The variables turn that and Chrome off, and set
+    // here they outrank the shell and the user, project and local settings files. `/background` restarts the session
+    // with `--settings` but not `--no-chrome`, so Chrome's opt-out lives here too.
     session.settings = join(dir, 'settings.json');
-    const settings = { disableClaudeAiConnectors: true, disableRemoteControl: true, env: { CLAUDE_CODE_AUTO_CONNECT_IDE: 'false' } };
+    const settings = {
+      disableClaudeAiConnectors: true,
+      disableRemoteControl: true,
+      crossSessionInbound: 'refuse',
+      env: { CLAUDE_CODE_AUTO_CONNECT_IDE: 'false', CLAUDE_CODE_ENABLE_CFC: '0' },
+    };
     writeFileSync(session.settings, JSON.stringify(settings), { mode: 0o600 });
   }
 
@@ -451,7 +457,7 @@ export function isolateConflict(agent: Agent, args: string[]): string | undefine
 const CLAUDE_REFUSED = [
   '--settings', '--mcp-config', '--agents', '--plugin-dir', '--plugin-url', '--chrome', '--ide',
   '--channels', '--dangerously-load-development-channels', '--cloud', '--remote', '--environment', '--teleport',
-  '--remote-control', '--rc',
+  '--remote-control', '--rc', '--desktop',
 ];
 
 export function codexArgs(session: Session, task: string, extra: string[], opts: LaunchOptions = {}): string[] {
