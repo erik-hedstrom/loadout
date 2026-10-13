@@ -213,10 +213,10 @@ library itself, in its own words, through MCP:
   servers, started on first use and kept for the session. Registered only when
   the library has servers, so a skills-only library costs two tool definitions.
 
-The search tools add **546 input tokens** per request in Claude Code. A
-native listing of 50 skills with generated names adds about 477; B1
-interpolates the crossover near 57 such skills. Real-name costs, router calls
-and returned skills are not included ([B1](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request)).
+The search tools added **546 input tokens** to a fresh Claude Code session's
+first request. A native listing of 50 skills with generated names adds about
+477; B1 interpolates the crossover near 57 such skills. Real-name costs, later
+turns, other hosts, router calls and returned skills are not included ([B1](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request)).
 
 Approvals: the launcher pre-approves only `find_skills` and `load_skill`
 (Claude `--allowedTools`, Codex `tools.<tool>.approval_mode = "approve"`).

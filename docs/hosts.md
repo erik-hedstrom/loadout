@@ -35,7 +35,8 @@ Notes:
    shows a tier choice reaching the agent, and whether Jev picks sensible
    tiers is not shown (backlog C3).
 3. The plugin, one `claude -p --plugin-dir` run, 2026-10-08
-   ([RESULTS](../bench/RESULTS.md#the-hook-plugin-in-the-claude-code-cli-2026-10-08)).
+   ([RESULTS](../bench/RESULTS.md#the-hook-plugin-in-the-claude-code-cli-2026-10-08)). The
+   marketplace install is untested.
    The settings-file hook ran in 10 sessions on 2026-10-07
    ([RESULTS](../bench/RESULTS.md#do-agents-use-what-they-are-given)).
 4. 10 headless sessions per host with `find_skills` attached, 2026-10-06
@@ -55,7 +56,8 @@ Notes:
    starting it.
    The Codex plugin attaches search on every request; its per-request token
    cost in Codex is not measured.
-   For WSL behind Windows Codex: [hook plugins](hook.md#codex-cli).
+   For WSL behind Windows Codex: [hook plugins](hook.md#codex-cli); that
+   TOML path is untested in a host.
 8. `loadout mcp --http`; see [library search over MCP](mcp.md#chatgpt-over-http).
 
 Backlog D3 tests the desktop and IDE hosts by hand and updates this table.

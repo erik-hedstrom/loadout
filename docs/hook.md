@@ -13,10 +13,7 @@ claude plugin marketplace add erik-hedstrom/loadout
 claude plugin install loadout@loadout
 ```
 
-You can also use `/plugin` inside a session. Checked in one headless
-`claude -p --plugin-dir plugins/loadout` run
-([RESULTS](../bench/RESULTS.md#the-hook-plugin-in-the-claude-code-cli-2026-10-08));
-the marketplace install and the desktop app's Code tab: untested.
+You can also use `/plugin` inside a session.
 
 For loadout running in WSL behind Windows Claude Code, use `loadout setup
 claude-code --windows` and merge its settings.json hook snippet into
@@ -34,7 +31,7 @@ Then trust the hook with `/hooks` in Codex. The `loadout-codex` plugin also
 attaches the [library search](mcp.md). For loadout in WSL behind Windows
 Codex, merge the TOML from `loadout setup codex --windows` into Codex's
 config instead: it carries the `wsl.exe` wrapper for the hook and the search
-server, which the plugin's fixed commands cannot. Untested in a host.
+server, which the plugin's fixed commands cannot.
 
 What the hook adds, and when: [DESIGN.md](../DESIGN.md#prompt-hook).
 
