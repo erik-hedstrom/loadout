@@ -14,14 +14,13 @@ skips one- or two-word prompts such as `yes` or `go on` unless they name a
 `/`, `@` or `$` reference (`isFollowUp` in `src/hook.ts`). MCP servers and the
 model tier are chosen when the launcher starts a session, and the tier reaching
 the agent is untested ([docs/hosts.md](../hosts.md), note 2). The Codex hook is
-left out until a live run checks it (backlog D2). It makes no claim a benchmark
-has to back.
+left out until a live run checks it (backlog D2).
 Leave the website field empty until there is a page to point to.
 
 ## Topics
 
 Repository counts come from GitHub search on 2026-10-12 (`topic:<name>`), so
-each topic is one people use. They show how crowded a topic is; how a topic
+each counted topic is one people use. They show how crowded a topic is; how a topic
 affects who finds loadout is not measured.
 
 | Topic | Repos | Why |
@@ -52,13 +51,13 @@ narrower choice.
    [docs/brand/social-preview.png](../brand/social-preview.png) (1280 x 640).
    [social-preview.svg](../brand/social-preview.svg) is the source.
 4. Check it: paste the repo URL into a private chat or a link-preview tool and
-   confirm the image shows the name, tagline and `$0.0011`.
+   confirm the image shows the name, tagline and `$0.0011–0.0012`.
 
-The image's one figure, `$0.0011 per routing decision`, is from
-[v4](../../bench/RESULTS.md#v4-2026-10-06-realistic-requests-on-the-real-library-judged),
-315 realistic requests. On C1's 300 new requests the mean was $0.0012
-([C1](../../bench/RESULTS.md#c1-2026-10-08-new-held-out-requests)); change
-the figure if you would rather show a range. To change the image, edit the SVG
+The image's one figure, `$0.0011–0.0012 per routing decision`, spans
+[v4](../../bench/RESULTS.md#v4-2026-10-06-realistic-requests-on-the-real-library-judged)
+(315 realistic requests, $0.0011) and
+[C1](../../bench/RESULTS.md#c1-2026-10-08-new-held-out-requests) (300 new
+requests on current code, $0.0012), the same range the README gives. To change the image, edit the SVG
 and render the PNG again at an exact 1280 x 640 viewport, for example with
 Puppeteer's `page.setViewport` and `page.screenshot`; Chrome's
 `--window-size` flag leaves a blank strip at the bottom.

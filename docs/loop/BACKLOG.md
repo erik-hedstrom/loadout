@@ -784,7 +784,8 @@ Acceptance: `test/` holds one file per module, with shared fakes in
 **E5. Releases.**
 
 Acceptance: changesets or release-please, with a CHANGELOG generated from
-PRs.
+PRs. A hand-written CHANGELOG.md exists since B4; the tool must take it over
+rather than start a second one.
 
 **E6. Architecture diagram.**
 
