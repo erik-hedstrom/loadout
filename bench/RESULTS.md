@@ -404,8 +404,8 @@ was present. The hook added `<skill_relevance>` context on all 10 prompts.
 - **In 6, it also injected one skill's full text:** `mcp-builder`,
   `changelog-generator`, `vendor-review`, `uncertainty-and-units`,
   `security-threat-model` and `statistical-analysis`. Whether the judge rates
-  each one useful is not shown for this arm; the hook arm above opened the last
-  two on the same requests. Whether Claude followed the injected text is not
+  each one useful is not shown for this arm; the hook arm above opened
+  `uncertainty-and-units` and `statistical-analysis` on the same requests. Whether Claude followed the injected text is not
   measured.
 - **Claude opened no library skill (0 of 10).** On the other 4 requests the
   context only pointed to a skill. It says to call `load_skill`, or to read
@@ -416,8 +416,8 @@ was present. The hook added `<skill_relevance>` context on all 10 prompts.
   requested permissions to read from \\\\wsl.localhost\\…\\SKILL.md, but you
   haven't granted it yet". In a headless run nobody can grant it.
 - 7 runs used their 8 turns, mostly on shell commands that were not approved.
-  3 answered in text.
-- One run made one successful `Skill` call. That tool reaches only skills
+  3 finished: 2 answered in text without a tool call, and 1 made one
+  successful `Skill` call, then wrote files. That tool reaches only skills
   installed in Claude Code, not the library, so it does not count as opened.
 
 So this shows the headless case, with loadout in WSL behind Windows Claude
