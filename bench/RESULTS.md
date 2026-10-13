@@ -405,8 +405,8 @@ was present. The hook added `<skill_relevance>` context on all 10 prompts.
   `changelog-generator`, `vendor-review`, `uncertainty-and-units`,
   `security-threat-model` and `statistical-analysis`. Whether the judge rates
   each one useful is not shown for this arm; the hook arm above opened
-  `uncertainty-and-units` and `statistical-analysis` on the same requests. Whether Claude followed the injected text is not
-  measured.
+  `uncertainty-and-units` and `statistical-analysis` on the same requests.
+  Whether Claude followed the injected text is not measured.
 - **Claude opened no library skill (0 of 10).** On the other 4 requests the
   context only pointed to a skill. It says to call `load_skill`, or to read
   `SKILL.md` in the folder given. The plugin has no `load_skill`; that was the
