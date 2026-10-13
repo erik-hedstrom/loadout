@@ -1,10 +1,10 @@
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterAll, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_CONFIG, type Config } from '../src/config.js';
+import { DEFAULT_CONFIG, loadoutHome, type Config } from '../src/config.js';
 import { jevClient, JevError, validateResponse, type Question, type SystemOneClient } from '../src/jev.js';
 import { claudeArgs, claudeHookSettings, codexArgs, hookCommand, hostSetup, launch, loaderArgs, materialize, searchServer, toToml } from '../src/launch.js';
 import { hookOutput, isFollowUp, HOOK_FAILURE_NOTE, JEV_FALLBACK_NOTE, promptContext } from '../src/hook.js';
@@ -69,6 +69,22 @@ function fakeClient(relevance: Record<string, number>, opts: { tier?: string; ne
 
 describe('E9 security', () => {
   const config = { ...DEFAULT_CONFIG, search: false, embeddings: false };
+
+  it('ignores an empty LOADOUT_HOME and refuses a relative one, so a repo cannot supply the config', () => {
+    try {
+      vi.stubEnv('LOADOUT_HOME', '');
+      expect(loadoutHome()).toBe(join(homedir(), '.loadout'));
+      for (const relative of ['.loadout', './x', 'x/../y']) {
+        vi.stubEnv('LOADOUT_HOME', relative);
+        expect(() => loadoutHome()).toThrow('absolute');
+      }
+      const absolute = join(tmpdir(), 'loadout-home');
+      vi.stubEnv('LOADOUT_HOME', absolute);
+      expect(loadoutHome()).toBe(absolute);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
   const runRoute = async (library: ReturnType<typeof scanLibrary>) => {
     const { client } = fakeClient(Object.fromEntries(library.map((c) => [c.name, 0.99])));
     return route({ task: TASK, repo: REPO, library, config, client });
