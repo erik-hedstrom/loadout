@@ -1,8 +1,9 @@
 # C2 protocol: does the small tier plus loadout match the large tier?
 
 Backlog item C2. The fixtures in this folder and this protocol were written
-before any run. Not built yet (the local half): the runner, the text
-extraction, the check script and the judge script.
+before any run. Not built yet (the local half): the runner, the sandbox
+self-check, the credential probe, the text extraction, the check script and
+the judge script.
 
 ## Provenance of the tasks
 
@@ -27,27 +28,77 @@ extraction, the check script and the judge script.
 
 ## Isolation
 
-The repo is public and holds the answers (`KEY.md`, the generator). So:
-- Each run starts in a fresh folder outside the checkout, holding a copy of
-  only that task's `inputs` from [index.json](index.json) (not `task.md`, not
-  `KEY.md`).
-- The runs happen in a container or throwaway user that cannot see the
-  checkout. The plugin is a copy of `plugins/loadout` outside the checkout;
-  `loadout` comes from a packed build (`npm pack`), not from the checkout.
-- No network for the agent: WebFetch and WebSearch are disallowed, and
-  egress allows only the Anthropic API (plus Jev's API for the loadout
-  hook and MCP server).
+The repo is public and holds the answers (`KEY.md`, the generator). `Bash` runs
+without limits, so the sandbox, not the tool list, is the boundary. A run does
+not start until the sandbox meets all of this:
+- **A container or VM, one per run, destroyed after it.** A throwaway user on
+  the host does not qualify: it shares the host's files, processes, disk and
+  network. The runner copies the outputs out; nothing is mounted back.
+- **Nothing from the host.** No bind mounts or host volumes (the run folder is
+  a fresh volume), no container-runtime socket, no `--privileged`, no added
+  capabilities, `no-new-privileges`, and a non-root user inside. No checkout,
+  and none of `~/.claude`, `~/.codex`, `~/.loadout`, an SSH agent or a cloud
+  credential. So the Docker tasks (`devops-*`) cannot run `docker`, and the
+  judge reads the files instead.
+- **Limits set from outside**, so the agent cannot lift them: CPU, memory,
+  process count, disk for the run folder and the writable layer, and the
+  15-minute wall clock.
+- **Egress enforced outside the container** (a proxy or firewall on the
+  network, not a setting inside it). Allowed: the Anthropic API and, for
+  `small-loadout`, the Jev API. Denied: the host, other containers, private and
+  link-local addresses (cloud metadata included). WebFetch and WebSearch are
+  also disallowed, but that is a tool setting, not isolation.
+- Each run starts in a fresh folder holding a copy of only that task's `inputs`
+  from [index.json](index.json) (not `task.md`, not `KEY.md`).
+- The plugin is a copy of `plugins/loadout` outside the checkout; `loadout`
+  comes from a packed build (`npm pack`), not from the checkout.
 - Nothing can be installed during a run, so the image comes with Node 22+,
   Python 3 with python-docx, openpyxl, python-pptx, pypdf, pdfplumber, pandas and
   matplotlib, and sqlite3. Versions go into the results.
+- The check scripts and the text extraction run in the same sandbox, after
+  `claude` has exited and the credentials are deleted from it, under the same
+  limits. They execute or parse what the agent wrote (`node --test`, `npm test`,
+  docx and pptx files), so they never run on Erik's machine.
+- Runs and judging happen on a local machine where the CLIs are logged in, not
+  in a cloud session.
 
-## Keys
+The smoke run starts with a self-check from inside the sandbox, as the agent's
+`Bash` would see it. It passes when none of these exist: a host path, a
+runtime socket, a route to the host or to a metadata address, a host name
+outside the allowlist that resolves and connects. The configured limits must
+show. Its output goes into the results.
 
-- `small-loadout` uses a dedicated Jev key, made for this run and revoked
-  after it. The bare arms' environment has no Jev key at all.
+## Credentials
+
+What loadout does today (`resolveApiKey` in `src/config.ts`): it reads the Jev
+key from the environment variable named there, or else from the file that
+`jev.apiKeyFile` in `$LOADOUT_HOME/config.json` names. The hook
+(`loadout hook claude`) and `loadout mcp` are child processes of `claude`.
+They run as the same user, in the same container, as the agent's `Bash`. So
+whatever key those two processes can read, `Bash` can read: `env`, a key file,
+`/proc/<pid>/environ`. loadout has no way to give them a key and withhold it
+from the shell, and this protocol does not claim one. What it does:
+- **Not in the environment.** The key sits in a file outside the run folder,
+  mode 0400, named by `jev.apiKeyFile`; `LOADOUT_HOME` (not a secret) points at
+  the home holding `config.json` and the library, in `claude`'s environment
+  and in the loadout server's `env` in `$MCP`. `env` and `printenv` then show
+  nothing. This closes the accidental path only. A skill's text that persuades
+  the agent to `cat` the file still works.
+- **Treated as disclosed.** The key can enter a tool result and so be sent to
+  Anthropic before any scan sees it. It is dedicated to this run, never used
+  elsewhere, and revoked right after the last run. The bare arms' environment
+  has no Jev key and no loadout config at all.
+- **Probed.** Before the smoke run a script, running as the agent's user, tests
+  which of `env`, the key file and `/proc/*/environ` yield the key, and prints
+  only yes or no for each. The answer goes into the results next to the
+  win rates.
+- **Scanned.** Before committing, every collected file and the stream are
+  scanned for the key's value and for key-shaped strings (the patterns in
+  `test/c2-fixtures.test.ts`). The runner never prints the key.
+- **The Anthropic credential is in the same position.** `claude` needs one in
+  the sandbox; `Bash` can read it. It is injected at start, never mounted from
+  `~/.claude` on the host, and revoked after the run.
 - Collected outputs leave out `node_modules`, `.venv` and `__pycache__`.
-- Before committing, scan every collected file for the key's value and for
-  key-shaped strings (the patterns in `test/c2-fixtures.test.ts`).
 
 ## Arms
 
@@ -66,7 +117,7 @@ claude -p "$PROMPT" --output-format stream-json --verbose --include-hook-events 
 | Arm | `$MODEL` | `$MCP` | Additions |
 |---|---|---|---|
 | `small-bare` | `claude-haiku-5-5` | `{"mcpServers":{}}` | none |
-| `small-loadout` | `claude-haiku-5-5` | `{"mcpServers":{"loadout":{"command":"loadout","args":["mcp"]}}}` | `--plugin-dir <plugin copy>`; `$EXTRA_TOOLS` = `mcp__loadout__find_skills mcp__loadout__load_skill`; the Jev key and `LOADOUT_HOME` (a loadout home with the full library) in the environment |
+| `small-loadout` | `claude-haiku-5-5` | `{"mcpServers":{"loadout":{"command":"loadout","args":["mcp"],"env":{"LOADOUT_HOME":"<home>"}}}}` | `--plugin-dir <plugin copy>`; `$EXTRA_TOOLS` = `mcp__loadout__find_skills mcp__loadout__load_skill`; `LOADOUT_HOME=<home>` in the environment, a loadout home with the full library; the Jev key as set out under Credentials |
 | `large-bare` | `claude-sonnet-5-5` | `{"mcpServers":{}}` | none |
 
 - Not B1's isolated configuration: that one adds `--restricted`,
@@ -75,10 +126,12 @@ claude -p "$PROMPT" --output-format stream-json --verbose --include-hook-events 
 - `plugins/loadout` is hook-only. The hook tells the agent to call
   `load_skill` or read a skill's SKILL.md, so the loadout arm also gets
   `loadout mcp` with its two read-only tools pre-approved, as the launchers
-  do. This is the setup RESULTS measured at 6 of 10 sessions opening a useful
-  skill.
-- `Bash` without limits is safe only because the sandbox is throwaway and
-  offline. All arms get the same tools and the same image.
+  do. RESULTS measured this pairing, search tool plus hook, at 6 of 10
+  sessions opening a useful skill, on Sonnet 5.5 with 8 turns and no shell
+  approved. That was a different model and tool set, so it does not predict
+  this run.
+- `Bash` without limits is acceptable only inside the sandbox above. All arms
+  get the same tools and the same image.
 - **Caps.** 15 minutes wall clock per run. On a timeout the folder as it
   stands is judged and the run is flagged `capped`. The capped rate per arm is
   reported. In the pilot, loadout runs hit the 6-minute cap 4 times and bare
@@ -86,11 +139,27 @@ claude -p "$PROMPT" --output-format stream-json --verbose --include-hook-events 
 - **Collected per run:** the stream (init event, hook events, result event
   with `total_cost_usd`, tokens, turns and duration), the final message,
   every file added or changed relative to the inputs, and for
-  `small-loadout` the hook's selection and Jev cost. Raw outputs go to
-  `bench/results/<timestamp>-c2/`; transcripts stay local.
-- **Order.** Arms run in separate batches, resumable per task.
+  `small-loadout` the hook's selection and Jev cost. The full stream, with
+  tool results, stays local; the committed record is the init, hook and result
+  events, the final message and the files.
+- **Committed:** under `bench/results/<timestamp>-c2/`, so others can
+  recompute: those records, the check results, the sandbox self-check, the
+  credential probe, the judge inputs as the judge saw them (after
+  redaction), every verdict in both orders with its guess, and the redaction
+  counts. Erik reviews the folder before anything is pushed, since the repo is
+  public.
+- **Order and concurrency.** Arms run in separate batches, resumable per
+  task, one run at a time. The 13.5 h bound below assumes that; parallel runs
+  would also change how often the cap and rate limits hit.
+- **Failed runs.** A run that dies for a reason outside the agent (API error,
+  rate limit, container fault) is rerun once from a clean folder, and the
+  count is reported per arm. A run is never rerun because of how its output
+  looks.
 
-**Smoke run first:** one task, each arm once. It passes when:
+**Smoke run first:** one task, each arm once. Its outputs are not judged and
+are not in the results. It passes when:
+- the sandbox self-check and the credential probe (see Isolation and
+  Credentials) have run and their output is recorded;
 - the init events list the same tools in all arms, apart from the plugin
   hook and the two loadout tools in `small-loadout`;
 - the init event shows the model asked for;
@@ -142,10 +211,16 @@ judged results. The judge does not see them.
   correctness against the key first, then completeness, then clarity. Answer
   `A`, `B` or `tie`, with one sentence, and which output the judge believes
   had extra guidance (`A`, `B` or `unsure`).
-- **Verdict per pair and task.** A side wins if it is preferred in both orders,
-  or preferred in one and tied in the other. Opposite preferences, or two
-  ties, count as a tie. The number of opposite-preference tasks is reported as
-  the judge's position bias.
+- **Verdict per pair and task**, as in the pilot ([outcome.ts](../../outcome.ts),
+  RESULTS): a side wins only if it is preferred in both orders. Two ties are a
+  tie. Anything else is a split: opposite preferences (position bias), or a
+  preference in one order and a tie in the other. A split is never a win for
+  either side. Ties and splits are reported separately, and splits are broken
+  down into opposite preferences and preference-plus-tie.
+- **Sequential.** The 108 judge calls run one at a time (concurrency 1), not
+  through the two-way pool `outcome.ts` uses for its judge, so a judge's cached
+  prompt stays warm. Calls are grouped by task, with the fixed part of the
+  prompt (instructions, `task.md`, inputs, the key entry) first.
 
 ## Template leakage
 
@@ -177,10 +252,11 @@ arm it is reading. Steps taken:
 - **Primary comparisons, fixed before any run:** `small-loadout` vs
   `small-bare` (does loadout help the small tier) and `small-loadout` vs
   `large-bare` (does it close the gap). The third pair is context.
-- **Win rate:** wins / (wins + losses), ties excluded, with a 95% Wilson
-  interval. Wins, ties and losses are always shown. With 14 decided tasks the
-  interval clears 50% only from 11 wins (79%); smaller effects are "not
-  shown".
+- **Win rate:** wins / (wins + losses), with a 95% Wilson interval. Ties and
+  splits are left out of the rate but always shown next to it, so a reader can
+  see how many tasks it rests on. With 14 decided tasks the interval clears
+  50% only from 11 wins (79%); with fewer decided tasks the bar is higher (7 of
+  8, 9 of 10, 10 of 12). Anything smaller is "not shown".
 - **Cost per task:** mean and median `total_cost_usd` per arm (a notional
   figure on a subscription), plus Jev cost for `small-loadout`. Also cost per
   task won, capped rate, median turns and median duration. The Codex CLI
@@ -189,6 +265,16 @@ arm it is reading. Steps taken:
 - **Per task:** a table of verdicts, so a reader sees which tasks drive any
   difference.
 - Negative and null results go into `bench/RESULTS.md` with the numbers.
+
+## Frozen before the first run
+
+The commit that merges this protocol fixes the tasks, `KEY.md`, the checks,
+the redaction rules, the primary comparisons and the analysis. The judge prompt
+and the extraction script do not exist yet; they are committed before the first
+full run. After that, none of these changes. A change forced by a fault in the
+harness goes into RESULTS as a deviation, with the reason and the runs it
+touched. No tuning follows from these results on these tasks (all 18 are test
+tasks).
 
 ## Expected spend (local run)
 
@@ -213,13 +299,15 @@ stays below that.
 |---|---:|---|
 | `large-bare` runs | 18 | $6-27 |
 | `small-bare` and `small-loadout` runs | 36 | $0.60-2.70 (Haiku 4.5: $6-27) |
-| Jev routing for `small-loadout` ($0.0012 per decision, C1) | 18 | about $0.02 |
+| Jev routing for `small-loadout` ($0.0012 per decision, [C1](../../RESULTS.md#c1-2026-10-08-new-held-out-requests)), hook only | 18 | about $0.02; `find_skills` calls add more, not measured |
 | Smoke run, one run per arm | 3 | $0.35-1.65 (Haiku 4.5: $0.65-3.00) |
-| Codex judging (3 pairs x 2 orders x 18 tasks) | 108 | plan quota, cost not reported |
+| Codex judging (3 pairs x 2 orders x 18 tasks), sequential | 108 | plan quota, cost not reported |
 
+Prices are Anthropic's list prices as of 2026-10-06, not figures from RESULTS.
 Total notional Claude cost: about $7-31 with Haiku 5.5, $12-57 with Haiku
-4.5. It becomes cash only if the runs go through an API key instead of the
-subscription. Wall clock: at most 54 x 15 minutes (13.5 h). The smoke run
+4.5. It becomes cash if the sandbox's Anthropic credential is an API key
+rather than a subscription token (see the open decisions). Wall clock: at most
+54 x 15 minutes (13.5 h), plus the smoke run. The smoke run
 replaces these assumptions with measured figures before the full run is
 approved.
 
@@ -229,6 +317,20 @@ approved.
   does not record which model it resolved to.
 - Sonnet 5.5 or Opus as the large tier. The `invoke.ts` agent runs used
   Sonnet 5.5; B1 and the hook probe ran on Haiku, and the judges on Opus.
-- The sandbox (container or throwaway user) and unrestricted `Bash` inside it.
+- The sandbox: container or VM (a throwaway user is ruled out above), and the
+  engine and the egress mechanism that enforce the list under Isolation.
+- The credentials, which loadout cannot hide from `Bash` in one sandbox (see
+  Credentials):
+  - **Jev key.** (a) Accept the exposure with a dedicated, revoked key, a
+    spend cap if the provider offers one, and the probe's result published. (b) Or
+    run the hook and `loadout mcp` as a second user through a wrapper, and let
+    only that user read the key file; loadout does not ship this and the
+    protocol does not test it beyond the probe. (c) Routing with the lexical
+    router needs no key but measures a different product, so it cannot be the
+    primary comparison. Recommended: (a).
+  - **Anthropic credential.** A dedicated API key with a spend limit (cash,
+    and the exposure ends with revocation) or a long-lived subscription token
+    tied to Erik's account (no cash, but a disclosed token is worth more).
+    Recommended: the API key.
 - A Codex-family replication (gpt-5.6-luna against gpt-6.1-sol), which would
   need a Claude judge for the Codex outputs. Not in this protocol.
