@@ -2,7 +2,8 @@
 
     python3 -B bench/fixtures/c2/make_inputs.py
 
-Needs python-docx, openpyxl, python-pptx and reportlab. Output is deterministic
+Written with Python 3.13, python-docx 1.2.0, openpyxl 3.1.5, python-pptx 1.0.2
+and reportlab 5.0.1; other versions may change bytes. Output is deterministic
 (fixed seeds, fixed zip timestamps, invariant PDF), so a rerun changes no bytes.
 Everything in here is invented: names, companies and numbers are fictional.
 """
@@ -25,7 +26,7 @@ from reportlab.pdfgen import canvas
 
 ROOT = Path(__file__).resolve().parent
 FIXED = dt.datetime(2026, 1, 1, 0, 0, 0)
-ORDERS_SEED = 8
+SEEDS = {"budget": 11, "sales": 7, "experiment": 23, "orders": 8, "access_log": 3}
 
 
 def out(task: str, name: str) -> Path:
@@ -36,18 +37,19 @@ def out(task: str, name: str) -> Path:
 
 def freeze_zip(path: Path) -> None:
     """Office files are zips whose entries carry the time they were written."""
-    tmp = Path(tempfile.mkdtemp()) / "x.zip"
-    with zipfile.ZipFile(path) as src, zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as dst:
-        for info in sorted(src.infolist(), key=lambda i: i.filename):
-            clone = zipfile.ZipInfo(info.filename, FIXED.timetuple()[:6])
-            clone.compress_type = zipfile.ZIP_DEFLATED
-            clone.external_attr = 0o644 << 16
-            data = src.read(info.filename)
-            if info.filename == "docProps/core.xml":
-                # openpyxl stamps the save time into the file.
-                data = re.sub(rb"(<dcterms:modified[^>]*>)[^<]*", rb"\g<1>2026-01-01T00:00:00Z", data)
-            dst.writestr(clone, data)
-    shutil.move(str(tmp), path)
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d) / "x.zip"
+        with zipfile.ZipFile(path) as src, zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as dst:
+            for info in sorted(src.infolist(), key=lambda i: i.filename):
+                clone = zipfile.ZipInfo(info.filename, FIXED.timetuple()[:6])
+                clone.compress_type = zipfile.ZIP_DEFLATED
+                clone.external_attr = 0o644 << 16
+                data = src.read(info.filename)
+                if info.filename == "docProps/core.xml":
+                    # openpyxl stamps the save time into the file.
+                    data = re.sub(rb"(<dcterms:modified[^>]*>)[^<]*", rb"\g<1>2026-01-01T00:00:00Z", data)
+                dst.writestr(clone, data)
+        shutil.move(str(tmp), path)
 
 
 def lease() -> None:
@@ -109,7 +111,7 @@ def budget() -> None:
     ws.merge_cells("A1:E1")
     ws.append([])
     ws.append(["Dept", "Category", "Month", "Amount", "Memo"])
-    rng = random.Random(11)
+    rng = random.Random(SEEDS["budget"])
     depts = ["Marketing", "Mktg", "marketing ", "Engineering", "Eng", "Sales", "Operations", "Ops"]
     cats = ["Software", "Travel", "Contractors", "Events", "Hardware", "Training"]
     months = [dt.datetime(2026, m, 1) for m in range(1, 7)]
@@ -194,7 +196,8 @@ def invoices() -> None:
 def deck() -> None:
     prs = Presentation()
     prs.core_properties.created = prs.core_properties.modified = FIXED
-    prs.core_properties.author = "Operations"
+    # The template's lastModifiedBy is a real person's name.
+    prs.core_properties.author = prs.core_properties.last_modified_by = "Operations"
     title = prs.slides.add_slide(prs.slide_layouts[0])
     title.shapes.title.text = "Operations Update, Q3 2026"
     title.placeholders[1].text = "Team all-hands, 8 October"
@@ -255,7 +258,7 @@ def deck() -> None:
 
 
 def sales() -> None:
-    rng = random.Random(7)
+    rng = random.Random(SEEDS["sales"])
     regions = ["North", "South", "East", "West"]
     skus = {"SKU-100": 14.5, "SKU-205": 32.0, "SKU-310": 8.75, "SKU-415": 120.0, "SKU-520": 54.9, "SKU-630": 19.99}
     rows = []
@@ -290,8 +293,7 @@ def sales() -> None:
 
 
 def experiment() -> None:
-    """B converts slightly worse than A on both devices but reaches more desktop visitors, so it looks better overall."""
-    rng = random.Random(23)
+    rng = random.Random(SEEDS["experiment"])
     base = {"desktop": 0.060, "mobile": 0.025}
     effect = {"A": 1.0, "B": 0.965}
     mix = {"A": {"desktop": 0.40, "mobile": 0.60}, "B": {"desktop": 0.62, "mobile": 0.38}}
@@ -313,7 +315,7 @@ def experiment() -> None:
 
 
 def orders() -> None:
-    rng = random.Random(ORDERS_SEED)
+    rng = random.Random(SEEDS["orders"])
     first = ["Ada", "Ben", "Chen", "Dara", "Eli", "Fay", "Gus", "Hana", "Ivo", "Jun", "Kai", "Lena", "Milo", "Nora", "Omar", "Pia", "Quinn", "Rosa", "Sam", "Tess"]
     last = ["Alder", "Brook", "Cole", "Dunn", "Ellis", "Frost", "Grant", "Hale", "Ito", "Joyce", "Kerr", "Lowe"]
     catalog = [("MUG-01", "Stoneware mug", 1800), ("TEE-02", "Logo tee", 2400), ("TOTE-03", "Canvas tote", 1500),
@@ -335,21 +337,16 @@ def orders() -> None:
                                    "reason": rng.choice(["damaged", "wrong size", "late"])}
             cust["orders"].append(order)
         customers.append(cust)
-    # The same person entered twice, the second time with an upper-case address.
     for src, dst in ((3, 38), (11, 39)):
-        dup = json.loads(json.dumps(customers[src]))
-        dup["id"] = customers[dst]["id"]
-        local, domain = dup["email"].split("@")
-        dup["email"] = local.upper() + "@" + domain
-        for o in dup["orders"]:
-            o["id"] = "X" + o["id"]
-        customers[dst] = dup
+        local, domain = customers[src]["email"].split("@")
+        customers[dst]["name"] = customers[src]["name"]
+        customers[dst]["email"] = local.upper() + "@" + domain
     doc = {"exported_at": "2026-07-01T06:00:00Z", "currency": "USD", "customers": customers}
     out("data-orders-sqlite", "orders.json").write_text(json.dumps(doc, separators=(",", ":")) + "\n")
 
 
 def access_log() -> None:
-    rng = random.Random(3)
+    rng = random.Random(SEEDS["access_log"])
     paths = ["/", "/api/items", "/api/items/17", "/login", "/static/app.js", "/healthz", "/api/orders", "/admin"]
     ips = [f"203.0.113.{n}" for n in (4, 9, 17, 23, 58, 120)] + ["198.51.100.7", "198.51.100.88"]
     start = dt.datetime(2026, 3, 8, 22, 0, 0)

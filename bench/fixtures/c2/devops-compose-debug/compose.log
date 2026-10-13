@@ -1,0 +1,25 @@
+$ docker compose up
+ Container demo-cache-1  Created
+ Container demo-db-1  Created
+ Container demo-api-1  Created
+Attaching to api-1, cache-1, db-1
+db-1     | The files belonging to this database system will be owned by user "postgres".
+db-1     | PostgreSQL init process complete; ready for start up.
+db-1     | 2026-10-09 08:14:02.311 UTC [1] LOG:  database system is ready to accept connections
+api-1    | {"level":30,"msg":"server starting","port":"3000"}
+api-1    | {"level":50,"msg":"database connection failed","err":"connect ECONNREFUSED 127.0.0.1:5432"}
+api-1 exited with code 1
+cache-1  | Ready to accept connections tcp
+
+$ curl -i http://localhost:8080/healthz
+curl: (52) Empty reply from server
+
+$ docker compose down && docker compose up -d && docker volume ls
+DRIVER    VOLUME NAME
+local     demo_dbdata
+$ docker compose exec db ls /var/lib/postgresql/data | head -3
+base
+global
+pg_commit_ts
+$ docker compose down && docker compose up -d && docker compose exec db psql -U app -c '\dt'
+Did not find any relations.

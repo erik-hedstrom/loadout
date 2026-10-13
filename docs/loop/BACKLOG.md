@@ -228,22 +228,11 @@ Acceptance:
 - Blind pairwise judging in both orders, longer caps (15 min).
 - Report win rates with intervals, plus cost per task.
 
-Learnings (cloud half; [fixtures and protocol](../../bench/fixtures/c2/PROTOCOL.md)):
-- 18 tasks (4 controls) with committed inputs in `bench/fixtures/c2/`, written
-  without reading the library, so the tasks do not follow its skills. A
-  committed script generates the docx, xlsx, pptx and pdf inputs.
-- Several tasks carry a planted trap (a total that does not add up, a
-  duplicated customer, a rent table the edit must also change); `KEY.md` lists
-  them for the judge only.
-- Claude wrote the tasks and runs all arms, so the judge is Codex. Leakage of
-  a skill's template is reduced by showing the judge only the final message and
-  files, redacting skill names, and recording the judge's guess of the arm; the
-  rest stays a stated limit.
-- Not done, local: the runner, the text extraction for office files, the judge
-  script, and the runs. At n = 18 per comparison only large differences show.
-- Open for Erik: shell permissions for the runs, and Sonnet 5.5 or Opus as the
-  large tier. Spend estimate is about $45 notional Claude cost (range $20-90),
-  an estimate until a smoke run measures it.
+Learnings (cloud half): [fixtures and protocol](../../bench/fixtures/c2/PROTOCOL.md).
+- 18 tasks (4 controls) with committed inputs and planted traps; `KEY.md`
+  holds the answers, so runs happen outside the checkout, offline.
+- Judging waits for E12 (Codex judges, since Claude wrote the tasks).
+- Open for Erik: which Haiku, the large tier, and the sandbox.
 
 **C3. Tier choice.**
 
