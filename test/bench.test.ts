@@ -56,6 +56,7 @@ describe('benchmark backends', () => {
     { mode: 'hook', windowsAgent: false, problem: 'missing hook' },
     { mode: 'plugin', windowsAgent: false, problem: 'no init' },
     { mode: 'plugin', windowsAgent: false, problem: 'bad init' },
+    { mode: 'plugin', windowsAgent: false, problem: 'plugins not a list' },
     { mode: 'plugin', windowsAgent: false, problem: 'auth failure' },
   ])('records hook evidence and paid rows in $mode (WSL: $windowsAgent, ambient: $ambient, problem: $problem)', async ({ mode, windowsAgent, ambient, problem }) => {
     const dir = join(temp(), "sweep ' $value"), binDir = temp();
@@ -115,7 +116,10 @@ describe('benchmark backends', () => {
       }
       const hooks = Array.from({ length: hookCounts.at(-1)! + (ambient === 'absolute' ? 1 : 0) }, (_, i) => {
         const fields = { hook_id: `hook-${i}`, hook_name: 'UserPromptSubmit', hook_event: probe.hook.event };
-        const stdout = !hasContext(i) ? '' : JSON.stringify({ hookSpecificOutput: { hookEventName: probe.hook.event, additionalContext: probe.hook.additionalContext } });
+        const stdout = !hasContext(i) ? '' : JSON.stringify({ hookSpecificOutput: { hookEventName: probe.hook.event, additionalContext: `${probe.hook.additionalContext}
+<skill name="skill-a" trust="third-party">
+body
+</skill>` } });
         return [
           { type: 'system', subtype: 'hook_started', ...fields },
           { type: 'system', subtype: 'hook_response', ...fields, stdout, output: stdout, stderr: probe.hook.stderr, exit_code: probe.hook.exit_code, outcome: probe.hook.outcome },
@@ -125,7 +129,7 @@ describe('benchmark backends', () => {
       child.stdout = new PassThrough(); child.stderr = new PassThrough();
       queueMicrotask(() => {
         child.stdout!.emit('data', Buffer.from([
-          ...(problem === 'no init' ? [] : [problem === 'bad init' ? '{"type":"system","subtype":"init","plugins":' : { type: 'system', subtype: 'init', ...inventory }]),
+          ...(problem === 'no init' ? [] : [problem === 'bad init' ? '{"type":"system","subtype":"init","plugins":' : problem === 'plugins not a list' ? { type: 'system', subtype: 'init', plugins: null } : { type: 'system', subtype: 'init', ...inventory }]),
           ...hooks,
           { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Read', id: 'read-a', input: { file_path: '/library/skills/skill-a/SKILL.md' } }] } },
           { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'read-a' }] } },
@@ -141,12 +145,12 @@ describe('benchmark backends', () => {
       process.argv = [process.execPath, 'bench/invoke.ts', dir, '--agent', 'claude', '--mode', mode, '--ids', 'a,b'];
       vi.resetModules();
       if (ambient || problem && problem !== 'silent hook') {
-        const reason = problem === 'auth failure' ? 'agent failed before the model ran' : problem === 'no init' || problem === 'bad init' ? 'no startup inventory' : ambient === 'plugin' ? 'ambient loadout plugin; measurement invalid' : ambient === 'absolute' ? 'uncounted loadout hook context; measurement invalid' : problem === 'missing plugin' ? 'missing loadout plugin; measurement invalid' : mode === 'routed' || mode === 'search' ? 'unexpected loadout UserPromptSubmit hook; measurement invalid' : 'expected exactly one loadout UserPromptSubmit hook; measurement invalid';
+        const reason = problem === 'auth failure' ? 'agent failed before the model ran' : problem === 'no init' || problem === 'bad init' || problem === 'plugins not a list' ? 'no startup inventory' : ambient === 'plugin' ? 'ambient loadout plugin; measurement invalid' : ambient === 'absolute' ? 'uncounted loadout hook context; measurement invalid' : problem === 'missing plugin' ? 'missing loadout plugin; measurement invalid' : mode === 'routed' || mode === 'search' ? 'unexpected loadout UserPromptSubmit hook; measurement invalid' : 'expected exactly one loadout UserPromptSubmit hook; measurement invalid';
         await expect(import('../bench/invoke.js')).rejects.toThrow(reason);
         const rows = readFileSync(join(dir, `invoke-claude-${mode}.jsonl`), 'utf8').trim().split('\n').map((line) => JSON.parse(line));
         expect(rows).toHaveLength(1);
         expect(calls).toHaveLength(1);
-        expect(rows[0]).toMatchObject({ id: 'a', invalid: reason, costUsd: problem === 'auth failure' ? 0 : 0.05, exit: problem === 'no init' ? 1 : 0, timedOut: false, invoked: ['skill-a'], tools: ['Read'], inventory: problem === 'no init' || problem === 'bad init' ? null : reduced(inventories[0]!), hookInvocations: hookCounts[0]!, hookEventCount: hookCounts[0]! + (ambient === 'absolute' ? 1 : 0) });
+        expect(rows[0]).toMatchObject({ id: 'a', invalid: reason, costUsd: problem === 'auth failure' ? 0 : 0.05, exit: problem === 'no init' ? 1 : 0, timedOut: false, invoked: ['skill-a'], tools: ['Read'], inventory: problem === 'no init' || problem === 'bad init' || problem === 'plugins not a list' ? null : reduced(inventories[0]!), hookInvocations: hookCounts[0]!, hookEventCount: hookCounts[0]! + (ambient === 'absolute' ? 1 : 0) });
         if (problem === 'auth failure') expect(rows[0].outcome).toEqual({ isError: true, subtype: 'success' });
         expect(rows[0].hooks).toHaveLength(hookCounts[0]! + (ambient === 'absolute' ? 1 : 0));
         return;
@@ -175,6 +179,7 @@ describe('benchmark backends', () => {
         expect(JSON.stringify(row)).not.toMatch(/ambient|other-plugin|skill_relevance/);
         expect(row).not.toHaveProperty('invalid');
         expect(row.hooks).toHaveLength(hookCounts[i]!);
+        expect(row.hooks.map((h: { injected: string[] }) => h.injected)).toEqual(row.hooks.map((h: { context: boolean }) => h.context ? ['skill-a'] : []));
         expect(row.ms).toBeGreaterThanOrEqual(0);
       }
       expect(process.env.PATH).toBe(fakePath);

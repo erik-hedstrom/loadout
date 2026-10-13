@@ -82,7 +82,7 @@ interface HookExecution { id: string; name: string; event: string; exit_code?: n
 const isLoadout = (name: string) => /^loadout(?:@|$)/i.test(name);
 
 function checkInventory(inventory: Inventory | undefined, hookInvocations: number, uncountedContext: number, pluginDir?: string): string | undefined {
-  if (!inventory || !Array.isArray(inventory.plugins)) return 'no startup inventory';
+  if (!inventory) return 'no startup inventory';
   const normalize = (p: string) => {
     const path = p.replace(/\\/g, '/').replace(/\/$/, '');
     return toPath('/') !== '/' || process.platform === 'win32' ? path.toLowerCase() : path;
@@ -117,7 +117,8 @@ function toolEvents(stream: string): { events: Event[]; hooks: HookExecution[]; 
       continue;
     }
     if (e.type === 'system' && e.subtype === 'init') {
-      inventory = { plugins: e.plugins };
+      // A malformed init counts as no inventory, so the row is still saved as invalid.
+      inventory = Array.isArray(e.plugins) ? { plugins: e.plugins } : undefined;
     } else if (e.type === 'system' && e.hook_event === 'UserPromptSubmit' && (e.subtype === 'hook_started' || e.subtype === 'hook_response')) {
       const hook: HookExecution = hooks.get(e.hook_id) ?? { id: e.hook_id, name: e.hook_name, event: e.hook_event };
       if (e.subtype === 'hook_response') {
@@ -216,7 +217,8 @@ for (const id of values.ids.split(',')) {
     // Rows are committed to a public repo: keep what validity needs, not the user's plugin
     // list, local paths or the hook's skill text.
     inventory: inventory ? { loadoutPlugins: inventory.plugins.filter((p) => isLoadout(p.name)).map((p) => p.name), otherPlugins: inventory.plugins.filter((p) => !isLoadout(p.name)).length } : null,
-    hooks: hooks.map(({ additionalContext, ...h }) => ({ ...h, context: additionalContext?.includes('<skill_relevance>') ?? false })),
+    // `injected` names the skills whose full text the hook put in context: those reach the agent without an open.
+    hooks: hooks.map(({ additionalContext, ...h }) => ({ ...h, context: additionalContext?.includes('<skill_relevance>') ?? false, injected: [...(additionalContext ?? '').matchAll(/<skill name="([^"]*)"/g)].map((m) => m[1]!) })),
     hookInvocations,
     hookEventCount: hooks.length,
     hookContext: hooks.some((h) => h.additionalContext?.includes('<skill_relevance>')),

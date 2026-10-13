@@ -183,7 +183,7 @@ cross-vendor agents). Erik publishes.
 | C5 | P2 | Retrieval beyond 200 candidates (Jev tournament) | Codex | cloud | todo |
 | C6 | P2 | Multi-intent requests | Claude | cloud | todo |
 | C7 | P1 | Recommended packs with measured upside (first: frontend with Impeccable) | Codex (harness) + Claude (runs) | cloud (fixtures) + local (runs) | todo (after B1, C2) |
-| C8 | P0 | Skill use with the hook-only plugin | Claude | local | done ([#25](https://github.com/erik-hedstrom/loadout/pull/25)): 0 of 10 headless; the hook routes on all 10, but the plugin cannot open what it routes to (D13) |
+| C8 | P0 | Skill use with the hook-only plugin | Claude | local | done ([#25](https://github.com/erik-hedstrom/loadout/pull/25)): headless, the hook injected a skill's text in 6 of 10; Claude opened 0 of 10, none of the 4 it was only pointed to (D13) |
 
 **C1. New held-out requests.**
 
@@ -304,12 +304,17 @@ Acceptance: a third row in that RESULTS table, with raw results. The README's
 "has not been measured" is then replaced by the number.
 
 Learnings (2026-10-12, [#25](https://github.com/erik-hedstrom/loadout/pull/25)):
-- **0 of 10.** The hook added `<skill_relevance>` context on all 10 prompts;
-  Claude opened no skill. The context points to `load_skill`, which the
-  plugin lacks, or to the library folder, which a headless run may not read
-  (probe: "requested permissions to read … but you haven't granted it yet").
-  The 6 of 10 arm opened skills through the MCP server's `load_skill`.
-  Interactive sessions would prompt instead: not measured. Next: D13.
+- **Injected 6, opened 0.** The hook added `<skill_relevance>` context on all
+  10 prompts and injected one skill's full text in 6. Claude opened no skill.
+  On the 4 where it was only pointed to one, the context names `load_skill`,
+  which the plugin lacks, or the library folder, which a headless run may not
+  read (probe: "requested permissions to read … but you haven't granted it
+  yet"). The 6 of 10 arm opened skills on those same 4 through the MCP
+  server's `load_skill`. Interactive sessions would prompt instead: not
+  measured. Next: D13.
+- The first write-up counted only opens and missed the injections, which sat
+  in hook text that the privacy redaction then dropped. Rows now list the
+  injected skill names per hook (Sol's review caught it).
 - The bench took six review rounds to measure the right thing. Skill context is
   not an execution counter (a hook legitimately returns nothing). A PATH shim
   the bench owns counts invocations, plus a `context` mark for invocations
@@ -563,19 +568,22 @@ throwaway `CODEX_HOME`):
 
 **D13. The plugin opens what its hook routes to.**
 
-Why (C8, 2026-10-12): the hook-only Claude Code plugin routed on 10 of 10
-prompts, and Claude opened 0 of 10 skills in headless runs. Its context points
-to `load_skill`, which only the MCP server has, or to library folders outside
-the working folder, which a headless run may not read. The Codex plugin
-carries the MCP server and is not affected by the first part.
+Why (C8, 2026-10-12): in headless runs of the hook-only Claude Code plugin,
+the hook injected a skill's full text on 6 of 10 prompts and only pointed to a
+skill on the other 4. Claude opened none of those 4: the context points to
+`load_skill`, which only the MCP server has, or to library folders outside the
+working folder, which a headless run may not read. With the MCP server, the
+hook arm opened skills on the same 4. The Codex plugin carries the MCP server
+and is not affected by the first part.
 
 Acceptance:
 - The context names only ways to open a skill that the installed setup has.
 - The plugin arm in `bench/invoke.ts` re-run on the same 10 requests, against
   the 6 of 10 and 2 of 10 rows.
 - Erik picks the approach first. Candidates: add the MCP server to the plugin
-  (B1: +546 tokens per request, which D10 avoided); inject the routed skill's
-  text into the hook context; or a Claude-side way to read the library.
+  (B1: +546 tokens per request, which D10 avoided); inject more often, since
+  the hook already injects confident matches; or a Claude-side way to read
+  the library.
 
 **D7. `loadout doctor`.**
 
@@ -832,4 +840,4 @@ integration layers, readable in both light and dark themes.
 | 2026-10-09 (iter 5) | #13 label-gated CI (`ci-full` label created), #11 and #12 E8 bench/src, #14 D11, #15 E8 docs, #16 C1 | — | Jev $0 / Claude: merges and conflict fixes / Codex: none | Actions runs again (GitHub Pro). Next work goes to a cloud session (Claude weekly usage at 96%) |
 | 2026-10-09 (iter 6, cloud) | — | Open PRs, each updating its own row: [#17](https://github.com/erik-hedstrom/loadout/pull/17) backlog statuses, [#18](https://github.com/erik-hedstrom/loadout/pull/18) D8, [#19](https://github.com/erik-hedstrom/loadout/pull/19) D6, [#20](https://github.com/erik-hedstrom/loadout/pull/20) D7, [#21](https://github.com/erik-hedstrom/loadout/pull/21) D9 | Jev $0 (no key in the cloud environment) / Claude: cloud-session credit / Codex: reviews on GitHub | Add `TYPESAFE_API_KEY` and `api.typesafe.ai` (and `huggingface.co`) to the cloud environment for D11's real-Jev run and C4 |
 | 2026-10-12 (iter 7) | #19 D6, #21 D9, #18 D8, #17 backlog statuses (after fixing pr-reviewer's two Mediums), #20 D7 (Sol fixed two findings from Erik's local Codex review: Windows hook paths, Claude search-only setup), all on the full matrix. This PR: default CLIs first, loop docs for the local and cloud setups | — | Jev under $0.001 (one doctor call) / Claude: pr-reviewer rounds (subscription) / Codex: one Sol build, five Sol reviews | Actions stopped starting jobs (Pro's minutes used up, about 62% by macOS). Erik made the repo public, so standard runners are free. Left for Erik: private vulnerability reporting (off), and the items under HANDOFF decision 1 |
-| 2026-10-12/13 (iter 8, desktop app) | #22 loop docs (after Erik enabled private vulnerability reporting); #24 D11 scan cache (new process p50 1,781 → 1,543 ms; D11 stays open); #23 D12 Codex plugin (installs from GitHub); this PR, #25 C8 (plugin arm 0 of 10: routes, cannot open) | — | Jev about $0.15 (hook latency, C8) / Claude: $1.93 C8 run plus probes, pr-reviewer rounds (subscription) / Codex: 3 Sol builds, about 12 fix rounds, about 20 reviews (ChatGPT plan) | D13: how the plugin opens skills (MCP server, inject, or other). D11: a long-lived process for the model load? D2: trust the Codex plugin hook in `/hooks`. D10: the desktop-app check. Ten stale worktrees under `dev/sandbox/loadout-wt` (all merged, clean) |
+| 2026-10-12/13 (iter 8, desktop app) | #22 loop docs (after Erik enabled private vulnerability reporting); #24 D11 scan cache (new process p50 1,781 → 1,543 ms; D11 stays open); #23 D12 Codex plugin (installs from GitHub); this PR, #25 C8 (plugin arm: injected 6 of 10, opened 0) | — | Jev about $0.15 (hook latency, C8) / Claude: $1.93 C8 run plus probes, pr-reviewer rounds (subscription) / Codex: 3 Sol builds, about 12 fix rounds, about 20 reviews (ChatGPT plan) | D13: how the plugin opens skills (MCP server, inject, or other). D11: a long-lived process for the model load? D2: trust the Codex plugin hook in `/hooks`. D10: the desktop-app check. Ten stale worktrees under `dev/sandbox/loadout-wt` (all merged, clean) |
