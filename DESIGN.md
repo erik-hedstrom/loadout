@@ -53,12 +53,12 @@ flowchart TB
     end
 
     subgraph out["Output"]
-        CTX["Context, hook and launcher<br/>hook: skill_relevance list with fit, once per skill per session;<br/>hook in lexical mode: only when a skill is named<br/>Claude launcher: skill_relevance in the system prompt, skills named with Jev only<br/>Codex launcher: skill list in the prompt<br/>SKILL.md text for named or clear-winner skills, if inject.enabled (default)"]
+        CTX["Context, hook and launcher<br/>hook: skill_relevance list with Jev fit, or a keyword score relative to the top match<br/>in lexical mode; once per skill per session;<br/>hook in lexical mode: only when a skill is named<br/>Claude launcher: skill_relevance in the system prompt, skills named with Jev only<br/>Codex launcher: skill list in the prompt<br/>SKILL.md text for named or clear-winner skills, if inject.enabled (default);<br/>past 12,000 characters, cut with a pointer to the file"]
         SKL["Skill loading, launcher only<br/>loaded and offered skills<br/>Claude: generated plugin<br/>Codex: paths in the prompt"]
         MCPS["Selected MCP servers, launcher only<br/>Claude: mcp.json<br/>Codex: -c mcp_servers"]
         TIER["Model tier, launcher only<br/>Claude: --model, --effort<br/>Codex: -m, model_reasoning_effort"]
         FSR["find_skills result<br/>returned to the agent: Jev-ranked matches with a fit score,<br/>or keyword matches when lexical (skills, then servers),<br/>or a note that nothing fits"]
-        LS["load_skill result<br/>one skill's SKILL.md and file list, or one file; no routing"]
+        LS["load_skill result<br/>one skill's SKILL.md (past 40,000 characters, cut with a pointer to the file)<br/>and up to 60 file names, or one text file up to 256 KB; no routing"]
         GW["Gateway: server_tools, call_server_tool<br/>library servers marked gateway: true; not over --http"]
         WARN["Warning, CLI and search server: on stderr or before the find_skills result<br/>no key, Jev fell back to keywords, or more than 3 skills named<br/>hook: only a fixed note when Jev fell back"]
         DR["Decision report, loadout route<br/>text, or --json"]
