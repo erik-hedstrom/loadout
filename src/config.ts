@@ -95,7 +95,9 @@ export function loadoutHome(): string {
   if (!home) return join(homedir(), '.loadout');
   // A relative value resolves against the working directory, which for a host-started server can be the open repo:
   // the repo would then supply the config (including the Jev URL the key is sent to) and the skills.
-  if (!isAbsolute(home)) throw new Error('LOADOUT_HOME must be an absolute path');
+  // On Windows, isAbsolute() also accepts `\x` (relative to the current drive) and UNC or device paths (a remote share).
+  const absolute = process.platform === 'win32' ? /^[A-Za-z]:[\\/]/.test(home) : isAbsolute(home);
+  if (!absolute) throw new Error('LOADOUT_HOME must be an absolute path (on Windows, starting with a drive letter)');
   return home;
 }
 

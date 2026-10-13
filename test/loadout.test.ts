@@ -85,6 +85,24 @@ describe('E9 security', () => {
       vi.unstubAllEnvs();
     }
   });
+
+  it('accepts only a drive-qualified LOADOUT_HOME on Windows, not a drive-relative, UNC or device path', () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')!;
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+    try {
+      for (const unsafe of ['\\loadout', '/loadout', '\\\\attacker\\share\\loadout', '//attacker/share/loadout', '\\\\?\\UNC\\attacker\\share', '\\\\.\\C:\\loadout', 'C:loadout']) {
+        vi.stubEnv('LOADOUT_HOME', unsafe);
+        expect(() => loadoutHome(), unsafe).toThrow('drive letter');
+      }
+      for (const local of ['C:\\Users\\me\\.loadout', 'd:/loadout']) {
+        vi.stubEnv('LOADOUT_HOME', local);
+        expect(loadoutHome()).toBe(local);
+      }
+    } finally {
+      Object.defineProperty(process, 'platform', platform);
+      vi.unstubAllEnvs();
+    }
+  });
   const runRoute = async (library: ReturnType<typeof scanLibrary>) => {
     const { client } = fakeClient(Object.fromEntries(library.map((c) => [c.name, 0.99])));
     return route({ task: TASK, repo: REPO, library, config, client });
