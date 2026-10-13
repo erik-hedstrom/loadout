@@ -417,7 +417,18 @@ export async function withAppServer<T>(command: Command, body: (request: AppServ
     await request('initialize', { clientInfo: { name: 'loadout-overhead', version: '1' } });
     child.stdin.write(JSON.stringify({ method: 'initialized' }) + '\n');
     return await body(request);
-  } finally { clearTimeout(timer); lines.close(); child.stdin.end(); child.kill(); }
+  } finally {
+    clearTimeout(timer); lines.close(); child.stdin.end();
+    // Wait for the exit, so the next command's reset of the work directory cannot hit a process still holding it (EBUSY on Windows).
+    const running = child.pid !== undefined && child.exitCode === null && child.signalCode === null;
+    const exited = new Promise<void>((done) => child.once('exit', () => done()));
+    child.kill();
+    if (running) {
+      let give: NodeJS.Timeout;
+      await Promise.race([exited, new Promise<void>((done) => { give = setTimeout(done, 5_000); })]);
+      clearTimeout(give!);
+    }
+  }
 }
 /** Only initialize, skills/list and MCP inventory: never create a thread or submit a turn. */
 export const inspectCodex = (command: Command): Promise<Discovery> => withAppServer(command, async (request) => {

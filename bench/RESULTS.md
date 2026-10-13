@@ -68,7 +68,8 @@ backlog, B7).
 - Deferral is inferred, not reported by the host. A row is invalid, and not
   recorded, unless it passes its controls:
   - every MCP arm has a positive input delta over the same host's baseline;
-  - all servers are connected and no others;
+  - Claude: every declared server is connected and no others (from the init
+    list);
   - Claude with tool search off lists every fixture tool;
   - Claude with the default or `auto` lists every tool, or lists ToolSearch and
     answers a canary: a third message, not measured and bounded by
@@ -80,8 +81,12 @@ backlog, B7).
     defers loadout's own tools too), and a non-error `server_tools` result for
     the canary's server has the tool's own line; `find_skills` may be tried
     first;
-  - Codex's `app-server` lists exactly the declared servers and tools; its
-    free commands run on empty temporary `CODEX_HOME`s.
+  - Codex's `app-server`, on an empty temporary `CODEX_HOME` like every free
+    command, lists exactly the declared servers and tools. That checks the
+    declaration, not what the paid exec loads: its isolation rests on
+    `--ignore-user-config`, which skips `$CODEX_HOME/config.toml` only
+    (`codex-rs/exec/src/cli.rs` at cf0ed4c). Known gap: a system or managed
+    Codex config is not covered.
 - Reading column: Claude rows read "all loaded" with tool search off, "all
   loaded (ToolSearch present)" or "(no ToolSearch)" where the default or `auto`
   listed every tool, "deferred (canary found)" where fewer were listed, and

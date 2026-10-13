@@ -5,8 +5,9 @@
  *
  * Why it is built this way: Claude Code defers MCP definitions by default, so every configuration is read at
  * both ends, tool search off (all loaded) and the host default, and no arm may read as "deferred" unless the
- * tools were actually there (positive controls). Both Claude requests share one process with
- * `--no-session-persistence`, so no transcript lands in ~/.claude; Codex gets one `--ephemeral` request.
+ * tools were actually there (positive controls). Claude's requests (two measured, and a canary lookup where
+ * deferral may be claimed) share one process with `--no-session-persistence`, so no transcript lands in ~/.claude;
+ * Codex gets one `--ephemeral` request.
  */
 import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -31,8 +32,10 @@ const B1_INPUT_PER_CALL = 8_500;
 // Assumptions, not measurements: characters per token, and seconds per request (the hard cap is execute()'s 120 s).
 const CHARS_PER_TOKEN = 3;
 const SECONDS_PER_REQUEST = 30;
-// `--max-turns` applies to each stdin message (code.claude.com/docs/en/cli-reference), so it bounds the canary lookup: a
-// ToolSearch for loadout's tool, find_skills, server_tools and the answer. Reaching it is an error, so a row fails loudly.
+// `--max-turns` bounds the canary lookup: a ToolSearch for loadout's tool, find_skills, server_tools and the answer. The
+// cli-reference says "With `--input-format stream-json`, a message still queued when the limit ends a turn stays queued
+// and starts a new turn with its own limit" (code.claude.com/docs/en/cli-reference); each message here is sent after the
+// previous result. A run has not confirmed it is per message; a cumulative limit would fail the canary turn loudly.
 const MAX_TURNS = 4;
 // Claude Code turns tool search off or unavailable for these (code.claude.com/docs/en/mcp, "Configure tool search").
 const TOOL_SEARCH_OFF = ['ANTHROPIC_BASE_URL', 'CLAUDE_CODE_USE_FOUNDRY', 'CLAUDE_CODE_USE_VERTEX', 'CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS'];
@@ -221,15 +224,19 @@ export function estimate(runs: Run[], rows: OfflineRow[]): Estimate {
   return { requests, inputTokens: [requests * B1_INPUT_PER_CALL, Math.round(high)], seconds: [requests * SECONDS_PER_REQUEST, messages * 120] };
 }
 
-/** What a `--run` writes in the host homes, resolved for this environment; nothing is redirected, because login needs these homes. */
+/**
+ * The directories a paid command may write anywhere in, resolved for this environment; nothing is redirected, because
+ * login needs these homes. An itemized list kept missing files, so the known ones are examples only.
+ */
 export function hostWrites(env: NodeJS.ProcessEnv = process.env): string[] {
   const home = homedir();
   const claudeDir = env.CLAUDE_CONFIG_DIR || join(home, '.claude');
   const cache = process.platform === 'darwin' ? join(home, 'Library', 'Caches') : process.platform === 'win32' ? (env.LOCALAPPDATA || join(home, 'AppData', 'Local')) : (env.XDG_CACHE_HOME || join(home, '.cache'));
-  const sqlite = env.CODEX_SQLITE_HOME || env.CODEX_HOME || join(home, '.codex');
+  const codexHome = env.CODEX_HOME || join(home, '.codex');
+  const sqlite = env.CODEX_SQLITE_HOME && env.CODEX_SQLITE_HOME !== codexHome ? ` and ${env.CODEX_SQLITE_HOME}` : '';
   return [
-    `Claude Code, per process: a project entry for the working directory and other usage counters in ${join(env.CLAUDE_CONFIG_DIR || home, '.claude.json')}; MCP server logs under ${join(cache, 'claude-cli-nodejs')} (one folder per working directory); anything else under ${claudeDir} is not suppressed. No transcript (--no-session-persistence). Not verified by a run.`,
-    `Codex, per exec: the state and logs SQLite databases in ${sqlite}, which exec opens even with --ephemeral (codex-rs/exec/src/lib.rs, codex-rs/state/src/runtime.rs at cf0ed4c). No rollout file. Its free commands run on empty temporary CODEX_HOMEs and write nothing here.`,
+    `Claude Code may write anywhere in ${claudeDir}, in ${join(env.CLAUDE_CONFIG_DIR || home, '.claude.json')} and in ${join(cache, 'claude-cli-nodejs')}. Examples: a project entry and usage counters in .claude.json, MCP server logs in the cache. No transcript (--no-session-persistence). Not verified by a run.`,
+    `Codex exec may write anywhere in ${codexHome}${sqlite}. Examples: the state and logs SQLite databases, which exec opens even with --ephemeral (codex-rs/exec/src/lib.rs, codex-rs/state/src/runtime.rs), installation_id (codex-rs/core/src/installation_id.rs), a refreshed auth.json, caches (cf0ed4c). No rollout file. Its free commands run on empty temporary CODEX_HOMEs and write nothing there.`,
   ];
 }
 
@@ -244,8 +251,8 @@ export interface Row {
 
 /**
  * A row where the servers connected but the tools never arrived would read as "deferred", the conclusion under
- * test. So every MCP arm needs a positive input delta over its baseline (the directories have equal names, so
- * nothing else adds tokens), and Claude needs the tools: all listed, or reachable through the lookup (canary).
+ * test. So every MCP arm needs a positive input delta over its baseline (every arm runs in the same working
+ * directory, so nothing else adds tokens), and Claude needs the tools: all listed, or reachable through the lookup (canary).
  */
 export function positiveControl(arm: Arm, tools: string[] | null, delta: number, canary: boolean | null) {
   if (arm.kind === 'baseline') return;
@@ -264,7 +271,7 @@ export function positiveControl(arm: Arm, tools: string[] | null, delta: number,
   if (!canary) throw new Error(`${armId(arm)}: ${listed} of ${expected} MCP tools listed and tool search did not return the canary tool; measurement invalid`);
 }
 
-/** Servers and tools the host reports against what the arm declares; counts only, since undeclared names may be the user's. */
+/** Servers and tools the app-server reports, on an empty home, against what the arm declares. */
 export function checkCodexInventory(found: Map<string, string[]>, arm: Arm) {
   const expected = new Map<string, string[]>(arm.kind === 'native' ? serverSpecs(CONFIGS[arm.config!]).map((s) => [s.name, serverTools(s).map((t) => t.name)])
     : arm.kind === 'gateway' ? [['loadout', LOADOUT_TOOLS]] : []);
@@ -294,7 +301,7 @@ const ambient = (inventory: { plugins: string[]; skills: string[]; slashCommands
 const firstLine = (text: string) => text.trim().split(/\r?\n/)[0] ?? '';
 
 export interface Deps { run?: (command: Command) => Promise<string>; inventory?: typeof codexMcpInventory }
-interface Baseline { version: string; contextHash: string }
+interface Baseline { version: string }
 
 /** Free Codex checks. A refusal skips the Codex arms; Claude is independent. Only counts and hashes are saved. */
 async function codexPreflight(plan: Plan, deps: Required<Deps>, out: string): Promise<{ ready: boolean; baseline?: Baseline }> {
@@ -307,7 +314,7 @@ async function codexPreflight(plan: Plan, deps: Required<Deps>, out: string): Pr
     try { const v = parsePromptInput(await deps.run(r.free!.prompt), r.command.cwd); line.renderedCharacters = v.renderedCharacters; line.contextHash = v.contextHash; } catch { refusals.push('prompt-input collection failed (details suppressed)'); }
     try { validateFeatures(await deps.run(r.free!.features)); } catch (error) { refusals.push((error as Error).message); }
     try { checkCodexInventory(await deps.inventory(r.free!.inventory), r.arm); } catch (error) { refusals.push((error as Error).message); }
-    if (r.arm.kind === 'baseline') baseline = { version: String(line.version), contextHash: String(line.contextHash) };
+    if (r.arm.kind === 'baseline') baseline = { version: String(line.version) };
     if (refusals.length) ready = false;
     appendFileSync(join(out, 'preflight.jsonl'), JSON.stringify({ ...line, refusals }) + '\n');
   }
@@ -352,8 +359,7 @@ export async function runStudy(plan: Plan, out: string, deps: Deps = {}): Promis
     if (!codex?.ready) notes.push('Codex skipped: a free preflight check refused it (see preflight.jsonl).');
     else {
       const b = plan.runs.find((r) => r.arm.host === 'codex' && r.arm.kind === 'baseline' && r.free)!;
-      const same = parsePromptInput(await full.run(b.free!.prompt), b.command.cwd).contextHash === codex.baseline?.contextHash && firstLine(await full.run(b.free!.version)) === codex.baseline.version;
-      if (!same) throw new Error('Codex ambient context or version changed during the study; measurement invalid');
+      if (firstLine(await full.run(b.free!.version)) !== codex.baseline?.version) throw new Error('Codex version changed during the study; measurement invalid');
     }
   }
   return { rows, notes };
@@ -400,7 +406,7 @@ export async function main(args: string[], deps: { print?: (s: string) => void; 
     const plan = buildPlan(root, only);
     const e = estimate(plan.runs, facts);
     print(`${plan.runs.length} runs, ${e.requests} paid requests (Codex only if its preflight passes; each canary lookup counted at its --max-turns bound of ${MAX_TURNS}). Estimate: ${e.inputTokens[0]} to ${e.inputTokens[1]} input tokens; ${Math.round(e.seconds[0] / 60)} to ${Math.round(e.seconds[1] / 60)} minutes. Subscription quota; no Jev. Needs Erik's approval before --run.`);
-    print('The low figure uses B1\'s 8.5k tokens a call, measured with `--tools Skill`; B7 keeps every built-in tool, so it probably undercounts. The pilot calibrates it.');
+    print('The low figure uses B1\'s 8.5k tokens a call, measured with `--tools Skill`; B7 keeps every built-in tool, so it probably undercounts, and the high figure, built on the same base, is not an upper bound. Claude pilot 1 calibrates both.');
     for (const blocker of plan.blockers) print(`BLOCKED: ${blocker}`);
     for (const write of hostWrites()) print(`HOST STATE: ${write}`);
     if (!values.run) {

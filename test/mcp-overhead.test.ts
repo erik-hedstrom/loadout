@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -7,7 +7,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { DISABLED_FEATURES, execute, parseClaudeTurns, withAppServer, type Command, type ToolCall } from '../bench/overhead.js';
 import { catalogFacts, serverInstructions, serverSpecs, serverTools } from '../bench/mcp-fixtures.js';
-import { arms, armId, buildPlan, canaryFound, canaryOf, checkCodexInventory, claudeEnv, estimate, formatOffline, hostWrites, loadoutFacts, main, offline, positiveControl, reading, runStudy, summarize, toolSearchBlockers, type Arm, type Plan, type Row, type Run } from '../bench/mcp-overhead.js';
+import { arms, armId, buildPlan, canaryFound, canaryOf, checkCodexInventory, claudeEnv, estimate, formatOffline, hostWrites, loadoutFacts, main, offline, positiveControl, reading, resetWork, runStudy, summarize, toolSearchBlockers, type Arm, type Plan, type Row, type Run } from '../bench/mcp-overhead.js';
 
 const temps: string[] = [];
 const temp = () => { const dir = mkdtempSync(join(tmpdir(), 'loadout-b7-test-')); temps.push(dir); return dir; };
@@ -244,15 +244,37 @@ describe('plan', () => {
     expect(e.seconds).toEqual([174 * 30, 102 * 120]);
   });
 
-  it('prints the host-state destinations resolved from the environment', () => {
+  it('names whole resolved directories as writable, with the known files only as examples', () => {
     const [claude, codex] = hostWrites({});
-    expect(claude).toContain(join(homedir(), '.claude.json'));
-    expect(claude).toContain('claude-cli-nodejs');
-    expect(codex).toContain(join(homedir(), '.codex'));
+    for (const dir of [join(homedir(), '.claude'), join(homedir(), '.claude.json'), 'claude-cli-nodejs']) expect(claude).toContain(dir);
+    expect(codex).toContain(`anywhere in ${join(homedir(), '.codex')}.`);
     const moved = hostWrites({ CLAUDE_CONFIG_DIR: '/c', CODEX_HOME: '/x', XDG_CACHE_HOME: '/cache' });
-    expect(moved[0]).toContain(join('/c', '.claude.json'));
-    expect(moved[1]).toContain('in /x,');
-    expect(hostWrites({ CODEX_HOME: '/x', CODEX_SQLITE_HOME: '/db' })[1]).toContain('in /db,');
+    for (const dir of ['anywhere in /c,', join('/c', '.claude.json')]) expect(moved[0]).toContain(dir);
+    if (process.platform === 'linux') expect(moved[0]).toContain(join('/cache', 'claude-cli-nodejs'));
+    expect(moved[1]).toContain('anywhere in /x.');
+    expect(hostWrites({ CODEX_HOME: '/x', CODEX_SQLITE_HOME: '/db' })[1]).toContain('anywhere in /x and /db.');
+    expect(codex).toContain('installation_id');
+    expect(codex).toContain('auth.json');
+  });
+
+  it('empties the work directory, and refuses a linked one or one outside the temp root', () => {
+    const work = join(temp(), 'work');
+    mkdirSync(join(work, 'sub'), { recursive: true });
+    writeFileSync(join(work, 'sub', 'left'), 'x');
+    resetWork(work);
+    expect(readdirSync(work)).toEqual([]);
+    const real = temp();
+    writeFileSync(join(real, 'precious'), 'x');
+    const link = join(temp(), 'link');
+    symlinkSync(real, link);
+    expect(() => resetWork(link)).toThrow('linked');
+    expect(existsSync(join(real, 'precious'))).toBe(true);
+    const outside = mkdtempSync(join(process.cwd(), '.b7-outside-'));
+    try {
+      writeFileSync(join(outside, 'precious'), 'x');
+      expect(() => resetWork(outside)).toThrow('temporary');
+      expect(existsSync(join(outside, 'precious'))).toBe(true);
+    } finally { rmSync(outside, { recursive: true, force: true }); }
   });
 
   it('main without --run prints the estimate, caveats, host-state writes, env, stdin and argv, and starts no host', async () => {
@@ -274,6 +296,20 @@ describe('plan', () => {
 });
 
 describe('host process', () => {
+  it('waits for the app-server to exit before returning', async () => {
+    const file = join(temp(), 'slow-exit.cjs');
+    writeFileSync(file, `
+      process.on('SIGTERM', () => setTimeout(() => { require('fs').writeFileSync(process.env.MARKER, 'exited'); process.exit(0); }, 300));
+      require('readline').createInterface({ input: process.stdin }).on('line', (line) => {
+        const m = JSON.parse(line);
+        if (m.id !== undefined) console.log(JSON.stringify({ id: m.id, result: {} }));
+      });
+    `);
+    const marker = join(temp(), 'marker');
+    await withAppServer({ bin: process.execPath, args: [file], cwd: tmpdir(), env: { ...process.env, MARKER: marker } }, (request) => request('probe', {}));
+    expect(existsSync(marker)).toBe(true);
+  });
+
   it('starts the Codex app-server with the command\'s own environment', async () => {
     const file = join(temp(), 'app-server.cjs');
     writeFileSync(file, `
@@ -453,7 +489,7 @@ describe('positive controls', () => {
 describe('measurement', () => {
   const SECRET_PLUGIN = 'ambient-private-plugin';
   type Lookup = 'found' | 'missing' | 'error' | 'echo';
-  interface Opts { canary?: (run: Run) => Lookup; version?: (call: number) => string | undefined; plugin?: (call: number) => string; status?: string; extraServer?: boolean; toolUse2?: boolean; numTurns1?: number; tools?: (run: Run, base: string[]) => string[]; flat?: boolean; features?: boolean; codexContext?: (call: number) => string; codexVersion?: (call: number) => string; inventory?: (run: Run) => Map<string, string[]>; byOrder?: boolean; findSkills?: boolean }
+  interface Opts { canary?: (run: Run) => Lookup; version?: (call: number) => string | undefined; plugin?: (call: number) => string; status?: string; extraServer?: boolean; toolUse2?: boolean; numTurns1?: number; tools?: (run: Run, base: string[]) => string[]; flat?: boolean; features?: boolean; codexVersion?: (call: number) => string; inventory?: (run: Run) => Map<string, string[]>; byOrder?: boolean; findSkills?: boolean }
   /**
    * A fake Claude and Codex that report what the plan declared: tools follow the tool search setting (under it loadout's own
    * four are deferred as well), counters grow with the servers. Each command finds the work directory empty or the test fails.
@@ -461,7 +497,7 @@ describe('measurement', () => {
   function fakeHost(p: Plan, o: Opts = {}) {
     const calls: Command[] = [];
     const listings: string[][] = [];
-    let claudeCalls = 0, contexts = 0, versions = 0, order = 0;
+    let claudeCalls = 0, versions = 0, order = 0;
     const owner = new Map<Command, Run>(p.runs.flatMap((r) => [r.command, ...Object.values(r.free ?? {})].map((c): [Command, Run] => [c, r])));
     const run = async (command: Command) => {
       calls.push(command);
@@ -470,7 +506,7 @@ describe('measurement', () => {
       const r = o.byOrder ? p.runs[order++]! : owner.get(command)!;
       const args = command.args;
       if (args.includes('features')) return DISABLED_FEATURES.map((name) => `${name} stable ${o.features === false ? 'true' : 'false'}`).join('\n');
-      if (args.includes('prompt-input')) return JSON.stringify([{ type: 'message', content: [{ type: 'input_text', text: o.codexContext?.(contexts++) ?? 'rendered' }] }]);
+      if (args.includes('prompt-input')) return JSON.stringify([{ type: 'message', content: [{ type: 'input_text', text: 'rendered' }] }]);
       if (args.includes('--version')) return `${o.codexVersion?.(versions++) ?? 'codex-cli 9.9.9'}\n`;
       const delta = o.flat || r.arm.kind === 'baseline' ? 0 : 10 * Math.max(1, r.servers.length);
       if (r.arm.host === 'codex') return jsonl({ type: 'thread.started', thread_id: 'thread-1' }, { type: 'turn.completed', usage: { input_tokens: 1000 + delta, cached_input_tokens: 0, output_tokens: 1 } });
@@ -571,9 +607,8 @@ describe('measurement', () => {
     expect(saved).not.toContain('my-private-server');
   });
 
-  it('refuses when the Codex context or version changes during the study', async () => {
-    await expect(study({ codexContext: (n) => `rendered ${n}` })).rejects.toThrow('Codex ambient context or version changed');
-    await expect(study({ codexVersion: (n) => `codex-cli 9.9.${n}` })).rejects.toThrow('Codex ambient context or version changed');
+  it('refuses when the Codex version changes during the study', async () => {
+    await expect(study({ codexVersion: (n) => `codex-cli 9.9.${n}` })).rejects.toThrow('Codex version changed');
   });
 
   it('refuses Claude version drift or a missing version within a run', async () => {

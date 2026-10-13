@@ -256,7 +256,9 @@ apply): 46 runs, 174 paid requests. Claude: 32 runs of 2 measured requests, and
 tokens a call (136k over 16), measured with `--tools Skill`; B7 keeps every
 built-in tool, so the low figure probably undercounts and the pilots calibrate
 it. Low 1.5M input tokens if tool search defers everything, high 6.1M if every
-arm loads all definitions on every request (an assumed 3 characters a token).
+arm loads all definitions on every request (an assumed 3 characters a token);
+the high figure is built on the same base, so it is not an upper bound, and
+Claude pilot 1 is the calibration.
 Subscription quota, no Jev. Time about 87 minutes at an assumed 30 s a request,
 at most 204 (102 stdin messages at the 120 s cap each). Claude pilot 1: 28
 requests, 0.24 to 0.29M tokens, 14 to 32 minutes. Claude pilot 2 (n20): 28
@@ -266,9 +268,13 @@ requests, 0.24 to 1.93M tokens, 14 to 32 minutes. Codex pilot: 3 requests,
 Ambient `CLAUDE.md`/`AGENTS.md` in the user directories or parents, and managed
 Claude settings, cannot be turned off by any flag; they are the same in every
 arm, and Claude's plugin, skill and command inventory and Codex's version are
-checked for drift. B1's Codex commands lack `--ignore-user-config` and
-`--ignore-rules` (its Codex baseline was meant to be ambient and its paid Codex
-runs are deferred); revisit before running them.
+checked for drift. Codex's paid exec isolation rests on `--ignore-user-config`
+(`codex-rs/exec/src/cli.rs` at cf0ed4c: it skips `$CODEX_HOME/config.toml`, and
+auth still uses `CODEX_HOME`), so it covers `config.toml` only. Known gap: a
+system or managed Codex config is not covered, and nothing checks the paid
+exec's MCP set at run time. B1's Codex commands lack the flag (its Codex
+baseline was meant to be ambient and its paid Codex runs are deferred); revisit
+before running them.
 
 Decisions for Erik:
 - Approve the pilots, then the full run, with the host-state writes the plan prints.
@@ -286,13 +292,9 @@ Decisions for Erik:
 - The free Codex commands run on empty temporary `CODEX_HOME`s, so `debug
   prompt-input` no longer sees the user's global `AGENTS.md` (read from that
   home, `codex-rs/cli/src/main.rs`). The paid exec still does, in every arm; the
-  drift check covers the built-in context only. Accept, or supply the key
-  options above.
+  preflight records the built-in context only, and nothing re-checks it at the
+  end. Accept, or supply the key options above.
 - Whether the Codex arms wait for `unified_exec` as in B1.
-- A Codex with MCP servers in its own config is refused (the `app-server`
-  inventory sees them). If the D12 Codex plugin is installed, its `loadout`
-  server appears in the baseline inventory, so the Codex arms are always refused
-  until it is removed for the study.
 
 ## C. Skill decision-making (router quality)
 
