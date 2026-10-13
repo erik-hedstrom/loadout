@@ -164,7 +164,8 @@ adding official flags to the agent's command line only. It writes nothing to
 
 - Claude Code: `--strict-mcp-config` (loadout's own servers still load),
   `--no-chrome`, and `--settings <file>`, written to the session folder,
-  with `disableClaudeAiConnectors` for the claude.ai connectors and
+  with `disableClaudeAiConnectors` for the claude.ai connectors,
+  `disableRemoteControl` so Remote Control does not start, and
   `env.CLAUDE_CODE_AUTO_CONNECT_IDE=false` so an IDE terminal does not
   connect it to the IDE. That file outranks your user, project and local
   settings, but not managed settings. All are in the
@@ -188,8 +189,8 @@ the isolation, which `--isolate` refuses before routing:
   `--channels` and `--dangerously-load-development-channels` (channel servers
   push messages and can relay permission prompts), `--cloud`, `--remote`,
   `--environment` and `--teleport` (cloud sessions bring their own
-  servers), and a second `--`, which would turn the isolation flags into
-  prompt text.
+  servers), `--remote-control` and `--rc`, and a second `--`, which would
+  turn the isolation flags into prompt text.
 - Codex: `--enable`, and every `-c`/`--config` override. A `projects` trust
   entry alone would turn project config files, and their servers, back on.
 

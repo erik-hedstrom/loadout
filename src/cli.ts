@@ -268,7 +268,7 @@ async function main(): Promise<number> {
       // Refused before routing: that is a paid Jev call, and a session dir would be left behind.
       if (values.isolate && agent === 'codex' && !values.headless) fail('--isolate for codex needs --headless: interactive Codex has no flag to skip the user config');
       const conflict = values.isolate ? isolateConflict(agent, passthrough) : undefined;
-      if (conflict) fail(`--isolate refuses ${conflict.split('=')[0]} after --: it would undo the isolation`);
+      if (conflict) fail(`--isolate refuses ${conflict} after --: it would undo the isolation`);
 
       const bin = which(agent);
       const toPath = pathTranslator(bin);

@@ -227,7 +227,7 @@ export function materialize(
     // Inside an IDE terminal Claude Code connects to the IDE on its own. The variable turns that off, and set here it
     // outranks the shell and the user, project and local settings files.
     session.settings = join(dir, 'settings.json');
-    const settings = { disableClaudeAiConnectors: true, env: { CLAUDE_CODE_AUTO_CONNECT_IDE: 'false' } };
+    const settings = { disableClaudeAiConnectors: true, disableRemoteControl: true, env: { CLAUDE_CODE_AUTO_CONNECT_IDE: 'false' } };
     writeFileSync(session.settings, JSON.stringify(settings), { mode: 0o600 });
   }
 
@@ -438,14 +438,20 @@ export function codexPrompt(session: Session, task: string): string {
  * re-enable config layers that can carry servers. Anything else passes through unchanged.
  */
 export function isolateConflict(agent: Agent, args: string[]): string | undefined {
-  const is = (a: string, flag: string) => a === flag || a.startsWith(`${flag}=`);
-  if (agent === 'claude') return args.find((a) => a === '--' || CLAUDE_REFUSED.some((f) => is(a, f)));
-  return args.find((a) => is(a, '--enable') || is(a, '--config') || /^-c/.test(a));
+  // Returns the flag's name, never the argument: a refusal must not echo what the caller typed.
+  for (const a of args) {
+    if (agent === 'claude' && a === '--') return '--';
+    if (agent === 'codex' && /^-c/.test(a)) return '-c';
+    const flag = (agent === 'claude' ? CLAUDE_REFUSED : ['--enable', '--config']).find((f) => a === f || a.startsWith(`${f}=`));
+    if (flag) return flag;
+  }
+  return undefined;
 }
 
 const CLAUDE_REFUSED = [
   '--settings', '--mcp-config', '--agents', '--plugin-dir', '--plugin-url', '--chrome', '--ide',
   '--channels', '--dangerously-load-development-channels', '--cloud', '--remote', '--environment', '--teleport',
+  '--remote-control', '--rc',
 ];
 
 export function codexArgs(session: Session, task: string, extra: string[], opts: LaunchOptions = {}): string[] {

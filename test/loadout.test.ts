@@ -892,7 +892,7 @@ describe('launch', () => {
     expect(at).toBeLessThan(isolated.indexOf('--permission-mode'));
     if (process.platform !== 'win32') expect(statSync(claude.settings!).mode & 0o777).toBe(0o600);
     // In the session's --settings file, the IDE opt-out outranks a user, project or local settings `env` that turns it on.
-    expect(JSON.parse(readFileSync(claude.settings!, 'utf8'))).toEqual({ disableClaudeAiConnectors: true, env: { CLAUDE_CODE_AUTO_CONNECT_IDE: 'false' } });
+    expect(JSON.parse(readFileSync(claude.settings!, 'utf8'))).toEqual({ disableClaudeAiConnectors: true, disableRemoteControl: true, env: { CLAUDE_CODE_AUTO_CONNECT_IDE: 'false' } });
     // loadout's own servers still load; the flag only drops the others.
     expect(isolated).toContain('--mcp-config');
     expect(isolated).toContain('--plugin-dir');
@@ -922,24 +922,27 @@ describe('launch', () => {
     expect(codex.result.stderr).toBe('loadout: --isolate for codex needs --headless: interactive Codex has no flag to skip the user config\n');
     expect(codex.sessions).toBe(false);
 
-    const cases: [string, ...string[]][] = [['claude', '--mcp-config', 'user.json'], ['claude', '--settings={}'], ['codex', '--headless', '--', '-c', 'mcp_servers.x.command="x"']];
+    const cases: [string, ...string[]][] = [['claude', '--mcp-config', 'user.json'], ['claude', '--settings={}'], ['codex', '--headless', '--', '-c', 'mcp_servers.x.command="x"'], ['codex', '--headless', '--', '-cmcp_servers.private.url="u"']];
     for (const [agent, ...own] of cases) {
       const refused = run(agent, '--isolate', '--dry-run', '--lexical', TASK, ...(agent === 'claude' ? ['--'] : []), ...own);
       expect(refused.result.status).not.toBe(0);
       expect(refused.result.stderr).toMatch(/^loadout: --isolate refuses (--mcp-config|--settings|-c) after --: it would undo the isolation\n$/);
       expect(refused.sessions).toBe(false);
+      expect(refused.result.stderr).not.toContain('private');
     }
   });
 
   it('finds passthrough arguments that would undo --isolate, in every spelling', () => {
     for (const args of [['--settings', '{}'], ['--settings={}'], ['--mcp-config', 'a.json'], ['--mcp-config=a.json'], ['--agents', '{}'], ['--agents={}'], ['--plugin-dir', 'p'], ['--plugin-dir=p'], ['--plugin-url', 'u'], ['--plugin-url=u'], ['--chrome'], ['--ide'],
-      ['--channels', 'plugin:p@m'], ['--channels=plugin:p@m'], ['--dangerously-load-development-channels', 'server:s'], ['--cloud'], ['--remote', 't'], ['--environment=e'], ['--teleport'], ['--']]) {
-      expect(isolateConflict('claude', ['--permission-mode', 'plan', ...args])).toBe(args[0]);
+      ['--channels', 'plugin:p@m'], ['--channels=plugin:p@m'], ['--dangerously-load-development-channels', 'server:s'], ['--cloud'], ['--remote', 't'], ['--environment=e'], ['--teleport'],
+      ['--remote-control'], ['--remote-control=name'], ['--rc'], ['--']]) {
+      // The flag's name only, never the caller's value.
+      expect(isolateConflict('claude', ['--permission-mode', 'plan', ...args])).toBe(args[0]!.split('=')[0]);
     }
     expect(isolateConflict('claude', ['--permission-mode', 'plan', '--model', 'opus', '--remote-control-session-name-prefix', 'p'])).toBeUndefined();
     // Any config override: a `projects` trust entry re-enables config layers that can carry servers.
     for (const args of [['-c', 'model_reasoning_effort="high"'], ['-c', 'projects."/r".trust_level="trusted"'], ['-c', 'mcp_servers.x.command="x"'], ['-cmcp_servers.x.url="u"'], ['-c=mcp_servers.x.url="u"'], ['-c=features.apps=true'], ['--config', 'features.apps=true'], ['--config=mcp_servers.x.url="u"'], ['--enable', 'apps'], ['--enable=apps']]) {
-      expect(isolateConflict('codex', ['--skip-git-repo-check', ...args])).toBe(args[0]);
+      expect(isolateConflict('codex', ['--skip-git-repo-check', ...args])).toBe(args[0]!.startsWith('-c') ? '-c' : args[0]!.split('=')[0]);
     }
     expect(isolateConflict('codex', ['--skip-git-repo-check', '-C', 'dir', '--disable', 'apps'])).toBeUndefined();
   });
