@@ -1,0 +1,1 @@
+scores.csv has exam scores for two teaching methods, A and B (one row per student). Our head of department says B clearly works better. Does the data back that up? Give me two sentences I can forward, and save the numbers you used in answer.md.

@@ -229,16 +229,8 @@ Acceptance:
 - Report win rates with intervals, plus cost per task.
 
 Learnings (cloud half): [fixtures and protocol](../../bench/fixtures/c2/PROTOCOL.md).
-- 18 tasks (4 controls) with committed inputs and planted traps; `KEY.md`
-  holds the answers, so runs happen outside the checkout, offline.
-- Judging waits for E12 (Codex judges, since Claude wrote the tasks).
 - The Jev key cannot be hidden from the agent's `Bash` in one sandbox: the
-  hook and `loadout mcp` run as the same user. The protocol treats it as
-  disclosed (dedicated, revoked key, a probe, a scan) and asks Erik to decide.
-- Verdicts follow the pilot's rule: a win needs the same winner in both orders;
-  win-plus-tie is a split. Judging runs one call at a time.
-- Open for Erik: which Haiku, the large tier, the container or VM and its
-  egress control, and the Jev and Anthropic credentials.
+  hook and `loadout mcp` run as the same user.
 
 **C3. Tier choice.**
 
