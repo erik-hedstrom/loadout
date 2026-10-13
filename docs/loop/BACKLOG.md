@@ -232,6 +232,9 @@ Learnings (cloud half): [fixtures and protocol](../../bench/fixtures/c2/PROTOCOL
 - The Jev key cannot be hidden from the agent's `Bash` in one sandbox: the
   hook and `loadout mcp` run as the same user. The protocol keeps real keys in
   a harness gateway outside the sandbox (`jev.baseUrl` already allows it).
+- Anything `claude` writes to stdout is forgeable by `Bash` (same user, via
+  `/proc/<pid>/fd/1`), so validity and cost come only from the gateway, by
+  conversation structure ([GATEWAY.md](../../bench/fixtures/c2/GATEWAY.md)).
 
 **C3. Tier choice.**
 
