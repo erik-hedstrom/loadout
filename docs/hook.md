@@ -91,5 +91,3 @@ Code-level detail: [SECURITY.md](../SECURITY.md#prompt-hook).
 
 To keep prompts local, set `"router": "lexical"` in loadout's config; the hook
 then adds context only for prompts that name a skill. Or leave the hook out.
-The Codex plugin's search server reads `~/.loadout/config.json` even when
-`LOADOUT_HOME` is set.

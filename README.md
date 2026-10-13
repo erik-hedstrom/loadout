@@ -51,8 +51,7 @@ Then start `claude` or `codex` as usual. Latency and setup details:
 **Privacy:** with a key set, the hook sends the text of each prompt event
 except short follow-ups such as "yes" or "go on", in every project, to
 TypeSafe's Jev API with repository and skill details. `"router": "lexical"` in
-`~/.loadout/config.json` (under `$LOADOUT_HOME` when set; the Codex plugin's
-search server still reads `~/.loadout`) keeps prompts local; the hook then
+`~/.loadout/config.json` (under `$LOADOUT_HOME` when set) keeps prompts local; the hook then
 adds context only for prompts that name a skill. What is sent, and from where:
 [privacy](docs/hook.md#privacy).
 
