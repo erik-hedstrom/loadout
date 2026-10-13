@@ -6,13 +6,16 @@ preview image are Erik's ([AGENTS.md](../../AGENTS.md) hard rule 4).
 ## Description
 
 ```
-Picks skills for each Claude Code prompt, and skills, MCP servers and model tier for each session it launches, using Jev.
+Picks skills for Claude Code prompts (not short follow-ups), and skills, MCP servers and model tier for each session it launches, using Jev.
 ```
 
-121 characters (GitHub allows 350). The prompt hook routes skills only; MCP
-servers and the model tier are chosen when the launcher starts a session, and
-the tier reaching the agent is untested ([docs/hosts.md](../hosts.md), note 2).
-The Codex hook is left out until a live run checks it (backlog D2). It makes no claim a benchmark has to back.
+140 characters (GitHub allows 350). The prompt hook routes skills only, and
+skips one- or two-word prompts such as `yes` or `go on` unless they name a
+`/`, `@` or `$` reference (`isFollowUp` in `src/hook.ts`). MCP servers and the
+model tier are chosen when the launcher starts a session, and the tier reaching
+the agent is untested ([docs/hosts.md](../hosts.md), note 2). The Codex hook is
+left out until a live run checks it (backlog D2). It makes no claim a benchmark
+has to back.
 Leave the website field empty until there is a page to point to.
 
 ## Topics

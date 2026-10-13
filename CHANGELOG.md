@@ -4,12 +4,13 @@
 
 ### Added
 
-- Jev-routed selection: skills, MCP servers and model tier per launched session
-  (`loadout route`, the launcher), skills per prompt (a prompt hook for Claude
-  Code and Codex), skill search and loading plus an opt-in gateway to library
-  MCP servers (`loadout mcp`, also over HTTP with a token for remote hosts),
-  `loadout setup <host>` config printing, and `loadout list --sources`. These
-  came in direct commits before PRs were used.
+- Jev-routed selection: skills, MCP servers and model tier per session that
+  `loadout claude` or `loadout codex` launches (`loadout route` prints the same
+  decision without launching), skills per prompt except short follow-ups (a
+  prompt hook for Claude Code and Codex), skill search and loading plus an
+  opt-in gateway to library MCP servers (`loadout mcp`, also over HTTP with a
+  token for remote hosts), `loadout setup <host>` config printing, and
+  `loadout list --sources`. These came in direct commits before PRs were used.
 - `loadout audit`: an inventory estimate of your installed skill listings, before host caps ([#3](https://github.com/erik-hedstrom/loadout/pull/3)).
 - `loadout doctor`, a read-only setup check ([#20](https://github.com/erik-hedstrom/loadout/pull/20)).
 - Claude Code plugin with the prompt hook ([#9](https://github.com/erik-hedstrom/loadout/pull/9)) and a Codex plugin carrying the hook and search server (install checked offline; the hook needs /hooks trust; a live run is pending under D2) ([#23](https://github.com/erik-hedstrom/loadout/pull/23)).
@@ -23,6 +24,7 @@
 
 - Prompt-hook follow-ups skip hook start-up, and the relay loads on demand ([#14](https://github.com/erik-hedstrom/loadout/pull/14)).
 - Routing (`loadout route`, the launcher, the prompt hook and `loadout mcp`) caches parsed library metadata and re-parses only changed manifests ([#24](https://github.com/erik-hedstrom/loadout/pull/24)).
+- SECURITY.md and the issue templates send vulnerability reports to GitHub's private vulnerability reporting instead of the maintainer directly; it was still off in the repo settings on 2026-10-12. docs/hosts.md dates two host notes ([#22](https://github.com/erik-hedstrom/loadout/pull/22)).
 - Simplified `src/` ([#12](https://github.com/erik-hedstrom/loadout/pull/12)), `bench/` ([#11](https://github.com/erik-hedstrom/loadout/pull/11)) and the docs ([#15](https://github.com/erik-hedstrom/loadout/pull/15)).
 - CI runs the full matrix only on PRs labelled `ci-full` ([#13](https://github.com/erik-hedstrom/loadout/pull/13)).
 
