@@ -896,6 +896,7 @@ describe('launch', () => {
       disableClaudeAiConnectors: true,
       disableRemoteControl: true,
       crossSessionInbound: 'refuse',
+      permissions: { deny: ['mcp__computer-use'] },
       env: { CLAUDE_CODE_AUTO_CONNECT_IDE: 'false', CLAUDE_CODE_ENABLE_CFC: '0' },
     });
     // loadout's own servers still load; the flag only drops the others.

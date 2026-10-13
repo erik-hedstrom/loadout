@@ -167,7 +167,8 @@ adding official flags to the agent's command line only. It writes nothing to
   with `disableClaudeAiConnectors` for the claude.ai connectors,
   `disableRemoteControl` so Remote Control does not start,
   `crossSessionInbound: "refuse"` so messages from your other sessions are
-  dropped, `env.CLAUDE_CODE_AUTO_CONNECT_IDE=false` so an IDE terminal does
+  dropped, a deny rule for `mcp__computer-use` (that built-in server stays
+  on in a project where you enabled it), `env.CLAUDE_CODE_AUTO_CONNECT_IDE=false` so an IDE terminal does
   not connect it to the IDE, and `env.CLAUDE_CODE_ENABLE_CFC=0`, which keeps
   Chrome off after `/background` (that restart keeps `--settings` but not
   `--no-chrome`). That file outranks your user, project and local settings,
@@ -177,6 +178,8 @@ adding official flags to the agent's command line only. It writes nothing to
   [settings reference](https://code.claude.com/docs/en/settings-reference#disableclaudeaiconnectors),
   [environment variables](https://code.claude.com/docs/en/env-vars),
   [cross-session messaging](https://code.claude.com/docs/en/cross-session-messaging#turn-off-cross-session-messaging),
+  [computer use](https://code.claude.com/docs/en/computer-use#enable-computer-use),
+  [permissions](https://code.claude.com/docs/en/permissions),
   [sessions](https://code.claude.com/docs/en/sessions#resume-a-running-background-session)
   and [agent view](https://code.claude.com/docs/en/agent-view#what-carries-over-when-you-background).
 - Codex: `codex exec --ignore-user-config` skips `$CODEX_HOME/config.toml`
@@ -215,6 +218,10 @@ Not hidden:
 - Sending to your other sessions: Claude can still list and message them
   (`ListAgents`, `SendMessage`). Deny rules for both would also cut messages
   to subagents and teammates, so `--isolate` adds none.
+- Managed settings (organization policy) outrank the `--settings` file. A
+  managed `crossSessionInbound: "accept"`, `env.CLAUDE_CODE_AUTO_CONNECT_IDE=true`
+  or `env.CLAUDE_CODE_ENABLE_CFC=1` wins over the values above, so peer
+  messages, the IDE, or Chrome after `/background` can come back.
 - A `managed-mcp.json` (organization policy): Claude Code exits at startup
   when `--strict-mcp-config` meets one.
 - Codex config layers other than `$CODEX_HOME/config.toml`
