@@ -408,6 +408,8 @@ Claude opened no library skill:
   haven't granted it yet". In a headless run nobody can grant it.
 - 7 runs used their 8 turns, mostly on shell commands that were not approved.
   3 answered in text.
+- One run made one successful `Skill` call. That tool reaches only skills
+  installed in Claude Code, not the library, so it does not count as opened.
 
 So this shows the headless case, with loadout in WSL behind Windows Claude
 Code. An interactive session would ask the user for permission to read each
