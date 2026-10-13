@@ -26,7 +26,7 @@
 - Prompt-hook follow-ups skip hook start-up, and the relay loads on demand ([#14](https://github.com/erik-hedstrom/loadout/pull/14)).
 - Routing (`loadout route`, the launcher, the prompt hook and `loadout mcp`) caches parsed library metadata and re-parses only changed manifests ([#24](https://github.com/erik-hedstrom/loadout/pull/24)).
 - Requires Node 22.12 or newer (was 20) ([#2](https://github.com/erik-hedstrom/loadout/pull/2), [#1](https://github.com/erik-hedstrom/loadout/pull/1)).
-- `loadout setup claude-code` and `loadout setup codex` print the plugin install commands; the settings and TOML snippets print only with `--windows` ([#9](https://github.com/erik-hedstrom/loadout/pull/9), [#23](https://github.com/erik-hedstrom/loadout/pull/23)).
+- `loadout setup claude-code` and `loadout setup codex` print the plugin install commands; the settings and TOML snippets print instead with `--windows`, or under WSL when the CLI is a Windows install ([#9](https://github.com/erik-hedstrom/loadout/pull/9), [#23](https://github.com/erik-hedstrom/loadout/pull/23)).
 - SECURITY.md and the issue templates send vulnerability reports to GitHub's private vulnerability reporting instead of the maintainer directly; it was still off in the repo settings on 2026-10-12 ([#22](https://github.com/erik-hedstrom/loadout/pull/22)).
 - Simplified `src/` ([#12](https://github.com/erik-hedstrom/loadout/pull/12)), `bench/` (`bench/outcome` loses `--agent`) ([#11](https://github.com/erik-hedstrom/loadout/pull/11)) and the docs ([#15](https://github.com/erik-hedstrom/loadout/pull/15)).
 - CI runs the full matrix only on PRs labelled `ci-full` ([#13](https://github.com/erik-hedstrom/loadout/pull/13)).
