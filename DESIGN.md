@@ -199,8 +199,7 @@ library itself, in its own words, through MCP:
   gate is softened, since the agent asked: when Jev judges the goal to be
   general work, only near-certain exact fits (P ≥ 0.8) are shown. Otherwise
   the answer says nothing fits and names the closest skill, so the agent does
-  not load a near miss. A search makes the same two Jev requests as a routing
-  decision; its own cost and latency are not measured separately.
+  not load a near miss. Cost and latency per search are not measured.
 - The tool description and the server's `instructions` ask for a search
   before the first specialised step, even in a familiar domain, and again when
   the domain changes. Measured uptake is still partial ([RESULTS](bench/RESULTS.md#do-agents-use-what-they-are-given)),
