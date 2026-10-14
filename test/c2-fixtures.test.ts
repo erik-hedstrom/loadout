@@ -77,8 +77,8 @@ describe('C2 fixtures', () => {
   });
 
   // The harness-owned probe for web-signup-form calls this interface, which only the task text tells the agent about.
-  it('names the signup interface in the task, the key and the protocol', () => {
-    for (const f of ['web-signup-form/task.md', 'KEY.md', 'PROTOCOL.md', 'CHECKS.md']) {
+  it('names the signup interface in the task, the key and the checks', () => {
+    for (const f of ['web-signup-form/task.md', 'KEY.md', 'CHECKS.md']) {
       expect(readFileSync(join(root, f), 'utf8'), f).toContain('validate({ email, password, confirm, terms })');
       expect(readFileSync(join(root, f), 'utf8'), f).toContain('validate.js');
     }

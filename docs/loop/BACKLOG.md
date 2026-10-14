@@ -229,24 +229,27 @@ Acceptance:
 - Report win rates with intervals, plus cost per task.
 
 Learnings (cloud half): [fixtures and protocol](../../bench/fixtures/c2/PROTOCOL.md).
-- No key can be hidden from the agent's `Bash` in one container: the hook and
-  `loadout mcp` run as the same user, and `claude` needs its own key. A harness
-  gateway that held the keys would intercept the agent's API traffic, which
-  AGENTS.md rule 1 forbids, so the protocol has none. Each arm calls the vendor
-  directly with a workspace key under a monthly spend limit, `claude`'s Bash
-  sandbox (`sandbox.network.strictAllowlist`, `allowUnsandboxedCommands: false`,
-  `failIfUnavailable`, via `--settings`) leaves `Bash` no network, and the
-  workspace is archived before any output is scanned, judged or committed:
+- A harness gateway that held the keys would intercept the agent's API
+  traffic, which AGENTS.md rule 1 forbids, so the protocol has none. Each arm
+  calls the vendor directly with a workspace key under a monthly spend limit.
+  A skill can tell `claude` to read a key and send it to Jev through a
+  pre-approved `find_skills` call, which runs outside the Bash sandbox, and
+  revoking later cannot undo that. So the primary layer is that the agent cannot
+  read a key: files denied to Read and to the Bash sandbox, `apiKeyHelper`,
+  `/proc` denied, and a canary probe in the smoke run. Redaction before Jev is
+  E13, a prerequisite for the loadout arm; the workspace is archived before any
+  output is scanned, judged or committed:
   [Credentials and spend](../../bench/fixtures/c2/PROTOCOL.md#credentials-and-spend).
-  Gated by a smoke probe from `Bash` against a runner-owned sink; a container
-  may need `enableWeakerNestedSandbox`, else a VM.
+  A container may need `enableWeakerNestedSandbox`, which exposes `/proc`; then
+  a VM.
 - What that gives up (refusal before the fact, a hard per-run limit, a record
   of the pins the agent cannot reach, per-run vendor cost) is listed in
   [PROTOCOL.md](../../bench/fixtures/c2/PROTOCOL.md#given-up-compared-with-a-harness-gateway).
   Spend is the vendor's usage for the key, checked against the stream to 5%.
-- The score is the mean over all paired tasks (win 1, tie 0.5, loss 0) with a
-  Wilson interval and a margin of 0.10. With 14 pairs "match" needs about two
-  thirds of the points, so it is likely "not shown"; the decisive-pair rate is
+- The score is S = 0.5 + (W - L) / (2n) over all paired tasks, with a Tango
+  score interval (`bench/c2-score.ts`) and a margin of 0.10. With 14 pairs, 14
+  ties are "not shown" (0.39 to 0.61) but one win and 13 ties read "match"
+  (0.42 to 0.66), so the margin is Erik's to set; the decisive-pair rate is
   secondary ([Analysis](../../bench/fixtures/c2/PROTOCOL.md#analysis)).
 - The documented env switches turn off compaction, the non-streaming fallback,
   the 1-hour cache TTL and the background title request in all arms, and every
@@ -615,6 +618,7 @@ Learnings (2026-10-09):
 | E10 | P1 | Build without optional dependencies | Codex | cloud | done ([PR #8](https://github.com/erik-hedstrom/loadout/pull/8)) |
 | E11 | P1 | Fixed-text diagnostics in the gateway and relay | Codex | cloud | done ([PR #10](https://github.com/erik-hedstrom/loadout/pull/10)) |
 | E12 | P1 | A tool-less Codex bench backend (codex-cli 0.160.1 keeps unified_exec on) | Codex | local | todo |
+| E13 | P1 | Redact key-shaped strings before anything goes to Jev (prerequisite for the C2 loadout arm) | Codex | cloud | todo |
 
 **E10. Build without optional dependencies.** src/embed.ts:24 types
 `@huggingface/transformers` with `typeof import(...)`. So `tsc` fails when npm
@@ -669,6 +673,24 @@ judge sees the skill catalog.
 Acceptance: a Codex configuration whose `exec` exposes no tool that reads
 files, runs commands or reaches the network, checked by lib.ts before every
 run; an adversarial test with the canary probe; `@codex security review`.
+
+**E13. Redact key-shaped strings before anything goes to Jev.** `find_skills`
+(renamed `find_tools` in #39) sends its `goal` (up to 4,000 characters) and
+`keywords` to Jev, and the hook sends the user's prompt. A pasted or injected
+credential then sits in Jev's logs while it is still live; a malicious skill can
+cause this (see Credentials and spend in the C2 protocol), and users paste
+secrets into prompts too.
+
+Acceptance:
+- One place that every Jev request passes through replaces strings that match
+  the key shapes in `bench/fixtures/c2/scan-patterns.json` (or a `src/` copy the
+  bench file reads) with a fixed token, in goals, keywords and prompts.
+- Adversarial tests for each shape, and for a key inside one `keywords` entry.
+- The session log counts redactions and never records the match.
+
+Limit: base64, splitting or any other encoding defeats pattern redaction, so
+this is defence in depth. The C2 protocol's primary layer is that the agent
+cannot read the key. Prerequisite for the C2 loadout arm.
 
 **E1. CI.**
 

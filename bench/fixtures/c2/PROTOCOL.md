@@ -36,9 +36,9 @@ of this:
   a fresh volume), no container-runtime socket, no `--privileged`, no added
   capabilities, `no-new-privileges`, and a non-root user inside. No checkout,
   and none of `~/.claude`, `~/.codex`, `~/.loadout`, an SSH agent or a cloud
-  credential: the batch's own keys are the only credentials inside (Credentials
-  and spend). So the Docker tasks (`devops-*`) cannot run `docker`, and the
-  judge reads the files instead.
+  credential: the batch's own keys, in `<keys>`, are the only credentials inside
+  (Credentials and spend). So the Docker tasks (`devops-*`) cannot run
+  `docker`, and the judge reads the files instead.
 - **Limits set from outside**, so the agent cannot lift them: CPU, memory,
   process count, disk for the run folder and the writable layer, and the
   15-minute wall clock.
@@ -81,57 +81,15 @@ of this:
   extraction and the check script. They execute or parse what the agent wrote
   (`node --test`, unittest, docx and pptx files), so they never run on Erik's
   machine, and the host never walks, opens or parses the agent's folder itself.
-- **The collector looks before it opens.** It works in this order:
-  1. It walks the run folder with `lstat` only, opening nothing, and prunes
-     `node_modules`, `.venv` and `__pycache__` when they are real directories
-     (a symlink with such a name is a violation). It accepts regular files and
-     directories only. A symlink, FIFO, socket, device, a file with `st_nlink`
-     above 1, a name that is not valid UTF-8 or holds a control character, and a
-     path over the limits below are violations.
-  2. Limits come from the fixtures: the largest task input is 38 KB and 5 files
-     (at most 50 zip entries, the largest 438 KB inflated). The collector
-     allows 500 entries, depth 6, a relative path of 200 bytes, a name of 100
-     bytes, 8 MiB per file and 32 MiB in all. Sizes are `st_size`, so a sparse
-     file counts at full length, and a file is never read to measure it.
-  3. Only then does it open each file (`O_RDONLY|O_NOFOLLOW|O_NONBLOCK`, so a
-     swapped-in FIFO cannot block), `fstat` the descriptor, which must show a
-     regular file with `nlink` 1 and the size the walk saw, and read at most
-     that many bytes.
-  4. It writes a tar stream of regular files and directories, with names it has
-     checked, to its stdout, and is killed after 32 MiB plus headers. The host
-     never uses `docker cp` or any copy that follows links; it reads only that
-     stream, with a bounded parser, into a fresh folder under names it
-     generated (`O_EXCL`, `O_NOFOLLOW`). Another entry type, an unchecked name,
-     a size that disagrees with its header and a stream over its cap fail the
-     same way.
-
-  Any violation fails the run as `output rejected`: nothing from its folder is
-  scanned, extracted or judged; the run is counted per arm, not rerun (see
-  [Arms](#arms)).
+- **The collector looks before it opens, and every later step on the agent's
+  bytes has a bound** ([COLLECTION.md](COLLECTION.md)). The collector walks with
+  `lstat` only, accepts regular files and directories only, and reads no more
+  than it measured; the host reads only its capped tar stream. A violation
+  fails the run as `output rejected`: nothing from its folder is scanned,
+  extracted or judged; the run is counted per arm, not rerun (see
+  [Arms](#arms)). A step that hits its bound fails that check or extraction
+  (counted, never named); it does not stall the batch.
 - Runs and judging happen on a local machine where the CLIs are logged in.
-
-Every later step that touches bytes or metadata the agent controls has a bound
-too, or runs in the sandbox without network. A step that hits its bound fails
-the run as `output rejected` (collect) or fails that check or extraction
-(counted, never named); it does not stall the batch.
-
-| Step | Where | Bound |
-|---|---|---|
-| Credential scan, pass one | host, on the validated copy | streams each file, constant memory. The patterns in [scan-patterns.json](scan-patterns.json) must be linear time (no nested quantifier, and two quantified runs only with a literal between them that the first cannot match); the runner refuses a pattern that is not |
-| Office files (zip) | extraction stage | reads entries in memory, never writes an entry to disk by name. At most 200 entries; 16 MiB inflated per entry and 64 MiB in all; inflation stops at the limit whatever the header says; a nested archive is not opened; a part holding `<!DOCTYPE` or `<!ENTITY` is not parsed |
-| PDF, SQLite, CSV | extraction and check stages | 200 pages; databases opened read-only; the limits in the next row |
-| Extraction and checks, as processes | second sandbox | 60 s CPU and 1 GiB memory per file or check, 10 minutes per run, no network. Over the limit, the extraction or check fails and is counted. The host reads at most 1 MiB of stdout from each and 8 MiB per run, kills the sandbox past either, and counts the extractions it skipped |
-| Judge input | host | extracted text cut at 256 KiB per output, the cut counted and reported; the same text rules for both arms; redaction runs on that text |
-| Stream JSON | host | read line by line with no whole-file parse. A line over 4 MiB (`claude` itself cuts tool output near 30 KB) is skipped, not parsed, and counted. Only the top-level events `system` (init, and the hook events `--include-hook-events` adds), `assistant` and `result` are parsed, after a prefix test and a nesting-depth scan (64 at most); tool results are never parsed. Numbers are taken from named fields and must be finite and not negative. The stream is cut at 128 MiB, stderr and the final message at 1 MiB each. An out-of-order event or a second or missing `result` is counted (see [Evidence](#evidence)) |
-| Commit scans | host | streamed through the scans in constant memory. A run is at most about 170 MiB (32 MiB files, 128 MiB stream, 8 MiB extracted text); the runner stops if free disk is below that |
-
-The collector, the host's tar parser and its stream parser have tests on
-made-up inputs before the smoke run, as the check script does. Collector: one
-folder per violation (symlink, FIFO, socket, hard link, sparse file over the
-limit, too many files, too deep, a long name, a symlink named `node_modules`),
-each rejected inside 60 s. Tar: a wrong entry type, a size mismatch, an
-oversize stream, an unchecked name. Stream: an over-long line, deep nesting, a
-bad number, an oversize stream, no `result`.
 
 The smoke run starts with a self-check from two places: the container as a
 plain process (the runner's exec), and `claude`'s Bash tool with the settings
@@ -164,15 +122,16 @@ hold:
   a dead sink cannot pass. Also the sandbox is on (a write outside the run
   folder fails with `Read-only file system`) and no process outside the sandbox
   is visible in `/proc`.
+- The credential-read probe under Credentials and spend.
 
 Its output goes into the results.
 
 ## Credentials and spend
 
 Each arm calls the vendor directly. No harness sits between `claude` and the
-Anthropic API, or between loadout and Jev (AGENTS.md rule 1). A spend limit at
-the vendor, keys that die when the batch ends and checks against the vendor's
-own record take a harness gateway's place.
+Anthropic API, or between loadout and Jev (AGENTS.md rule 1). Keys the agent
+cannot read, a spend limit at the vendor, keys that die when the batch ends and
+checks against the vendor's own record take a harness gateway's place.
 
 - **A workspace and a key per batch** (an arm; the smoke run). It needs a
   Console organization: the Admin and Usage APIs "are unavailable for individual
@@ -181,22 +140,75 @@ own record take a harness gateway's place.
   ([workspaces](https://platform.claude.com/docs/en/manage-claude/workspaces),
   same date) is the batch's approved cap, so the plan runs inside one calendar
   month. The page gives no enforcement delay, so the limit backs up the
-  pre-check under Expected spend.
-- **The key is in the agent's process.** `claude` needs it.
-  `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` keeps it out of the environments of
-  `Bash`, hooks and stdio MCP servers, and "the Claude Code process keeps the
-  credentials for its own API calls" ([env-vars](https://code.claude.com/docs/en/env-vars)).
-  `Bash` may still read `claude`'s `/proc/<pid>/environ`, and the Jev key sits in
-  a file (`jev.apiKeyFile`; an environment variable would be scrubbed) that
-  `Bash` can read as the same user. The protocol does not claim to withhold
-  either. They stay in the container because `Bash` has no network (Arms). One
-  that lands in an output, in any encoding, is already dead: the keys are
-  revoked before anything is scanned, judged or committed.
+  pre-check under Expected spend. The key gets an expiration (the Console offers
+  3 hours, 1 day, 7 days or 30 days,
+  [authentication](https://platform.claude.com/docs/en/manage-claude/authentication))
+  of 7 days, so a forgotten key dies by itself.
+- **The threat.** Skill text is third-party. It can tell `claude` to read a
+  credential with `Bash` or `Read` and put it into a pre-approved `find_skills`
+  call (PR #39 renames it `find_tools`). That call runs outside the Bash sandbox
+  and sends its `goal` (up to 4,000 characters) and `keywords` to Jev, where a
+  live key could sit in logs for the length of the run, up to about 27 h.
+  Revoking later does not undo that. The model's own turns go to Anthropic, which
+  already holds the Anthropic key, so that channel discloses nothing new.
+- **Layer 1, the primary one: the agent cannot read a key.**
+  - Both keys are files under one directory `<keys>`, outside the run folder.
+    The Anthropic key reaches `claude` through `apiKeyHelper`, a harness-owned
+    command that prints the file, with `ANTHROPIC_API_KEY` unset because the
+    variable outranks the helper ([authentication](https://code.claude.com/docs/en/authentication),
+    read 2026-10-14). So it is in no environment and no argv. The docs do not
+    say the helper runs under `-p`; the smoke run checks, and if it does not,
+    the key goes in the environment and `/proc` is the layer. The Jev key is
+    the file `jev.apiKeyFile` names, not an MCP `env` entry: the hook has no
+    configured `env`, and a key in a server's environment sits in
+    `/proc/<pid>/environ`.
+  - The helper, the hook and `loadout mcp` run outside the Bash sandbox "with
+    your full access" ([sandboxing](https://code.claude.com/docs/en/sandboxing)),
+    as the agent's user, so only the denials below keep `claude`'s tools out.
+    `--settings` denies `<keys>` twice. `permissions.deny` has `Read(//<keys>/**)`
+    and `Edit(//<keys>/**)`: they cover the built-in file tools ("best-effort"
+    for Grep and Glob), and Bash file commands Claude Code recognises
+    ([permissions](https://code.claude.com/docs/en/permissions)). `sandbox.filesystem.denyRead`
+    and `sandbox.credentials.files` with mode `deny` are enforced by the OS on
+    `Bash` and its children, and "A `denyRead` entry doesn't stop the Read
+    tool", so both kinds are needed. Permission paths use `//` for absolute,
+    sandbox paths `/`.
+  - `Read(//proc/**)` is denied too. `Read` runs inside `claude`, so
+    `/proc/self/environ` and `/proc/self/mem` are `claude`'s own.
+  - The default bubblewrap sandbox gives `Bash` a fresh `/proc`, so `claude` is
+    not in its view. `enableWeakerNestedSandbox` bind-mounts the container's
+    `/proc` and "exposes process information to sandboxed commands" (sandboxing).
+    I expect that includes `/proc/<claude pid>/root/<keys>`, outside the
+    sandbox's mounts. So the weaker mode is allowed only with `/proc` denied
+    for reads and the probe below passing, else a VM.
+  - `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` strips credentials from the
+    environments of `Bash`, hooks and stdio MCP servers, and
+    `CLAUDE_CODE_MCP_ALLOWLIST_ENV=1` gives servers "only a safe baseline
+    environment plus the server's configured `env`"
+    ([env-vars](https://code.claude.com/docs/en/env-vars)).
+  - **Probe, in the smoke run.** Canaries stand where the keys stand: a file in
+    `<keys>`, and a variable in `claude`'s environment and in the MCP server's.
+    From `Bash`, `Read`, `Grep` and `Glob` it tries each canary, the `environ`
+    and `cmdline` of `claude` and the MCP server under `/proc`,
+    `/proc/<pid>/root/<keys>/...` and `/proc/self/environ`. It passes only if no
+    nonce appears anywhere in the stream; the runner knows them, and the model's
+    account of what it saw is not used. It proves these reads fail on this
+    image and CLI version. It cannot prove that no other path exists, that the
+    Grep and Glob rule holds for every spelling, or that the real key sits
+    where the canary does.
+- **Layer 2, not in this PR:** loadout redacts strings that match the key
+  shapes in `scan-patterns.json` from everything it sends to Jev (`find_skills`
+  goals and keywords, hook prompts). BACKLOG E13 records it as a prerequisite
+  for the loadout arm. Base64 or splitting defeats it, so it is secondary.
+- **Layer 3, not adopted:** a key per task. The docs describe creating keys in
+  the Console, and federation needs an identity provider, so it would add a
+  service to build; the 7-day expiry bounds a leak instead.
 - **Revoked, and confirmed.** When a batch's last run (reruns included) ends,
   its workspace is archived, which "deactivates the workspace and archives every
   API key created for it", "within seconds", and "cannot be undone" (workspaces).
   Erik revokes the batch's dedicated Jev key. One request per key must then be
-  refused, else nothing from the batch is judged or committed.
+  refused, else nothing from the batch is judged or committed. The order is
+  revocation, then judging, then committing.
 - **Spend.** An arm's cost is the vendor's usage for its key (1-minute buckets
   by key, model and token class) at list prices (Expected spend), plus Jev. That
   data "typically appears within 5 minutes of API request completion, though
@@ -215,10 +227,11 @@ own record take a harness gateway's place.
   the plan stops there (stopping rule).
 - **Scanned.** The runner never prints a key. The scan looks for each key's
   exact value, its base64 and hex forms, and the shapes in
-  [scan-patterns.json](scan-patterns.json), in three passes: collected names and
-  contents, stream and `claude` stderr, before extraction; extracted text,
-  before judging (office files are compressed); and everything about to be
-  committed. A hit stops the batch and Erik is told.
+  [scan-patterns.json](scan-patterns.json), in three passes, all after the
+  revocation: collected names and contents, the stream (before it is gzipped)
+  and `claude` stderr, on the host; extracted text, before judging (office files
+  are compressed); and everything about to be committed. A hit stops the batch
+  and Erik is told.
 
 The prompt cache is shared between the runs of an arm (one key, one workspace),
 so a run can start warm after the one before it. A hit makes requests faster and
@@ -252,12 +265,13 @@ the run is rerun after the fix).
 2. Every `assistant` event names the pinned model, none holds a `tool_use` for
    a denied tool, and none comes from a nested conversation.
 3. The stream shows no compaction event.
-4. Message ids are unique, and each usage is finite with output tokens at most
-   the pinned 32,000.
+4. Message ids are unique and each usage is finite. `max_tokens` is not in the
+   stream, only `output_tokens`, which must stay at most the pinned 32,000.
 5. The vendor shows no model but the pinned one for the arm's key (before each
    task, from its record so far); token sums are compared at the end (Spend). A
    side call to another model that cannot be turned off is listed by the smoke
-   run and priced in.
+   run and priced in. The smoke key carries both models, so the check there is
+   per model.
 
 ## Given up compared with a harness gateway
 
@@ -269,17 +283,24 @@ the run is rerun after the fix).
 - Pins on a record the agent cannot reach. Tools, `max_tokens` (the setting
   covers "most requests") and compaction rest on the stream.
 - Per-run cost from the vendor, and a check of each Jev request.
-- No key in the sandbox. The batch key is in `claude`'s process, so the defence
-  is `Bash` without network, a spend limit and revocation before anything is
-  committed: a weaker position than a key that was never there.
+- No key kept out of the container. The keys are files the hook and `loadout
+  mcp` read, and the Anthropic key is in `claude`'s memory. The defence is that
+  `claude`'s tools cannot read them (layer 1), then redaction before Jev (layer
+  2, not built), then expiry and revocation. Two channels leave the Bash
+  sandbox: the model's turns to Anthropic, which already holds that key, and the
+  `find_skills` `goal` and `keywords` to Jev, where a live Jev key could sit in
+  logs for the run, and revocation cannot undo that. If layer 1 holds, nothing
+  reads the keys. The probe proves only that its canary reads fail on one image
+  and CLI version.
 
 ## Arms
 
 One run per task and arm. `$PROMPT` is `task.md` verbatim, read by the runner
 from outside the run folder. All arms share this argv and this environment;
 only `small-loadout` adds to it.
-- `ANTHROPIC_API_KEY=<the batch's key>` and `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1`
-  (Credentials and spend).
+- `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` and `CLAUDE_CODE_MCP_ALLOWLIST_ENV=1`.
+  `ANTHROPIC_API_KEY` is unset: the key comes from `apiKeyHelper` (Credentials
+  and spend).
 - `CLAUDE_CODE_MAX_OUTPUT_TOKENS=32000`: the same `max_tokens` in every arm; the
   worst request under Expected spend assumes it. The
   [env-vars](https://code.claude.com/docs/en/env-vars) page says it applies to
@@ -296,14 +317,24 @@ only `small-loadout` adds to it.
 - All are in env-vars (read 2026-10-14; `DISABLE_NON_ESSENTIAL_MODEL_CALLS` is
   not). The smoke run confirms each on the pinned CLI.
 
-The argv, with `$SANDBOX` set to
-`{"sandbox":{"enabled":true,"failIfUnavailable":true,"allowUnsandboxedCommands":false,"network":{"strictAllowlist":true}}}`
-and `$CEILING` the arm's per-run ceiling (Expected spend):
+The argv, with `$CEILING` the arm's per-run ceiling (Expected spend) and
+`$SETTINGS` this JSON (`<keys>` and `<helper>` are harness paths; no secret is
+in it):
+
+```json
+{"apiKeyHelper":"<helper>",
+ "permissions":{"deny":["Read(//<keys>/**)","Edit(//<keys>/**)","Read(//proc/**)"]},
+ "sandbox":{"enabled":true,"failIfUnavailable":true,"allowUnsandboxedCommands":false,
+  "network":{"strictAllowlist":true},
+  "filesystem":{"denyRead":["<keys>"]},
+  "credentials":{"files":[{"path":"<keys>","mode":"deny"}]}}}
+```
+
 
 ```bash
 claude -p "$PROMPT" --output-format stream-json --verbose --include-hook-events \
   --model "$MODEL" --max-budget-usd "$CEILING" --no-session-persistence \
-  --setting-sources '' --strict-mcp-config --mcp-config "$MCP" --settings "$SANDBOX" \
+  --setting-sources '' --strict-mcp-config --mcp-config "$MCP" --settings "$SETTINGS" \
   --permission-mode acceptEdits --allowedTools Bash $EXTRA_TOOLS \
   --disallowedTools WebFetch WebSearch Task Agent Workflow SendMessage Skill
 ```
@@ -311,14 +342,14 @@ claude -p "$PROMPT" --output-format stream-json --verbose --include-hook-events 
 | Arm | `$MODEL` | `$MCP` | Additions |
 |---|---|---|---|
 | `small-bare` | `claude-haiku-5-5` | `{"mcpServers":{}}` | none |
-| `small-loadout` | `claude-haiku-5-5` | `{"mcpServers":{"loadout":{"command":"loadout","args":["mcp"],"env":{"LOADOUT_HOME":"<home>"}}}}` | `--plugin-dir <plugin copy>`; `$EXTRA_TOOLS` = `mcp__loadout__find_skills mcp__loadout__load_skill`; `LOADOUT_HOME=<home>` in the environment, a loadout home with the full library, whose `config.json` points `jev.apiKeyFile` at the file holding the batch's Jev key and leaves `jev.baseUrl` at its default |
+| `small-loadout` | `claude-haiku-5-5` | `{"mcpServers":{"loadout":{"command":"loadout","args":["mcp"],"env":{"LOADOUT_HOME":"<home>"}}}}` | `--plugin-dir <plugin copy>`; `$EXTRA_TOOLS` = `mcp__loadout__find_skills mcp__loadout__load_skill`; `LOADOUT_HOME=<home>` in the environment, a loadout home with the full library, whose `config.json` points `jev.apiKeyFile` at the batch's Jev key file in `<keys>` and leaves `jev.baseUrl` at its default |
 | `large-bare` | `claude-sonnet-5-5` | `{"mcpServers":{}}` | none |
 
 - `plugins/loadout` is hook-only. The hook tells the agent to call
   `load_skill` or read a skill's SKILL.md, so the loadout arm also gets
   `loadout mcp` with its two read-only tools pre-approved, as the launchers
   do.
-- **`Bash` has no network.** `$SANDBOX` goes in with `--settings`, the "Command
+- **`Bash` has no network.** `$SETTINGS` goes in with `--settings`, the "Command
   line" settings level, which `--setting-sources` (`user`, `project`, `local`)
   does not exclude ([CLI reference](https://code.claude.com/docs/en/cli-reference),
   read 2026-10-14). Per the [sandboxing page](https://code.claude.com/docs/en/sandboxing)
@@ -342,9 +373,10 @@ claude -p "$PROMPT" --output-format stream-json --verbose --include-hook-events 
   [sub-agents page](https://code.claude.com/docs/en/sub-agents) (read
   2026-10-14) says `Task` became `Agent` in v2.1.63, `Task(...)` references
   "still work as aliases", and "To prevent Claude from delegating to any
-  subagent, deny the `Agent` tool itself". A bare name in `--disallowedTools` "removes the matching tools from Claude's
-  context" (CLI reference). The [tools reference](https://code.claude.com/docs/en/tools-reference)
-  lists three more paths, denied the same way: `Workflow` ("orchestrates many
+  subagent, deny the `Agent` tool itself". A bare name in `--disallowedTools`
+  "removes the matching tools from Claude's context" (CLI reference). The
+  [tools reference](https://code.claude.com/docs/en/tools-reference) lists three
+  more paths, denied the same way: `Workflow` ("orchestrates many
   subagents in the background"), `SendMessage` (writes to another agent or
   session) and `Skill` (a skill with `context: fork` runs in a subagent).
   Denying `Skill` disables all skills in every arm, bundled ones such as
@@ -395,17 +427,18 @@ claude -p "$PROMPT" --output-format stream-json --verbose --include-hook-events 
   "not run" in all arms.
 - **Invalid and rejected runs are results.** A run that fails an Evidence check
   is `invalid`; one whose folder fails collection (Isolation) is
-  `output rejected`. Neither is rerun. Every `invalid` run halts the plan (all
-  arms) until Erik classifies it as caused by the agent (it stands) or by
-  `claude` (a deviation under Frozen, and the run is rerun after the fix). Both
-  are counted per arm and task, and their cost counts toward the spend.
+  `output rejected`. Neither is rerun. An `invalid` run halts the plan as under
+  [Evidence](#evidence). Both are counted per arm and task, and their cost
+  counts toward the spend.
 
 ## What is committed
 
 AGENTS.md says to commit raw results, and a reviewer can check the numbers only
 against the outputs they came from. The fixtures and the agents' outputs are
 ours, so the only reasons to withhold anything are a secret, a path or a
-username. Committed under `bench/results/<timestamp>-c2/`:
+username. The streams also hold third-party skill text from `load_skill`
+results, which is not ours: Erik's read covers its licences (Open for Erik).
+Committed under `bench/results/<timestamp>-c2/`:
 - per run: the final message, every file the collector kept, the stream (gzip,
   hook events included), the `claude` stderr, the extracted text, the
   per-message usage records, and the runner's figures: arm, task, `capped`,
@@ -446,8 +479,8 @@ from the folder".
 
 The scans cannot see a key in a form they do not look for (split across files,
 compressed, enciphered). That is why the keys are revoked first and Erik reads
-the folder. Skill text a run loaded comes from the library snapshot whose hash
-is recorded.
+the folder. The skill text a run loaded comes from the library snapshot whose hash is
+recorded.
 
 Others can recompute from the folder the win, tie and split counts, the scores
 and intervals, the guess accuracy, check pass rates, and the cost, model call,
@@ -500,13 +533,8 @@ into RESULTS as a deviation.
 
 ## Checks by script
 
-A text judge cannot tell whether tests pass or a file opens. One script runs in
-the second sandbox after each run and records pass or fail per check, in a fresh
-folder with the agent's own tests, modules and `package.json` kept out, so a test
-that passes while testing nothing does not count. The rules, the check per task
-and the harness-owned probe for `web-signup-form` (the task names the interface,
-`validate({ email, password, confirm, terms })` in `validate.js`) are in
-[CHECKS.md](CHECKS.md).
+The per-task checks, how they are kept from passing vacuously, and the
+harness-owned signup probe are in [CHECKS.md](CHECKS.md).
 
 Pass rates per arm and check are reported with Wilson intervals, next to the
 judged results. The judge does not see them.
@@ -586,22 +614,25 @@ arm it is reading. Steps taken:
   win scores 1, a tie 0.5, a loss 0 and a split 0.5 (splits are also reported
   on their own). A pair with an `invalid` or `output rejected` run is not
   judged; it scores as a loss for the arm that has the bad run (a tie if both
-  do). S is the mean score over all paired tasks in the set, with a 95% Wilson
-  interval that treats S x n as successes out of n pairs. That is conservative
-  for scores with ties at 0.5, an approximation chosen in advance. The
-  non-inferiority margin is 0.10 below parity (0.5). For `small-loadout` against
-  `large-bare`, "match" is shown only if the lower bound is at least 0.40,
-  "better" if it is above 0.5, "worse" if the upper bound is below 0.5, else
-  "not shown". Against `small-bare`, "helps" if the lower bound is above 0.5,
-  "hurts" if the upper bound is below 0.5, else "not shown".
-- **What 14 pairs can and cannot show.** The lower bound reaches 0.40 from
-  S = 0.679 (9.5 points of 14) and 0.5 from S = 0.786 (11 points); with all 18
-  tasks, from 0.639 (11.5 points) and 0.75 (13.5). All 14 pairs tied gives
-  S = 0.5 with an interval of 0.27 to 0.73: "not shown", though the arms may be
-  equal. So "match" needs `small-loadout` to take about two thirds of the points
-  from `large-bare`, and an even result is consistent with a real gap of about 0.2 either way: the
-  likely outcome is "not shown". The margin is an assumption
-  (Open for Erik).
+  do). With W wins and L losses over the n paired tasks in the set, S = 0.5 +
+  (W - L) / (2n). Its 95% interval is a Tango (1998) score interval for
+  (W - L) / n, a paired method that keeps what the ties say; the formula and
+  its tests are [bench/c2-score.ts](../../c2-score.ts) and
+  [test/c2-score.test.ts](../../../test/c2-score.test.ts). The non-inferiority
+  margin is 0.10 below parity (0.5). For `small-loadout` against `large-bare`,
+  "match" is shown only if the lower bound is at least 0.40, "better" if it is
+  above 0.5, "worse" if the upper bound is below 0.5, else "not shown". Against
+  `small-bare`, "helps" if the lower bound is above 0.5, "hurts" if the upper
+  bound is below 0.5, else "not shown". Wins, ties and losses are always shown
+  beside it.
+- **What 14 pairs can and cannot show.** All 14 tied: S = 0.50, interval 0.39
+  to 0.61. One win and 13 ties: 0.54, 0.42 to 0.66. Nine wins, one tie, four
+  losses: 0.68, 0.43 to 0.85. With no losses the lower bound reaches 0.40 from
+  one win and 0.5 from four; the upper bound falls below 0.5 at four losses and
+  no wins. So one pair flips the label: 14 ties are "not shown" (lower bound
+  0.392) and one win with 13 ties is "match". At this margin "match" means "not
+  clearly worse", and ties reach it cheaply. A margin of 0.05 (lower bound 0.45)
+  needs 3 wins and no loss. The margin is an assumption (Open for Erik).
 - **Secondary, never a conclusion: the decisive-pair win rate,** wins / (wins +
   losses) with a 95% Wilson interval, next to the tie and split counts. It
   leaves ties out, so it is undefined when all pairs tie and reads 100% for one
@@ -629,10 +660,10 @@ criterion and the analysis. The runner, collector, resolver, sandbox self-check,
 credential probe, extraction script, check script with its tests and both judge
 prompts do not exist yet; they are committed before the smoke run and change
 only as set out under Smoke run first. The treatment is fixed before it. After
-the first full run starts, none of these changes. A change forced by a fault in the harness goes into RESULTS as
-a deviation, with the reason and the runs it touched; those runs are rerun once
-after the fix, and the originals stay reported. No tuning follows from these
-results on these tasks.
+the first full run starts, none of these changes. A change forced by a fault in
+the harness goes into RESULTS as a deviation, with the reason and the runs it
+touched; those runs are rerun once after the fix, and the originals stay
+reported. No tuning follows from these results on these tasks.
 
 ## Expected spend (local run)
 
@@ -726,8 +757,9 @@ these assumptions with measured figures before the full run is approved.
 - Sonnet 5.5 or Opus as the large tier (the `invoke.ts` runs used Sonnet 5.5).
 - The sandbox: container or VM (a throwaway user is ruled out above), and the
   engine, egress mechanism, resolver and collector sandbox. In a container,
-  `claude`'s Bash sandbox may need `enableWeakerNestedSandbox` (Arms). If the
-  smoke probe fails with it, I recommend a VM.
+  `claude`'s Bash sandbox may need `enableWeakerNestedSandbox`, which exposes
+  `/proc` (Credentials and spend). I recommend a VM, or the weaker mode only
+  with `/proc` denied and the probe passing.
 - Approved hours (Expected spend): about 27 h for 108 attempts of 15 minutes,
   plus the smoke run and the collection and extraction time. Set the figure.
 - Approvals (Expected spend): I recommend (n - 1) x high + ceiling with the
@@ -741,12 +773,18 @@ these assumptions with measured figures before the full run is approved.
   inside one calendar month. Archiving cannot be undone. Say whether the runner
   archives them or you do by hand before anything is judged.
 - The Jev key is dedicated to the `small-loadout` batch, and you revoke it
-  after. Say whether Jev reports usage per key. Recording each decision's calls, tokens and cost is a small change to
-  loadout (a harness task, not in this PR). The lexical router needs no Jev key
-  but measures a different product, so it is not the primary comparison.
-- The matching margin, 0.10 below parity (Analysis), is my assumption. Confirm
-  it or set another before any result exists. With 14 pairs "match" is likely
-  "not shown" either way.
+  after. Say whether Jev reports usage per key. Two loadout changes are
+  prerequisites for the loadout arm, neither in this PR: redacting key-shaped
+  strings before anything goes to Jev (BACKLOG E13), and recording each
+  decision's calls, tokens and cost. The lexical router needs no Jev key but
+  measures a different product, so it is not the primary comparison.
+- The streams hold third-party skill text from `load_skill` results. Before
+  anything is pushed, check the licences of the skills a run loaded.
+- The matching margin, 0.10 below parity (Analysis), is my assumption. With it
+  one win and 13 ties reads "match" and 14 ties "not shown" by 0.008, so one
+  pair flips the label. A margin of 0.05 needs 3 wins and no loss. I suggest
+  0.05, with wins, ties and losses always beside it; you decide, before any
+  result exists.
 - Delegation is off in every arm (see Arms). Confirm, or ask for a subagent
   rule; a subagent's requests would not be told apart from its parent's in the
   vendor's record.
