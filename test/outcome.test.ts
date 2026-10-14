@@ -13,7 +13,8 @@ const temps: string[] = [];
 afterAll(() => temps.forEach((dir) => rmSync(dir, { recursive: true, force: true })));
 
 describe('bench/outcome.ts judging', () => {
-  it('runs one judge call at a time, so the cached prompt stays warm', async () => {
+  // The stand-in `claude` is a shell script, which Windows cannot run from PATH.
+  it.skipIf(process.platform === 'win32')('runs one judge call at a time, so the cached prompt stays warm', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'loadout-outcome-test-'));
     temps.push(dir);
     const ids = ['a', 'b', 'c'];
