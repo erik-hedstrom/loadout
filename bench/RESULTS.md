@@ -92,12 +92,12 @@ backlog, B7).
   list. No model-free tool inventory was found for Claude (`init.tools` lists
   what is loaded; whether `/context` runs under `-p` is unverified); Codex's
   `mcpServerStatus/list` is one.
-- Every CLI child gets an environment built from a per-host allowlist, Claude
-  runs with updates off and MCP servers scrubbed of credentials, and the arms
-  are refused if a managed settings file, a server-managed cache, a macOS
-  profile or a cached Codex cloud bundle exists. A live Codex cloud bundle and
-  the Windows registry policy are not seen; the plan prints them as
-  preconditions. Details and sources: backlog, B7, "Isolation".
+- What the real homes make each CLI load, and what the harness does about it
+  (refuse, neutralise with a flag, or record as identical across arms), is one
+  table: backlog, B7, "Isolation". The plan prints it, and a `--run` saves the
+  names of the identical items present in `host-state.json`. A live Codex cloud
+  bundle, server-managed Claude settings that were not cached and the Windows
+  registry policy are not seen; the plan prints them as preconditions.
 - The host version is stored on each row and may not change during the study;
   Claude's plugin, skill and command inventory and Codex's version may not
   drift.

@@ -8,7 +8,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { DISABLED_FEATURES, execute, parseClaudeTurns, stopChild, withAppServer, type Command, type ToolCall } from '../bench/overhead.js';
 import { EventEmitter } from 'node:events';
 import { catalogFacts, serverInstructions, serverSpecs, serverTools } from '../bench/mcp-fixtures.js';
-import { arms, armId, buildPlan, canaryFound, canaryOf, checkCodexInventory, claudeEnv, estimate, childEnv, envAllowlist, CLAUDE_MANAGED_PRECONDITION, CLAUDE_SCRUB_PRECONDITION, CODEX_CLOUD_PRECONDITION, managedClaudeFiles, formatOffline, hostWrites, loadoutFacts, main, managedCodexFiles, offline, positiveControl, reading, resetWork, runStudy, summarize, type Arm, type Plan, type Row, type Run } from '../bench/mcp-overhead.js';
+import { arms, armId, buildPlan, canaryFound, canaryOf, checkCodexInventory, claudeEnv, estimate, childEnv, envAllowlist, CLAUDE_MANAGED_PRECONDITION, CLAUDE_SCRUB_PRECONDITION, CODEX_CLOUD_PRECONDITION, managedClaudeFiles, formatOffline, hostState, hostWrites, loadoutFacts, main, managedCodexFiles, offline, positiveControl, presentFiles, reading, refusedFiles, resetWork, runStudy, summarize, type Arm, type Plan, type Row, type Run } from '../bench/mcp-overhead.js';
 
 const temps: string[] = [];
 const temp = () => { const dir = mkdtempSync(join(tmpdir(), 'loadout-b7-test-')); temps.push(dir); return dir; };
@@ -122,7 +122,6 @@ describe('arms and environment', () => {
       expect(claudeEnv({ CLAUDE_CODE_MCP_ALLOWLIST_ENV: '0' }, toolSearch)).toMatchObject({ CLAUDE_CODE_MCP_ALLOWLIST_ENV: '1', CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1' });
     }
   });
-
 });
 
 describe('plan', () => {
@@ -160,6 +159,48 @@ describe('plan', () => {
       if (r.arm.host === 'codex') for (const flag of ['--ephemeral', '--ignore-user-config', '--ignore-rules']) expect(args).toContain(flag);
       else expect(args).toContain('--no-session-persistence');
     }
+  });
+
+  it('neutralises the real homes\' settings, hooks, MCP servers and memory on Claude, and config, hooks, rules and plugins on Codex', () => {
+    for (const r of plan().runs) {
+      const args = r.command.args;
+      const after = (flag: string) => args[args.indexOf(flag) + 1];
+      if (r.arm.host === 'claude') {
+        expect(args).toContain('--restricted');
+        expect(after('--setting-sources')).toBe('');
+        expect(JSON.parse(after('--settings')!)).toEqual({ disableAllHooks: true });
+        expect(args).toContain('--strict-mcp-config');
+        expect(r.command.env).toMatchObject({ CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1' });
+      } else if (r.command.args.includes('exec')) {
+        for (const flag of ['--ignore-user-config', '--ignore-rules']) expect(args).toContain(flag);
+        expect(args).not.toContain('--profile');
+        const disabled = args.flatMap((a, k) => (a === '--disable' ? [args[k + 1]] : []));
+        for (const feature of ['hooks', 'plugins', 'skill_mcp_dependency_install']) expect(disabled).toContain(feature);
+      }
+    }
+    expect(claudeEnv({ CLAUDE_CODE_DISABLE_AUTO_MEMORY: '0' })).toMatchObject({ CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1' });
+  });
+
+  it('lists every item the real homes make a CLI load, each with a decision and a source, and prints it', async () => {
+    const items = hostState({}, 'linux');
+    for (const i of items) { expect(i.how.length).toBeGreaterThan(10); expect(i.source.length).toBeGreaterThan(5); }
+    const names = (host: string, decision: string) => items.filter((i) => i.host === host && i.decision === decision).length;
+    expect(names('claude', 'neutralised')).toBe(4);
+    expect(names('codex', 'neutralised')).toBe(4);
+    expect(names('codex', 'refuse if present')).toBe(2);
+    expect(items.find((i) => i.item.includes('.env'))!.files).toEqual([join(homedir(), '.codex', '.env')]);
+    const lines: string[] = [];
+    await main(['--hosts', 'claude', '--configs', 'n1', '--repeats', '1'], { print: (s) => lines.push(s), run: never });
+    for (const i of hostState()) expect(lines.some((l) => l.startsWith(`LOADS ${i.host}: ${i.item}: ${i.decision}.`))).toBe(true);
+  });
+
+  it('records the presence of the items that stay identical across arms, by name only', () => {
+    const claudeHome = temp();
+    const codexHome = temp();
+    writeFileSync(join(claudeHome, 'CLAUDE.md'), 'private text');
+    mkdirSync(join(codexHome, 'skills'));
+    const items = hostState({ CLAUDE_CONFIG_DIR: claudeHome, CODEX_HOME: codexHome }, 'linux').filter((i) => i.decision.startsWith('identical'));
+    expect(items.flatMap((i) => presentFiles(i).map((f) => f.slice(f.lastIndexOf('/') + 1))).sort()).toEqual(['CLAUDE.md', 'skills']);
   });
 
   it('keeps every directory it creates or configures under the temp root', () => {
@@ -276,13 +317,22 @@ describe('plan', () => {
     const mac = managedClaudeFiles('darwin', {});
     expect(mac[0]).toBe('/Library/Application Support/ClaudeCode/managed-settings.json');
     expect(mac).toContain('/Library/Managed Preferences/com.anthropic.claudecode.plist');
-    expect(mac.some((f) => f.startsWith('/Library/Managed Preferences/') && f.endsWith('/com.anthropic.claudecode.plist') && f.split('/').length === 5)).toBe(true);
+    expect(mac.some((f) => f.startsWith('/Library/Managed Preferences/') && f.endsWith('/com.anthropic.claudecode.plist'))).toBe(true);
     expect(managedClaudeFiles('linux', {}).some((f) => f.includes('Managed Preferences'))).toBe(false);
     expect(managedClaudeFiles('win32', {})[0]).toContain('ClaudeCode');
     const fake = '/fake/managed-settings.json';
     expect(buildPlan(temp(), {}, clean, [fake]).blockers[0]).toContain(fake);
     expect(buildPlan(temp(), { hosts: ['codex'] }, clean, [fake]).blockers).toEqual([]);
     expect(plan().blockers).toEqual([]);
+  });
+
+  it('blocks the Claude arms by default when a server-managed cache exists in the config directory', () => {
+    const dir = temp();
+    writeFileSync(join(dir, 'remote-settings.json'), '{}');
+    const saved = process.env.CLAUDE_CONFIG_DIR;
+    process.env.CLAUDE_CONFIG_DIR = dir;
+    try { expect(buildPlan(temp(), { hosts: ['claude'], configs: ['n1'], repeats: 1 }, clean).blockers[0]).toContain(join(dir, 'remote-settings.json')); }
+    finally { if (saved === undefined) delete process.env.CLAUDE_CONFIG_DIR; else process.env.CLAUDE_CONFIG_DIR = saved; }
   });
 
   it('estimates by request, canary lookups included, and brackets the input tokens', async () => {
@@ -640,13 +690,13 @@ describe('measurement', () => {
     return { run, inventory, calls, listings };
   }
   const small = () => buildPlan(temp(), { configs: ['n1'], repeats: 1 }, { PATH: process.env.PATH }, []);
-  const study = (o: Opts = {}, p = small()) => { const h = fakeHost(p, o); return runStudy(p, temp(), { run: h.run, inventory: h.inventory, managed: () => [] }); };
+  const study = (o: Opts = {}, p = small()) => { const h = fakeHost(p, o); return runStudy(p, temp(), { run: h.run, inventory: h.inventory, refused: () => [] }); };
 
   it('measures both Claude requests of a run and one Codex request, without keeping inventory names', async () => {
     const p = small();
     const out = temp();
     const h = fakeHost(p);
-    const { rows, notes } = await runStudy(p, out, { run: h.run, inventory: h.inventory, managed: () => [] });
+    const { rows, notes } = await runStudy(p, out, { run: h.run, inventory: h.inventory, refused: () => [] });
     expect(rows).toHaveLength(6 * 2 + 3);
     expect(notes).toEqual([]);
     const claude = rows.filter((r) => r.host === 'claude');
@@ -673,7 +723,7 @@ describe('measurement', () => {
     const p = small();
     const out = temp();
     const h = fakeHost(p);
-    await runStudy(p, out, { run: h.run, inventory: h.inventory, managed: () => [] });
+    await runStudy(p, out, { run: h.run, inventory: h.inventory, refused: () => [] });
     const lines = readFileSync(join(out, 'preflight.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
     expect(lines).toHaveLength(3);
     expect(lines[0]).toMatchObject({ arm: 'codex/baseline', version: 'codex-cli 9.9.9', refusals: [] });
@@ -694,13 +744,30 @@ describe('measurement', () => {
     const p = small();
     const h = fakeHost(p);
     const fake = join(temp(), 'requirements.toml');
-    const { rows, notes } = await runStudy(p, temp(), { run: h.run, inventory: h.inventory, managed: () => [fake] });
+    const { rows, notes } = await runStudy(p, temp(), { run: h.run, inventory: h.inventory, refused: () => [fake] });
     expect(rows.some((r) => r.host === 'codex')).toBe(false);
     expect(rows.some((r) => r.host === 'claude')).toBe(true);
     expect(notes[0]).toContain(fake);
     expect(h.calls.some((c) => c.args.includes('exec') || c.args.includes('features'))).toBe(false);
     const clear = fakeHost(p);
-    expect((await runStudy(p, temp(), { run: clear.run, inventory: clear.inventory, managed: () => [] })).rows.some((r) => r.host === 'codex')).toBe(true);
+    expect((await runStudy(p, temp(), { run: clear.run, inventory: clear.inventory, refused: () => [] })).rows.some((r) => r.host === 'codex')).toBe(true);
+  });
+
+  it('refuses the Codex arms when $CODEX_HOME/.env exists, and the Claude arms when a server-managed cache does', async () => {
+    const codexHome = temp();
+    const claudeHome = temp();
+    expect(refusedFiles('codex', { CODEX_HOME: codexHome }, 'linux').filter((f) => f.startsWith(codexHome))).toEqual([]);
+    writeFileSync(join(codexHome, '.env'), 'OPENAI_API_KEY=not-a-key\nHOME=/elsewhere\n');
+    expect(refusedFiles('codex', { CODEX_HOME: codexHome }, 'linux').filter((f) => f.startsWith(codexHome))).toEqual([join(codexHome, '.env')]);
+    writeFileSync(join(claudeHome, 'remote-settings.json'), '{}');
+    expect(refusedFiles('claude', { CLAUDE_CONFIG_DIR: claudeHome }, 'linux').filter((f) => f.startsWith(claudeHome))).toEqual([join(claudeHome, 'remote-settings.json')]);
+    const p = small();
+    const h = fakeHost(p);
+    const { rows, notes } = await runStudy(p, temp(), { run: h.run, inventory: h.inventory, refused: () => refusedFiles('codex', { CODEX_HOME: codexHome }, 'linux') });
+    expect(rows.some((r) => r.host === 'codex')).toBe(false);
+    expect(rows.some((r) => r.host === 'claude')).toBe(true);
+    expect(notes[0]).toContain(join(codexHome, '.env'));
+    expect(h.calls.some((c) => c.args.includes('exec') || c.args.includes('features'))).toBe(false);
   });
 
   it('skips Codex and says so when a free check refuses it, and when an undeclared server is visible', async () => {
@@ -712,7 +779,7 @@ describe('measurement', () => {
     const p = small();
     const out = temp();
     const h = fakeHost(p, { inventory: () => new Map([['my-private-server', ['t']]]) });
-    const ambient = await runStudy(p, out, { run: h.run, inventory: h.inventory, managed: () => [] });
+    const ambient = await runStudy(p, out, { run: h.run, inventory: h.inventory, refused: () => [] });
     expect(ambient.rows.some((r) => r.host === 'codex')).toBe(false);
     const saved = readFileSync(join(out, 'preflight.jsonl'), 'utf8');
     expect(saved).toContain('differs from the arm');
@@ -761,27 +828,29 @@ describe('measurement', () => {
     const p = small();
     const out = temp();
     const h = fakeHost(p, { tools: (r, base) => (r.arm.kind === 'gateway' ? ['Bash'] : base) });
-    await expect(runStudy(p, out, { run: h.run, inventory: h.inventory, managed: () => [] })).rejects.toThrow();
+    await expect(runStudy(p, out, { run: h.run, inventory: h.inventory, refused: () => [] })).rejects.toThrow();
     const saved = readFileSync(join(out, 'rows.jsonl'), 'utf8');
     expect(saved).not.toContain('"kind":"gateway"');
   });
 
   it('leaves INCOMPLETE beside the partial rows of a run that stops, and removes it when the run finishes', async () => {
     const only = ['--run', '--hosts', 'claude', '--configs', 'n1', '--repeats', '1'];
-    {
-      const stopped = temp();
-      const p = buildPlan(temp(), { hosts: ['claude'], configs: ['n1'], repeats: 1 }, { PATH: process.env.PATH }, []);
-      const bad = fakeHost(p, { byOrder: true, tools: (r, base) => (r.arm.kind === 'gateway' ? ['Bash'] : base) });
-      await expect(main(only, { print: () => {}, run: bad.run, out: stopped, claudeManaged: [] })).rejects.toThrow();
-      expect(existsSync(join(stopped, 'INCOMPLETE'))).toBe(true);
-      expect(readFileSync(join(stopped, 'rows.jsonl'), 'utf8')).toContain('"kind":"baseline"');
-      expect(existsSync(join(stopped, 'summary.md'))).toBe(false);
-      const done = temp();
-      const good = fakeHost(p, { byOrder: true });
-      await main(only, { print: () => {}, run: good.run, out: done, claudeManaged: [] });
-      expect(existsSync(join(done, 'INCOMPLETE'))).toBe(false);
-      expect(readFileSync(join(done, 'summary.md'), 'utf8')).toContain('B7 input tokens per request');
-    }
+    const stopped = temp();
+    const p = buildPlan(temp(), { hosts: ['claude'], configs: ['n1'], repeats: 1 }, { PATH: process.env.PATH }, []);
+    const bad = fakeHost(p, { byOrder: true, tools: (r, base) => (r.arm.kind === 'gateway' ? ['Bash'] : base) });
+    await expect(main(only, { print: () => {}, run: bad.run, out: stopped, claudeManaged: [] })).rejects.toThrow();
+    expect(existsSync(join(stopped, 'INCOMPLETE'))).toBe(true);
+    expect(readFileSync(join(stopped, 'rows.jsonl'), 'utf8')).toContain('"kind":"baseline"');
+    expect(existsSync(join(stopped, 'summary.md'))).toBe(false);
+    const done = temp();
+    const good = fakeHost(p, { byOrder: true });
+    await main(only, { print: () => {}, run: good.run, out: done, claudeManaged: [] });
+    expect(existsSync(join(done, 'INCOMPLETE'))).toBe(false);
+    const recorded = readFileSync(join(done, 'host-state.json'), 'utf8');
+    expect(JSON.parse(recorded).map((i: { host: string }) => i.host).sort()).toEqual(['claude', 'codex', 'codex']);
+    expect(JSON.parse(recorded).every((i: { present: string[] }) => i.present.every((n) => !n.includes('/')))).toBe(true);
+    expect(recorded).not.toContain(homedir());
+    expect(readFileSync(join(done, 'summary.md'), 'utf8')).toContain('B7 input tokens per request');
   });
 
   it('does not measure while a blocker stands', async () => {

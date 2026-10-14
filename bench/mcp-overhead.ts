@@ -12,7 +12,7 @@
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { homedir, tmpdir, userInfo } from 'node:os';
-import { join, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -132,9 +132,10 @@ export const childEnv = (base: NodeJS.ProcessEnv, host: Host): NodeJS.ProcessEnv
  * the MCP servers it starts: `CLAUDE_CODE_MCP_ALLOWLIST_ENV` "spawn[s] stdio MCP servers with only a safe baseline environment
  * plus the server's configured `env`", and `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` strips credentials from subprocess environments
  * (CLI 2.1.83; by variable name from 2.1.251). A CLI too old to know either is not detectable offline: see the precondition.
+ * Auto memory is off, so no memory file is loaded into or written by a run ("does not create or load auto memory files", env-vars).
  */
 export function claudeEnv(base: NodeJS.ProcessEnv, toolSearch: ToolSearch = 'default'): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...base, MCP_TIMEOUT: '60000', DISABLE_AUTOUPDATER: '1', DISABLE_UPDATES: '1', CLAUDE_CODE_MCP_ALLOWLIST_ENV: '1', CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1' };
+  const env: NodeJS.ProcessEnv = { ...base, MCP_TIMEOUT: '60000', DISABLE_AUTOUPDATER: '1', DISABLE_UPDATES: '1', CLAUDE_CODE_MCP_ALLOWLIST_ENV: '1', CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1', CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1' };
   if (toolSearch !== 'default') env.ENABLE_TOOL_SEARCH = toolSearch;
   return env;
 }
@@ -198,13 +199,13 @@ export function managedClaudeFiles(platform: NodeJS.Platform = process.platform,
     join(env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'), 'remote-settings.json'), ...(platform === 'darwin' ? managedPlists('com.anthropic.claudecode') : [])];
 }
 
-export function buildPlan(root: string, only: Only = {}, env: NodeJS.ProcessEnv = process.env, claudeManaged: string[] = managedClaudeFiles().filter((f) => existsSync(f))): Plan {
+export function buildPlan(root: string, only: Only = {}, env: NodeJS.ProcessEnv = process.env, claudeManaged: string[] = refusedFiles('claude')): Plan {
   assertTemporary(root);
   const work = join(root, 'work');
   resetWork(work);
   const hosts = only.hosts ?? ['claude', 'codex'];
   const blockers: string[] = [];
-  if (hosts.includes('claude') && claudeManaged.length) blockers.push(`managed Claude settings exist (${claudeManaged.join(', ')}): they override --settings and can set env and paths, so the arms would not be isolated; remove them for this study`);
+  if (hosts.includes('claude') && claudeManaged.length) blockers.push(`managed Claude settings exist (${claudeManaged.join(', ')}): they override --settings and can set env and paths, so the arms would not be isolated; run the study on a machine and account without managed settings`);
   const runs: Run[] = [];
   for (const arm of arms()) {
     if (!hosts.includes(arm.host) || (arm.config && only.configs && !only.configs.includes(arm.config))) continue;
@@ -358,8 +359,8 @@ export function managedCodexFiles(platform: NodeJS.Platform = process.platform, 
   return [...['config.toml', 'requirements.toml', 'managed_config.toml'].map((f) => `/etc/codex/${f}`), ...(platform === 'darwin' ? managedPlists('com.openai.codex') : []), cloudCache];
 }
 
-export const CLAUDE_SCRUB_PRECONDITION = 'Claude MCP servers receive no login token only if this CLI honours CLAUDE_CODE_MCP_ALLOWLIST_ENV (introduced in a version the docs do not give) and CLAUDE_CODE_SUBPROCESS_ENV_SCRUB (2.1.83; credential names from 2.1.251); an older CLI ignores them silently. Codex starts stdio MCP servers with a small default environment plus the declared env (codex-rs/rmcp-client/src/utils.rs).';
-export const CLAUDE_MANAGED_PRECONDITION = 'Claude arms assume no Windows registry policy (HKLM or HKCU SOFTWARE\\Policies\\ClaudeCode) and no Windows policy inherited by WSL: those are not checked.';
+export const CLAUDE_SCRUB_PRECONDITION = 'Claude MCP servers receive no login token only if this CLI honours CLAUDE_CODE_MCP_ALLOWLIST_ENV (introduced in a version the docs do not give) or CLAUDE_CODE_SUBPROCESS_ENV_SCRUB (2.1.83; credential names from 2.1.251); a CLI that knows neither ignores them silently. Codex starts stdio MCP servers with a small default environment plus the declared env (codex-rs/rmcp-client/src/utils.rs).';
+export const CLAUDE_MANAGED_PRECONDITION = 'Claude arms assume no Windows registry policy (HKLM or HKCU SOFTWARE\\Policies\\ClaudeCode), no Windows policy inherited by WSL, and no server-managed settings for the logged-in organization (a `-p` run may apply them without caching them): those are not checked.';
 /**
  * A paid exec fetches the workspace's cloud config bundle when it is logged in with a ChatGPT business, education or
  * enterprise plan (codex-rs/cloud-config/src/service.rs, cloud_config_eligible_auth; exec/src/lib.rs). The bundle can set
@@ -368,13 +369,54 @@ export const CLAUDE_MANAGED_PRECONDITION = 'Claude arms assume no Windows regist
  */
 export const CODEX_CLOUD_PRECONDITION = 'Codex arms assume the logged-in account has no cloud-managed requirements (ChatGPT business, education or enterprise workspaces): a cached bundle is checked, but no free command shows a live one.';
 
-export interface Deps { run?: (command: Command) => Promise<string>; inventory?: typeof codexMcpInventory; managed?: () => string[] }
+type Decision = 'refuse if present' | 'neutralised' | 'identical across arms, recorded' | 'needed' | 'not checked';
+export interface HostItem { host: Host; item: string; files: string[]; decision: Decision; how: string; source: string }
+
+/**
+ * Everything the real homes make each CLI load at startup or during a run, with what the harness does about it. The single
+ * list: BACKLOG (B7, Isolation) points here. Claude sources: code.claude.com/docs/en/cli-reference, /settings-reference,
+ * /managed-settings, /env-vars (read 2026-10-14). Codex sources: openai/codex at cf0ed4c600161fcaa18eeac02b5fc715e1076955.
+ * A "refuse" item stops its host's arms when a file exists; an "identical" item is the same in every arm of the host, so the
+ * baseline delta cancels it, and its presence is saved as names only; the flags of a "neutralised" item are asserted in tests.
+ */
+export function hostState(env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform): HostItem[] {
+  const claude = env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude');
+  const codex = env.CODEX_HOME || join(homedir(), '.codex');
+  const at = (dir: string, ...names: string[]) => names.map((n) => join(dir, n));
+  const item = (host: Host, decision: Decision, name: string, files: string[], how: string, source: string): HostItem => ({ host, item: name, files, decision, how, source });
+  return [
+    item('claude', 'refuse if present', 'managed settings, managed MCP, server-managed cache, macOS profile', managedClaudeFiles(platform, env), 'they override --settings and can set env and paths; the plan blocks the Claude arms', 'docs/en/managed-settings, /server-managed-settings'),
+    item('claude', 'neutralised', 'settings.json and settings.local.json (user, project, local): env block, hooks, apiKeyHelper, statusLine, permissions, enabledPlugins, outputStyle', at(claude, 'settings.json', 'settings.local.json'), '--restricted loads only managed settings and --settings, and --setting-sources "" names no source', 'docs/en/cli-reference: --restricted, --setting-sources'),
+    item('claude', 'neutralised', 'hooks from settings, plugins, skills or agents, and the status line command', [], '"disableAllHooks":true in --settings', 'docs/en/settings-reference: disableAllHooks'),
+    item('claude', 'neutralised', 'MCP servers in ~/.claude.json (user and local scope), .mcp.json and plugins', at(env.CLAUDE_CONFIG_DIR || homedir(), '.claude.json'), '--strict-mcp-config with the arm\'s own --mcp-config', 'docs/en/cli-reference: --strict-mcp-config'),
+    item('claude', 'neutralised', 'auto memory', at(claude, 'projects'), 'CLAUDE_CODE_DISABLE_AUTO_MEMORY=1', 'docs/en/env-vars'),
+    item('claude', 'identical across arms, recorded', 'CLAUDE.md, rules, agents, skills, commands, plugins', at(claude, 'CLAUDE.md', 'rules', 'agents', 'skills', 'commands', 'plugins'), '--restricted does not skip them, and --bare and --safe-mode would also drop OAuth or the MCP servers; plugins, skills and slash commands are hashed from init and must match the baseline', 'docs/en/cli-reference: --restricted, --bare, --safe-mode; docs/en/env-vars: CLAUDE_CODE_SIMPLE'),
+    item('claude', 'needed', 'subscription login (credentials file, keychain, CLAUDE_CODE_OAUTH_TOKEN)', at(claude, '.credentials.json'), 'the study runs on subscription quota', 'backlog B7 decisions'),
+    item('claude', 'not checked', 'global config keys in ~/.claude.json', [], 'interface, IDE and teammate preferences only; none sets env, hooks or MCP', 'docs/en/settings-reference: Global config settings'),
+    item('codex', 'refuse if present', 'system, managed and cloud-bundle config layers', managedCodexFiles(platform, env), '--ignore-user-config does not skip them and they can move sqlite_home, log_dir and the MCP servers', 'codex-rs/config/src/loader/mod.rs, cloud-config/src/cache.rs'),
+    item('codex', 'refuse if present', '$CODEX_HOME/.env', at(codex, '.env'), 'Codex loads it into its own environment before any command, every name not starting CODEX_ (API keys, proxy URLs, HOME), past the allowlist', 'codex-rs/arg0/src/lib.rs: load_dotenv'),
+    item('codex', 'neutralised', 'config.toml: model, features, mcp_servers, notify, hooks, profiles, project trust', at(codex, 'config.toml'), '--ignore-user-config makes the user layer empty and no --profile is passed; -c overrides are a separate layer', 'codex-rs/config/src/loader/mod.rs: load_user_config_layer'),
+    item('codex', 'neutralised', 'hooks.json', at(codex, 'hooks.json'), '--disable hooks (the layer\'s folder stays CODEX_HOME, so the feature flag is what stops it; the free features check confirms it)', 'codex-rs/hooks/src/engine/discovery.rs'),
+    item('codex', 'neutralised', 'rules/*.rules', at(codex, 'rules'), '--ignore-rules', 'codex-rs/exec/src/cli.rs'),
+    item('codex', 'neutralised', 'plugins, marketplaces and skill MCP dependencies', at(codex, 'plugins', 'marketplaces'), '--disable plugins and --disable skill_mcp_dependency_install', 'codex-rs/features/src/lib.rs'),
+    item('codex', 'identical across arms, recorded', 'AGENTS.md and AGENTS.override.md', at(codex, 'AGENTS.md', 'AGENTS.override.md'), 'read at startup into every arm\'s prompt; the free prompt-input check runs on an empty home and does not see them', 'codex-rs/codex-home/src/instructions/mod.rs'),
+    item('codex', 'identical across arms, recorded', 'skills and agents (custom roles, which add to the spawn tool description)', [...at(codex, 'skills', 'agents'), join(homedir(), '.agents', 'skills')], '--ignore-user-config does not skip them: the user layer keeps CODEX_HOME as its folder', 'codex-rs/exec-server/src/discoverV2/capability_locations.rs, agent-roles/src/loader.rs'),
+    item('codex', 'needed', 'auth.json', at(codex, 'auth.json'), 'the study runs on subscription quota; Codex may refresh it in place', 'codex-rs/login'),
+    item('codex', 'not checked', 'a .codex folder or AGENTS.md above the temp working directory', [], 'a project layer needs trust, which lives in the emptied config.toml; not tested on a real tree', 'codex-rs/config/src/loader/mod.rs'),
+  ];
+}
+export const presentFiles = (i: HostItem) => i.files.filter((f) => existsSync(f));
+/** The files of the refuse items of one host that exist: they stop that host's arms. */
+export const refusedFiles = (host: Host, env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform) =>
+  hostState(env, platform).filter((i) => i.host === host && i.decision === 'refuse if present').flatMap(presentFiles);
+
+export interface Deps { run?: (command: Command) => Promise<string>; inventory?: typeof codexMcpInventory; refused?: () => string[] }
 interface Baseline { version: string }
 
 /** Free Codex checks. A refusal skips the Codex arms; Claude is independent. Only counts and hashes are saved. */
 async function codexPreflight(plan: Plan, deps: Required<Deps>, out: string): Promise<{ ready: boolean; baseline?: Baseline; reason?: string }> {
-  const managed = deps.managed();
-  if (managed.length) return { ready: false, reason: `managed Codex configuration exists (${managed.join(', ')}); --ignore-user-config does not skip it and it can move the state directories` };
+  const refused = deps.refused();
+  if (refused.length) return { ready: false, reason: `Codex state the study cannot isolate exists (${refused.join(', ')}): a managed layer, which --ignore-user-config does not skip, or $CODEX_HOME/.env, which Codex loads into its own environment` };
   let ready = true;
   let baseline: Baseline | undefined;
   for (const r of plan.runs.filter((x) => x.free)) {
@@ -395,7 +437,7 @@ export async function runStudy(plan: Plan, out: string, deps: Deps = {}): Promis
   if (plan.blockers.length) throw new Error(`blocked: ${plan.blockers.join('; ')}`);
   // Strictly sequential, each command in the emptied work directory.
   const fresh = <R>(f: (command: Command) => Promise<R>) => (command: Command) => { resetWork(plan.work); return f(command); };
-  const full = { run: fresh(deps.run ?? execute), inventory: fresh(deps.inventory ?? codexMcpInventory), managed: deps.managed ?? (() => managedCodexFiles().filter((f) => existsSync(f))) };
+  const full = { run: fresh(deps.run ?? execute), inventory: fresh(deps.inventory ?? codexMcpInventory), refused: deps.refused ?? (() => refusedFiles('codex')) };
   mkdirSync(out, { recursive: true });
   const rows: Row[] = [];
   const notes: string[] = [];
@@ -480,6 +522,7 @@ export async function main(args: string[], deps: { print?: (s: string) => void; 
     for (const blocker of plan.blockers) print(`BLOCKED: ${blocker}`);
     for (const write of hostWrites()) print(`HOST STATE: ${write}`);
     for (const precondition of [CODEX_CLOUD_PRECONDITION, CLAUDE_MANAGED_PRECONDITION, CLAUDE_SCRUB_PRECONDITION]) print(`PRECONDITION: ${precondition}`);
+    for (const i of hostState()) print(`LOADS ${i.host}: ${i.item}: ${i.decision}. ${i.how} (${i.source}).${i.decision === 'refuse if present' || i.decision.startsWith('identical') ? ` Present: ${presentFiles(i).map((f) => basename(f)).join(', ') || 'none'}.` : ''}`);
     for (const host of ['claude', 'codex'] as const) print(`ENV ${host}: a child gets only these variables, when set: ${envAllowlist(host).join(', ')}. Passed from this environment: ${Object.keys(childEnv(process.env, host)).join(', ')}.`);
     if (!values.run) {
       print('Illustrative: the temp root below is deleted when this exits, so use --run rather than replaying these lines. Every command runs in the one cwd shown, emptied before each. Claude is sent its stdin lines one at a time, each after the previous result.');
@@ -494,6 +537,7 @@ export async function main(args: string[], deps: { print?: (s: string) => void; 
     mkdirSync(out, { recursive: true });
     writeFileSync(join(out, 'INCOMPLETE'), 'This run did not finish: delete this folder; its rows are not a result.\n');
     writeFileSync(join(out, 'offline.json'), JSON.stringify(facts, null, 1));
+    writeFileSync(join(out, 'host-state.json'), JSON.stringify(hostState().filter((i) => i.decision.startsWith('identical')).map((i) => ({ host: i.host, item: i.item, present: presentFiles(i).map((f) => basename(f)) })), null, 1));
     const { rows, notes } = await runStudy(plan, out, { run: deps.run });
     writeFileSync(join(out, 'summary.md'), summarize(rows, notes) + '\n');
     rmSync(join(out, 'INCOMPLETE'));
