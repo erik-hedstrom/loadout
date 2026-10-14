@@ -227,7 +227,8 @@ library itself, in its own words, through MCP:
   list different servers at once cannot overwrite each other. Each file also
   carries a hash of the server's command or URL, env and headers; only the
   hash is stored. The hash marks an entry stale when the config changes. It is
-  not an integrity check, since anyone can compute it.
+  not an integrity check, since anyone can compute it. A listing that
+  succeeds with no tools deletes the file; one that fails leaves it.
   - Search reads the files as untrusted: it checks the shape and the sizes
     (128 KB file, 100 tools, 100/200 characters), ignores what fails, and
     escapes the text before it reaches Jev. A planted entry can change how a
@@ -237,6 +238,10 @@ library itself, in its own words, through MCP:
     description. The Jev question gets the text too; the embedding index does
     not.
   - Search never starts a server to fill the index.
+  - Keys and names reach the agent escaped, so one with tag-like text comes
+    back escaped. The gateway and `load_skill` accept the exact name first,
+    then the escaped form when exactly one capability has it, and `find_skills`
+    leaves out a capability whose escaped key would reach another.
 - **Cache and state files.** The scan cache, tool index, embeddings and hook
   state are written through `src/safefs.ts`; the embedding model folder and
   the session folder get its folder check. Session files (`decision.json`,

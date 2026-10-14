@@ -57,8 +57,8 @@ function readEntry(folder: string, c: Capability): ToolSummary[] | undefined {
 }
 
 /**
- * Remember a server's tools after a successful listing, and forget servers that are no longer gateway
- * servers in the library.
+ * Remember a server's tools after a successful listing (an empty one forgets them), and forget servers that
+ * are no longer gateway servers in the library.
  */
 export function rememberTools(dir: string, server: Capability, gateway: Capability[], tools: { name: string; description?: string }[]): void {
   const folder = join(dir, FOLDER);
@@ -74,6 +74,8 @@ export function rememberTools(dir: string, server: Capability, gateway: Capabili
     writeCacheFile(folder, entryFile(server.name), JSON.stringify({ version: VERSION, name: server.name, fingerprint: fingerprint(server.server!), tools: kept }), 'MCP tool index');
   }
   if (!isPlainFolder(folder)) return;
+  // A listing with no tools means the old entry is wrong now, so it goes rather than keep advertising them.
+  if (kept.length === 0) rmSync(join(folder, entryFile(server.name)), { force: true });
   const current = new Set(gateway.map((c) => entryFile(c.name)));
   try {
     for (const f of readdirSync(folder)) if (ENTRY_FILE.test(f) && !current.has(f)) rmSync(join(folder, f), { force: true });

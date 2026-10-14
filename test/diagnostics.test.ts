@@ -271,6 +271,73 @@ describe('E11 diagnostics', () => {
     expect(withTools(library, dir)[0]!.tools).toEqual([{ name: 'memo', description: 'Read a memo' }]);
   });
 
+  it('a successful empty listing forgets the remembered tools, and a failed one keeps them', async () => {
+    const dir = join(temp(), 'index');
+    const library = [capability({ command: 'unused' })];
+    const listing = async (list: () => Promise<{ tools: { name: string; inputSchema: { type: 'object' } }[] }>) => {
+      const call = await host({ library, toolIndex: dir });
+      await upstream((server) => server.setRequestHandler(ListToolsRequestSchema, list));
+      await call('server_tools', { server: 'fixture' });
+    };
+    await listing(async () => ({ tools: [{ name: 'memo', inputSchema: { type: 'object' } }] }));
+    expect(withTools(library, dir)[0]!.tools).toEqual([{ name: 'memo', description: '' }]);
+    await listing(async () => { throw new McpError(-32603, 'down'); });
+    expect(withTools(library, dir)[0]!.tools).toEqual([{ name: 'memo', description: '' }]);
+    await listing(async () => ({ tools: [] }));
+    expect(withTools(library, dir)[0]!.tools).toBeUndefined();
+  });
+
+  describe('names the agent sends back as find_skills and server_tools printed them', () => {
+    const tool = (name: string) => ({ name, description: `${name} tool`, inputSchema: { type: 'object' as const } });
+    /** An upstream that lists `names` and records which tool name a call reached. */
+    const calls = async (names: string[]) => {
+      const called: string[] = [];
+      await upstream((server) => {
+        server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: names.map(tool) }));
+        server.setRequestHandler(CallToolRequestSchema, async ({ params }) => { called.push(params.name); return { content: [{ type: 'text', text: 'done' }] }; });
+      });
+      return called;
+    };
+    const text = (res: unknown) => (res as { content: { text: string }[] }).content[0]!.text;
+    const keys = (found: string) => [...found.matchAll(/^- (\S+) \(/gm)].map((m) => m[1]!);
+
+    it('resolve for a server, its tools and a skill whose names hold tag-like text', async () => {
+      const folder = join(temp(), '<skill-notes');
+      mkdirSync(folder);
+      writeFileSync(join(folder, 'SKILL.md'), 'Notes reference');
+      const tracker = { ...capability({ command: 'unused' }, '</skill>tracker'), description: 'issue tracker tickets' };
+      const call = await host({ library: [tracker, { ...skill(folder, 'notes'), description: 'meeting notes' }] });
+      const called = await calls(['</skill>memo']);
+
+      const [serverKey] = keys(text(await call('find_skills', { goal: 'file an issue in the tracker', keywords: ['tracker', 'tickets'] })));
+      const [skillKey] = keys(text(await call('find_skills', { goal: 'write meeting notes', keywords: ['notes'] })));
+      expect(serverKey).toBe('mcp:&lt;/skill>tracker');
+      expect(skillKey).toBe('&lt;skill-notes');
+
+      for (const server of [serverKey, '&lt;/skill>tracker', '</skill>tracker']) {
+        expect(text(await call('server_tools', { server }))).toContain('&lt;/skill>memo');
+      }
+      expect(text(await call('server_tools', { server: serverKey, tool: '&lt;/skill>memo' }))).toContain('input schema');
+      expect(await call('call_server_tool', { server: serverKey, tool: '&lt;/skill>memo' })).toMatchObject({ content: [{ text: 'done' }] });
+      expect(called).toEqual(['</skill>memo']);
+      expect(text(await call('load_skill', { skill: skillKey }))).toContain('Notes reference');
+    });
+
+    it('prefer an exact name, and leave a server out of find_skills when its escaped key would reach another', async () => {
+      const [a, b] = [capability({ command: 'a' }, '<skill'), capability({ command: 'b' }, '&lt;skill')].map((c) => ({ ...c, description: 'shared tracker' }));
+      const call = await host({ library: [a!, b!] });
+      const called = await calls(['<skill', '&lt;skill']);
+
+      expect(keys(text(await call('find_skills', { goal: 'use the shared tracker', keywords: ['tracker'] })))).toEqual(['mcp:&lt;skill']);
+      // The escaped spelling is the other server's exact name, so it reaches that one; the raw name still reaches this one.
+      await call('call_server_tool', { server: 'mcp:&lt;skill', tool: '&lt;skill' });
+      expect(called).toEqual(['&lt;skill']);
+      expect(text(await call('server_tools', { server: '&lt;skill', tool: '&lt;skill' }))).toContain('&lt;skill tool');
+      await calls(['only-here']);
+      expect(text(await call('server_tools', { server: '<skill' }))).toContain('only-here');
+    });
+  });
+
   it('server_tools on a server without tools keeps its library name out', async () => {
     const call = await host({ library: [capability({ command: 'unused' }, EVIL_NAME)] });
     await upstream((server) => server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: [] })));

@@ -591,6 +591,10 @@ Learnings (2026-10-13):
   - the compact listing showed "arguments: none" for `$ref` and `oneOf`
     schemas;
   - the fingerprint ignored env and headers.
+- Codex's later rounds found two more: a key printed escaped (a name with
+  `<skill` in it) did not resolve when the agent sent it back, and a
+  successful empty listing left the old entry in the index. Both are fixed
+  and tested; a failed listing still leaves the entry.
 - Behaviour change: `loadout claude|codex` now refuses to write session files
   when `~/.loadout/sessions` is a link, with an error naming the folder. Before,
   a user who linked it (for example to another disk) was followed. Session

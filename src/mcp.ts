@@ -73,7 +73,15 @@ export async function findSkills(deps: SearchDeps, goal: string, keywords: strin
   const task = keywords.length ? `${goal}\nKeywords: ${keywords.join(', ')}` : goal;
   const repo = deps.repo ?? { name: 'project', files: [], dependencies: [], languages: {} };
   // Only what the agent can use from here: skills, and servers opted into the gateway.
-  const library = withTools(deps.library.filter((c) => c.kind === 'skill' || c.gateway), deps.toolIndex);
+  const offered = deps.library.filter((c) => c.kind === 'skill' || c.gateway);
+  // A capability whose escaped key would resolve to another (names that differ only by tag-like text) is left out
+  // rather than risk a call that reaches the wrong one.
+  const reachable = (c: Capability) => {
+    const key = escapeSkillTags(capabilityKey(c));
+    if (key === capabilityKey(c)) return true;
+    return c.kind === 'skill' ? resolveSkill(offered, key) === c : resolveServer(offered.filter((o) => o.kind === 'mcp'), key) === c;
+  };
+  const library = withTools(offered.filter(reachable), deps.toolIndex);
   const hasServers = library.some((c) => c.kind === 'mcp');
   // A search never waits long for the index (e.g. a first-run model download); keywords alone still work.
   const embeddings = deps.embeddings ? await Promise.race([deps.embeddings, delay(EMBEDDINGS_WAIT_MS)]) : undefined;
@@ -109,10 +117,25 @@ export async function findSkills(deps: SearchDeps, goal: string, keywords: strin
   return `${note}Matches (fit 0-1; ${how}):\n${lines.join('\n')}`;
 }
 
+/**
+ * Keys and names are escaped for the agent (find_skills, server_tools), so one with tag-like text comes back
+ * escaped and must still resolve. An exact match wins; the escaped form counts only when a single capability has it.
+ */
+function onlyEscaped(items: Capability[], requested: string, spellings: (c: Capability) => string[]): Capability | undefined {
+  const escaped = items.filter((c) => spellings(c).some((k) => escapeSkillTags(k) === requested));
+  return escaped.length === 1 ? escaped[0] : undefined;
+}
+
 /** Find a skill by key, falling back to its declared name. */
 function resolveSkill(library: Capability[], skill: string): Capability | undefined {
   const skills = library.filter((c) => c.kind === 'skill');
-  return skills.find((c) => capabilityKey(c) === skill) ?? skills.find((c) => c.name === skill) ?? skills.find((c) => `loadout:${c.name}` === skill);
+  return skills.find((c) => capabilityKey(c) === skill) ?? skills.find((c) => c.name === skill) ?? skills.find((c) => `loadout:${c.name}` === skill) ?? onlyEscaped(skills, skill, (c) => [capabilityKey(c)]);
+}
+
+/** Find a gateway server by its name or its `mcp:` key, as the agent sends it. */
+function resolveServer(servers: Capability[], requested: string): Capability | undefined {
+  const spellings = (s: Capability) => [s.name, `mcp:${s.name}`];
+  return servers.find((s) => spellings(s).includes(requested)) ?? onlyEscaped(servers, requested, spellings);
 }
 
 /** Relative paths of the regular files in a skill folder (no symlinks, no SKILL.md), up to a cap. */
@@ -237,6 +260,12 @@ const gatewayFailure = (name: string, origin: string | undefined) => (err: unkno
   throw new Error(diagnostic(`gateway ${escapeSkillTags(name)}`, origin, err));
 };
 
+/** The listed tool the agent named: exact, else the one whose name it sent back as listed (escaped). */
+function resolveTool(tools: ListedTool[], requested: string): ListedTool | undefined {
+  const escaped = tools.filter((t) => escapeSkillTags(t.name) === requested);
+  return tools.find((t) => t.name === requested) ?? (escaped.length === 1 ? escaped[0] : undefined);
+}
+
 /** Connections to the library's MCP servers, opened on first use and kept for the session. */
 export class Gateway {
   private clients = new Map<string, Promise<{ client: Client; origin?: string }>>();
@@ -247,14 +276,16 @@ export class Gateway {
   }
 
   private find(name: string): Capability | undefined {
-    return this.servers.find((s) => s.name === name || `mcp:${s.name}` === name);
+    return resolveServer(this.servers, name);
   }
 
   private connect(name: string): Promise<{ client: Client; origin?: string }> {
-    const existing = this.clients.get(name);
-    if (existing) return existing;
     const c = this.find(name);
     if (!c?.server) return Promise.reject(new Error(`no such MCP server in the library (have: ${this.names.map(escapeSkillTags).join(', ') || 'none'})`));
+    // Every spelling of a server shares one connection.
+    name = c.name;
+    const existing = this.clients.get(name);
+    if (existing) return existing;
     const s = c.server;
     let origin: string | undefined;
     let transport;
@@ -292,9 +323,7 @@ export class Gateway {
     return ready;
   }
 
-  /** The server's tools; with `tool`, that one tool's complete input schema. */
-  async tools(name: string, tool?: string): Promise<string> {
-    const { client, origin } = await this.connect(name);
+  private async list(name: string, client: Client, origin: string | undefined): Promise<ListedTool[]> {
     const tools: ListedTool[] = [];
     let cursor: string | undefined;
     for (let page = 0; page < MAX_TOOL_PAGES; page++) {
@@ -303,11 +332,18 @@ export class Gateway {
       cursor = res.nextCursor;
       if (!cursor) break;
     }
-    if (tools.length === 0) return 'the server has no tools.';
-    // connect() found the server, so it is in the library with its config.
+    return tools;
+  }
+
+  /** The server's tools; with `tool`, that one tool's complete input schema. */
+  async tools(name: string, tool?: string): Promise<string> {
+    const { client, origin } = await this.connect(name);
+    const tools = await this.list(name, client, origin);
+    // connect() found the server, so it is in the library with its config. An empty listing clears what was remembered.
     if (this.toolIndex) rememberTools(this.toolIndex, this.find(name)!, this.servers, tools);
+    if (tools.length === 0) return 'the server has no tools.';
     if (tool) {
-      const t = tools.find((x) => x.name === tool);
+      const t = resolveTool(tools, tool);
       if (!t) throw new Error('no such tool; list them with server_tools');
       return escapeSkillTags(`${t.name}: ${t.description ?? ''}\ninput schema: ${JSON.stringify(t.inputSchema)}`);
     }
@@ -316,7 +352,9 @@ export class Gateway {
 
   async call(name: string, tool: string, args: Record<string, unknown>) {
     const { client, origin } = await this.connect(name);
-    return client.callTool({ name: tool, arguments: args }).catch(gatewayFailure(name, origin));
+    // Only a name that could be escaped listing text needs a listing to find the real one.
+    const real = tool.includes('&lt;') ? resolveTool(await this.list(name, client, origin), tool)?.name ?? tool : tool;
+    return client.callTool({ name: real, arguments: args }).catch(gatewayFailure(name, origin));
   }
 
   async close(): Promise<void> {
@@ -388,7 +426,7 @@ export function createServer(deps: SearchDeps): { server: McpServer; gateway: Ga
         },
         annotations: { readOnlyHint: true },
       },
-      ({ server: name, tool }) => textTool(() => gateway.tools(name.replace(/^mcp:/, ''), tool)),
+      ({ server: name, tool }) => textTool(() => gateway.tools(name, tool)),
     );
     server.registerTool(
       'call_server_tool',
@@ -402,7 +440,7 @@ export function createServer(deps: SearchDeps): { server: McpServer; gateway: Ga
       },
       async ({ server: name, tool, arguments: args }) => {
         try {
-          const res = await gateway.call(name.replace(/^mcp:/, ''), tool, args ?? {});
+          const res = await gateway.call(name, tool, args ?? {});
           return res as { content: { type: 'text'; text: string }[]; isError?: boolean };
         } catch (err) {
           return failure(err);
