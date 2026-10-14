@@ -110,7 +110,7 @@ describe('E11 diagnostics', () => {
 
   it('missing skill never echoes caller input', async () => {
     const call = await host({});
-    expect(await call('load_skill', { skill: EVIL_NAME })).toMatchObject(failure('no such skill in the library; use find_skills to search'));
+    expect(await call('load_skill', { skill: EVIL_NAME })).toMatchObject(failure('no such skill in the library; use find_tools to search'));
   });
 
   it.each(['root', 'nested'] as const)('copySkillConfined %s link error is path-free', (stage) => {
@@ -314,8 +314,8 @@ describe('E11 diagnostics', () => {
       expect(scanned.map(capabilityKey).sort()).toEqual(['mcp:tracker', 'notes']);
       expect(skipped.sort()).toEqual(['<skill-notes', 'mcp:</skill>tracker', 'mcp:<SKILL']);
       const call = await host({ library: scanned });
-      expect(keys(text(await call('find_skills', { goal: 'write meeting notes', keywords: ['notes'] })))).toEqual(['notes']);
-      expect(keys(text(await call('find_skills', { goal: 'file an issue in the tracker', keywords: ['tracker'] })))).toEqual(['mcp:tracker']);
+      expect(keys(text(await call('find_tools', { goal: 'write meeting notes', keywords: ['notes'] })))).toEqual(['notes']);
+      expect(keys(text(await call('find_tools', { goal: 'file an issue in the tracker', keywords: ['tracker'] })))).toEqual(['mcp:tracker']);
       const { tools } = await call.client.listTools();
       expect(tools.find((t) => t.name === 'server_tools')?.description).toContain('MCP server from the library: tracker.');
     });
@@ -387,7 +387,7 @@ describe('E11 diagnostics', () => {
     const call = await host({ library: [skill(join(temp(), CANARY)), skill(temp(), 'confined')] });
     for (const [args, message] of [
       [{ skill: 'fixture', file: 'data.txt' }, 'could not read skill file'],
-      [{ skill: 'absent' }, 'no such skill in the library; use find_skills to search'],
+      [{ skill: 'absent' }, 'no such skill in the library; use find_tools to search'],
       [{ skill: 'confined', file: '../outside' }, 'give a path relative to the skill folder'],
       [{ skill: 'confined', file: 'absent' }, 'no such file in the skill'],
     ] as const) expect(await call('load_skill', args)).toMatchObject(failure(message));

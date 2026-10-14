@@ -60,7 +60,7 @@ Isolation needs per-CLI support that is not uniform yet (Claude Code has
 | Layer | When | Claude Code | Codex |
 |---|---|---|---|
 | **Launcher** (v0.1) | once per session | `--model`, `--plugin-dir`, `--mcp-config` | `-m`, `-c` overrides |
-| **Search server** (`loadout mcp`) | mid-session, on demand | `find_skills`, `load_skill`, gateway to library MCP servers; attached by the launcher | same — Codex speaks MCP |
+| **Search server** (`loadout mcp`) | mid-session, on demand | `find_tools`, `load_skill`, gateway to library MCP servers; attached by the launcher | same — Codex speaks MCP |
 | **Prompt hook** (`loadout hook claude\|codex`) | every prompt | D10 plugin (`plugins/loadout`): `UserPromptSubmit` adds the skills that fit as context (cache-safe: appended to the user turn), once per skill per session | same contract, once trusted with `/hooks`; untested ([hosts](docs/hosts.md)) |
 | **HTTP** (`loadout mcp --http`) | remote hosts | — | ChatGPT chat, behind an HTTPS tunnel; skills only, optional bearer token |
 
@@ -194,15 +194,16 @@ The launcher decides once, up front. When the work drifts (a debugging
 session turns into "now write the release notes"), the agent can search the
 library itself, in its own words, through MCP:
 
-- **`find_skills(goal, keywords?)`** runs the same two Jev requests on the
+- **`find_tools(goal, keywords?)`** runs the same two Jev requests on the
   agent's goal, over the library's skills and its gateway MCP servers. It
   returns at most 5 matches with fit ≥ 0.5, one line each (key, fit, a
   180-character description; "MCP server" and its tool count for a server),
   with the exact next call: `load_skill` for a skill, `server_tools` then
-  `call_server_tool` for a server. The name stays `find_skills`: the
-  launcher's pre-approval, the Codex plugin, the hook text, the benchmarks and
-  users' own approval rules all name it, and a rename would break them for no
-  gain in what the agent does. The need gate is softened, since the agent
+  `call_server_tool` for a server. The name says what agents look for
+  mid-conversation: tools, connectors and MCP servers, more often than skills.
+  It replaced an earlier name with no alias, since the package is unpublished
+  and two near-identical tools would cost context; benchmarks run before
+  2026-10-14 used the earlier name (bench/RESULTS.md). The need gate is softened, since the agent
   asked: when Jev judges the goal to be general work, only near-certain exact
   fits (P ≥ 0.8) are shown. Otherwise the answer says nothing fits and names
   the closest skill, so the agent does not load a near miss. About 1 s and
@@ -279,7 +280,7 @@ native listing of 50 skills with generated names adds about 477; B1
 interpolates the crossover near 57 such skills. Real-name costs, router calls
 and returned skills are not included ([B1](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request)).
 
-Approvals: the launcher pre-approves only `find_skills` and `load_skill`
+Approvals: the launcher pre-approves only `find_tools` and `load_skill`
 (Claude `--allowedTools`, Codex `tools.<tool>.approval_mode = "approve"`).
 They only read the user's own library. `call_server_tool` keeps the host's
 prompt, which shows the server, tool and arguments.

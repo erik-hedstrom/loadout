@@ -545,7 +545,7 @@ throwaway `CODEX_HOME`):
 **D15. MCP discovery.**
 
 Why (Erik, 2026-10-13): MCP servers are a bigger part of his context than
-skills, and MCP is a launch priority. `find_skills` already ranked gateway
+skills, and MCP is a launch priority. The search tool already ranked gateway
 servers, but everything the agent read talked about skills, so nothing cued a
 search for a tool and a match gave no clear next step. Library servers are not
 configured in the host, so they cost nothing until needed, and one search
@@ -567,12 +567,15 @@ Acceptance:
   search.
 
 Learnings (2026-10-13):
-- `find_skills` keeps its name (reason in DESIGN, search server).
-- Sizes, with one gateway server: server instructions 337 → 424 characters,
-  `find_skills` description 473 → 556, `server_tools` 76 → 120 (plus the
-  server names). A skills-only library gets byte-identical text, so the B1
-  figure still describes it. The with-server figure is not remeasured in
-  tokens.
+- The search tool is now `find_tools` (Erik, 2026-10-14; reason in DESIGN,
+  search server), with a description that leads with tools and MCP servers.
+  No alias. `load_skill`, `server_tools` and `call_server_tool` keep their
+  names.
+- Sizes in characters. Skills-only library: server instructions 337 → 336,
+  `find_tools` description 473 → 492. With one gateway server: instructions 424,
+  `find_tools` 582, `server_tools` 120 (76 before D15, plus the server
+  names). The skills-only text differs from what B1 measured, so the B1
+  token figure is not remeasured for either case.
 - A declared tool list in `mcp.json` was not added: nothing in the standard
   format carries one, and a second field would drift from the server. The
   index is filled by `server_tools` instead; before that call, search sees only

@@ -43,8 +43,8 @@ export interface Session {
 /** The MCP server name loadout's own search server is attached under. */
 export const SEARCH_SERVER = 'loadout';
 /** Read-only search tools that need no approval prompt: they only read the user's own library. */
-export const SEARCH_TOOLS = ['find_skills', 'load_skill'];
-export const SEARCH_HINT = "When the work involves a format, product, service or domain your skills do not cover, search the user's skill library with the loadout find_skills tool before starting on it.";
+export const SEARCH_TOOLS = ['find_tools', 'load_skill'];
+export const SEARCH_HINT = "When the work involves a format, product, service or domain your skills do not cover, search the user's skill library with the loadout find_tools tool before starting on it.";
 
 export function searchServer(windowsAgent: boolean): McpServerConfig {
   return loadoutCommand(['mcp'], windowsAgent);

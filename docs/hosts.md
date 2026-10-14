@@ -23,10 +23,10 @@ The columns:
   a launch keep the user's model.
 - **Hook:** a prompt hook routes every prompt and adds the skills that fit as
   context.
-- **Search:** `find_skills` and `load_skill` over MCP. `find_skills` covers
+- **Search:** `find_tools` and `load_skill` over MCP. `find_tools` covers
   the library's skills and its gateway servers.
 - **Gateway:** `server_tools` and `call_server_tool`, for library servers
-  marked `"gateway": true`. A server match from `find_skills` names these as
+  marked `"gateway": true`. A server match from `find_tools` names these as
   the next call.
 
 Notes:
@@ -40,7 +40,7 @@ Notes:
    ([RESULTS](../bench/RESULTS.md#the-hook-plugin-in-the-claude-code-cli-2026-10-08)).
    The settings-file hook ran in 10 sessions on 2026-10-07
    ([RESULTS](../bench/RESULTS.md#do-agents-use-what-they-are-given)).
-4. 10 headless sessions per host with `find_skills` attached, 2026-10-06
+4. 10 headless sessions per host with the search server attached, 2026-10-06
    ([RESULTS](../bench/RESULTS.md#do-agents-use-what-they-are-given)).
 5. The same plugin as the CLI. Erik's check is backlog D10.
 6. `loadout setup codex` prints marketplace and plugin install commands for

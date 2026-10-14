@@ -159,16 +159,17 @@ loadout library (`loadout add <dir>`).
 
 `loadout mcp` serves the library as an MCP server (**546 input tokens** of
 tool definitions in Claude Code for a skills-only library,
-[B1](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request);
-with gateway servers, the server instructions and the `find_skills` and
-`server_tools` descriptions gain a few words about MCP servers, sized in the
-D15 learnings in [the backlog](docs/loop/BACKLOG.md)),
+[B1](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request),
+measured before the search tool was renamed and its wording changed, so not
+remeasured; with gateway servers, the server instructions and the
+`find_tools` and `server_tools` descriptions gain a few words about MCP
+servers, sized in the D15 learnings in [the backlog](docs/loop/BACKLOG.md)),
 so an agent can look for know-how when the work drifts away from what the
 session started with, in its own words:
 
-- `find_skills(goal, keywords?)`: a Jev-ranked handful of matches with their
+- `find_tools(goal, keywords?)`: a Jev-ranked handful of matches with their
   fit, about a second and $0.001 per search; "nothing fits" when nothing does.
-  It searches the library's skills and its `"gateway": true` MCP servers
+  It searches the library's `"gateway": true` MCP servers and its skills
   together. A server match says it is an MCP server (with its tool count once
   `server_tools` has listed it) and gives the next call;
 - `load_skill(skill, file?)`: the skill's instructions as attributed

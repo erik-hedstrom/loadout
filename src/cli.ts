@@ -25,7 +25,7 @@ Usage:
   loadout claude [--dry-run] [--headless] <task> [-- <claude args>]
   loadout codex  [--dry-run] [--headless] <task> [-- <codex args>]
                                           --headless runs once and exits (claude -p / codex exec)
-  loadout mcp [--lexical]                 Serve the library over MCP (stdio): find_skills, load_skill,
+  loadout mcp [--lexical]                 Serve the library over MCP (stdio): find_tools, load_skill,
                                           and a gateway to the library's MCP servers
   loadout mcp --http [--port 8787] [--host 127.0.0.1] [--token-file f] [--allowed-host h]
                                           The same over Streamable HTTP (skills only), for remote hosts
