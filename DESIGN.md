@@ -199,10 +199,10 @@ library itself, in its own words, through MCP:
   returns at most 5 matches with fit ≥ 0.5, one line each (key, fit, a
   180-character description; "MCP server" and its tool count for a server),
   with the exact next call: `load_skill` for a skill, `server_tools` then
-  `call_server_tool` for a server. The name says what agents look for
-  mid-conversation: tools, connectors and MCP servers, more often than skills.
-  It replaced an earlier name with no alias, since the package is unpublished
-  and two near-identical tools would cost context; benchmarks run before
+  `call_server_tool` for a server. It was renamed from `find_skills` at Erik's
+  request (D15), since it also finds gateway servers and their tools. There is
+  no alias, since the package is unpublished and two near-identical tools would
+  cost context; benchmarks run before
   2026-10-14 used the earlier name (bench/RESULTS.md). The need gate is softened, since the agent
   asked: when Jev judges the goal to be general work, only near-certain exact
   fits (P ≥ 0.8) are shown. Otherwise the answer says nothing fits and names
