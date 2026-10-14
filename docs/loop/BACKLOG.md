@@ -265,24 +265,44 @@ requests, 0.24 to 0.29M tokens, 14 to 32 minutes. Claude pilot 2 (n20): 28
 requests, 0.24 to 1.93M tokens, 14 to 32 minutes. Codex pilot: 3 requests,
 0.03M tokens, 2 to 6 minutes.
 
-Ambient `CLAUDE.md`/`AGENTS.md` in the user directories or parents, and managed
-Claude settings, cannot be turned off by any flag; they are the same in every
-arm, and Claude's plugin, skill and command inventory and Codex's version are
-checked for drift. Codex's paid exec isolation rests on `--ignore-user-config`
-(`codex-rs/exec/src/cli.rs` at cf0ed4c: it skips `$CODEX_HOME/config.toml`, and
-auth still uses `CODEX_HOME`), so it covers `config.toml` only. A system or
-managed config can move `sqlite_home` or `log_dir` and add MCP servers, so the
-Codex arms are refused, naming the file, if `/etc/codex/config.toml`,
-`requirements.toml` or `managed_config.toml` (Windows:
-`%ProgramData%\OpenAI\Codex\config.toml`, `requirements.toml`) exists
-(`codex-rs/config/src/loader/mod.rs`, `layer_io.rs`). Known gap: macOS managed
-preferences and cloud requirements are not files and are not detected, and
-nothing checks the paid exec's MCP set at run time. Claude runs with
-`DISABLE_UPDATES=1` and `DISABLE_AUTOUPDATER=1` (code.claude.com/docs/en/env-vars,
-read 2026-10-14), so no new CLI is installed mid-study; Codex `exec` and
-`app-server` have no update check (it is in the tui crate). B1's Codex commands lack the flag (its Codex
-baseline was meant to be ambient and its paid Codex runs are deferred); revisit
-before running them.
+Isolation, and where it stops (the plan prints the preconditions, the env
+allowlist and the host directories a paid command may write in):
+- Every CLI child (paid and free, Claude and Codex, app-server included) gets
+  an environment built from an allowlist, not the parent's: PATH, HOME and
+  Windows system variables, locale, TMP, the proxy and CA variables if set,
+  `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `CODEX_SQLITE_HOME`, `XDG_CACHE_HOME`,
+  `CLAUDE_CODE_OAUTH_TOKEN`, plus each arm's own variables. `DEBUG` with
+  `CLAUDE_CODE_DEBUG_LOGS_DIR`, updaters, base URLs and API keys never reach
+  a child; the plan prints the names it drops. B1 is unchanged: it does not use
+  the helper and still inherits the environment.
+- Claude runs with `DISABLE_UPDATES=1` and `DISABLE_AUTOUPDATER=1`
+  (code.claude.com/docs/en/env-vars, read 2026-10-14). Codex `exec` and
+  `app-server` have no update check (it is in the tui crate).
+- Managed configuration overrides `--settings` and `--ignore-user-config`, so
+  the arms are refused, naming the files, if any exist: Claude's
+  `managed-settings.json`, `managed-settings.d` or `managed-mcp.json` in
+  `/etc/claude-code`, `/Library/Application Support/ClaudeCode` or
+  `C:\Program Files\ClaudeCode` (a blocker); Codex's `/etc/codex/config.toml`,
+  `requirements.toml` or `managed_config.toml`, or `config.toml` and
+  `requirements.toml` under ProgramData on Windows (both `%ProgramData%` and
+  `C:\ProgramData` are checked, because Codex asks Windows for the known folder
+  and Node cannot without a dependency). Codex's paid exec isolation otherwise
+  rests on `--ignore-user-config`, which skips `$CODEX_HOME/config.toml` only
+  (`codex-rs/exec/src/cli.rs`, `config/src/loader/mod.rs` at cf0ed4c).
+- Not detectable, so stated as preconditions: Claude MDM and server-managed
+  settings; Codex macOS managed preferences; and the Codex cloud config bundle,
+  which a paid exec fetches for a ChatGPT business, education or enterprise login
+  (`codex-rs/cloud-config/src/service.rs`, `cloud_config_eligible_auth`; API keys
+  cannot fetch it) and which can set `sqlite_home`, `log_dir` and MCP servers.
+  No flag or variable turns it off, and the free commands run without a login.
+  The Codex arms assume the logged-in account has no cloud-managed requirements.
+  `--run` is the approval; there is no confirmation flag.
+- Ambient `CLAUDE.md`/`AGENTS.md` in the user directories or parents cannot be
+  turned off; they are the same in every arm, and Claude's plugin, skill and
+  command inventory and Codex's version are checked for drift. Nothing checks
+  the paid Codex exec's MCP set at run time. B1's Codex commands lack
+  `--ignore-user-config` (its Codex baseline was meant to be ambient and its paid
+  Codex runs are deferred); revisit before running them.
 
 Decisions for Erik:
 - Approve the pilots, then the full run, with the host-state writes the plan prints.

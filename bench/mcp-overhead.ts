@@ -109,6 +109,21 @@ export interface Run { arm: Arm; repeat: number; servers: string[]; requests: nu
 export interface Plan { runs: Run[]; blockers: string[]; root: string; work: string }
 export interface Only { hosts?: Host[]; configs?: ConfigName[]; repeats?: number }
 
+// A variable can redirect writes (DEBUG with CLAUDE_CODE_DEBUG_LOGS_DIR, updaters, base URLs) to places hostWrites does not
+// list, and rounds 3 to 6 kept finding one more. So a CLI child gets these names only, when they are set.
+const RUN_ENV = ['PATH', 'HOME', 'USERPROFILE', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TERM', 'TMPDIR', 'TMP', 'TEMP', 'SHELL'];
+const WINDOWS_ENV = ['SYSTEMROOT', 'SYSTEMDRIVE', 'WINDIR', 'APPDATA', 'LOCALAPPDATA', 'PROGRAMDATA', 'PROGRAMFILES', 'PROGRAMFILES(X86)', 'COMSPEC', 'PATHEXT', 'USERNAME', 'USERDOMAIN'];
+// A corporate machine needs these to reach the API (code.claude.com/docs/en/env-vars; CODEX_CA_CERTIFICATE in codex-rs at cf0ed4c).
+const NETWORK_ENV = ['HTTPS_PROXY', 'HTTP_PROXY', 'ALL_PROXY', 'NO_PROXY', 'NODE_EXTRA_CA_CERTS', 'SSL_CERT_FILE', 'SSL_CERT_DIR', 'CODEX_CA_CERTIFICATE', 'CLAUDE_CODE_CERT_STORE', 'CLAUDE_CODE_CLIENT_CERT', 'CLAUDE_CODE_CLIENT_KEY'];
+// The homes hostWrites resolves and prints, and the subscription login token. API keys are not passed: under `-p` they would
+// bill cash instead of the subscription (backlog, B7 decision).
+const HOME_ENV = ['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'CODEX_SQLITE_HOME', 'XDG_CACHE_HOME', 'CLAUDE_CODE_OAUTH_TOKEN'];
+export const ENV_ALLOWLIST = [...RUN_ENV, ...WINDOWS_ENV, ...NETWORK_ENV, ...HOME_ENV];
+const allowed = (name: string) => ENV_ALLOWLIST.includes(name.toUpperCase());
+export const childEnv = (base: NodeJS.ProcessEnv): NodeJS.ProcessEnv => Object.fromEntries(Object.entries(base).filter(([name, value]) => value !== undefined && allowed(name)));
+/** Names only, never values. */
+export const droppedEnv = (base: NodeJS.ProcessEnv): string[] => Object.keys(base).filter((name) => !allowed(name)).sort();
+
 /**
  * The child environment for Claude: the tool search setting is explicit in every arm, never inherited, and updates are
  * off, so no new CLI is installed mid-study (code.claude.com/docs/en/env-vars, read 2026-10-14: `DISABLE_AUTOUPDATER`
@@ -164,12 +179,24 @@ export function resetWork(work: string) {
 
 const userMessage = (text: string) => JSON.stringify({ type: 'user', message: { role: 'user', content: [{ type: 'text', text }] } });
 
-export function buildPlan(root: string, only: Only = {}, env: NodeJS.ProcessEnv = process.env): Plan {
+/**
+ * Claude Code's managed settings files (code.claude.com/docs/en/managed-settings, read 2026-10-14). Nothing in `--settings`
+ * overrides a managed key (docs/en/settings, "Settings precedence"), and a managed file can set env and paths. MDM and
+ * server-managed settings are not files, so they are not detected.
+ */
+export function managedClaudeFiles(platform: NodeJS.Platform = process.platform): string[] {
+  const dir = platform === 'darwin' ? '/Library/Application Support/ClaudeCode' : platform === 'win32' ? 'C:\\Program Files\\ClaudeCode' : '/etc/claude-code';
+  return ['managed-settings.json', 'managed-settings.d', 'managed-mcp.json'].map((f) => join(dir, f));
+}
+
+export function buildPlan(root: string, only: Only = {}, env: NodeJS.ProcessEnv = process.env, claudeManaged: string[] = managedClaudeFiles().filter((f) => existsSync(f))): Plan {
   assertTemporary(root);
   const work = join(root, 'work');
   resetWork(work);
+  const clean = childEnv(env);
   const hosts = only.hosts ?? ['claude', 'codex'];
   const blockers = hosts.includes('claude') ? toolSearchBlockers(env) : [];
+  if (hosts.includes('claude') && claudeManaged.length) blockers.push(`managed Claude settings exist (${claudeManaged.join(', ')}): they override --settings and can set env and paths, so the arms would not be isolated; remove them for this study`);
   const runs: Run[] = [];
   for (const arm of arms()) {
     if (!hosts.includes(arm.host) || (arm.config && only.configs && !only.configs.includes(arm.config))) continue;
@@ -185,7 +212,7 @@ export function buildPlan(root: string, only: Only = {}, env: NodeJS.ProcessEnv 
       const home = join(root, 'codex-homes', `${armId(arm).replaceAll('/', '-')}-${name}`);
       assertTemporary(home);
       mkdirSync(home, { recursive: true });
-      const freeEnv: NodeJS.ProcessEnv = { ...env, CODEX_HOME: home };
+      const freeEnv: NodeJS.ProcessEnv = { ...clean, CODEX_HOME: home };
       delete freeEnv.CODEX_SQLITE_HOME;
       return command(args, { env: freeEnv });
     };
@@ -203,8 +230,8 @@ export function buildPlan(root: string, only: Only = {}, env: NodeJS.ProcessEnv 
       // commands cannot take the flags, so their inventory is checked against the arm's declaration instead.
       runs.push(arm.host === 'claude'
         ? { arm, repeat, servers: Object.keys(servers), canary, requests: canary ? 2 + MAX_TURNS : 2,
-            command: command([...claudeIsolation(servers), '--input-format', 'stream-json', '--max-turns', String(MAX_TURNS), '--model', MODELS.claude], { env: claudeEnv(env, arm.toolSearch), stdin: [...PROMPTS, ...(canary ? [canaryPrompt(canary)] : [])].map(userMessage) }) }
-        : { arm, repeat, servers: Object.keys(servers), requests: 1, command: command(['exec', '--json', '--ephemeral', '--ignore-user-config', '--ignore-rules', '--skip-git-repo-check', ...settings, PROMPTS[0]]),
+            command: command([...claudeIsolation(servers), '--input-format', 'stream-json', '--max-turns', String(MAX_TURNS), '--model', MODELS.claude], { env: claudeEnv(clean, arm.toolSearch), stdin: [...PROMPTS, ...(canary ? [canaryPrompt(canary)] : [])].map(userMessage) }) }
+        : { arm, repeat, servers: Object.keys(servers), requests: 1, command: command(['exec', '--json', '--ephemeral', '--ignore-user-config', '--ignore-rules', '--skip-git-repo-check', ...settings, PROMPTS[0]], { env: clean }),
             ...(repeat === 1 ? { free: { features: free('features', ['features', 'list', ...settings]), prompt: free('prompt', ['debug', 'prompt-input', ...settings, PROMPTS[0]]), version: free('version', ['--version']), inventory: free('inventory', ['app-server', ...settings]) } } : {}) });
     }
   }
@@ -311,9 +338,23 @@ const firstLine = (text: string) => text.trim().split(/\r?\n/)[0] ?? '';
  * requirements are not files, so they are not detected.
  */
 export function managedCodexFiles(platform: NodeJS.Platform = process.platform, env: NodeJS.ProcessEnv = process.env): string[] {
-  if (platform === 'win32') return ['config.toml', 'requirements.toml'].map((f) => join(env.ProgramData || 'C:\\ProgramData', 'OpenAI', 'Codex', f));
+  if (platform === 'win32') {
+    // Codex asks Windows for the ProgramData known folder and falls back to C:\ProgramData, not to the variable (loader/mod.rs).
+    // Node cannot ask without a dependency, so the variable and the fallback are both checked, once each.
+    const dirs = [...new Map([env.ProgramData, 'C:\\ProgramData'].filter((d): d is string => !!d).map((d) => [d.toLowerCase(), d])).values()];
+    return dirs.flatMap((dir) => ['config.toml', 'requirements.toml'].map((f) => join(dir, 'OpenAI', 'Codex', f)));
+  }
   return ['config.toml', 'requirements.toml', 'managed_config.toml'].map((f) => `/etc/codex/${f}`);
 }
+
+/**
+ * A paid exec fetches the workspace's cloud config bundle when it is logged in with a ChatGPT business, education or
+ * enterprise plan (codex-rs/cloud-config/src/service.rs, cloud_config_eligible_auth; exec/src/lib.rs). The bundle can set
+ * sqlite_home, log_dir and MCP servers. No flag or variable turns it off, and the free commands run without a login, so
+ * nothing here can see it.
+ */
+export const CLAUDE_MANAGED_PRECONDITION = 'Claude arms assume no MDM or server-managed settings (only the managed settings files are detected).';
+export const CODEX_CLOUD_PRECONDITION = 'Codex arms assume the logged-in account has no cloud-managed requirements (ChatGPT business, education or enterprise workspaces); the harness cannot detect them.';
 
 export interface Deps { run?: (command: Command) => Promise<string>; inventory?: typeof codexMcpInventory; managed?: () => string[] }
 interface Baseline { version: string }
@@ -426,6 +467,8 @@ export async function main(args: string[], deps: { print?: (s: string) => void; 
     print('The low figure uses B1\'s 8.5k tokens a call, measured with `--tools Skill`; B7 keeps every built-in tool, so it probably undercounts, and the high figure, built on the same base, is not an upper bound. Claude pilot 1 calibrates both.');
     for (const blocker of plan.blockers) print(`BLOCKED: ${blocker}`);
     for (const write of hostWrites()) print(`HOST STATE: ${write}`);
+    for (const precondition of [CODEX_CLOUD_PRECONDITION, CLAUDE_MANAGED_PRECONDITION]) print(`PRECONDITION: ${precondition}`);
+    print(`ENV: a CLI child gets only these variables, when set: ${ENV_ALLOWLIST.join(', ')}. Passed from this environment: ${Object.keys(childEnv(process.env)).join(', ')}. Dropped (names only): ${droppedEnv(process.env).join(', ')}.`);
     if (!values.run) {
       print('Illustrative: the temp root below is deleted when this exits, so use --run rather than replaying these lines. Every command runs in the one cwd shown, emptied before each. Claude is sent its stdin lines one at a time, each after the previous result.');
       for (const r of plan.runs) {

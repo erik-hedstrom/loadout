@@ -5,9 +5,10 @@ import { spawnSync } from 'node:child_process';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { DISABLED_FEATURES, execute, parseClaudeTurns, withAppServer, type Command, type ToolCall } from '../bench/overhead.js';
+import { DISABLED_FEATURES, execute, parseClaudeTurns, stopChild, withAppServer, type Command, type ToolCall } from '../bench/overhead.js';
+import { EventEmitter } from 'node:events';
 import { catalogFacts, serverInstructions, serverSpecs, serverTools } from '../bench/mcp-fixtures.js';
-import { arms, armId, buildPlan, canaryFound, canaryOf, checkCodexInventory, claudeEnv, estimate, formatOffline, hostWrites, loadoutFacts, main, managedCodexFiles, offline, positiveControl, reading, resetWork, runStudy, summarize, toolSearchBlockers, type Arm, type Plan, type Row, type Run } from '../bench/mcp-overhead.js';
+import { arms, armId, buildPlan, canaryFound, canaryOf, checkCodexInventory, claudeEnv, estimate, childEnv, droppedEnv, ENV_ALLOWLIST, CLAUDE_MANAGED_PRECONDITION, CODEX_CLOUD_PRECONDITION, managedClaudeFiles, formatOffline, hostWrites, loadoutFacts, main, managedCodexFiles, offline, positiveControl, reading, resetWork, runStudy, summarize, toolSearchBlockers, type Arm, type Plan, type Row, type Run } from '../bench/mcp-overhead.js';
 
 const temps: string[] = [];
 const temp = () => { const dir = mkdtempSync(join(tmpdir(), 'loadout-b7-test-')); temps.push(dir); return dir; };
@@ -130,7 +131,7 @@ describe('arms and environment', () => {
 
 describe('plan', () => {
   const clean = { PATH: process.env.PATH };
-  const plan = (only = {}, env: NodeJS.ProcessEnv = clean) => buildPlan(temp(), only, env);
+  const plan = (only = {}, env: NodeJS.ProcessEnv = clean) => buildPlan(temp(), only, env, []);
   const mcpOf = (r: Run) => JSON.parse(r.command.args[r.command.args.indexOf('--mcp-config') + 1]!).mcpServers as Record<string, { env?: { LOADOUT_HOME: string } }>;
 
   it('builds 46 runs: Claude sends its requests through one process, with a bounded canary message where deferral may be claimed', () => {
@@ -167,13 +168,13 @@ describe('plan', () => {
 
   it('keeps every directory it creates or configures under the temp root', () => {
     const root = temp();
-    const p = buildPlan(root, {}, clean);
+    const p = buildPlan(root, {}, clean, []);
     for (const r of p.runs) {
       expect(r.command.cwd.startsWith(root)).toBe(true);
       for (const s of Object.values(r.arm.host === 'claude' ? mcpOf(r) : {})) if (s.env) expect(s.env.LOADOUT_HOME.startsWith(root)).toBe(true);
     }
-    expect(() => buildPlan(join(homedir(), '.claude', 'b7-test'), {}, clean)).toThrow('temporary');
-    expect(() => buildPlan(join(homedir(), '.codex', 'b7-test'), {}, clean)).toThrow('temporary');
+    expect(() => buildPlan(join(homedir(), '.claude', 'b7-test'), {}, clean, [])).toThrow('temporary');
+    expect(() => buildPlan(join(homedir(), '.codex', 'b7-test'), {}, clean, [])).toThrow('temporary');
   });
 
   it('runs every command of every arm in one working directory, since the prompt carries it', () => {
@@ -195,7 +196,27 @@ describe('plan', () => {
       expect(readdirSync(home)).toEqual([]);
     }
     expect(free.every((c) => !('CODEX_SQLITE_HOME' in c.env!) && c.env!.PATH === process.env.PATH)).toBe(true);
-    expect(p.runs.every((r) => r.command.env === undefined)).toBe(true);
+    expect(p.runs.every((r) => r.command.env?.PATH === process.env.PATH)).toBe(true);
+  });
+
+  it('builds every child environment from an allowlist, so a debug log path or a stray variable cannot reach it', () => {
+    const ambient = { PATH: '/bin', HOME: '/h', HTTPS_PROXY: 'http://p', NODE_EXTRA_CA_CERTS: '/ca', CODEX_HOME: '/users/real', DEBUG: '1', CLAUDE_CODE_DEBUG_LOGS_DIR: '/elsewhere/log', RANDOM_B7_VAR: 'x', ANTHROPIC_API_KEY: 'k', ENABLE_TOOL_SEARCH: 'auto', CODEX_API_KEY: 'k' };
+    const p = plan({}, ambient);
+    const commands = p.runs.flatMap((r) => [r.command, ...Object.values(r.free ?? {})]);
+    expect(commands.length).toBeGreaterThan(60);
+    for (const c of commands) {
+      for (const name of ['DEBUG', 'CLAUDE_CODE_DEBUG_LOGS_DIR', 'RANDOM_B7_VAR', 'ANTHROPIC_API_KEY', 'CODEX_API_KEY']) expect(c.env).not.toHaveProperty(name);
+      expect(c.env).toMatchObject({ PATH: '/bin', HOME: '/h', HTTPS_PROXY: 'http://p', NODE_EXTRA_CA_CERTS: '/ca' });
+    }
+    expect(p.runs.filter((r) => r.arm.host === 'claude').every((r) => r.command.env!.ENABLE_TOOL_SEARCH === (r.arm.toolSearch === 'false' || r.arm.toolSearch === 'auto' ? r.arm.toolSearch : undefined))).toBe(true);
+    expect(p.runs.find((r) => r.arm.host === 'codex')!.command.env!.CODEX_HOME).toBe('/users/real');
+  });
+
+  it('matches allowed names case-insensitively and reports only the names it drops', () => {
+    expect(childEnv({ Path: 'C:\\x', systemroot: 'C:\\Windows', https_proxy: 'http://p', Debug: '1' })).toEqual({ Path: 'C:\\x', systemroot: 'C:\\Windows', https_proxy: 'http://p' });
+    expect(droppedEnv({ PATH: '/bin', DEBUG: '1', SECRET_TOKEN: 'shh' })).toEqual(['DEBUG', 'SECRET_TOKEN']);
+    expect(ENV_ALLOWLIST).toEqual(expect.arrayContaining(['PATH', 'HTTPS_PROXY', 'NODE_EXTRA_CA_CERTS', 'CODEX_HOME', 'CLAUDE_CONFIG_DIR']));
+    expect(ENV_ALLOWLIST).not.toContain('DEBUG');
   });
 
   it('makes the arms of a host differ only by their treatment', () => {
@@ -229,6 +250,16 @@ describe('plan', () => {
   it('requires every Codex server so a failed start cannot shrink an arm', () => {
     const codex = plan({ hosts: ['codex'], configs: ['n1'], repeats: 1 }).runs.find((r) => r.arm.kind === 'native')!;
     expect(codex.command.args.join(' ')).toContain('required');
+  });
+
+  it('blocks the Claude arms, naming the files, when managed Claude settings exist', () => {
+    expect(managedClaudeFiles('linux')).toEqual(['/etc/claude-code/managed-settings.json', '/etc/claude-code/managed-settings.d', '/etc/claude-code/managed-mcp.json']);
+    expect(managedClaudeFiles('darwin')[0]).toBe('/Library/Application Support/ClaudeCode/managed-settings.json');
+    expect(managedClaudeFiles('win32')[0]).toContain('ClaudeCode');
+    const fake = '/fake/managed-settings.json';
+    expect(buildPlan(temp(), {}, clean, [fake]).blockers[0]).toContain(fake);
+    expect(buildPlan(temp(), { hosts: ['codex'] }, clean, [fake]).blockers).toEqual([]);
+    expect(plan().blockers).toEqual([]);
   });
 
   it('reports a blocker instead of a misleading default arm', () => {
@@ -288,6 +319,9 @@ describe('plan', () => {
     const text = lines.join('\n');
     expect(text).toContain('probably undercounts');
     expect(text).toContain('Illustrative');
+    expect(lines).toContain(`PRECONDITION: ${CODEX_CLOUD_PRECONDITION}`);
+    expect(lines).toContain(`PRECONDITION: ${CLAUDE_MANAGED_PRECONDITION}`);
+    expect(lines.find((l) => l.startsWith('ENV: '))).toMatch(/only these variables.*Passed from this environment: .*Dropped \(names only\)/);
     for (const write of hostWrites()) expect(lines).toContain(`HOST STATE: ${write}`);
     const paid = lines.find((l) => l.startsWith('PAID claude/native/n1/false/1'))!;
     expect(paid).toContain('env=ENABLE_TOOL_SEARCH=false,MCP_TIMEOUT=60000');
@@ -318,6 +352,15 @@ describe('host process', () => {
     if (alive) process.kill(pid, 'SIGKILL');
     expect(alive).toBe(false);
     expect(Date.now() - started).toBeLessThan(5_000);
+  });
+
+  it('fails closed when a child is still alive after SIGKILL and the second bound', async () => {
+    const signals: (string | number | undefined)[] = [];
+    const stuck = Object.assign(new EventEmitter(), { pid: 4242, exitCode: null, signalCode: null, kill: (signal?: string | number) => { signals.push(signal); return true; } });
+    await expect(stopChild(stuck as never, 20, 20)).rejects.toThrow('did not exit after SIGKILL');
+    expect(signals).toEqual([undefined, 'SIGKILL']);
+    const polite = Object.assign(new EventEmitter(), { pid: 1, exitCode: null as number | null, signalCode: null, kill: () => { setTimeout(() => { polite.exitCode = 0; polite.emit('exit'); }, 10); return true; } });
+    await expect(stopChild(polite as never, 200, 20)).resolves.toBeUndefined();
   });
 
   it('waits for the app-server to exit before returning', async () => {
@@ -574,7 +617,7 @@ describe('measurement', () => {
     };
     return { run, inventory, calls, listings };
   }
-  const small = () => buildPlan(temp(), { configs: ['n1'], repeats: 1 }, { PATH: process.env.PATH });
+  const small = () => buildPlan(temp(), { configs: ['n1'], repeats: 1 }, { PATH: process.env.PATH }, []);
   const study = (o: Opts = {}, p = small()) => { const h = fakeHost(p, o); return runStudy(p, temp(), { run: h.run, inventory: h.inventory, managed: () => [] }); };
 
   it('measures both Claude requests of a run and one Codex request, without keeping inventory names', async () => {
@@ -617,7 +660,11 @@ describe('measurement', () => {
 
   it('refuses the Codex arms, naming the file, when a system or managed Codex config exists', async () => {
     expect(managedCodexFiles('linux')).toEqual(['/etc/codex/config.toml', '/etc/codex/requirements.toml', '/etc/codex/managed_config.toml']);
-    expect(managedCodexFiles('win32', { ProgramData: 'D:\\PD' }).every((f) => f.startsWith('D:\\PD') && f.includes('Codex'))).toBe(true);
+    // Codex asks Windows for ProgramData and falls back to C:\ProgramData, so both are checked, once each
+    const under = (dir: string) => ['config.toml', 'requirements.toml'].map((f) => join(dir, 'OpenAI', 'Codex', f));
+    expect(managedCodexFiles('win32', { ProgramData: 'D:\\PD' })).toEqual([...under('D:\\PD'), ...under('C:\\ProgramData')]);
+    expect(managedCodexFiles('win32', { ProgramData: 'c:\\programdata' })).toHaveLength(2);
+    expect(managedCodexFiles('win32', {})).toHaveLength(2);
     const p = small();
     const h = fakeHost(p);
     const fake = join(temp(), 'requirements.toml');
@@ -698,7 +745,7 @@ describe('measurement', () => {
     vi.stubEnv('ANTHROPIC_BASE_URL', '');
     try {
       const stopped = temp();
-      const p = buildPlan(temp(), { hosts: ['claude'], configs: ['n1'], repeats: 1 }, { PATH: process.env.PATH });
+      const p = buildPlan(temp(), { hosts: ['claude'], configs: ['n1'], repeats: 1 }, { PATH: process.env.PATH }, []);
       const bad = fakeHost(p, { byOrder: true, tools: (r, base) => (r.arm.kind === 'gateway' ? ['Bash'] : base) });
       await expect(main(only, { print: () => {}, run: bad.run, out: stopped })).rejects.toThrow();
       expect(existsSync(join(stopped, 'INCOMPLETE'))).toBe(true);

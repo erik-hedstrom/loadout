@@ -1,5 +1,5 @@
 /** B1: text-listing overhead, through official host CLIs. No model calls in --plan. */
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { appendFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
@@ -417,20 +417,24 @@ export async function withAppServer<T>(command: Command, body: (request: AppServ
     await request('initialize', { clientInfo: { name: 'loadout-overhead', version: '1' } });
     child.stdin.write(JSON.stringify({ method: 'initialized' }) + '\n');
     return await body(request);
-  } finally {
-    clearTimeout(timer); lines.close(); child.stdin.end();
-    // Wait for the exit, so the next command's reset of the work directory cannot hit a process still holding it (EBUSY on
-    // Windows), and force it after the grace if it ignores the first signal.
-    const alive = () => child.pid !== undefined && child.exitCode === null && child.signalCode === null;
-    const exited = new Promise<void>((done) => child.once('exit', () => done()));
-    const within = async (ms: number) => { let t: NodeJS.Timeout; await Promise.race([exited, new Promise<void>((done) => { t = setTimeout(done, ms); })]); clearTimeout(t!); };
-    const running = alive();
-    child.kill();
-    if (running) {
-      await within(graceMs);
-      if (alive()) { child.kill('SIGKILL'); await within(2_000); }
-    }
-  }
+  } finally { clearTimeout(timer); lines.close(); child.stdin.end(); await stopChild(child, graceMs); }
+}
+/**
+ * Stop a child and wait for it, so the next command's reset of the work directory cannot hit a process still holding it
+ * (EBUSY on Windows). It is forced after the grace if it ignores the first signal; one that outlives that fails the study.
+ */
+export async function stopChild(child: Pick<ChildProcess, 'pid' | 'exitCode' | 'signalCode' | 'kill' | 'once'>, graceMs = 5_000, forceMs = 2_000) {
+  const alive = () => child.pid !== undefined && child.exitCode === null && child.signalCode === null;
+  const exited = new Promise<void>((done) => child.once('exit', () => done()));
+  const within = async (ms: number) => { let t: NodeJS.Timeout; await Promise.race([exited, new Promise<void>((done) => { t = setTimeout(done, ms); })]); clearTimeout(t!); };
+  const running = alive();
+  child.kill();
+  if (!running) return;
+  await within(graceMs);
+  if (!alive()) return;
+  child.kill('SIGKILL');
+  await within(forceMs);
+  if (alive()) throw new Error('Codex app-server did not exit after SIGKILL; stopping the study');
 }
 /** Only initialize, skills/list and MCP inventory: never create a thread or submit a turn. */
 export const inspectCodex = (command: Command): Promise<Discovery> => withAppServer(command, async (request) => {
