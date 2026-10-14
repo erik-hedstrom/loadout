@@ -40,11 +40,11 @@ not start until the sandbox meets all of this:
   process count, disk for the run folder and the writable layer, and the
   15-minute wall clock.
 - **Egress enforced outside the container** (a network rule, not a setting
-  inside it). The only route is to the harness gateway ([GATEWAY.md](GATEWAY.md)),
-  by its exact address. Denied: everything else, the host, other containers, private
-  and link-local addresses (cloud metadata included), and any direct route to
-  the Anthropic and Jev APIs. WebFetch and WebSearch are disallowed too, as a
-  tool setting only.
+  inside it). The only route is to the harness gateway
+  ([GATEWAY.md](GATEWAY.md)), by its exact address. Denied: everything else,
+  the host, other containers, private and link-local addresses (cloud metadata
+  included), and any direct route to the Anthropic and Jev APIs. WebFetch and
+  WebSearch are disallowed too, as a tool setting only.
 - **Name resolution is egress too.** A lookup of `<secret>.attacker.example`
   reaches the attacker's name server with no connection from the container, and
   a skill can encode a credential into DNS labels. The only resolver the
@@ -153,11 +153,14 @@ holds them ([GATEWAY.md](GATEWAY.md)).
   `CLAUDE_CODE_MAX_RETRIES=5` (the N in GATEWAY.md). Compaction and the
   fallback would rewrite or re-send turns.
 - `FORCE_PROMPT_CACHING_5M=1`, since the gateway refuses the 1-hour cache TTL.
-- `CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1` (the background title request) and
-  `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`, the documented switches for
-  requests outside the conversation; the smoke run must see none.
+- `CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1` (the background title request),
+  `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` (auto-updates among others) and
+  `CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false`: the documented switches for
+  requests outside the conversation. The smoke run must see zero side calls.
+- `ENABLE_TOOL_SEARCH=false` loads every tool upfront. Unset, tool search is
+  off only because the base URL is not first-party.
 - All are in [env-vars](https://code.claude.com/docs/en/env-vars) (read
-  2026-10-13; `DISABLE_NON_ESSENTIAL_MODEL_CALLS` is not). The smoke run
+  2026-10-14; `DISABLE_NON_ESSENTIAL_MODEL_CALLS` is not). The smoke run
   confirms each on the pinned CLI.
 
 The argv:
@@ -191,11 +194,11 @@ claude -p "$PROMPT" --output-format stream-json --verbose --include-hook-events 
   that fills the window ends at the provider's context error and is judged as it
   stands, flagged `context full`. A compaction that happens anyway is off-chain.
 - **Pinned CLI.** The image holds one `claude` version, part of the treatment
-  hashes, with auto-update off (`DISABLE_AUTOUPDATER=1`).
+  hashes, with auto-update off (see the env list above).
 - **Caps.** 15 minutes wall clock per run, measured by the runner. On a timeout
   the folder as it stands is judged and the run is flagged `capped`; the rate
-  per arm is reported (in the pilot, loadout runs hit the 6-minute cap 4 times,
-  bare runs twice).
+  per arm is reported (in the [pilot](../../RESULTS.md#is-the-work-better-outcome-pilot-2026-10-07),
+  loadout runs hit the 6-minute cap 4 times, bare runs twice).
 - **Collected per run, kept local** in a folder outside the checkout, never
   pushed or shared: the stream, the `claude` stderr, the final message (the
   `result` text, or the last assistant text when there is no `result`), every
@@ -214,10 +217,11 @@ claude -p "$PROMPT" --output-format stream-json --verbose --include-hook-events 
   reported as missing.
 - **Invalid and rejected runs are results.** A run with an off-chain request
   or other off-list gateway traffic (GATEWAY.md) is `invalid`; one whose folder
-  fails collection (Isolation) is `output rejected`. The arm's skill text or the
-  agent's own commands caused both, so neither is rerun; a harness fault that
-  caused one is handled under Frozen. Both are counted per arm and task, and
-  their cost counts toward the spend.
+  fails collection (Isolation) is `output rejected`. Neither is rerun. Every
+  `invalid` run halts the batch until Erik classifies it as caused by the agent
+  (it stands) or by `claude` (a deviation under Frozen, and the run is rerun
+  after the fix). Both are counted per arm and task, and their cost counts
+  toward the spend.
 
 ## What is committed
 
@@ -294,9 +298,8 @@ It passes when:
   shows exit 0);
 - the collector and the extraction script run on each smoke output folder;
 - the gateway sorts every request of each smoke run as a next link or an exact
-  retry, sees zero side calls (requests outside the conversation) with the Arms
-  switches set, and the stream cross-check agrees with it exactly on message ids
-  and token sums;
+  retry, and the stream cross-check agrees with it exactly on message ids and
+  token sums;
 - a stub-upstream step answers `claude` with a 529, a mid-stream cut, a
   `max_tokens` stop and a context-overflow 400 in turn, and records exactly what
   it resends after each. The gateway's retry and continuation rules accept those
@@ -499,9 +502,10 @@ arm it is reading. Steps taken:
   run is not judged. It counts as a loss for the arm that has the bad run (a
   tie if both do), and the rate is also shown with those pairs left out, with
   their number beside it. It is shown too without the pairs where a run is
-  `context full`, which the loadout arm reaches sooner, with their number. With 14 decided tasks the interval clears
-  50% only from 11 wins (79%); with fewer decided tasks the bar is higher (7 of
-  8, 9 of 10, 10 of 12). Anything smaller is "not shown".
+  `context full`, which the loadout arm reaches sooner, with their number. With
+  14 decided tasks the interval clears 50% only from 11 wins (79%); with fewer
+  decided tasks the bar is higher (7 of 8, 9 of 10, 10 of 12). Anything smaller
+  is "not shown".
 - **Cost per task:** mean and median per arm of the gateway-priced cost (upstream
   usage at list price, as billed and uncached) plus Jev cost for
   `small-loadout`, with the CLI's `total_cost_usd` beside it as reported by the
@@ -517,11 +521,11 @@ arm it is reading. Steps taken:
 
 The commit that merges this protocol fixes the tasks, `KEY.md`, the checks,
 the redaction rules, the limits under Isolation, the accounting rules in
-[GATEWAY.md](GATEWAY.md), the primary comparisons and the analysis. The runner, collector,
-gateway, resolver, sandbox self-check, credential probe, extraction script,
-check script with its tests and both judge prompts do not exist yet; they are
-committed before the smoke run and change only as set out under Smoke run
-first. The treatment is fixed before it. After the first full run starts, none
+[GATEWAY.md](GATEWAY.md), the primary comparisons and the analysis. The
+runner, collector, gateway, resolver, sandbox self-check, credential probe,
+extraction script, check script with its tests and both judge prompts do not
+exist yet; they are committed before the smoke run and change only as set out
+under Smoke run first. The treatment is fixed before it. After the first full run starts, none
 of these changes. A change forced by a fault in the harness goes into RESULTS as
 a deviation, with the reason and the runs it touched; those runs are rerun once
 after the fix, and the originals stay reported. No tuning follows from these
@@ -590,14 +594,12 @@ limited to engine faults); the plan does not reduce the attempts.
 | **Total** | **about $78** | **about $136** |
 
 These are caps, not expectations: the expected cost is the no-reruns figure
-above. The gateway refuses the 1-hour cache TTL, whose write price is 2x input
-instead of 1.25x; allowing it would put the reservations at 2x. Wall clock is
-about 108 x 17 minutes (15-minute cap, 2-minute drain; about 31 h) plus the
-smoke run and up to 10 minutes per attempt for collection and extraction: a
-planning figure, since the drain runs longer where the smoke run measured a
-slower response. The runner also stops at the approved hours and reports what
-it left unrun. The smoke run replaces these assumptions with measured figures
-before the full run is approved.
+above. Wall clock is about 108 x 17 minutes (15-minute cap, 2-minute drain;
+about 31 h) plus the smoke run and up to 10 minutes per attempt for collection
+and extraction: a planning figure, since the drain runs longer where the smoke
+run measured a slower response. The runner also stops at the approved hours and
+reports what it left unrun. The smoke run replaces these assumptions with
+measured figures before the full run is approved.
 
 ## Open for Erik
 
@@ -615,7 +617,7 @@ before the full run is approved.
   rule the gateway can verify, which is more to build and test.
 - Invalid and `output rejected` runs count as a loss for their arm in the win
   rate, shown also without them (see Analysis). Confirm, or leave them out of
-  the primary rate.
+  the primary rate. Each `invalid` run halts the batch for you to classify.
 - Raw outputs stay local (What is committed), against AGENTS.md's "commit raw
   results". Confirm, or say which you will read and publish.
 - AGENTS.md rule 1: is a harness gateway that adds a credential header inside

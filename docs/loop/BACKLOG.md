@@ -240,7 +240,7 @@ Learnings (cloud half): [fixtures and protocol](../../bench/fixtures/c2/PROTOCOL
   for usage. The documented env switches turn off compaction, the
   non-streaming fallback, the 1-hour cache TTL and the background title
   request in all arms, so there is no side-call kind; the smoke run must see
-  none. Approvals are (n - 1) x high + ceiling: about $78 with Haiku 5.5,
+  none. Every `invalid` run halts the batch for Erik to classify. Approvals are (n - 1) x high + ceiling: about $78 with Haiku 5.5,
   $136 with Haiku 4.5, as caps.
 
 **C3. Tier choice.**

@@ -30,38 +30,39 @@ tell keys apart inside TLS. So no real key goes into the sandbox:
   reaches another account. It also reads each Anthropic request body, within a
   size limit (16 MiB, Jev 4 MiB; the smoke run may lower them), and refuses a
   body whose top-level keys, tool `type` values, `model` or `anthropic-beta`
-  header values the smoke run did not see `claude` send, or whose
-  `cache_control` has a `ttl` other than 5 minutes (see Arms). That closes the
-  server-side tools (web search, web fetch, code execution) and `mcp_servers`,
-  which would give `Bash` web access and remote tools. Such a refusal
-  invalidates the run. If a second run shows the same unseen value, `claude`
-  itself sends it: the batch halts for Erik, who adds it as a deviation under
-  Frozen, and the runs it touched are rerun. The `claude` version is pinned
-  (see Arms).
+  header values the smoke run did not see `claude` send, whose `cache_control`
+  has a `ttl` other than 5 minutes (see Arms), or whose assistant turns hold a
+  block type other than `text`, `tool_use`, `thinking` and `redacted_thinking`
+  (so an unhashed block such as `compaction` cannot be forged in). That closes
+  the server-side tools (web search, web fetch, code execution) and
+  `mcp_servers`, which would give `Bash` web access and remote tools. Such a
+  refusal invalidates the run. The `claude` version is pinned (see Arms).
 - **The gateway cannot tell `claude` from `Bash`,** which is a child of
   `claude` and inherits its environment: the placeholder key, the base URL and
   anything else `claude` holds are readable by `Bash`, and a secret only
   `claude` has does not exist. The placeholder key is unique per run, which
   attributes each request to its run and refuses a straggler from an earlier
   run, and binds nothing more. So a skill can POST to the allowed paths itself,
-  to get help from the arm's own model or to spend the cap. The protocol does
-  not prevent that. It sorts every request by what it is, never by who sent it,
-  and prices all of them.
+  to get help from the arm's own model or to spend the cap, or stop its parent
+  `claude` and run the chain itself, rewriting earlier user turns (which the
+  chain rule does not compare, below). The protocol does not prevent that. It
+  sorts every request by what it is, never by who sent it, and prices all of
+  them.
 - **Every request is a next link, an exact retry or off-chain,** by its body and
   the links before it, whatever its status and whether its stream was cut or
   completed. There is no fourth kind: `claude` makes no call outside the
-  conversation (Arms switches the background ones off, and the smoke run must
-  see none), and subagents are off. A request carrying k-1 assistant turns is at
-  position k. It *completes* when the gateway has read `message_stop` from
-  upstream while the client is still connected; an `error` event inside a 200
-  stream is a failure. The *link* at position k is the first request there to
-  complete: the first completed retry becomes the link, and a candidate that
-  completes later is priced and never a link.
+  conversation (Arms switches the background ones off), and subagents are off.
+  A request carrying k-1 assistant turns is at position k. It *completes* when
+  the gateway has read `message_stop` from upstream while the client is still
+  connected; an `error` event inside a 200 stream is a failure. The *link* at
+  position k is the first request there to complete: the first completed retry
+  becomes the link, and a candidate that completes later is priced and never a
+  link.
   - **Next link:** the first request at position k that
     1. carries links 1 to k-1 as its assistant turns, in order and equal by
        hash. The hash covers a turn's `text` and `tool_use` blocks, not its
-       `thinking` blocks, since with the 5.5 models `claude` may drop whole
-       thinking blocks from old turns;
+       `thinking` or `redacted_thinking` blocks, which `claude` may drop from
+       old turns (the smoke run records whether it does);
     2. has a last user turn that answers exactly the `tool_use` ids of link
        k-1; for a link without `tool_use` that stopped at `max_tokens`, it is
        ordinary text (the continuation); any other stop has no next link;
@@ -83,6 +84,12 @@ tell keys apart inside TLS. So no real key goes into the sandbox:
     that is not a link, a second conversation, another `model`, `system`,
     `tools` or `max_tokens`, a compaction, and any call outside the
     conversation.
+
+  Every `invalid` run halts the batch. Its record names what broke, from a fixed
+  set (a pin field by name, the hash, the answered `tool_use` ids, an allowlist,
+  the retry limit), never a value. Erik classifies the run as caused by the
+  agent, which stands, or by `claude`, which is a deviation under Frozen: the
+  runs it touched are rerun after the fix.
 
   Assistant turns reach `claude` only through the gateway, and `tool_use` ids
   are made upstream, so no request carries a turn the gateway did not return. A
@@ -187,7 +194,7 @@ is counted, scanned or not kept:
 
 | Record | Handling |
 |---|---|
-| Gateway | Per run: requests per allowed path, refused requests, bytes, status codes. Per request: kind, `model` and beta values (from the fixed sets), usage (input and cache tokens in `message_start`, output in the last `message_delta`), the response's message id and stop reason, a hash of its content blocks (`text` and `tool_use`: `type`, text, `id`, `name`, `input`; `thinking` blocks are left out), the hashes of the assistant turns the request carries, and `max_tokens`. Bodies are parsed, never stored; no body, header, query string or refused path is logged. Local: ids and hashes carry bits the agent chose, so only sums and the kinds by count are committed. |
+| Gateway | Per run: requests per allowed path, refused requests, bytes, status codes. Per request: kind, `model` and beta values (from the fixed sets), usage (input and cache tokens in `message_start`, output in the last `message_delta`), the response's message id and stop reason, a hash of its content blocks (`text` and `tool_use`: `type`, text, `id`, `name`, `input`; `thinking` and `redacted_thinking` blocks are left out), the hashes of the assistant turns the request carries, and `max_tokens`. Bodies are parsed, never stored; no body, header, query string or refused path is logged. Local: ids and hashes carry bits the agent chose, so only sums and the kinds by count are committed. |
 | Firewall drop log, container engine log | Not kept (a refused address and port carry bits; the log driver is off). Refusals are counted only. |
 | Stream JSON with hook events, final message, `claude` stderr | Local, never committed; scanned in pass one. |
 
@@ -197,11 +204,12 @@ invalid flags) are a thin channel too, a few bits per run.
 Between runs, a new sandbox, run volume, loadout home, placeholder key, ceiling
 and counters for each attempt, reruns included; the gateway and resolver keep
 nothing else. The provider's prompt cache is not isolated: runs on the account
-share it within its lifetime, so a run can start warm because of the one
-before it, honestly (same tools and system prompt) or by a request `Bash` sent
-to warm a prefix. A hit makes requests faster and billed cost lower. It can move the `capped` flag and the duration by the seconds per
-request a cached prefix saves, and through `capped` the files a run has when it
-is cut, so a check or a verdict. It does not change what a request returns or
-the uncached cost behind the headline. The order of arms is a stated limit and
-cache tokens are reported per run. Isolating it would take a provider
-workspace per run (a nonce in the prompt would change the treatment).
+share it within its lifetime, so a run can start warm because of the one before
+it, honestly (same tools and system prompt) or by a request `Bash` sent to warm
+a prefix. A hit makes requests faster and billed cost lower. It can move the
+`capped` flag and the duration by the seconds per request a cached prefix
+saves, and through `capped` the files a run has when it is cut, so a check or a
+verdict. It does not change what a request returns or the uncached cost behind
+the headline. The order of arms is a stated limit and cache tokens are reported
+per run. Isolating it would take a provider workspace per run (a nonce in the
+prompt would change the treatment).
