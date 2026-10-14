@@ -132,10 +132,18 @@ export const childEnv = (base: NodeJS.ProcessEnv, host: Host): NodeJS.ProcessEnv
  * the MCP servers it starts: `CLAUDE_CODE_MCP_ALLOWLIST_ENV` "spawn[s] stdio MCP servers with only a safe baseline environment
  * plus the server's configured `env`", and `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` strips credentials from subprocess environments
  * (CLI 2.1.83; by variable name from 2.1.251). A CLI too old to know either is not detectable offline: see the precondition.
- * Auto memory is off, so no memory file is loaded into or written by a run ("does not create or load auto memory files", env-vars).
+ * Auto memory is off ("does not create or load auto memory files"), no CLAUDE.md memory file is loaded ("including user, project, and
+ * auto memory files"), and the system-wide managed skills directory is skipped (env-vars, read 2026-10-14).
  */
+/**
+ * `--settings` for Claude: hooks off, and AGENTS.md off. A built-in plugin reads AGENTS.md as project instructions, and its
+ * setting is read from a `--settings` file; `managed-only` leaves only the managed CLAUDE.md and auto memory (docs/en/memory,
+ * "Choose which instruction files load"). The pre-2.1.285 plugin ID is used because later versions read either.
+ */
+export const CLAUDE_SETTINGS = { disableAllHooks: true, pluginConfigs: { 'agents-md@builtin': { options: { instructionFiles: 'managed-only' } } } };
+
 export function claudeEnv(base: NodeJS.ProcessEnv, toolSearch: ToolSearch = 'default'): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...base, MCP_TIMEOUT: '60000', DISABLE_AUTOUPDATER: '1', DISABLE_UPDATES: '1', CLAUDE_CODE_MCP_ALLOWLIST_ENV: '1', CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1', CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1' };
+  const env: NodeJS.ProcessEnv = { ...base, MCP_TIMEOUT: '60000', DISABLE_AUTOUPDATER: '1', DISABLE_UPDATES: '1', CLAUDE_CODE_MCP_ALLOWLIST_ENV: '1', CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1', CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1', CLAUDE_CODE_DISABLE_CLAUDE_MDS: '1', CLAUDE_CODE_DISABLE_POLICY_SKILLS: '1' };
   if (toolSearch !== 'default') env.ENABLE_TOOL_SEARCH = toolSearch;
   return env;
 }
@@ -213,7 +221,7 @@ export function buildPlan(root: string, only: Only = {}, env: NodeJS.ProcessEnv 
   resetWork(work);
   const hosts = only.hosts ?? ['claude', 'codex'];
   const blockers: string[] = [];
-  if (hosts.includes('claude') && claudeManaged.length) blockers.push(`managed Claude settings or policy limits exist (${claudeManaged.map((f) => redacted(f)).join(', ')}): managed settings override --settings and can set env and paths, and policy limits refresh at startup whatever the setting sources, so the arms would not be isolated; run the study on a machine and account without either`);
+  if (hosts.includes('claude') && claudeManaged.length) blockers.push(`Claude state the study cannot isolate exists (${claudeManaged.map((f) => redacted(f)).join(', ')}): managed settings override --settings and can set env and paths, policy limits refresh at startup whatever the setting sources, and instructions above the working directory may load; run the study on a machine and account without them`);
   const runs: Run[] = [];
   for (const arm of arms()) {
     if (!hosts.includes(arm.host) || (arm.config && only.configs && !only.configs.includes(arm.config))) continue;
@@ -248,7 +256,7 @@ export function buildPlan(root: string, only: Only = {}, env: NodeJS.ProcessEnv 
       // commands cannot take the flags, so their inventory is checked against the arm's declaration instead.
       runs.push(arm.host === 'claude'
         ? { arm, repeat, servers: Object.keys(servers), canary, requests: canary ? 2 + MAX_TURNS : 2,
-            command: command([...claudeIsolation(servers), '--input-format', 'stream-json', '--max-turns', String(MAX_TURNS), '--model', MODELS.claude], { env: claudeEnv(clean, arm.toolSearch), stdin: [...PROMPTS, ...(canary ? [canaryPrompt(canary)] : [])].map(userMessage) }) }
+            command: command([...claudeIsolation(servers, CLAUDE_SETTINGS), '--input-format', 'stream-json', '--max-turns', String(MAX_TURNS), '--model', MODELS.claude], { env: claudeEnv(clean, arm.toolSearch), stdin: [...PROMPTS, ...(canary ? [canaryPrompt(canary)] : [])].map(userMessage) }) }
         : { arm, repeat, servers: Object.keys(servers), requests: 1, command: command(['exec', '--json', '--ephemeral', '--ignore-user-config', '--ignore-rules', '--skip-git-repo-check', ...settings, PROMPTS[0]], { env: clean }),
             ...(repeat === 1 ? { free: { features: free('features', ['features', 'list', ...settings]), prompt: free('prompt', ['debug', 'prompt-input', ...settings, PROMPTS[0]]), version: free('version', ['--version']), inventory: free('inventory', ['app-server', ...settings]) } } : {}) });
     }
@@ -368,6 +376,7 @@ export function managedCodexFiles(platform: NodeJS.Platform = process.platform, 
 }
 
 export const CLAUDE_SCRUB_PRECONDITION = 'Claude MCP servers receive no login token only if this CLI honours CLAUDE_CODE_MCP_ALLOWLIST_ENV (introduced in a version the docs do not give) or CLAUDE_CODE_SUBPROCESS_ENV_SCRUB (2.1.83; credential names from 2.1.251); a CLI that knows neither ignores them silently. Codex starts stdio MCP servers with a small default environment plus the declared env (codex-rs/rmcp-client/src/utils.rs).';
+export const CLAUDE_SWITCH_PRECONDITION = 'Claude loads no CLAUDE.md and no managed skills only if this CLI honours CLAUDE_CODE_DISABLE_CLAUDE_MDS and CLAUDE_CODE_DISABLE_POLICY_SKILLS (the docs give no version for either; an older CLI ignores them silently): the setting sources, the folders above the working directory and the managed skills directory (recorded) are the checks behind them.';
 export const CLAUDE_MANAGED_PRECONDITION = 'Claude arms assume no Windows registry policy (HKLM or HKCU SOFTWARE\\Policies\\ClaudeCode), no Windows policy inherited by WSL, and no server-managed settings or policy limits for the logged-in organization (a cache of either is checked; a `-p` run may apply them without one): those are not checked.';
 /**
  * A paid exec fetches the workspace's cloud config bundle when it is logged in with a ChatGPT business, education or
@@ -387,44 +396,56 @@ export interface HostItem { host: Host; item: string; files: string[]; decision:
  * A "refuse" item stops its host's arms when a file exists; an "identical" item is the same in every arm of the host, so the
  * baseline delta cancels it, and its presence is saved as names only; the flags of a "neutralised" item are asserted in tests.
  */
-export function hostState(env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform): HostItem[] {
+export function hostState(env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform, workParent: string = tmpdir()): HostItem[] {
   const claude = env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude');
   const codex = env.CODEX_HOME || join(homedir(), '.codex');
+  const managed = claudeManagedDir(platform);
   const at = (dir: string, ...names: string[]) => names.map((n) => join(dir, n));
   const above = (dir: string): string[] => (dirname(dir) === dir ? [dir] : [dir, ...above(dirname(dir))]);
+  // The user's own dot-folders in the home directory are the config directories listed separately.
+  const ancestors = (names: string[], dotted: string[]) => above(workParent).flatMap((d) => [...at(d, ...names), ...(d === homedir() ? [] : at(d, ...dotted))]);
   const codexSystem = platform === 'win32' ? join(env.ProgramData || 'C:\\ProgramData', 'OpenAI', 'Codex') : '/etc/codex';
   // files only for the decisions that read them: refuse and identical
   const item = (host: Host, decision: Decision, name: string, how: string, source: string, files: string[] = []): HostItem => ({ host, item: name, files, decision, how, source });
+  const SDK = 'docs/en/agent-sdk/claude-code-features: What settingSources does not control, CLAUDE.md load locations';
   return [
     item('claude', 'refuse if present', 'managed settings, managed MCP, server-managed cache, macOS profile', 'they override --settings and can set env and paths; the plan blocks the Claude arms', 'docs/en/managed-settings, /server-managed-settings', managedClaudeFiles(platform, env)),
     item('claude', 'refuse if present', 'policy-limits.json and its stamp: the organization\'s cached feature policy, on some account types', 'refreshed automatically whatever the setting sources, so a refresh could change one arm of a pair; the plan blocks the Claude arms', 'docs/en/claude-directory: Kept until you delete them', at(claude, 'policy-limits.json', 'policy-limits.json.stamp.json')),
+    item('claude', 'refuse if present', 'memory, rules, skills, agents or commands in the folders above the temp working directory', 'neutralised below, but the setting sources and switches depend on the CLI version, so any trace stops the Claude arms; the user\'s own dot-folders in the home directory are listed elsewhere',
+      'docs/en/memory: How CLAUDE.md files load; /skills: Load skills in monorepos', ancestors(['CLAUDE.md', 'CLAUDE.local.md', 'AGENTS.md'], ['.claude/CLAUDE.md', '.claude/AGENTS.md', '.claude/rules', '.claude/skills', '.claude/agents', '.claude/commands'])),
     item('claude', 'neutralised', 'settings.json and settings.local.json (user, project, local): env block, hooks, apiKeyHelper, statusLine, permissions, enabledPlugins, outputStyle', '--restricted loads only managed settings and --settings, and --setting-sources "" names no source', 'docs/en/cli-reference: --restricted, --setting-sources'),
+    item('claude', 'neutralised', 'CLAUDE.md (user, project in the working directory and every parent, .claude/CLAUDE.md), CLAUDE.local.md, rules folders and their @path imports', '--setting-sources "" leaves out user, project and local, and CLAUDE_CODE_DISABLE_CLAUDE_MDS=1 skips any CLAUDE.md memory file', `${SDK}; docs/en/env-vars`),
+    item('claude', 'neutralised', 'AGENTS.md and .claude/AGENTS.md in the working directory and above', 'pluginConfigs "agents-md@builtin" instructionFiles "managed-only" in --settings', 'docs/en/memory: AGENTS.md, Choose which instruction files load'),
+    item('claude', 'neutralised', 'user and project skills, agents and commands, and skills synced from claude.ai (~/.claude/skills/synced)', '--setting-sources "" leaves out user and project, which also stops the claude.ai sync', `${SDK}; docs/en/skills: Where synced skills load`),
+    item('claude', 'neutralised', 'managed skills directory (.claude/skills in the managed settings directory)', 'CLAUDE_CODE_DISABLE_POLICY_SKILLS=1', 'docs/en/env-vars'),
     item('claude', 'neutralised', 'hooks from settings, plugins, skills or agents, and the status line command', '"disableAllHooks":true in --settings', 'docs/en/settings-reference: disableAllHooks'),
-    item('claude', 'neutralised', 'MCP servers in ~/.claude.json (user and local scope), .mcp.json and plugins', '--strict-mcp-config with the arm\'s own --mcp-config', 'docs/en/cli-reference: --strict-mcp-config'),
+    item('claude', 'neutralised', 'MCP servers in ~/.claude.json (user and local scope), .mcp.json, plugins and claude.ai connectors', '--strict-mcp-config with the arm\'s own --mcp-config', `docs/en/cli-reference: --strict-mcp-config; ${SDK}`),
     item('claude', 'neutralised', 'auto memory (projects/<project>/memory)', 'CLAUDE_CODE_DISABLE_AUTO_MEMORY=1', 'docs/en/env-vars'),
-    item('claude', 'identical across arms, recorded', 'CLAUDE.md, rules, agents, agent-memory, skills, commands, workflows, plugins (synced ones included) in the config directory, and the managed-policy CLAUDE.md',
-      '--restricted does not skip them, and --bare and --safe-mode would also drop OAuth or the MCP servers; plugins, skills and slash commands (workflows included) are hashed from init and must match the baseline, which also catches a claude.ai sync mid-study',
-      'docs/en/cli-reference: --restricted, --bare, --safe-mode; /memory: managed policy; /claude-directory: File reference', [...at(claude, 'CLAUDE.md', 'rules', 'agents', 'agent-memory', 'skills', 'commands', 'workflows', 'plugins'), join(claudeManagedDir(platform), 'CLAUDE.md')]),
-    item('claude', 'identical across arms, recorded', 'CLAUDE.md, CLAUDE.local.md and AGENTS.md in the folders above the temp working directory', 'loaded at launch from the working directory and every directory above it', 'docs/en/memory: How CLAUDE.md files load', above(tmpdir()).flatMap((d) => at(d, 'CLAUDE.md', 'CLAUDE.local.md', 'AGENTS.md'))),
+    item('claude', 'identical across arms, recorded', 'managed-policy CLAUDE.md and managed agents, which no setting excludes, the managed skills directory (also switched off above), and installed plugins',
+      'plugins, skills and slash commands are hashed from init and must match the baseline; the managed files cannot be excluded ("Managed policy CLAUDE.md files cannot be excluded")', 'docs/en/memory: Exclude specific CLAUDE.md files; /sub-agents: managed subagents; /claude-directory: File reference',
+      [join(managed, 'CLAUDE.md'), join(managed, '.claude', 'agents'), join(managed, '.claude', 'skills'), ...at(claude, 'plugins')]),
     item('claude', 'needed', 'subscription login (credentials file, keychain, CLAUDE_CODE_OAUTH_TOKEN)', 'the study runs on subscription quota', 'backlog B7 decisions'),
     item('claude', 'not checked', 'what Claude writes: transcripts, history.jsonl, stats-cache.json, caches, debug logs, sessions/, backups/, and keybindings.json and themes (interactive only)', 'listed as writable in HOST STATE; none is read into the prompt or the settings', 'docs/en/claude-directory: Application data'),
     item('claude', 'not checked', 'global config keys in ~/.claude.json', 'interface, IDE and teammate preferences only; none sets env, hooks or MCP', 'docs/en/settings-reference: Global config settings'),
     item('codex', 'refuse if present', 'system, managed and cloud-bundle config layers', '--ignore-user-config does not skip them and they can move sqlite_home, log_dir and the MCP servers', 'codex-rs/config/src/loader/mod.rs, cloud-config/src/cache.rs', managedCodexFiles(platform, env)),
     item('codex', 'refuse if present', '$CODEX_HOME/.env', 'Codex loads it into its own environment before any command, every name not starting CODEX_ (API keys, proxy URLs, HOME), past the allowlist', 'codex-rs/arg0/src/lib.rs: load_dotenv', at(codex, '.env')),
-    item('codex', 'neutralised', 'config.toml: model, features, mcp_servers, notify, hooks, profiles, project trust', '--ignore-user-config makes the user layer empty and no --profile is passed; -c overrides are a separate layer', 'codex-rs/config/src/loader/mod.rs: load_user_config_layer'),
+    item('codex', 'refuse if present', 'AGENTS.md, AGENTS.override.md, .codex or .agents in the folders above the temp working directory', 'AGENTS.md is read from the project root (the nearest .git) down to the working directory, project config layers and .agents/skills are read from there too, and none of it is skipped by --ignore-user-config',
+      'codex-rs/core/src/agents_md.rs, ext/skills/src/host_roots.rs: repo_agents_skill_roots', ancestors(['AGENTS.md', 'AGENTS.override.md'], ['.codex', '.agents'])),
+    item('codex', 'neutralised', 'config.toml and environments.toml: model, features, mcp_servers, notify, hooks, profiles, project trust, project_doc_fallback_filenames', '--ignore-user-config makes the user layer empty, loads no environments.toml, and no --profile is passed; -c overrides are a separate layer', 'codex-rs/config/src/loader/mod.rs: load_user_config_layer; exec/src/lib.rs: EnvironmentManager::from_env'),
     item('codex', 'neutralised', 'hooks.json', '--disable hooks (the layer\'s folder stays CODEX_HOME, so the feature flag is what stops it; the free features check confirms it)', 'codex-rs/hooks/src/engine/discovery.rs'),
     item('codex', 'neutralised', 'rules/*.rules', '--ignore-rules', 'codex-rs/exec/src/cli.rs'),
     item('codex', 'neutralised', 'plugins, marketplaces and skill MCP dependencies', '--disable plugins and --disable skill_mcp_dependency_install', 'codex-rs/features/src/lib.rs'),
     item('codex', 'identical across arms, recorded', 'AGENTS.md and AGENTS.override.md', 'read at startup into every arm\'s prompt; the free prompt-input check runs on an empty home and does not see them', 'codex-rs/codex-home/src/instructions/mod.rs', at(codex, 'AGENTS.md', 'AGENTS.override.md')),
     item('codex', 'identical across arms, recorded', 'skills (user, ~/.agents and the admin root next to the system config) and agents (custom roles, which add to the spawn tool description)', '--ignore-user-config does not skip them: the user layer keeps CODEX_HOME as its folder, and the system layer\'s folder is a skills root', 'codex-rs/ext/skills/src/host_roots.rs, exec-server/src/discoverV2/capability_locations.rs, agent-roles/src/loader.rs', [...at(codex, 'skills', 'agents'), join(homedir(), '.agents', 'skills'), join(codexSystem, 'skills')]),
     item('codex', 'needed', 'auth.json', 'the study runs on subscription quota; Codex may refresh it in place', 'codex-rs/login'),
-    item('codex', 'not checked', 'a .codex folder or AGENTS.md above the temp working directory', 'a project layer needs trust, which lives in the emptied config.toml; not tested on a real tree', 'codex-rs/config/src/loader/mod.rs'),
+    item('codex', 'not checked', 'models_cache.json: the model catalog cache', 'a five-minute cache of what the service returns, refreshed when the service sends a new ETag; a change mid-study would be the service\'s, the same for every arm that follows it, and is not detected', 'codex-rs/models-manager/src/manager.rs'),
+    item('codex', 'not checked', 'Claude Code files (CLAUDE.md, .claude/settings.json)', 'read only by an app-server import request, which neither exec nor the free commands send', 'codex-rs/app-server/src/external_agent_migration'),
   ];
 }
 export const presentFiles = (i: HostItem) => i.files.filter((f) => existsSync(f));
 /** The files of the refuse items of one host that exist: they stop that host's arms. */
-export const refusedFiles = (host: Host, env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform) =>
-  hostState(env, platform).filter((i) => i.host === host && i.decision === 'refuse if present').flatMap(presentFiles);
+export const refusedFiles = (host: Host, env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform, workParent: string = tmpdir()) =>
+  hostState(env, platform, workParent).filter((i) => i.host === host && i.decision === 'refuse if present').flatMap(presentFiles);
 
 export interface Deps { run?: (command: Command) => Promise<string>; inventory?: typeof codexMcpInventory; refused?: () => string[] }
 interface Baseline { version: string }
@@ -537,7 +558,7 @@ export async function main(args: string[], deps: { print?: (s: string) => void; 
     print('The low figure uses B1\'s 8.5k tokens a call, measured with `--tools Skill`; B7 keeps every built-in tool, so it probably undercounts, and the high figure, built on the same base, is not an upper bound. Claude pilot 1 calibrates both.');
     for (const blocker of plan.blockers) print(`BLOCKED: ${blocker}`);
     for (const write of hostWrites()) print(`HOST STATE: ${write}`);
-    for (const precondition of [CODEX_CLOUD_PRECONDITION, CLAUDE_MANAGED_PRECONDITION, CLAUDE_SCRUB_PRECONDITION]) print(`PRECONDITION: ${precondition}`);
+    for (const precondition of [CODEX_CLOUD_PRECONDITION, CLAUDE_MANAGED_PRECONDITION, CLAUDE_SCRUB_PRECONDITION, CLAUDE_SWITCH_PRECONDITION]) print(`PRECONDITION: ${precondition}`);
     for (const i of hostState()) print(`LOADS ${i.host}: ${i.item}: ${i.decision}. ${i.how} (${i.source}).${i.decision === 'refuse if present' || i.decision.startsWith('identical') ? ` Present: ${presentFiles(i).map((f) => basename(f)).join(', ') || 'none'}.` : ''}`);
     for (const host of ['claude', 'codex'] as const) print(`ENV ${host}: a child gets only these variables, when set: ${envAllowlist(host).join(', ')}. Passed from this environment: ${Object.keys(childEnv(process.env, host)).join(', ')}.`);
     if (!values.run) {

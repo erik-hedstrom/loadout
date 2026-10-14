@@ -154,8 +154,8 @@ export function cli(host: Host) {
 }
 
 /** The isolated Claude configuration up to the MCP servers, shared by B1 and B7. */
-export function claudeIsolation(mcp: object): string[] {
-  return ['-p', '--output-format', 'stream-json', '--verbose', '--no-session-persistence', '--restricted', '--setting-sources', '', '--settings', '{"disableAllHooks":true}', '--strict-mcp-config', '--mcp-config', JSON.stringify({ mcpServers: mcp })];
+export function claudeIsolation(mcp: object, settings: object = { disableAllHooks: true }): string[] {
+  return ['-p', '--output-format', 'stream-json', '--verbose', '--no-session-persistence', '--restricted', '--setting-sources', '', '--settings', JSON.stringify(settings), '--strict-mcp-config', '--mcp-config', JSON.stringify({ mcpServers: mcp })];
 }
 /** Codex overrides shared by exec, debug and app-server (ignore-user-config is exec-only). */
 export function codexSettings(mcpServers: object): string[] {

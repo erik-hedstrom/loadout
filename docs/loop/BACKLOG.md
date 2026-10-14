@@ -269,13 +269,16 @@ Isolation, and where it stops. The plan prints `LOADS`, `HOST STATE`, `ENV` and
 `PRECONDITION` lines; sources are in the code docblocks.
 - Env: every CLI child (paid and free, app-server included) gets a per-host
   allowlist, not the parent's environment (`envAllowlist()`); API keys, base
-  URLs and `DEBUG` never reach a child. Claude also runs with updates off,
-  auto memory off, and MCP servers scrubbed of credentials, per the `claudeEnv()`
-  docblock; Codex has no update check in `exec` or `app-server`. B1 is unchanged
-  and still inherits the environment.
+  URLs and `DEBUG` never reach a child. Claude also runs with updates off, auto
+  memory, CLAUDE.md files and managed skills off, and MCP servers scrubbed of
+  credentials, per the `claudeEnv()` docblock; Codex has no update check in
+  `exec` or `app-server`. B1 is unchanged and still inherits the environment.
 - Managed configuration overrides `--settings` and `--ignore-user-config`, and
   Claude's policy limits refresh whatever the setting sources, so their files
-  are refused (`hostState()`).
+  are refused (`hostState()`). So is any instruction, rule, skill or config file
+  in a folder above the temp working directory: the run's own directory is
+  fresh, but its ancestors (`/tmp` and up) are not ours, so they are checked
+  instead, and `assertTemporary` cannot enforce that.
 
 Host state the runs load: `hostState()` is the one list, with a decision and a
 source per item (refuse, neutralise with a flag, identical across arms and

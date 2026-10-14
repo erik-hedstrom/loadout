@@ -5,10 +5,10 @@ import { spawnSync } from 'node:child_process';
 import { afterAll, describe, expect, it } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { DISABLED_FEATURES, execute, parseClaudeTurns, stopChild, withAppServer, type Command, type ToolCall } from '../bench/overhead.js';
+import { DISABLED_FEATURES, claudeIsolation, execute, parseClaudeTurns, stopChild, withAppServer, type Command, type ToolCall } from '../bench/overhead.js';
 import { EventEmitter } from 'node:events';
 import { catalogFacts, serverInstructions, serverSpecs, serverTools } from '../bench/mcp-fixtures.js';
-import { arms, armId, buildPlan, canaryFound, canaryOf, checkCodexInventory, claudeEnv, estimate, childEnv, envAllowlist, CLAUDE_MANAGED_PRECONDITION, CLAUDE_SCRUB_PRECONDITION, CODEX_CLOUD_PRECONDITION, managedClaudeFiles, formatOffline, hostState, hostWrites, loadoutFacts, main, managedCodexFiles, offline, positiveControl, presentFiles, reading, redacted, refusedFiles, resetWork, runStudy, summarize, type Arm, type Plan, type Row, type Run } from '../bench/mcp-overhead.js';
+import { CLAUDE_SETTINGS, arms, armId, buildPlan, canaryFound, canaryOf, checkCodexInventory, claudeEnv, estimate, childEnv, envAllowlist, CLAUDE_MANAGED_PRECONDITION, CLAUDE_SCRUB_PRECONDITION, CLAUDE_SWITCH_PRECONDITION, CODEX_CLOUD_PRECONDITION, managedClaudeFiles, formatOffline, hostState, hostWrites, loadoutFacts, main, managedCodexFiles, offline, positiveControl, presentFiles, reading, redacted, refusedFiles, resetWork, runStudy, summarize, type Arm, type Plan, type Row, type Run } from '../bench/mcp-overhead.js';
 
 const temps: string[] = [];
 const temp = () => { const dir = mkdtempSync(join(tmpdir(), 'loadout-b7-test-')); temps.push(dir); return dir; };
@@ -168,9 +168,10 @@ describe('plan', () => {
       if (r.arm.host === 'claude') {
         expect(args).toContain('--restricted');
         expect(after('--setting-sources')).toBe('');
-        expect(JSON.parse(after('--settings')!)).toEqual({ disableAllHooks: true });
+        expect(JSON.parse(after('--settings')!)).toEqual(CLAUDE_SETTINGS);
+        expect(CLAUDE_SETTINGS).toMatchObject({ disableAllHooks: true, pluginConfigs: { 'agents-md@builtin': { options: { instructionFiles: 'managed-only' } } } });
         expect(args).toContain('--strict-mcp-config');
-        expect(r.command.env).toMatchObject({ CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1' });
+        expect(r.command.env).toMatchObject({ CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1', CLAUDE_CODE_DISABLE_CLAUDE_MDS: '1', CLAUDE_CODE_DISABLE_POLICY_SKILLS: '1' });
       } else if (r.command.args.includes('exec')) {
         for (const flag of ['--ignore-user-config', '--ignore-rules']) expect(args).toContain(flag);
         expect(args).not.toContain('--profile');
@@ -178,7 +179,8 @@ describe('plan', () => {
         for (const feature of ['hooks', 'plugins', 'skill_mcp_dependency_install']) expect(disabled).toContain(feature);
       }
     }
-    expect(claudeEnv({ CLAUDE_CODE_DISABLE_AUTO_MEMORY: '0' })).toMatchObject({ CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1' });
+    expect(claudeEnv({ CLAUDE_CODE_DISABLE_AUTO_MEMORY: '0', CLAUDE_CODE_DISABLE_CLAUDE_MDS: '0', CLAUDE_CODE_DISABLE_POLICY_SKILLS: '0' })).toMatchObject({ CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1', CLAUDE_CODE_DISABLE_CLAUDE_MDS: '1', CLAUDE_CODE_DISABLE_POLICY_SKILLS: '1' });
+    expect(claudeIsolation({})).toContain('{"disableAllHooks":true}');
   });
 
   it('lists every item the real homes make a CLI load, each with a decision and a source, and prints it', async () => {
@@ -187,7 +189,9 @@ describe('plan', () => {
     const files = (host: string, decision: string) => items.filter((i) => i.host === host && i.decision.startsWith(decision)).flatMap((i) => i.files);
     expect(files('claude', 'refuse')).toContain(join(homedir(), '.claude', 'policy-limits.json'));
     expect(files('claude', 'identical')).toContain('/etc/claude-code/CLAUDE.md');
-    expect(files('claude', 'identical')).toContain(join(tmpdir(), 'CLAUDE.local.md'));
+    expect(files('claude', 'identical')).toContain('/etc/claude-code/.claude/skills');
+    expect(files('claude', 'refuse')).toContain(join(tmpdir(), 'CLAUDE.local.md'));
+    expect(files('codex', 'refuse')).toContain(join(tmpdir(), 'AGENTS.override.md'));
     expect(files('codex', 'identical')).toContain('/etc/codex/skills');
     expect(hostState({ ProgramData: 'D:\\PD' }, 'win32').flatMap((i) => i.files)).toContain(join('D:\\PD', 'OpenAI', 'Codex', 'skills'));
     const lines: string[] = [];
@@ -195,14 +199,40 @@ describe('plan', () => {
     for (const i of hostState()) expect(lines.some((l) => l.startsWith(`LOADS ${i.host}: ${i.item}: ${i.decision}.`))).toBe(true);
   });
 
+  it('refuses when instructions, rules, skills or config sit in a folder above the working directory, but not the home directory\'s own dot-folders', () => {
+    const top = temp();
+    const parent = join(top, 'a', 'b');
+    mkdirSync(parent, { recursive: true });
+    const refused = (host: 'claude' | 'codex') => refusedFiles(host, { CLAUDE_CONFIG_DIR: temp(), CODEX_HOME: temp() }, 'linux', parent).filter((f) => f.startsWith(top)).map((f) => f.slice(top.length + 1)).sort();
+    expect(refused('claude')).toEqual([]);
+    expect(refused('codex')).toEqual([]);
+    mkdirSync(join(top, '.claude'));
+    writeFileSync(join(top, '.claude', 'CLAUDE.md'), 'x');
+    mkdirSync(join(top, 'a', '.claude', 'rules'), { recursive: true });
+    writeFileSync(join(top, 'a', 'b', 'AGENTS.md'), 'x');
+    writeFileSync(join(top, 'CLAUDE.local.md'), 'x');
+    mkdirSync(join(top, 'a', '.codex'));
+    mkdirSync(join(top, 'a', 'b', '.agents'));
+    for (const dir of [join(top, '.claude', 'skills'), join(top, 'a', '.claude', 'agents'), join(top, 'a', 'b', '.claude', 'commands')]) mkdirSync(dir, { recursive: true });
+    writeFileSync(join(top, 'a', 'b', '.claude', 'AGENTS.md'), 'x');
+    writeFileSync(join(top, 'AGENTS.override.md'), 'x');
+    expect(refused('claude')).toEqual(['.claude/CLAUDE.md', '.claude/skills', 'CLAUDE.local.md', 'a/.claude/agents', 'a/.claude/rules', 'a/b/.claude/AGENTS.md', 'a/b/.claude/commands', 'a/b/AGENTS.md']);
+    expect(refused('codex')).toEqual(['AGENTS.override.md', 'a/.codex', 'a/b/.agents', 'a/b/AGENTS.md']);
+    const found = (host: string) => hostState({}, 'linux', join(homedir(), 'x')).filter((i) => i.host === host && i.decision.startsWith('refuse')).flatMap((i) => i.files);
+    expect(found('claude')).toContain(join(homedir(), 'AGENTS.md'));
+    expect(found('claude')).not.toContain(join(homedir(), '.claude', 'rules'));
+    expect(found('codex')).not.toContain(join(homedir(), '.codex'));
+  });
+
   it('records the presence of the items that stay identical across arms, by name only', () => {
     const claudeHome = temp();
     const codexHome = temp();
     writeFileSync(join(claudeHome, 'CLAUDE.md'), 'private text');
+    mkdirSync(join(claudeHome, 'plugins'));
     mkdirSync(join(codexHome, 'skills'));
     const items = hostState({ CLAUDE_CONFIG_DIR: claudeHome, CODEX_HOME: codexHome }, 'linux').filter((i) => i.decision.startsWith('identical'));
     const ours = items.flatMap(presentFiles).filter((f) => f.startsWith(claudeHome) || f.startsWith(codexHome));
-    expect(ours.map((f) => f.slice(f.lastIndexOf('/') + 1)).sort()).toEqual(['CLAUDE.md', 'skills']);
+    expect(ours.map((f) => f.slice(f.lastIndexOf('/') + 1)).sort()).toEqual(['plugins', 'skills']);
   });
 
   it('keeps every directory it creates or configures under the temp root', () => {
@@ -409,6 +439,7 @@ describe('plan', () => {
     expect(lines).toContain(`PRECONDITION: ${CODEX_CLOUD_PRECONDITION}`);
     expect(lines).toContain(`PRECONDITION: ${CLAUDE_MANAGED_PRECONDITION}`);
     expect(lines).toContain(`PRECONDITION: ${CLAUDE_SCRUB_PRECONDITION}`);
+    expect(lines).toContain(`PRECONDITION: ${CLAUDE_SWITCH_PRECONDITION}`);
     for (const host of ['claude', 'codex']) expect(lines.find((l) => l.startsWith(`ENV ${host}: `))).toMatch(/only these variables.*Passed from this environment: /);
     expect(lines.find((l) => l.startsWith('ENV codex: '))).not.toContain('CLAUDE_CODE_OAUTH_TOKEN');
     expect(lines.join('\n')).not.toContain('Dropped');
