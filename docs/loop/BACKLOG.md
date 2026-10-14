@@ -34,8 +34,12 @@ launcher-only work is P2.
 
 **A2. `loadout audit`.**
 
-Why: this is the entry point for the audience. "Your 312 installed skills add
-~38k tokens to every request" is the sentence people share.
+Why: this is the entry point for the audience, and the sentence people share
+must be a measured one. B1 measured Claude Code's skill listing at about 10
+tokens per skill: +477 input tokens at 50 skills and +12.3k at 1,232 (Haiku,
+generated skill names, first call;
+[RESULTS](../../bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request)).
+Description sums such as the earlier "312 skills, ~38k" are not request overhead (B1 withdrew its 140k estimate the same way).
 
 Acceptance:
 - Read-only scan of Claude Code (user and project skills, enabled plugins'
@@ -184,6 +188,7 @@ cross-vendor agents). Erik publishes.
 | C6 | P2 | Multi-intent requests | Claude | cloud | todo |
 | C7 | P1 | Recommended packs with measured upside (first: frontend with Impeccable) | Codex (harness) + Claude (runs) | cloud (fixtures) + local (runs) | todo (after B1, C2) |
 | C8 | P0 | Skill use with the hook-only plugin | Claude | local | todo |
+| C10 | P2 | Bench quick fixes: sequential outcome judge, tier fixed across arms, stale A2 number | Claude | cloud | in review |
 
 **C1. New held-out requests.**
 
@@ -302,6 +307,26 @@ users install has the hook only. Add a plugin arm (`--plugin-dir`) to
 
 Acceptance: a third row in that RESULTS table, with raw results. The README's
 "has not been measured" is then replaced by the number.
+
+**C10. Bench quick fixes.** From the launch-readiness review, 2026-10-13. $0,
+no paid calls.
+- `bench/outcome.ts` judged two requests at once; AGENTS.md rule 6 says judges
+  run sequentially so their cached prompt stays warm. Now a loop, with a test
+  that runs the script against a stand-in `claude` and checks the calls never
+  overlap. The `--concurrency` option stays: it sizes the Codex runs, which
+  have no shared cache.
+- `decisionFor(row, library, empty)` keeps the row's tier for the bare arm.
+  That is correct: `outcome.ts` gives both arms of a pair the same model, so
+  the comparison is about skills. The 2026-10-06 pilot's raw files show
+  `gpt-6.1-sol` for both arms of all 8 requests, so RESULTS needs no note. No
+  behaviour change; a comment gives the reason and a test pins it. The tier
+  still varies between requests with Jev's choice, and `invoke.ts` compares
+  nothing across arms, so no fixed model was added.
+- A2's rationale quoted the withdrawn description-sum estimate; it now
+  carries B1's measured figures and scope.
+
+Learnings: a script that spawns the CLIs can be tested by putting a fake
+binary first on `PATH`, so the `claude` judge needed no new seam.
 
 ## D. Integrations and robustness
 
