@@ -234,7 +234,7 @@ export function scanLibrary(libraryDir: string, options: { cache?: boolean; skip
   let changed = cache === undefined;
   const capabilities: Capability[] = [];
   for (const dir of dirs) {
-    if (hasTagText(basename(dir))) {
+    if (unofferable(basename(dir))) {
       options.skipped?.push(basename(dir));
       continue;
     }
@@ -252,7 +252,8 @@ export function scanLibrary(libraryDir: string, options: { cache?: boolean; skip
 
   const mcpFile = join(libraryDir, 'mcp.json');
   for (const [name, { description = '', autoApprove, gateway, ...server }] of Object.entries(readMcpServers(libraryDir))) {
-    if (hasTagText(name)) {
+    // A server named "mcp:x" would share the key of a server named "x".
+    if (name.startsWith('mcp:') || unofferable(`mcp:${name}`)) {
       options.skipped?.push(`mcp:${name}`);
       continue;
     }
@@ -284,6 +285,11 @@ export function librarySources(libraryDir: string): { origin: string; skills: nu
  * names and tool names the agent must name back exactly cannot hold tag text, so such ones are never offered.
  */
 export const hasTagText = (text: string) => /<\/?skill/i.test(text);
+
+/** The longest key the MCP tools take back; their input schemas cap it. */
+export const KEY_CHARS = 200;
+/** A key the agent could not send back exactly: escaping would change it, or the tools would refuse it. */
+const unofferable = (key: string) => hasTagText(key) || key.length > KEY_CHARS;
 
 /** Unique key of a capability: the skill's folder (names repeat across sources) or `mcp:<server>`. */
 export const capabilityKey = (c: Capability) => (c.kind === 'skill' ? basename(c.source) : `mcp:${c.name}`);

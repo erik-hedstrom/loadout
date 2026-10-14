@@ -239,15 +239,19 @@ library itself, in its own words, through MCP:
     description. The Jev question gets the text too; the embedding index does
     not.
   - Search never starts a server to fill the index.
-  - A skill folder, server name or tool name that holds `<skill` or `</skill`
-    is never offered, because the agent sees names escaped and could not send
-    one back exactly. The library scan leaves out such skills and servers (so
-    search, the hook and the launcher all agree) and `loadout doctor` lists
-    them, escaped. `server_tools` also leaves out tool names over 128
-    characters or not on one line, which a listing would show shortened, and
-    says how many it left out. An argument name it cannot show whole sends
-    the agent to the tool's full schema. Schemas are shown as JSON with each
-    `<` written `\u003c`, so tag escaping leaves every key and value exact.
+  - Everything the agent may send back (a skill or server key, a tool or
+    argument name, a schema) is shown as JSON with each `<` written
+    `\u003c`, so quotes keep commas and `?` inside a name and tag escaping
+    changes nothing.
+  - A key is never offered when the agent could not send it back: a skill
+    folder or server name holding `<skill` or `</skill`, a key over 200
+    characters (what the tools accept), or a server name starting `mcp:`,
+    which would share another server's key. The library scan leaves these
+    out (so search, the hook and the launcher all agree) and `loadout doctor`
+    lists them, escaped. `server_tools` leaves out tool names that are
+    tag-like, over 128 characters or not on one line, and says how many. A
+    compact entry whose argument names cannot be shown whole, or whose schema
+    requires an argument it does not list, sends the agent to the full schema.
 - **Cache and state files.** The scan cache, tool index, embeddings and hook
   state are written through `src/safefs.ts`; the embedding model folder and
   the session folder get its folder check. Session files (`decision.json`,

@@ -574,7 +574,7 @@ Learnings (2026-10-13):
 - Sizes in characters. Skills-only library: see the
   [note under B1 results](../../bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request).
   With one gateway server: instructions 424, `find_tools` 582, `server_tools`
-  120 (76 before D15, plus the server names). Neither case is remeasured in
+  120 (76 before D15), plus each server name quoted. Neither case is remeasured in
   tokens.
 - A declared tool list in `mcp.json` was not added: nothing in the standard
   format carries one, and a second field would drift from the server. The
@@ -602,11 +602,12 @@ Learnings (2026-10-13):
   which cost about 50 lines for names that are injection attempts in
   practice. The second is fixed and tested; a failed listing still leaves the
   entry.
-- A later round found tool names over 128 characters cut short in the
-  listing, so the agent could not call them. The same rule now covers every
-  name `server_tools` shows: a tool name that is tag-like, over 128
-  characters or not on one line is not listed, and when an argument name
-  cannot be shown whole, the compact form points to the full schema.
+- Later rounds found more values the agent could not send back exactly:
+  tool names cut at 128 characters, escaped schema keys, comma-joined names,
+  a server named `mcp:x` resolving to the server `x`, keys longer than the
+  tools accept, and required arguments missing from `properties`. One rule
+  now covers the class: everything the agent may send back is shown as a JSON
+  string, and a key the tools could not take back is never offered.
 - Behaviour change: `loadout claude|codex` now refuses to write session files
   when `~/.loadout/sessions` is a link, with an error naming the folder. Before,
   a user who linked it (for example to another disk) was followed. Session

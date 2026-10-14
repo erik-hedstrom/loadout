@@ -117,7 +117,7 @@ export async function doctor(config: Config, client: (apiKey: string) => SystemO
       checks.push({
         name: 'library names',
         ok: false,
-        detail: `left out, because the name holds "<skill" or "</skill": ${skipped.map(escapeSkillTags).join(', ')}`,
+        detail: `left out, because an agent could not name them back exactly (the name holds "<skill" or "</skill", is over 200 characters, or is a server name starting "mcp:"): ${skipped.map(escapeSkillTags).join(', ')}`,
         fix: 'rename the skill folder or the mcp.json server; these names are never offered to an agent',
       });
     }
