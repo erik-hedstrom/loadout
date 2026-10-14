@@ -279,13 +279,13 @@ export function librarySources(libraryDir: string): { origin: string; skills: nu
     .sort((a, b) => b.skills - a.skills || a.origin.localeCompare(b.origin));
 }
 
-/** Unique key of a capability: the skill's folder (names repeat across sources) or `mcp:<server>`. */
 /**
  * Whether `escapeSkillTags` (launch.ts, which imports this module) would change the text. Skill folders, server
  * names and tool names the agent must name back exactly cannot hold tag text, so such ones are never offered.
  */
 export const hasTagText = (text: string) => /<\/?skill/i.test(text);
 
+/** Unique key of a capability: the skill's folder (names repeat across sources) or `mcp:<server>`. */
 export const capabilityKey = (c: Capability) => (c.kind === 'skill' ? basename(c.source) : `mcp:${c.name}`);
 
 /** A folder name made only of lowercase letters, digits and hyphens. */
