@@ -265,54 +265,25 @@ requests, 0.24 to 0.29M tokens, 14 to 32 minutes. Claude pilot 2 (n20): 28
 requests, 0.24 to 1.93M tokens, 14 to 32 minutes. Codex pilot: 3 requests,
 0.03M tokens, 2 to 6 minutes.
 
-Isolation, and where it stops. The plan prints every line below (`LOADS`,
-`HOST STATE`, `ENV`, `PRECONDITION`); the code is `hostState()` in
-`bench/mcp-overhead.ts`, whose docblock has the sources.
+Isolation, and where it stops. The plan prints `LOADS`, `HOST STATE`, `ENV` and
+`PRECONDITION` lines; sources are in the code docblocks.
 - Env: every CLI child (paid and free, app-server included) gets a per-host
   allowlist, not the parent's environment (`envAllowlist()`); API keys, base
   URLs and `DEBUG` never reach a child. Claude also runs with updates off,
   auto memory off, and MCP servers scrubbed of credentials, per the `claudeEnv()`
   docblock; Codex has no update check in `exec` or `app-server`. B1 is unchanged
   and still inherits the environment.
-- Managed configuration overrides `--settings` and `--ignore-user-config`, so
-  its files are refused, in `managedClaudeFiles()` and `managedCodexFiles()`.
+- Managed configuration overrides `--settings` and `--ignore-user-config`, and
+  Claude's policy limits refresh whatever the setting sources, so their files
+  are refused (`hostState()`).
 
-Host state the runs load (item, decision, source; Claude sources are
-code.claude.com/docs/en/{cli-reference, settings-reference, managed-settings,
-server-managed-settings, env-vars}, read 2026-10-14; Codex sources are
-`openai/codex` at cf0ed4c). Neutralised items have argv or env tests.
-
-| Host | Item | Decision | How, and source |
-|---|---|---|---|
-| Claude | managed settings and MCP files, the server-managed cache, the macOS profile | refuse (blocker) | they override `--settings`; managed-settings, server-managed-settings |
-| Claude | `settings.json`, `settings.local.json`: `env` block, hooks, `apiKeyHelper`, `statusLine`, permissions, `enabledPlugins`, `outputStyle` | neutralised | `--restricted` "loads only managed settings and `--settings`"; `--setting-sources ''`; cli-reference |
-| Claude | hooks from settings, plugins, skills or agents; the status line command | neutralised | `"disableAllHooks":true` in `--settings`; settings-reference |
-| Claude | MCP servers in `~/.claude.json` (user, local), `.mcp.json`, plugins | neutralised | `--strict-mcp-config`; cli-reference |
-| Claude | auto memory (`~/.claude/projects`) | neutralised | `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`; env-vars |
-| Claude | `CLAUDE.md`, rules, agents, skills, commands, plugins | identical across arms, recorded | `--restricted` does not skip them; `--bare` and `--safe-mode` would drop OAuth or the MCP servers (cli-reference, env-vars). Plugins, skills and slash commands are hashed from init and must match the baseline; names present go to `host-state.json` |
-| Claude | subscription login | needed | the study runs on quota |
-| Claude | global keys in `~/.claude.json` | not checked | interface, IDE and teammate keys only (settings-reference) |
-| Codex | system, managed and cloud-bundle layers | refuse (arms skipped) | `--ignore-user-config` does not skip them; `config/src/loader/mod.rs`, `cloud-config/src/cache.rs` |
-| Codex | `$CODEX_HOME/.env` | refuse (arms skipped) | loaded into Codex's own environment before any command, every name not starting `CODEX_`, past the allowlist; `arg0/src/lib.rs` `load_dotenv` |
-| Codex | `config.toml`: model, features, `mcp_servers`, `notify`, hooks, profiles, project trust | neutralised | `--ignore-user-config`, no `--profile`; `config/src/loader/mod.rs` `load_user_config_layer` |
-| Codex | `hooks.json` | neutralised | `--disable hooks`: the user layer keeps `$CODEX_HOME` as its folder, so the flag is what stops it; `hooks/src/engine/discovery.rs` |
-| Codex | `rules/*.rules` | neutralised | `--ignore-rules`; `exec/src/cli.rs` |
-| Codex | plugins, marketplaces, skill MCP dependencies | neutralised | `--disable plugins`, `--disable skill_mcp_dependency_install`; `features/src/lib.rs` |
-| Codex | `AGENTS.md`, `AGENTS.override.md` | identical across arms, recorded | read into every prompt; the free prompt-input check runs on an empty home and does not see them; `codex-home/src/instructions/mod.rs` |
-| Codex | `skills/`, `~/.agents/skills`, `agents/*.toml` (custom roles change the spawn tool description) | identical across arms, recorded | not skipped by `--ignore-user-config`; `exec-server/src/discoverV2/capability_locations.rs`, `agent-roles/src/loader.rs` |
-| Codex | `auth.json` | needed | the study runs on quota; Codex may refresh it in place |
-| Codex | a `.codex` folder or `AGENTS.md` above the temp working directory | not checked | a project layer needs trust, which lives in the emptied `config.toml`; not tested on a real tree |
-
+Host state the runs load: `hostState()` is the one list, with a decision and a
+source per item (refuse, neutralise with a flag, identical across arms and
+recorded, needed, or not checked); neutralised items have argv or env tests.
 "Identical across arms" means the baseline delta cancels it, not that absolute
-input tokens are free of it; the rows are for the delta. Not checked, and
-printed as preconditions: the Windows registry policy (`HKLM` and `HKCU`
-`SOFTWARE\Policies\ClaudeCode`), a Windows policy inherited by WSL,
-server-managed settings that a `-p` run applies without caching, and a live
-Codex cloud bundle (`cloud-config/src/service.rs`; a paid exec fetches it for a
-ChatGPT business, education or enterprise login; no flag turns it off and the
-free commands run without a login), which can set `sqlite_home`, `log_dir` and
-MCP servers. Nothing checks the paid Codex exec's MCP set at run time. B1's
-Codex commands lack `--ignore-user-config`; revisit before running them.
+input tokens are free of it; the rows are for the delta. Nothing checks the
+paid Codex exec's MCP set at run time. B1's Codex commands lack
+`--ignore-user-config`; revisit before running them.
 
 Decisions for Erik:
 - Approve the pilots, then the full run, with the host-state writes and the
@@ -334,6 +305,11 @@ Decisions for Erik:
   home, `codex-rs/cli/src/main.rs`). The paid exec still does, in every arm; the
   preflight records the built-in context only, and nothing re-checks it at the
   end. Accept, or supply the key options above.
+- Claude's `policy-limits.json` (the organization's cached feature policy on
+  some account types) blocks the Claude arms when present, so a Team or
+  Enterprise login is likely blocked until it is run from an individual
+  subscription. The alternative, hashing the file before and after each run,
+  would only report a refresh after the fact.
 - Whether the Codex arms wait for `unified_exec` as in B1.
 
 ## C. Skill decision-making (router quality)
