@@ -270,9 +270,17 @@ Claude settings, cannot be turned off by any flag; they are the same in every
 arm, and Claude's plugin, skill and command inventory and Codex's version are
 checked for drift. Codex's paid exec isolation rests on `--ignore-user-config`
 (`codex-rs/exec/src/cli.rs` at cf0ed4c: it skips `$CODEX_HOME/config.toml`, and
-auth still uses `CODEX_HOME`), so it covers `config.toml` only. Known gap: a
-system or managed Codex config is not covered, and nothing checks the paid
-exec's MCP set at run time. B1's Codex commands lack the flag (its Codex
+auth still uses `CODEX_HOME`), so it covers `config.toml` only. A system or
+managed config can move `sqlite_home` or `log_dir` and add MCP servers, so the
+Codex arms are refused, naming the file, if `/etc/codex/config.toml`,
+`requirements.toml` or `managed_config.toml` (Windows:
+`%ProgramData%\OpenAI\Codex\config.toml`, `requirements.toml`) exists
+(`codex-rs/config/src/loader/mod.rs`, `layer_io.rs`). Known gap: macOS managed
+preferences and cloud requirements are not files and are not detected, and
+nothing checks the paid exec's MCP set at run time. Claude runs with
+`DISABLE_UPDATES=1` and `DISABLE_AUTOUPDATER=1` (code.claude.com/docs/en/env-vars,
+read 2026-10-14), so no new CLI is installed mid-study; Codex `exec` and
+`app-server` have no update check (it is in the tui crate). B1's Codex commands lack the flag (its Codex
 baseline was meant to be ambient and its paid Codex runs are deferred); revisit
 before running them.
 

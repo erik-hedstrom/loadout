@@ -85,8 +85,10 @@ backlog, B7).
     command, lists exactly the declared servers and tools. That checks the
     declaration, not what the paid exec loads: its isolation rests on
     `--ignore-user-config`, which skips `$CODEX_HOME/config.toml` only
-    (`codex-rs/exec/src/cli.rs` at cf0ed4c). Known gap: a system or managed
-    Codex config is not covered.
+    (`codex-rs/exec/src/cli.rs` at cf0ed4c). The Codex arms are refused if a
+    system or managed config file exists (`/etc/codex/{config,requirements,
+    managed_config}.toml`; Windows `%ProgramData%\OpenAI\Codex`). Known gap:
+    macOS managed preferences and cloud requirements are not detected.
 - Reading column: Claude rows read "all loaded" with tool search off, "all
   loaded (ToolSearch present)" or "(no ToolSearch)" where the default or `auto`
   listed every tool, "deferred (canary found)" where fewer were listed, and
@@ -95,6 +97,8 @@ backlog, B7).
   list. No model-free tool inventory was found for Claude (`init.tools` lists
   what is loaded; whether `/context` runs under `-p` is unverified); Codex's
   `mcpServerStatus/list` is one.
+- Claude runs with `DISABLE_UPDATES=1` and `DISABLE_AUTOUPDATER=1`, so no new
+  CLI is installed mid-study.
 - The host version is stored on each row and may not change during the study;
   Claude's plugin, skill and command inventory and Codex's version may not
   drift.

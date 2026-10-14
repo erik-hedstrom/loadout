@@ -391,7 +391,7 @@ export function parsePromptInput(stdout: string, cwd: string): Visibility {
 
 type AppServerRequest = (method: string, params: unknown) => Promise<any>;
 /** A model-free Codex app-server session: initialize, then `body` makes requests; never creates a thread or turn. */
-export async function withAppServer<T>(command: Command, body: (request: AppServerRequest) => Promise<T>): Promise<T> {
+export async function withAppServer<T>(command: Command, body: (request: AppServerRequest) => Promise<T>, graceMs = 5_000): Promise<T> {
   const child = spawn(command.bin, command.args, { cwd: command.cwd, env: command.env, stdio: ['pipe', 'pipe', 'ignore'], shell: false, windowsHide: true });
   const lines = createInterface({ input: child.stdout });
   const pending = new Map<number, { resolve: (value: any) => void; reject: (error: Error) => void }>();
@@ -419,14 +419,16 @@ export async function withAppServer<T>(command: Command, body: (request: AppServ
     return await body(request);
   } finally {
     clearTimeout(timer); lines.close(); child.stdin.end();
-    // Wait for the exit, so the next command's reset of the work directory cannot hit a process still holding it (EBUSY on Windows).
-    const running = child.pid !== undefined && child.exitCode === null && child.signalCode === null;
+    // Wait for the exit, so the next command's reset of the work directory cannot hit a process still holding it (EBUSY on
+    // Windows), and force it after the grace if it ignores the first signal.
+    const alive = () => child.pid !== undefined && child.exitCode === null && child.signalCode === null;
     const exited = new Promise<void>((done) => child.once('exit', () => done()));
+    const within = async (ms: number) => { let t: NodeJS.Timeout; await Promise.race([exited, new Promise<void>((done) => { t = setTimeout(done, ms); })]); clearTimeout(t!); };
+    const running = alive();
     child.kill();
     if (running) {
-      let give: NodeJS.Timeout;
-      await Promise.race([exited, new Promise<void>((done) => { give = setTimeout(done, 5_000); })]);
-      clearTimeout(give!);
+      await within(graceMs);
+      if (alive()) { child.kill('SIGKILL'); await within(2_000); }
     }
   }
 }

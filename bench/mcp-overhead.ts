@@ -9,7 +9,7 @@
  * deferral may be claimed) share one process with `--no-session-persistence`, so no transcript lands in ~/.claude;
  * Codex gets one `--ephemeral` request.
  */
-import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -109,9 +109,13 @@ export interface Run { arm: Arm; repeat: number; servers: string[]; requests: nu
 export interface Plan { runs: Run[]; blockers: string[]; root: string; work: string }
 export interface Only { hosts?: Host[]; configs?: ConfigName[]; repeats?: number }
 
-/** The child environment for Claude: the tool search setting is explicit in every arm, never inherited. */
+/**
+ * The child environment for Claude: the tool search setting is explicit in every arm, never inherited, and updates are
+ * off, so no new CLI is installed mid-study (code.claude.com/docs/en/env-vars, read 2026-10-14: `DISABLE_AUTOUPDATER`
+ * "disable automatic background updates", `DISABLE_UPDATES` "block all updates ... stricter").
+ */
 export function claudeEnv(base: NodeJS.ProcessEnv, toolSearch: ToolSearch = 'default'): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...base, MCP_TIMEOUT: '60000' };
+  const env: NodeJS.ProcessEnv = { ...base, MCP_TIMEOUT: '60000', DISABLE_AUTOUPDATER: '1', DISABLE_UPDATES: '1' };
   delete env.ENABLE_TOOL_SEARCH;
   if (toolSearch !== 'default') env.ENABLE_TOOL_SEARCH = toolSearch;
   return env;
@@ -225,8 +229,9 @@ export function estimate(runs: Run[], rows: OfflineRow[]): Estimate {
 }
 
 /**
- * The directories a paid command may write anywhere in, resolved for this environment; nothing is redirected, because
- * login needs these homes. An itemized list kept missing files, so the known ones are examples only.
+ * The directories a paid command may write anywhere in, as far as this harness knows and given no managed Codex config,
+ * resolved for this environment; nothing is redirected, because login needs these homes. An itemized list kept missing
+ * files, so the known ones are examples only.
  */
 export function hostWrites(env: NodeJS.ProcessEnv = process.env): string[] {
   const home = homedir();
@@ -235,8 +240,8 @@ export function hostWrites(env: NodeJS.ProcessEnv = process.env): string[] {
   const codexHome = env.CODEX_HOME || join(home, '.codex');
   const sqlite = env.CODEX_SQLITE_HOME && env.CODEX_SQLITE_HOME !== codexHome ? ` and ${env.CODEX_SQLITE_HOME}` : '';
   return [
-    `Claude Code may write anywhere in ${claudeDir}, in ${join(env.CLAUDE_CONFIG_DIR || home, '.claude.json')} and in ${join(cache, 'claude-cli-nodejs')}. Examples: a project entry and usage counters in .claude.json, MCP server logs in the cache. No transcript (--no-session-persistence). Not verified by a run.`,
-    `Codex exec may write anywhere in ${codexHome}${sqlite}. Examples: the state and logs SQLite databases, which exec opens even with --ephemeral (codex-rs/exec/src/lib.rs, codex-rs/state/src/runtime.rs), installation_id (codex-rs/core/src/installation_id.rs), a refreshed auth.json, caches (cf0ed4c). No rollout file. Its free commands run on empty temporary CODEX_HOMEs and write nothing there.`,
+    `Claude Code may write anywhere in ${claudeDir}, in ${join(env.CLAUDE_CONFIG_DIR || home, '.claude.json')} and in ${join(cache, 'claude-cli-nodejs')}. Examples: a project entry and usage counters in .claude.json, MCP server logs in the cache. No transcript (--no-session-persistence), no self-update (DISABLE_UPDATES, DISABLE_AUTOUPDATER). Not verified by a run.`,
+    `Codex exec may write anywhere in ${codexHome}${sqlite}, as far as this harness knows: it refuses the Codex arms if a system or managed Codex config exists, which could move sqlite_home or log_dir. Neither exec nor app-server checks for updates (that code is in the tui crate). Examples: the state and logs SQLite databases, which exec opens even with --ephemeral (codex-rs/exec/src/lib.rs, codex-rs/state/src/runtime.rs), installation_id (codex-rs/core/src/installation_id.rs), a refreshed auth.json, caches (cf0ed4c). No rollout file. Its free commands run on empty temporary CODEX_HOMEs and write nothing there.`,
   ];
 }
 
@@ -300,11 +305,23 @@ export async function codexMcpInventory(command: Command): Promise<Map<string, s
 const ambient = (inventory: { plugins: string[]; skills: string[]; slashCommands: string[] }) => createHash('sha256').update(JSON.stringify({ plugins: [...inventory.plugins].sort(), skills: [...inventory.skills].sort(), slashCommands: [...inventory.slashCommands].sort() })).digest('hex');
 const firstLine = (text: string) => text.trim().split(/\r?\n/)[0] ?? '';
 
-export interface Deps { run?: (command: Command) => Promise<string>; inventory?: typeof codexMcpInventory }
+/**
+ * Codex layers an administrator controls, which `--ignore-user-config` does not skip and which can move sqlite_home, log_dir
+ * or the MCP servers (codex-rs/config/src/loader/mod.rs and layer_io.rs at cf0ed4c). macOS managed preferences and cloud
+ * requirements are not files, so they are not detected.
+ */
+export function managedCodexFiles(platform: NodeJS.Platform = process.platform, env: NodeJS.ProcessEnv = process.env): string[] {
+  if (platform === 'win32') return ['config.toml', 'requirements.toml'].map((f) => join(env.ProgramData || 'C:\\ProgramData', 'OpenAI', 'Codex', f));
+  return ['config.toml', 'requirements.toml', 'managed_config.toml'].map((f) => `/etc/codex/${f}`);
+}
+
+export interface Deps { run?: (command: Command) => Promise<string>; inventory?: typeof codexMcpInventory; managed?: () => string[] }
 interface Baseline { version: string }
 
 /** Free Codex checks. A refusal skips the Codex arms; Claude is independent. Only counts and hashes are saved. */
-async function codexPreflight(plan: Plan, deps: Required<Deps>, out: string): Promise<{ ready: boolean; baseline?: Baseline }> {
+async function codexPreflight(plan: Plan, deps: Required<Deps>, out: string): Promise<{ ready: boolean; baseline?: Baseline; reason?: string }> {
+  const managed = deps.managed();
+  if (managed.length) return { ready: false, reason: `managed Codex configuration exists (${managed.join(', ')}); --ignore-user-config does not skip it and it can move the state directories` };
   let ready = true;
   let baseline: Baseline | undefined;
   for (const r of plan.runs.filter((x) => x.free)) {
@@ -325,7 +342,7 @@ export async function runStudy(plan: Plan, out: string, deps: Deps = {}): Promis
   if (plan.blockers.length) throw new Error(`blocked: ${plan.blockers.join('; ')}`);
   // Strictly sequential, each command in the emptied work directory.
   const fresh = <R>(f: (command: Command) => Promise<R>) => (command: Command) => { resetWork(plan.work); return f(command); };
-  const full = { run: fresh(deps.run ?? execute), inventory: fresh(deps.inventory ?? codexMcpInventory) };
+  const full = { run: fresh(deps.run ?? execute), inventory: fresh(deps.inventory ?? codexMcpInventory), managed: deps.managed ?? (() => managedCodexFiles().filter((f) => existsSync(f))) };
   mkdirSync(out, { recursive: true });
   const rows: Row[] = [];
   const notes: string[] = [];
@@ -356,7 +373,7 @@ export async function runStudy(plan: Plan, out: string, deps: Deps = {}): Promis
     for (const row of made) { rows.push(row); appendFileSync(join(out, 'rows.jsonl'), JSON.stringify(row) + '\n'); }
   }
   if (plan.runs.some((r) => r.arm.host === 'codex')) {
-    if (!codex?.ready) notes.push('Codex skipped: a free preflight check refused it (see preflight.jsonl).');
+    if (!codex?.ready) notes.push(`Codex skipped: ${codex?.reason ?? 'a free preflight check refused it (see preflight.jsonl)'}.`);
     else {
       const b = plan.runs.find((r) => r.arm.host === 'codex' && r.arm.kind === 'baseline' && r.free)!;
       if (firstLine(await full.run(b.free!.version)) !== codex.baseline?.version) throw new Error('Codex version changed during the study; measurement invalid');

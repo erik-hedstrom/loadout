@@ -7,7 +7,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { DISABLED_FEATURES, execute, parseClaudeTurns, withAppServer, type Command, type ToolCall } from '../bench/overhead.js';
 import { catalogFacts, serverInstructions, serverSpecs, serverTools } from '../bench/mcp-fixtures.js';
-import { arms, armId, buildPlan, canaryFound, canaryOf, checkCodexInventory, claudeEnv, estimate, formatOffline, hostWrites, loadoutFacts, main, offline, positiveControl, reading, resetWork, runStudy, summarize, toolSearchBlockers, type Arm, type Plan, type Row, type Run } from '../bench/mcp-overhead.js';
+import { arms, armId, buildPlan, canaryFound, canaryOf, checkCodexInventory, claudeEnv, estimate, formatOffline, hostWrites, loadoutFacts, main, managedCodexFiles, offline, positiveControl, reading, resetWork, runStudy, summarize, toolSearchBlockers, type Arm, type Plan, type Row, type Run } from '../bench/mcp-overhead.js';
 
 const temps: string[] = [];
 const temp = () => { const dir = mkdtempSync(join(tmpdir(), 'loadout-b7-test-')); temps.push(dir); return dir; };
@@ -116,6 +116,7 @@ describe('arms and environment', () => {
     expect(claudeEnv(base, 'false').ENABLE_TOOL_SEARCH).toBe('false');
     expect(claudeEnv(base, 'auto').ENABLE_TOOL_SEARCH).toBe('auto');
     expect(claudeEnv(base).PATH).toBe('/bin');
+    for (const toolSearch of ['default', 'false', 'auto'] as const) expect(claudeEnv({ DISABLE_UPDATES: '0', DISABLE_AUTOUPDATER: '0' }, toolSearch)).toMatchObject({ DISABLE_UPDATES: '1', DISABLE_AUTOUPDATER: '1' });
     expect(base.ENABLE_TOOL_SEARCH).toBe('auto:5');
   });
 
@@ -247,12 +248,14 @@ describe('plan', () => {
   it('names whole resolved directories as writable, with the known files only as examples', () => {
     const [claude, codex] = hostWrites({});
     for (const dir of [join(homedir(), '.claude'), join(homedir(), '.claude.json'), 'claude-cli-nodejs']) expect(claude).toContain(dir);
-    expect(codex).toContain(`anywhere in ${join(homedir(), '.codex')}.`);
+    expect(codex).toContain(`anywhere in ${join(homedir(), '.codex')},`);
+    expect(codex).toContain('managed Codex config');
     const moved = hostWrites({ CLAUDE_CONFIG_DIR: '/c', CODEX_HOME: '/x', XDG_CACHE_HOME: '/cache' });
     for (const dir of ['anywhere in /c,', join('/c', '.claude.json')]) expect(moved[0]).toContain(dir);
     if (process.platform === 'linux') expect(moved[0]).toContain(join('/cache', 'claude-cli-nodejs'));
-    expect(moved[1]).toContain('anywhere in /x.');
-    expect(hostWrites({ CODEX_HOME: '/x', CODEX_SQLITE_HOME: '/db' })[1]).toContain('anywhere in /x and /db.');
+    expect(moved[1]).toContain('anywhere in /x,');
+    expect(hostWrites({ CODEX_HOME: '/x', CODEX_SQLITE_HOME: '/db' })[1]).toContain('anywhere in /x and /db,');
+    expect(moved[0]).toContain('DISABLE_UPDATES');
     expect(codex).toContain('installation_id');
     expect(codex).toContain('auth.json');
   });
@@ -296,6 +299,27 @@ describe('plan', () => {
 });
 
 describe('host process', () => {
+  it('kills an app-server that ignores the first signal, within the grace and a short second bound', async () => {
+    const file = join(temp(), 'stubborn.cjs');
+    writeFileSync(file, `
+      require('fs').writeFileSync(process.env.PIDFILE, String(process.pid));
+      process.on('SIGTERM', () => {});
+      setInterval(() => {}, 1000);
+      require('readline').createInterface({ input: process.stdin }).on('line', (line) => {
+        const m = JSON.parse(line);
+        if (m.id !== undefined) console.log(JSON.stringify({ id: m.id, result: {} }));
+      });
+    `);
+    const pidFile = join(temp(), 'pid');
+    const started = Date.now();
+    await withAppServer({ bin: process.execPath, args: [file], cwd: tmpdir(), env: { ...process.env, PIDFILE: pidFile } }, (request) => request('probe', {}), 200);
+    const pid = Number(readFileSync(pidFile, 'utf8'));
+    const alive = (() => { try { process.kill(pid, 0); return true; } catch { return false; } })();
+    if (alive) process.kill(pid, 'SIGKILL');
+    expect(alive).toBe(false);
+    expect(Date.now() - started).toBeLessThan(5_000);
+  });
+
   it('waits for the app-server to exit before returning', async () => {
     const file = join(temp(), 'slow-exit.cjs');
     writeFileSync(file, `
@@ -551,13 +575,13 @@ describe('measurement', () => {
     return { run, inventory, calls, listings };
   }
   const small = () => buildPlan(temp(), { configs: ['n1'], repeats: 1 }, { PATH: process.env.PATH });
-  const study = (o: Opts = {}, p = small()) => { const h = fakeHost(p, o); return runStudy(p, temp(), { run: h.run, inventory: h.inventory }); };
+  const study = (o: Opts = {}, p = small()) => { const h = fakeHost(p, o); return runStudy(p, temp(), { run: h.run, inventory: h.inventory, managed: () => [] }); };
 
   it('measures both Claude requests of a run and one Codex request, without keeping inventory names', async () => {
     const p = small();
     const out = temp();
     const h = fakeHost(p);
-    const { rows, notes } = await runStudy(p, out, { run: h.run, inventory: h.inventory });
+    const { rows, notes } = await runStudy(p, out, { run: h.run, inventory: h.inventory, managed: () => [] });
     expect(rows).toHaveLength(6 * 2 + 3);
     expect(notes).toEqual([]);
     const claude = rows.filter((r) => r.host === 'claude');
@@ -584,11 +608,26 @@ describe('measurement', () => {
     const p = small();
     const out = temp();
     const h = fakeHost(p);
-    await runStudy(p, out, { run: h.run, inventory: h.inventory });
+    await runStudy(p, out, { run: h.run, inventory: h.inventory, managed: () => [] });
     const lines = readFileSync(join(out, 'preflight.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
     expect(lines).toHaveLength(3);
     expect(lines[0]).toMatchObject({ arm: 'codex/baseline', version: 'codex-cli 9.9.9', refusals: [] });
     expect(lines[0].renderedCharacters).toBe(8);
+  });
+
+  it('refuses the Codex arms, naming the file, when a system or managed Codex config exists', async () => {
+    expect(managedCodexFiles('linux')).toEqual(['/etc/codex/config.toml', '/etc/codex/requirements.toml', '/etc/codex/managed_config.toml']);
+    expect(managedCodexFiles('win32', { ProgramData: 'D:\\PD' }).every((f) => f.startsWith('D:\\PD') && f.includes('Codex'))).toBe(true);
+    const p = small();
+    const h = fakeHost(p);
+    const fake = join(temp(), 'requirements.toml');
+    const { rows, notes } = await runStudy(p, temp(), { run: h.run, inventory: h.inventory, managed: () => [fake] });
+    expect(rows.some((r) => r.host === 'codex')).toBe(false);
+    expect(rows.some((r) => r.host === 'claude')).toBe(true);
+    expect(notes[0]).toContain(fake);
+    expect(h.calls.some((c) => c.args.includes('exec') || c.args.includes('features'))).toBe(false);
+    const clear = fakeHost(p);
+    expect((await runStudy(p, temp(), { run: clear.run, inventory: clear.inventory, managed: () => [] })).rows.some((r) => r.host === 'codex')).toBe(true);
   });
 
   it('skips Codex and says so when a free check refuses it, and when an undeclared server is visible', async () => {
@@ -600,7 +639,7 @@ describe('measurement', () => {
     const p = small();
     const out = temp();
     const h = fakeHost(p, { inventory: () => new Map([['my-private-server', ['t']]]) });
-    const ambient = await runStudy(p, out, { run: h.run, inventory: h.inventory });
+    const ambient = await runStudy(p, out, { run: h.run, inventory: h.inventory, managed: () => [] });
     expect(ambient.rows.some((r) => r.host === 'codex')).toBe(false);
     const saved = readFileSync(join(out, 'preflight.jsonl'), 'utf8');
     expect(saved).toContain('differs from the arm');
@@ -649,7 +688,7 @@ describe('measurement', () => {
     const p = small();
     const out = temp();
     const h = fakeHost(p, { tools: (r, base) => (r.arm.kind === 'gateway' ? ['Bash'] : base) });
-    await expect(runStudy(p, out, { run: h.run, inventory: h.inventory })).rejects.toThrow();
+    await expect(runStudy(p, out, { run: h.run, inventory: h.inventory, managed: () => [] })).rejects.toThrow();
     const saved = readFileSync(join(out, 'rows.jsonl'), 'utf8');
     expect(saved).not.toContain('"kind":"gateway"');
   });
