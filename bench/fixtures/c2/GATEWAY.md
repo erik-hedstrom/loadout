@@ -96,7 +96,8 @@ tell keys apart inside TLS. So no real key goes into the sandbox:
   usage seen, and at its reservation when none was seen or the drain aborted
   it. The *reservation*, made before forwarding, uses the highest input-side
   price that can apply: `max_tokens` at the output price plus T input tokens at
-  the 5-minute cache-write price (1.25 times input), both at the over-100k tier
+  the 5-minute cache-write price (1.25 times input; allowing the 1-hour TTL
+  would need its 2 times), both at the over-100k tier
   if T passes 100k. T is the body's bytes without the base64 of images and
   documents (a token is at least a byte), plus 6,000 per image (an assumption;
   the smoke run checks the provider's maximum) and the whole context window per
