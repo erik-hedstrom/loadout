@@ -2,13 +2,13 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { afterAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { DISABLED_FEATURES, execute, parseClaudeTurns, stopChild, withAppServer, type Command, type ToolCall } from '../bench/overhead.js';
 import { EventEmitter } from 'node:events';
 import { catalogFacts, serverInstructions, serverSpecs, serverTools } from '../bench/mcp-fixtures.js';
-import { arms, armId, buildPlan, canaryFound, canaryOf, checkCodexInventory, claudeEnv, estimate, childEnv, droppedEnv, ENV_ALLOWLIST, CLAUDE_MANAGED_PRECONDITION, CODEX_CLOUD_PRECONDITION, managedClaudeFiles, formatOffline, hostWrites, loadoutFacts, main, managedCodexFiles, offline, positiveControl, reading, resetWork, runStudy, summarize, toolSearchBlockers, type Arm, type Plan, type Row, type Run } from '../bench/mcp-overhead.js';
+import { arms, armId, buildPlan, canaryFound, canaryOf, checkCodexInventory, claudeEnv, estimate, childEnv, envAllowlist, CLAUDE_MANAGED_PRECONDITION, CLAUDE_SCRUB_PRECONDITION, CODEX_CLOUD_PRECONDITION, managedClaudeFiles, formatOffline, hostWrites, loadoutFacts, main, managedCodexFiles, offline, positiveControl, reading, resetWork, runStudy, summarize, type Arm, type Plan, type Row, type Run } from '../bench/mcp-overhead.js';
 
 const temps: string[] = [];
 const temp = () => { const dir = mkdtempSync(join(tmpdir(), 'loadout-b7-test-')); temps.push(dir); return dir; };
@@ -111,22 +111,18 @@ describe('arms and environment', () => {
     expect(all.filter((a) => a.kind === 'baseline').map(armId)).toEqual(['claude/baseline', 'codex/baseline']);
   });
 
-  it('makes the tool search setting explicit and never inherits it', () => {
-    const base = { ENABLE_TOOL_SEARCH: 'auto:5', PATH: '/bin' };
+  it('makes the tool search setting explicit and turns updates off', () => {
+    const base = { PATH: '/bin' };
     expect(claudeEnv(base, 'default').ENABLE_TOOL_SEARCH).toBeUndefined();
     expect(claudeEnv(base, 'false').ENABLE_TOOL_SEARCH).toBe('false');
     expect(claudeEnv(base, 'auto').ENABLE_TOOL_SEARCH).toBe('auto');
     expect(claudeEnv(base).PATH).toBe('/bin');
-    for (const toolSearch of ['default', 'false', 'auto'] as const) expect(claudeEnv({ DISABLE_UPDATES: '0', DISABLE_AUTOUPDATER: '0' }, toolSearch)).toMatchObject({ DISABLE_UPDATES: '1', DISABLE_AUTOUPDATER: '1' });
-    expect(base.ENABLE_TOOL_SEARCH).toBe('auto:5');
-  });
-
-  it('blocks environments in which Claude Code tool search is off or unavailable', () => {
-    expect(toolSearchBlockers({ PATH: '/bin' })).toEqual([]);
-    for (const name of ['ANTHROPIC_BASE_URL', 'CLAUDE_CODE_USE_FOUNDRY', 'CLAUDE_CODE_USE_VERTEX', 'CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS']) {
-      expect(toolSearchBlockers({ [name]: '1' })[0]).toContain(name);
+    for (const toolSearch of ['default', 'false', 'auto'] as const) {
+      expect(claudeEnv({ DISABLE_UPDATES: '0', DISABLE_AUTOUPDATER: '0' }, toolSearch)).toMatchObject({ DISABLE_UPDATES: '1', DISABLE_AUTOUPDATER: '1' });
+      expect(claudeEnv({ CLAUDE_CODE_MCP_ALLOWLIST_ENV: '0' }, toolSearch)).toMatchObject({ CLAUDE_CODE_MCP_ALLOWLIST_ENV: '1', CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1' });
     }
   });
+
 });
 
 describe('plan', () => {
@@ -200,23 +196,45 @@ describe('plan', () => {
   });
 
   it('builds every child environment from an allowlist, so a debug log path or a stray variable cannot reach it', () => {
-    const ambient = { PATH: '/bin', HOME: '/h', HTTPS_PROXY: 'http://p', NODE_EXTRA_CA_CERTS: '/ca', CODEX_HOME: '/users/real', DEBUG: '1', CLAUDE_CODE_DEBUG_LOGS_DIR: '/elsewhere/log', RANDOM_B7_VAR: 'x', ANTHROPIC_API_KEY: 'k', ENABLE_TOOL_SEARCH: 'auto', CODEX_API_KEY: 'k' };
+    const ambient = { PATH: '/bin', HOME: '/h', HTTPS_PROXY: 'http://p', NODE_EXTRA_CA_CERTS: '/ca', CODEX_HOME: '/users/real', CLAUDE_CONFIG_DIR: '/users/claude', CLAUDE_CODE_OAUTH_TOKEN: 't', DEBUG: '1', CLAUDE_CODE_DEBUG_LOGS_DIR: '/elsewhere/log', RANDOM_B7_VAR: 'x', ANTHROPIC_API_KEY: 'k', ENABLE_TOOL_SEARCH: 'auto', CODEX_API_KEY: 'k' };
     const p = plan({}, ambient);
     const commands = p.runs.flatMap((r) => [r.command, ...Object.values(r.free ?? {})]);
     expect(commands.length).toBeGreaterThan(60);
     for (const c of commands) {
       for (const name of ['DEBUG', 'CLAUDE_CODE_DEBUG_LOGS_DIR', 'RANDOM_B7_VAR', 'ANTHROPIC_API_KEY', 'CODEX_API_KEY']) expect(c.env).not.toHaveProperty(name);
-      expect(c.env).toMatchObject({ PATH: '/bin', HOME: '/h', HTTPS_PROXY: 'http://p', NODE_EXTRA_CA_CERTS: '/ca' });
+      expect(c.env).toMatchObject({ PATH: '/bin', HOME: '/h', HTTPS_PROXY: 'http://p' });
+    }
+    // each host gets only its own names: no Claude token or config dir in a Codex child, no CODEX_* in a Claude one
+    for (const r of p.runs) {
+      const own = r.arm.host === 'claude' ? ['CLAUDE_CONFIG_DIR', 'CLAUDE_CODE_OAUTH_TOKEN', 'NODE_EXTRA_CA_CERTS'] : ['CODEX_HOME'];
+      const other = r.arm.host === 'claude' ? ['CODEX_HOME'] : ['CLAUDE_CONFIG_DIR', 'CLAUDE_CODE_OAUTH_TOKEN', 'NODE_EXTRA_CA_CERTS'];
+      for (const name of own) expect(r.command.env).toHaveProperty(name);
+      for (const name of other) expect(r.command.env).not.toHaveProperty(name);
     }
     expect(p.runs.filter((r) => r.arm.host === 'claude').every((r) => r.command.env!.ENABLE_TOOL_SEARCH === (r.arm.toolSearch === 'false' || r.arm.toolSearch === 'auto' ? r.arm.toolSearch : undefined))).toBe(true);
     expect(p.runs.find((r) => r.arm.host === 'codex')!.command.env!.CODEX_HOME).toBe('/users/real');
   });
 
-  it('matches allowed names case-insensitively and reports only the names it drops', () => {
-    expect(childEnv({ Path: 'C:\\x', systemroot: 'C:\\Windows', https_proxy: 'http://p', Debug: '1' })).toEqual({ Path: 'C:\\x', systemroot: 'C:\\Windows', https_proxy: 'http://p' });
-    expect(droppedEnv({ PATH: '/bin', DEBUG: '1', SECRET_TOKEN: 'shh' })).toEqual(['DEBUG', 'SECRET_TOKEN']);
-    expect(ENV_ALLOWLIST).toEqual(expect.arrayContaining(['PATH', 'HTTPS_PROXY', 'NODE_EXTRA_CA_CERTS', 'CODEX_HOME', 'CLAUDE_CONFIG_DIR']));
-    expect(ENV_ALLOWLIST).not.toContain('DEBUG');
+  it('gives MCP servers no credential: the child scrubs, and the server configs carry only what they need', () => {
+    const canary = 'canary-oauth-token-b7';
+    const p = plan({}, { PATH: '/bin', CLAUDE_CODE_OAUTH_TOKEN: canary, CODEX_API_KEY: canary });
+    for (const r of p.runs.filter((x) => x.arm.host === 'claude')) {
+      expect(r.command.env).toMatchObject({ CLAUDE_CODE_MCP_ALLOWLIST_ENV: '1', CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1' });
+      for (const server of Object.values(mcpOf(r))) expect(Object.keys(server.env ?? {})).toEqual(server.env ? ['LOADOUT_HOME'] : []);
+    }
+    // the token may sit in the Claude child's own env, which needs it; it is in no argument and no file the plan wrote
+    const files = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? files(join(dir, e.name)) : [join(dir, e.name)]));
+    for (const r of p.runs) for (const arg of [...r.command.args, ...(r.command.stdin ?? [])]) expect(arg).not.toContain(canary);
+    for (const file of files(p.root)) expect(readFileSync(file, 'utf8')).not.toContain(canary);
+    expect(p.runs.filter((x) => x.arm.host === 'codex').every((r) => !('CLAUDE_CODE_OAUTH_TOKEN' in r.command.env!))).toBe(true);
+  });
+
+  it('matches allowed names case-insensitively', () => {
+    expect(childEnv({ Path: 'C:\\x', systemroot: 'C:\\Windows', https_proxy: 'http://p', Debug: '1' }, 'claude')).toEqual({ Path: 'C:\\x', systemroot: 'C:\\Windows', https_proxy: 'http://p' });
+    expect(envAllowlist('claude')).toEqual(expect.arrayContaining(['PATH', 'HTTPS_PROXY', 'NODE_EXTRA_CA_CERTS', 'CLAUDE_CONFIG_DIR']));
+    expect(envAllowlist('codex')).toEqual(expect.arrayContaining(['PATH', 'HTTPS_PROXY', 'CODEX_HOME', 'CODEX_SQLITE_HOME']));
+    expect(envAllowlist('codex')).not.toContain('CLAUDE_CODE_OAUTH_TOKEN');
+    expect(envAllowlist('claude')).not.toContain('DEBUG');
   });
 
   it('makes the arms of a host differ only by their treatment', () => {
@@ -253,18 +271,18 @@ describe('plan', () => {
   });
 
   it('blocks the Claude arms, naming the files, when managed Claude settings exist', () => {
-    expect(managedClaudeFiles('linux')).toEqual(['/etc/claude-code/managed-settings.json', '/etc/claude-code/managed-settings.d', '/etc/claude-code/managed-mcp.json']);
-    expect(managedClaudeFiles('darwin')[0]).toBe('/Library/Application Support/ClaudeCode/managed-settings.json');
-    expect(managedClaudeFiles('win32')[0]).toContain('ClaudeCode');
+    expect(managedClaudeFiles('linux', { CLAUDE_CONFIG_DIR: '/cc' })).toEqual(['/etc/claude-code/managed-settings.json', '/etc/claude-code/managed-settings.d', '/etc/claude-code/managed-mcp.json', join('/cc', 'remote-settings.json')]);
+    expect(managedClaudeFiles('linux', {})).toContain(join(homedir(), '.claude', 'remote-settings.json'));
+    const mac = managedClaudeFiles('darwin', {});
+    expect(mac[0]).toBe('/Library/Application Support/ClaudeCode/managed-settings.json');
+    expect(mac).toContain('/Library/Managed Preferences/com.anthropic.claudecode.plist');
+    expect(mac.some((f) => f.startsWith('/Library/Managed Preferences/') && f.endsWith('/com.anthropic.claudecode.plist') && f.split('/').length === 5)).toBe(true);
+    expect(managedClaudeFiles('linux', {}).some((f) => f.includes('Managed Preferences'))).toBe(false);
+    expect(managedClaudeFiles('win32', {})[0]).toContain('ClaudeCode');
     const fake = '/fake/managed-settings.json';
     expect(buildPlan(temp(), {}, clean, [fake]).blockers[0]).toContain(fake);
     expect(buildPlan(temp(), { hosts: ['codex'] }, clean, [fake]).blockers).toEqual([]);
     expect(plan().blockers).toEqual([]);
-  });
-
-  it('reports a blocker instead of a misleading default arm', () => {
-    expect(plan({}, { ANTHROPIC_BASE_URL: 'http://proxy.invalid' }).blockers[0]).toContain('ANTHROPIC_BASE_URL');
-    expect(plan({ hosts: ['codex'] }, { ANTHROPIC_BASE_URL: 'http://proxy.invalid' }).blockers).toEqual([]);
   });
 
   it('estimates by request, canary lookups included, and brackets the input tokens', async () => {
@@ -321,7 +339,10 @@ describe('plan', () => {
     expect(text).toContain('Illustrative');
     expect(lines).toContain(`PRECONDITION: ${CODEX_CLOUD_PRECONDITION}`);
     expect(lines).toContain(`PRECONDITION: ${CLAUDE_MANAGED_PRECONDITION}`);
-    expect(lines.find((l) => l.startsWith('ENV: '))).toMatch(/only these variables.*Passed from this environment: .*Dropped \(names only\)/);
+    expect(lines).toContain(`PRECONDITION: ${CLAUDE_SCRUB_PRECONDITION}`);
+    for (const host of ['claude', 'codex']) expect(lines.find((l) => l.startsWith(`ENV ${host}: `))).toMatch(/only these variables.*Passed from this environment: /);
+    expect(lines.find((l) => l.startsWith('ENV codex: '))).not.toContain('CLAUDE_CODE_OAUTH_TOKEN');
+    expect(lines.join('\n')).not.toContain('Dropped');
     for (const write of hostWrites()) expect(lines).toContain(`HOST STATE: ${write}`);
     const paid = lines.find((l) => l.startsWith('PAID claude/native/n1/false/1'))!;
     expect(paid).toContain('env=ENABLE_TOOL_SEARCH=false,MCP_TIMEOUT=60000');
@@ -366,6 +387,7 @@ describe('host process', () => {
   it('waits for the app-server to exit before returning', async () => {
     const file = join(temp(), 'slow-exit.cjs');
     writeFileSync(file, `
+      setInterval(() => {}, 1000);
       process.on('SIGTERM', () => setTimeout(() => { require('fs').writeFileSync(process.env.MARKER, 'exited'); process.exit(0); }, 300));
       require('readline').createInterface({ input: process.stdin }).on('line', (line) => {
         const m = JSON.parse(line);
@@ -659,12 +681,16 @@ describe('measurement', () => {
   });
 
   it('refuses the Codex arms, naming the file, when a system or managed Codex config exists', async () => {
-    expect(managedCodexFiles('linux')).toEqual(['/etc/codex/config.toml', '/etc/codex/requirements.toml', '/etc/codex/managed_config.toml']);
+    const cache = join('/ch', 'cloud-config-bundle-cache.json');
+    expect(managedCodexFiles('linux', { CODEX_HOME: '/ch' })).toEqual(['/etc/codex/config.toml', '/etc/codex/requirements.toml', '/etc/codex/managed_config.toml', cache]);
+    expect(managedCodexFiles('linux', {})).toContain(join(homedir(), '.codex', 'cloud-config-bundle-cache.json'));
+    expect(managedCodexFiles('darwin', { CODEX_HOME: '/ch' })).toContain('/Library/Managed Preferences/com.openai.codex.plist');
+    expect(managedCodexFiles('linux', { CODEX_HOME: '/ch' }).some((f) => f.includes('Managed Preferences'))).toBe(false);
     // Codex asks Windows for ProgramData and falls back to C:\ProgramData, so both are checked, once each
     const under = (dir: string) => ['config.toml', 'requirements.toml'].map((f) => join(dir, 'OpenAI', 'Codex', f));
-    expect(managedCodexFiles('win32', { ProgramData: 'D:\\PD' })).toEqual([...under('D:\\PD'), ...under('C:\\ProgramData')]);
-    expect(managedCodexFiles('win32', { ProgramData: 'c:\\programdata' })).toHaveLength(2);
-    expect(managedCodexFiles('win32', {})).toHaveLength(2);
+    expect(managedCodexFiles('win32', { ProgramData: 'D:\\PD', CODEX_HOME: '/ch' })).toEqual([...under('D:\\PD'), ...under('C:\\ProgramData'), cache]);
+    expect(managedCodexFiles('win32', { ProgramData: 'c:\\programdata' })).toHaveLength(3);
+    expect(managedCodexFiles('win32', {})).toHaveLength(3);
     const p = small();
     const h = fakeHost(p);
     const fake = join(temp(), 'requirements.toml');
@@ -742,21 +768,20 @@ describe('measurement', () => {
 
   it('leaves INCOMPLETE beside the partial rows of a run that stops, and removes it when the run finishes', async () => {
     const only = ['--run', '--hosts', 'claude', '--configs', 'n1', '--repeats', '1'];
-    vi.stubEnv('ANTHROPIC_BASE_URL', '');
-    try {
+    {
       const stopped = temp();
       const p = buildPlan(temp(), { hosts: ['claude'], configs: ['n1'], repeats: 1 }, { PATH: process.env.PATH }, []);
       const bad = fakeHost(p, { byOrder: true, tools: (r, base) => (r.arm.kind === 'gateway' ? ['Bash'] : base) });
-      await expect(main(only, { print: () => {}, run: bad.run, out: stopped })).rejects.toThrow();
+      await expect(main(only, { print: () => {}, run: bad.run, out: stopped, claudeManaged: [] })).rejects.toThrow();
       expect(existsSync(join(stopped, 'INCOMPLETE'))).toBe(true);
       expect(readFileSync(join(stopped, 'rows.jsonl'), 'utf8')).toContain('"kind":"baseline"');
       expect(existsSync(join(stopped, 'summary.md'))).toBe(false);
       const done = temp();
       const good = fakeHost(p, { byOrder: true });
-      await main(only, { print: () => {}, run: good.run, out: done });
+      await main(only, { print: () => {}, run: good.run, out: done, claudeManaged: [] });
       expect(existsSync(join(done, 'INCOMPLETE'))).toBe(false);
       expect(readFileSync(join(done, 'summary.md'), 'utf8')).toContain('B7 input tokens per request');
-    } finally { vi.unstubAllEnvs(); }
+    }
   });
 
   it('does not measure while a blocker stands', async () => {

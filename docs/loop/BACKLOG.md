@@ -236,9 +236,9 @@ Acceptance:
   surviving `--ignore-user-config` (the n1 delta over the baseline), and the
   `app-server` inventory listing without a login on an empty `CODEX_HOME`.
 
-How to run locally (a machine with `claude` and `codex` logged in; unset
-`ANTHROPIC_BASE_URL`, `CLAUDE_CODE_USE_FOUNDRY`, `CLAUDE_CODE_USE_VERTEX`
-and `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS`, or the plan reports a blocker):
+How to run locally (a machine with `claude` and `codex` logged in with a
+subscription; the children get an allowlisted environment, so base-URL, provider
+and API-key variables do not reach them):
 
 ```bash
 npx tsx bench/mcp-overhead.ts --offline          # characters per arm, $0, no CLI
@@ -268,35 +268,55 @@ requests, 0.24 to 1.93M tokens, 14 to 32 minutes. Codex pilot: 3 requests,
 Isolation, and where it stops (the plan prints the preconditions, the env
 allowlist and the host directories a paid command may write in):
 - Every CLI child (paid and free, Claude and Codex, app-server included) gets
-  an environment built from an allowlist, not the parent's: PATH, HOME and
-  Windows system variables, locale, TMP, the proxy and CA variables if set,
-  `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `CODEX_SQLITE_HOME`, `XDG_CACHE_HOME`,
-  `CLAUDE_CODE_OAUTH_TOKEN`, plus each arm's own variables. `DEBUG` with
-  `CLAUDE_CODE_DEBUG_LOGS_DIR`, updaters, base URLs and API keys never reach
-  a child; the plan prints the names it drops. B1 is unchanged: it does not use
-  the helper and still inherits the environment.
+  an environment built from a per-host allowlist, not the parent's: PATH, HOME
+  and Windows system variables, locale, TMP and the proxy and CA variables if
+  set, plus for Claude `CLAUDE_CONFIG_DIR`, `XDG_CACHE_HOME` and
+  `CLAUDE_CODE_OAUTH_TOKEN`, and for Codex `CODEX_HOME` and `CODEX_SQLITE_HOME`,
+  plus each arm's own variables. `DEBUG` with `CLAUDE_CODE_DEBUG_LOGS_DIR`,
+  base URLs and API keys never reach a child. The plan prints each allowlist and
+  what is passed (names only; it no longer lists what is dropped). B1 is
+  unchanged: it does not use the helper and still inherits the environment.
 - Claude runs with `DISABLE_UPDATES=1` and `DISABLE_AUTOUPDATER=1`
   (code.claude.com/docs/en/env-vars, read 2026-10-14). Codex `exec` and
   `app-server` have no update check (it is in the tui crate).
-- Managed configuration overrides `--settings` and `--ignore-user-config`, so
-  the arms are refused, naming the files, if any exist: Claude's
-  `managed-settings.json`, `managed-settings.d` or `managed-mcp.json` in
+- MCP servers get no login token. Claude runs with
+  `CLAUDE_CODE_MCP_ALLOWLIST_ENV=1` (stdio servers get "only a safe baseline
+  environment plus the server's configured `env`") and
+  `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` (credentials stripped from subprocess
+  environments; the changelog has it from 2.1.83, and by variable name from
+  2.1.251 per the env-vars page). The docs give no version for the first, and a
+  CLI that does not know either ignores them silently, so the plan prints a
+  precondition. Our server configs carry only `LOADOUT_HOME`, and a test checks
+  that a token canary appears in no argument and no generated file. Codex starts
+  stdio servers with a small default environment plus the declared `env`
+  (`codex-rs/rmcp-client/src/utils.rs`), so there is nothing to set.
+- Managed configuration overrides `--settings` and `--ignore-user-config`, and a
+  managed `env` block is applied inside the child after the allowlist, so the
+  arms are refused, naming the files, if any exist. Claude (a blocker, from
+  code.claude.com/docs/en/managed-settings and /server-managed-settings):
+  `managed-settings.json`, `managed-settings.d` and `managed-mcp.json` in
   `/etc/claude-code`, `/Library/Application Support/ClaudeCode` or
-  `C:\Program Files\ClaudeCode` (a blocker); Codex's `/etc/codex/config.toml`,
-  `requirements.toml` or `managed_config.toml`, or `config.toml` and
+  `C:\Program Files\ClaudeCode`; the server-managed cache
+  `<config dir>/remote-settings.json`; on macOS the profile plist
+  `com.anthropic.claudecode` in `/Library/Managed Preferences` (device or user
+  folder: the macOS convention, unverified on a Mac). Codex: `/etc/codex/config.toml`,
+  `requirements.toml`, `managed_config.toml`, or `config.toml` and
   `requirements.toml` under ProgramData on Windows (both `%ProgramData%` and
-  `C:\ProgramData` are checked, because Codex asks Windows for the known folder
-  and Node cannot without a dependency). Codex's paid exec isolation otherwise
-  rests on `--ignore-user-config`, which skips `$CODEX_HOME/config.toml` only
-  (`codex-rs/exec/src/cli.rs`, `config/src/loader/mod.rs` at cf0ed4c).
-- Not detectable, so stated as preconditions: Claude MDM and server-managed
-  settings; Codex macOS managed preferences; and the Codex cloud config bundle,
-  which a paid exec fetches for a ChatGPT business, education or enterprise login
+  `C:\ProgramData`, because Codex asks Windows for the known folder and Node
+  cannot without a dependency); on macOS `com.openai.codex` in the same folder;
+  and a cached cloud bundle `$CODEX_HOME/cloud-config-bundle-cache.json`.
+  Codex's paid exec isolation otherwise rests on `--ignore-user-config`, which
+  skips `$CODEX_HOME/config.toml` only (`codex-rs/exec/src/cli.rs`,
+  `config/src/loader/mod.rs` at cf0ed4c).
+- Not checked: the Windows registry policy (`HKLM` and `HKCU`
+  `SOFTWARE\Policies\ClaudeCode`) and a Windows policy inherited by WSL. Not
+  visible to any free command: a live Codex cloud config bundle, which a paid
+  exec fetches for a ChatGPT business, education or enterprise login
   (`codex-rs/cloud-config/src/service.rs`, `cloud_config_eligible_auth`; API keys
   cannot fetch it) and which can set `sqlite_home`, `log_dir` and MCP servers.
   No flag or variable turns it off, and the free commands run without a login.
-  The Codex arms assume the logged-in account has no cloud-managed requirements.
-  `--run` is the approval; there is no confirmation flag.
+  The Codex arms assume the logged-in account has no cloud-managed requirements;
+  a cached bundle is the only sign.
 - Ambient `CLAUDE.md`/`AGENTS.md` in the user directories or parents cannot be
   turned off; they are the same in every arm, and Claude's plugin, skill and
   command inventory and Codex's version are checked for drift. Nothing checks
@@ -305,7 +325,9 @@ allowlist and the host directories a paid command may write in):
   Codex runs are deferred); revisit before running them.
 
 Decisions for Erik:
-- Approve the pilots, then the full run, with the host-state writes the plan prints.
+- Approve the pilots, then the full run, with the host-state writes and the
+  preconditions the plan prints. `--run` is the approval; there is no
+  confirmation flag.
 - Whether to move the host state out of the real homes. Two options, both
   verified only in source or docs, neither implemented, and both **switch the cost
   from subscription quota to API cash**: (a) Codex with a temporary `CODEX_HOME`

@@ -92,11 +92,12 @@ backlog, B7).
   list. No model-free tool inventory was found for Claude (`init.tools` lists
   what is loaded; whether `/context` runs under `-p` is unverified); Codex's
   `mcpServerStatus/list` is one.
-- Every CLI child gets an environment built from an allowlist, and Claude runs
-  with `DISABLE_UPDATES=1` and `DISABLE_AUTOUPDATER=1`. The Claude and Codex
-  arms are refused if managed settings files exist, and assume no cloud-managed
-  Codex requirements, MDM or server-managed Claude settings: the harness cannot
-  detect those. Details and sources: backlog, B7, "Isolation".
+- Every CLI child gets an environment built from a per-host allowlist, Claude
+  runs with updates off and MCP servers scrubbed of credentials, and the arms
+  are refused if a managed settings file, a server-managed cache, a macOS
+  profile or a cached Codex cloud bundle exists. A live Codex cloud bundle and
+  the Windows registry policy are not seen; the plan prints them as
+  preconditions. Details and sources: backlog, B7, "Isolation".
 - The host version is stored on each row and may not change during the study;
   Claude's plugin, skill and command inventory and Codex's version may not
   drift.

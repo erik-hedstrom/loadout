@@ -421,7 +421,9 @@ export async function withAppServer<T>(command: Command, body: (request: AppServ
 }
 /**
  * Stop a child and wait for it, so the next command's reset of the work directory cannot hit a process still holding it
- * (EBUSY on Windows). It is forced after the grace if it ignores the first signal; one that outlives that fails the study.
+ * (EBUSY on Windows). It is forced after the grace if it ignores the first signal; one that outlives that throws, which
+ * both preflights record as a refusal. Only the direct child is guaranteed to stop: behind the npm wrapper on Windows,
+ * SIGKILL ends node and can leave codex.exe running.
  */
 export async function stopChild(child: Pick<ChildProcess, 'pid' | 'exitCode' | 'signalCode' | 'kill' | 'once'>, graceMs = 5_000, forceMs = 2_000) {
   const alive = () => child.pid !== undefined && child.exitCode === null && child.signalCode === null;
@@ -434,7 +436,7 @@ export async function stopChild(child: Pick<ChildProcess, 'pid' | 'exitCode' | '
   if (!alive()) return;
   child.kill('SIGKILL');
   await within(forceMs);
-  if (alive()) throw new Error('Codex app-server did not exit after SIGKILL; stopping the study');
+  if (alive()) throw new Error('Codex app-server did not exit after SIGKILL');
 }
 /** Only initialize, skills/list and MCP inventory: never create a thread or submit a turn. */
 export const inspectCodex = (command: Command): Promise<Discovery> => withAppServer(command, async (request) => {

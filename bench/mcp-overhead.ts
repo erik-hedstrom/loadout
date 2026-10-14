@@ -11,7 +11,7 @@
  */
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { homedir, tmpdir } from 'node:os';
+import { homedir, tmpdir, userInfo } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
@@ -37,8 +37,6 @@ const SECONDS_PER_REQUEST = 30;
 // and starts a new turn with its own limit" (code.claude.com/docs/en/cli-reference); each message here is sent after the
 // previous result. A run has not confirmed it is per message; a cumulative limit would fail the canary turn loudly.
 const MAX_TURNS = 4;
-// Claude Code turns tool search off or unavailable for these (code.claude.com/docs/en/mcp, "Configure tool search").
-const TOOL_SEARCH_OFF = ['ANTHROPIC_BASE_URL', 'CLAUDE_CODE_USE_FOUNDRY', 'CLAUDE_CODE_USE_VERTEX', 'CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS'];
 
 export type ConfigName = keyof typeof CONFIGS;
 export type ToolSearch = typeof TOOL_SEARCH[number];
@@ -110,32 +108,36 @@ export interface Plan { runs: Run[]; blockers: string[]; root: string; work: str
 export interface Only { hosts?: Host[]; configs?: ConfigName[]; repeats?: number }
 
 // A variable can redirect writes (DEBUG with CLAUDE_CODE_DEBUG_LOGS_DIR, updaters, base URLs) to places hostWrites does not
-// list, and rounds 3 to 6 kept finding one more. So a CLI child gets these names only, when they are set.
-const RUN_ENV = ['PATH', 'HOME', 'USERPROFILE', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TERM', 'TMPDIR', 'TMP', 'TEMP', 'SHELL'];
-const WINDOWS_ENV = ['SYSTEMROOT', 'SYSTEMDRIVE', 'WINDIR', 'APPDATA', 'LOCALAPPDATA', 'PROGRAMDATA', 'PROGRAMFILES', 'PROGRAMFILES(X86)', 'COMSPEC', 'PATHEXT', 'USERNAME', 'USERDOMAIN'];
-// A corporate machine needs these to reach the API (code.claude.com/docs/en/env-vars; CODEX_CA_CERTIFICATE in codex-rs at cf0ed4c).
-const NETWORK_ENV = ['HTTPS_PROXY', 'HTTP_PROXY', 'ALL_PROXY', 'NO_PROXY', 'NODE_EXTRA_CA_CERTS', 'SSL_CERT_FILE', 'SSL_CERT_DIR', 'CODEX_CA_CERTIFICATE', 'CLAUDE_CODE_CERT_STORE', 'CLAUDE_CODE_CLIENT_CERT', 'CLAUDE_CODE_CLIENT_KEY'];
-// The homes hostWrites resolves and prints, and the subscription login token. API keys are not passed: under `-p` they would
-// bill cash instead of the subscription (backlog, B7 decision).
-const HOME_ENV = ['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'CODEX_SQLITE_HOME', 'XDG_CACHE_HOME', 'CLAUDE_CODE_OAUTH_TOKEN'];
-export const ENV_ALLOWLIST = [...RUN_ENV, ...WINDOWS_ENV, ...NETWORK_ENV, ...HOME_ENV];
-const allowed = (name: string) => ENV_ALLOWLIST.includes(name.toUpperCase());
-export const childEnv = (base: NodeJS.ProcessEnv): NodeJS.ProcessEnv => Object.fromEntries(Object.entries(base).filter(([name, value]) => value !== undefined && allowed(name)));
-/** Names only, never values. */
-export const droppedEnv = (base: NodeJS.ProcessEnv): string[] => Object.keys(base).filter((name) => !allowed(name)).sort();
+// list, and rounds 3 to 6 kept finding one more. So a CLI child gets the names of its own host only, when they are set.
+const COMMON_ENV = ['PATH', 'HOME', 'USERPROFILE', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TERM', 'TMPDIR', 'TMP', 'TEMP', 'SHELL',
+  'SYSTEMROOT', 'SYSTEMDRIVE', 'WINDIR', 'APPDATA', 'LOCALAPPDATA', 'PROGRAMDATA', 'PROGRAMFILES', 'PROGRAMFILES(X86)', 'COMSPEC', 'PATHEXT', 'USERNAME', 'USERDOMAIN',
+  // a corporate machine needs these to reach the API
+  'HTTPS_PROXY', 'HTTP_PROXY', 'ALL_PROXY', 'NO_PROXY', 'SSL_CERT_FILE', 'SSL_CERT_DIR'];
+// The homes hostWrites resolves and prints; Claude's subscription login token. API keys are not passed: under `-p` they would
+// bill cash instead of the subscription (backlog, B7 decision). Names from code.claude.com/docs/en/env-vars and codex-rs at cf0ed4c.
+const HOST_ENV: Record<Host, string[]> = {
+  claude: ['CLAUDE_CONFIG_DIR', 'XDG_CACHE_HOME', 'CLAUDE_CODE_OAUTH_TOKEN', 'NODE_EXTRA_CA_CERTS', 'CLAUDE_CODE_CERT_STORE', 'CLAUDE_CODE_CLIENT_CERT', 'CLAUDE_CODE_CLIENT_KEY'],
+  codex: ['CODEX_HOME', 'CODEX_SQLITE_HOME', 'CODEX_CA_CERTIFICATE'],
+};
+export const envAllowlist = (host: Host) => [...COMMON_ENV, ...HOST_ENV[host]];
+export const childEnv = (base: NodeJS.ProcessEnv, host: Host): NodeJS.ProcessEnv => {
+  const allowed = envAllowlist(host);
+  return Object.fromEntries(Object.entries(base).filter(([name, value]) => value !== undefined && allowed.includes(name.toUpperCase())));
+};
 
 /**
- * The child environment for Claude: the tool search setting is explicit in every arm, never inherited, and updates are
- * off, so no new CLI is installed mid-study (code.claude.com/docs/en/env-vars, read 2026-10-14: `DISABLE_AUTOUPDATER`
- * "disable automatic background updates", `DISABLE_UPDATES` "block all updates ... stricter").
+ * The child environment for Claude: the tool search setting is explicit in every arm and updates are off, so no new CLI is
+ * installed mid-study (code.claude.com/docs/en/env-vars, read 2026-10-14: `DISABLE_AUTOUPDATER` "disable automatic
+ * background updates", `DISABLE_UPDATES` "block all updates ... stricter"). The login token the child may hold must not reach
+ * the MCP servers it starts: `CLAUDE_CODE_MCP_ALLOWLIST_ENV` "spawn[s] stdio MCP servers with only a safe baseline environment
+ * plus the server's configured `env`", and `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` strips credentials from subprocess environments
+ * (CLI 2.1.83; by variable name from 2.1.251). A CLI too old to know either is not detectable offline: see the precondition.
  */
 export function claudeEnv(base: NodeJS.ProcessEnv, toolSearch: ToolSearch = 'default'): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...base, MCP_TIMEOUT: '60000', DISABLE_AUTOUPDATER: '1', DISABLE_UPDATES: '1' };
-  delete env.ENABLE_TOOL_SEARCH;
+  const env: NodeJS.ProcessEnv = { ...base, MCP_TIMEOUT: '60000', DISABLE_AUTOUPDATER: '1', DISABLE_UPDATES: '1', CLAUDE_CODE_MCP_ALLOWLIST_ENV: '1', CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1' };
   if (toolSearch !== 'default') env.ENABLE_TOOL_SEARCH = toolSearch;
   return env;
 }
-export const toolSearchBlockers = (env: NodeJS.ProcessEnv) => TOOL_SEARCH_OFF.filter((name) => env[name]).map((name) => `${name} is set: it turns Claude Code tool search off or unavailable, so the default arm would not mean what it says; unset it for this study`);
 
 /** The last tool of the last server of a configuration, which a host that stopped ingesting early would lose; one per config. */
 export function canaryOf(config: ConfigName): Canary {
@@ -179,27 +181,34 @@ export function resetWork(work: string) {
 
 const userMessage = (text: string) => JSON.stringify({ type: 'user', message: { role: 'user', content: [{ type: 'text', text }] } });
 
+// A macOS configuration profile lands as a plist for the device or for the user in this folder (the macOS convention; the
+// domains are from the Claude docs and codex-rs, and the folder is unverified on a Mac).
+const managedPlists = (domain: string) => ['/Library/Managed Preferences', join('/Library/Managed Preferences', userInfo().username)].map((d) => join(d, `${domain}.plist`));
+
 /**
- * Claude Code's managed settings files (code.claude.com/docs/en/managed-settings, read 2026-10-14). Nothing in `--settings`
- * overrides a managed key (docs/en/settings, "Settings precedence"), and a managed file can set env and paths. MDM and
- * server-managed settings are not files, so they are not detected.
+ * What Claude Code reads that an administrator controls (code.claude.com/docs/en/managed-settings and /server-managed-settings,
+ * read 2026-10-14): the managed settings files, the macOS profile domain com.anthropic.claudecode, and the cache of
+ * server-managed settings. Nothing in `--settings` overrides a managed key, and a managed `env` block is applied inside
+ * the child after the allowlist. Not checked: the Windows registry (HKLM or HKCU SOFTWARE\Policies\ClaudeCode) and a Windows
+ * policy inherited by WSL.
  */
-export function managedClaudeFiles(platform: NodeJS.Platform = process.platform): string[] {
+export function managedClaudeFiles(platform: NodeJS.Platform = process.platform, env: NodeJS.ProcessEnv = process.env): string[] {
   const dir = platform === 'darwin' ? '/Library/Application Support/ClaudeCode' : platform === 'win32' ? 'C:\\Program Files\\ClaudeCode' : '/etc/claude-code';
-  return ['managed-settings.json', 'managed-settings.d', 'managed-mcp.json'].map((f) => join(dir, f));
+  return [...['managed-settings.json', 'managed-settings.d', 'managed-mcp.json'].map((f) => join(dir, f)),
+    join(env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'), 'remote-settings.json'), ...(platform === 'darwin' ? managedPlists('com.anthropic.claudecode') : [])];
 }
 
 export function buildPlan(root: string, only: Only = {}, env: NodeJS.ProcessEnv = process.env, claudeManaged: string[] = managedClaudeFiles().filter((f) => existsSync(f))): Plan {
   assertTemporary(root);
   const work = join(root, 'work');
   resetWork(work);
-  const clean = childEnv(env);
   const hosts = only.hosts ?? ['claude', 'codex'];
-  const blockers = hosts.includes('claude') ? toolSearchBlockers(env) : [];
+  const blockers: string[] = [];
   if (hosts.includes('claude') && claudeManaged.length) blockers.push(`managed Claude settings exist (${claudeManaged.join(', ')}): they override --settings and can set env and paths, so the arms would not be isolated; remove them for this study`);
   const runs: Run[] = [];
   for (const arm of arms()) {
     if (!hosts.includes(arm.host) || (arm.config && only.configs && !only.configs.includes(arm.config))) continue;
+    const clean = childEnv(env, arm.host);
     const servers: Record<string, object> = arm.kind === 'native' ? Object.fromEntries(serverSpecs(CONFIGS[arm.config!]).map((s) => [s.name, serverConfig(s)]))
       : arm.kind === 'gateway' ? { loadout: gatewayServer(root, arm.config!) } : {};
     const binary = cli(arm.host);
@@ -334,27 +343,30 @@ const firstLine = (text: string) => text.trim().split(/\r?\n/)[0] ?? '';
 
 /**
  * Codex layers an administrator controls, which `--ignore-user-config` does not skip and which can move sqlite_home, log_dir
- * or the MCP servers (codex-rs/config/src/loader/mod.rs and layer_io.rs at cf0ed4c). macOS managed preferences and cloud
- * requirements are not files, so they are not detected.
+ * or the MCP servers (codex-rs/config/src/loader/mod.rs, layer_io.rs and macos.rs at cf0ed4c): the system files, the macOS
+ * profile domain com.openai.codex, and the cache of a cloud config bundle in CODEX_HOME (cloud-config/src/cache.rs, valid for
+ * an hour). The cache proves a bundle exists; its absence proves nothing.
  */
 export function managedCodexFiles(platform: NodeJS.Platform = process.platform, env: NodeJS.ProcessEnv = process.env): string[] {
+  const cloudCache = join(env.CODEX_HOME || join(homedir(), '.codex'), 'cloud-config-bundle-cache.json');
   if (platform === 'win32') {
     // Codex asks Windows for the ProgramData known folder and falls back to C:\ProgramData, not to the variable (loader/mod.rs).
     // Node cannot ask without a dependency, so the variable and the fallback are both checked, once each.
     const dirs = [...new Map([env.ProgramData, 'C:\\ProgramData'].filter((d): d is string => !!d).map((d) => [d.toLowerCase(), d])).values()];
-    return dirs.flatMap((dir) => ['config.toml', 'requirements.toml'].map((f) => join(dir, 'OpenAI', 'Codex', f)));
+    return [...dirs.flatMap((dir) => ['config.toml', 'requirements.toml'].map((f) => join(dir, 'OpenAI', 'Codex', f))), cloudCache];
   }
-  return ['config.toml', 'requirements.toml', 'managed_config.toml'].map((f) => `/etc/codex/${f}`);
+  return [...['config.toml', 'requirements.toml', 'managed_config.toml'].map((f) => `/etc/codex/${f}`), ...(platform === 'darwin' ? managedPlists('com.openai.codex') : []), cloudCache];
 }
 
+export const CLAUDE_SCRUB_PRECONDITION = 'Claude MCP servers receive no login token only if this CLI honours CLAUDE_CODE_MCP_ALLOWLIST_ENV (introduced in a version the docs do not give) and CLAUDE_CODE_SUBPROCESS_ENV_SCRUB (2.1.83; credential names from 2.1.251); an older CLI ignores them silently. Codex starts stdio MCP servers with a small default environment plus the declared env (codex-rs/rmcp-client/src/utils.rs).';
+export const CLAUDE_MANAGED_PRECONDITION = 'Claude arms assume no Windows registry policy (HKLM or HKCU SOFTWARE\\Policies\\ClaudeCode) and no Windows policy inherited by WSL: those are not checked.';
 /**
  * A paid exec fetches the workspace's cloud config bundle when it is logged in with a ChatGPT business, education or
  * enterprise plan (codex-rs/cloud-config/src/service.rs, cloud_config_eligible_auth; exec/src/lib.rs). The bundle can set
- * sqlite_home, log_dir and MCP servers. No flag or variable turns it off, and the free commands run without a login, so
- * nothing here can see it.
+ * sqlite_home, log_dir and MCP servers. No flag or variable turns it off, and the free commands run without a login, so a
+ * live bundle cannot be seen; a cached one can (managedCodexFiles).
  */
-export const CLAUDE_MANAGED_PRECONDITION = 'Claude arms assume no MDM or server-managed settings (only the managed settings files are detected).';
-export const CODEX_CLOUD_PRECONDITION = 'Codex arms assume the logged-in account has no cloud-managed requirements (ChatGPT business, education or enterprise workspaces); the harness cannot detect them.';
+export const CODEX_CLOUD_PRECONDITION = 'Codex arms assume the logged-in account has no cloud-managed requirements (ChatGPT business, education or enterprise workspaces): a cached bundle is checked, but no free command shows a live one.';
 
 export interface Deps { run?: (command: Command) => Promise<string>; inventory?: typeof codexMcpInventory; managed?: () => string[] }
 interface Baseline { version: string }
@@ -451,7 +463,7 @@ export function summarize(rows: Row[], notes: string[] = []): string {
   return lines.join('\n');
 }
 
-export async function main(args: string[], deps: { print?: (s: string) => void; run?: Deps['run']; out?: string } = {}) {
+export async function main(args: string[], deps: { print?: (s: string) => void; run?: Deps['run']; out?: string; claudeManaged?: string[] } = {}) {
   const print = deps.print ?? console.log;
   const { values } = parseArgs({ args, options: { offline: { type: 'boolean' }, run: { type: 'boolean' }, hosts: { type: 'string' }, configs: { type: 'string' }, repeats: { type: 'string' } } });
   const list = <T extends string>(text: string | undefined, allowed: readonly T[]) => text?.split(',').map((x) => { if (!allowed.includes(x as T)) throw new Error(`unknown value ${x}`); return x as T; });
@@ -461,14 +473,14 @@ export async function main(args: string[], deps: { print?: (s: string) => void; 
   if (values.offline) { print(formatOffline(facts)); return; }
   const root = mkdtempSync(join(tmpdir(), 'loadout-b7-'));
   try {
-    const plan = buildPlan(root, only);
+    const plan = buildPlan(root, only, process.env, deps.claudeManaged);
     const e = estimate(plan.runs, facts);
     print(`${plan.runs.length} runs, ${e.requests} paid requests (Codex only if its preflight passes; each canary lookup counted at its --max-turns bound of ${MAX_TURNS}). Estimate: ${e.inputTokens[0]} to ${e.inputTokens[1]} input tokens; ${Math.round(e.seconds[0] / 60)} to ${Math.round(e.seconds[1] / 60)} minutes. Subscription quota; no Jev. Needs Erik's approval before --run.`);
     print('The low figure uses B1\'s 8.5k tokens a call, measured with `--tools Skill`; B7 keeps every built-in tool, so it probably undercounts, and the high figure, built on the same base, is not an upper bound. Claude pilot 1 calibrates both.');
     for (const blocker of plan.blockers) print(`BLOCKED: ${blocker}`);
     for (const write of hostWrites()) print(`HOST STATE: ${write}`);
-    for (const precondition of [CODEX_CLOUD_PRECONDITION, CLAUDE_MANAGED_PRECONDITION]) print(`PRECONDITION: ${precondition}`);
-    print(`ENV: a CLI child gets only these variables, when set: ${ENV_ALLOWLIST.join(', ')}. Passed from this environment: ${Object.keys(childEnv(process.env)).join(', ')}. Dropped (names only): ${droppedEnv(process.env).join(', ')}.`);
+    for (const precondition of [CODEX_CLOUD_PRECONDITION, CLAUDE_MANAGED_PRECONDITION, CLAUDE_SCRUB_PRECONDITION]) print(`PRECONDITION: ${precondition}`);
+    for (const host of ['claude', 'codex'] as const) print(`ENV ${host}: a child gets only these variables, when set: ${envAllowlist(host).join(', ')}. Passed from this environment: ${Object.keys(childEnv(process.env, host)).join(', ')}.`);
     if (!values.run) {
       print('Illustrative: the temp root below is deleted when this exits, so use --run rather than replaying these lines. Every command runs in the one cwd shown, emptied before each. Claude is sent its stdin lines one at a time, each after the previous result.');
       for (const r of plan.runs) {
