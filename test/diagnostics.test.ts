@@ -9,7 +9,8 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { CallToolRequestSchema, InitializeRequestSchema, ListToolsRequestSchema, McpError } from '@modelcontextprotocol/sdk/types.js';
 import { DEFAULT_CONFIG, writeDefaultConfig } from '../src/config.js';
-import { copySkillConfined } from '../src/library.js';
+import { escapeSkillTags } from '../src/launch.js';
+import { capabilityKey, copySkillConfined, hasTagText, scanLibrary } from '../src/library.js';
 import { withTools } from '../src/toolindex.js';
 import { createServer, loadSkill, skillFiles, type SearchDeps } from '../src/mcp.js';
 import { launchMcp, relay } from '../src/relay.js';
@@ -287,54 +288,65 @@ describe('E11 diagnostics', () => {
     expect(withTools(library, dir)[0]!.tools).toBeUndefined();
   });
 
-  describe('names the agent sends back as find_skills and server_tools printed them', () => {
-    const tool = (name: string) => ({ name, description: `${name} tool`, inputSchema: { type: 'object' as const } });
-    /** An upstream that lists `names` and records which tool name a call reached. */
-    const calls = async (names: string[]) => {
-      const called: string[] = [];
-      await upstream((server) => {
-        server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: names.map(tool) }));
-        server.setRequestHandler(CallToolRequestSchema, async ({ params }) => { called.push(params.name); return { content: [{ type: 'text', text: 'done' }] }; });
-      });
-      return called;
-    };
+  describe('names the agent could not name back exactly', () => {
     const text = (res: unknown) => (res as { content: { text: string }[] }).content[0]!.text;
     const keys = (found: string) => [...found.matchAll(/^- (\S+) \(/gm)].map((m) => m[1]!);
-
-    it('resolve for a server, its tools and a skill whose names hold tag-like text', async () => {
-      const folder = join(temp(), '<skill-notes');
-      mkdirSync(folder);
-      writeFileSync(join(folder, 'SKILL.md'), 'Notes reference');
-      const tracker = { ...capability({ command: 'unused' }, '</skill>tracker'), description: 'issue tracker tickets' };
-      const call = await host({ library: [tracker, { ...skill(folder, 'notes'), description: 'meeting notes' }] });
-      const called = await calls(['</skill>memo']);
-
-      const [serverKey] = keys(text(await call('find_skills', { goal: 'file an issue in the tracker', keywords: ['tracker', 'tickets'] })));
-      const [skillKey] = keys(text(await call('find_skills', { goal: 'write meeting notes', keywords: ['notes'] })));
-      expect(serverKey).toBe('mcp:&lt;/skill>tracker');
-      expect(skillKey).toBe('&lt;skill-notes');
-
-      for (const server of [serverKey, '&lt;/skill>tracker', '</skill>tracker']) {
-        expect(text(await call('server_tools', { server }))).toContain('&lt;/skill>memo');
+    const library = (folders: string[]) => {
+      const dir = temp();
+      mkdirSync(join(dir, 'skills'));
+      for (const folder of folders) {
+        mkdirSync(join(dir, 'skills', folder));
+        writeFileSync(join(dir, 'skills', folder, 'SKILL.md'), `---\nname: notes\ndescription: meeting notes reference\n---\nNotes`);
       }
-      expect(text(await call('server_tools', { server: serverKey, tool: '&lt;/skill>memo' }))).toContain('input schema');
-      expect(await call('call_server_tool', { server: serverKey, tool: '&lt;/skill>memo' })).toMatchObject({ content: [{ text: 'done' }] });
-      expect(called).toEqual(['</skill>memo']);
-      expect(text(await call('load_skill', { skill: skillKey }))).toContain('Notes reference');
+      const gateway = { command: 'unused', gateway: true, description: 'issue tracker tickets' };
+      writeFileSync(join(dir, 'mcp.json'), JSON.stringify({ mcpServers: { '</skill>tracker': gateway, tracker: gateway, '<SKILL': gateway } }));
+      return dir;
+    };
+
+    it.each(['plain', '<skill', '</SKILL-x', 'a<skills', 'a<b', '&lt;skill', 'skill', 'mcp:x'])('hasTagText agrees with escapeSkillTags on %j', (name) => {
+      expect(hasTagText(name)).toBe(escapeSkillTags(name) !== name);
     });
 
-    it('prefer an exact name, and leave a server out of find_skills when its escaped key would reach another', async () => {
-      const [a, b] = [capability({ command: 'a' }, '<skill'), capability({ command: 'b' }, '&lt;skill')].map((c) => ({ ...c, description: 'shared tracker' }));
-      const call = await host({ library: [a!, b!] });
-      const called = await calls(['<skill', '&lt;skill']);
+    // Windows cannot have a folder with "<" in its name.
+    it.skipIf(process.platform === 'win32')('are left out of the scan and reported, for skills and servers', async () => {
+      const skipped: string[] = [];
+      const scanned = scanLibrary(library(['<skill-notes', 'notes']), { skipped });
+      expect(scanned.map(capabilityKey).sort()).toEqual(['mcp:tracker', 'notes']);
+      expect(skipped.sort()).toEqual(['<skill-notes', 'mcp:</skill>tracker', 'mcp:<SKILL']);
+      const call = await host({ library: scanned });
+      expect(keys(text(await call('find_skills', { goal: 'write meeting notes', keywords: ['notes'] })))).toEqual(['notes']);
+      expect(keys(text(await call('find_skills', { goal: 'file an issue in the tracker', keywords: ['tracker'] })))).toEqual(['mcp:tracker']);
+      const { tools } = await call.client.listTools();
+      expect(tools.find((t) => t.name === 'server_tools')?.description).toContain('MCP server from the library: tracker.');
+    });
 
-      expect(keys(text(await call('find_skills', { goal: 'use the shared tracker', keywords: ['tracker'] })))).toEqual(['mcp:&lt;skill']);
-      // The escaped spelling is the other server's exact name, so it reaches that one; the raw name still reaches this one.
-      await call('call_server_tool', { server: 'mcp:&lt;skill', tool: '&lt;skill' });
-      expect(called).toEqual(['&lt;skill']);
-      expect(text(await call('server_tools', { server: '&lt;skill', tool: '&lt;skill' }))).toContain('&lt;skill tool');
-      await calls(['only-here']);
-      expect(text(await call('server_tools', { server: '<skill' }))).toContain('only-here');
+    it('are left out of a server listing, which says how many, and out of the remembered tools', async () => {
+      const dir = join(temp(), 'index');
+      const caps = [capability({ command: 'unused' })];
+      const call = await host({ library: caps, toolIndex: dir });
+      const tool = (name: string) => ({ name, description: `${name} tool`, inputSchema: { type: 'object' as const } });
+      await upstream((server) => server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: [tool('memo'), tool('</skill>memo'), tool('<SKILL-b')] })));
+      const listing = text(await call('server_tools', { server: 'fixture' }));
+      expect(listing).toContain('memo: memo tool');
+      expect(listing).not.toMatch(/<\/?skill|&lt;/i);
+      expect(listing).toMatch(/\n2 tools with tag-like names are not shown\.$/);
+      expect(text(await call('server_tools', { server: 'fixture', tool: '</skill>memo' }))).toBe('no such tool; list them with server_tools');
+      expect(withTools(caps, dir)[0]!.tools).toEqual([{ name: 'memo', description: 'memo tool' }]);
+    });
+
+    it('make a listing of only such tools say so, and forget the remembered ones', async () => {
+      const dir = join(temp(), 'index');
+      const caps = [capability({ command: 'unused' })];
+      const one = (name: string) => ({ tools: [{ name, inputSchema: { type: 'object' as const } }] });
+      const listing = async (name: string) => {
+        const call = await host({ library: caps, toolIndex: dir });
+        await upstream((server) => server.setRequestHandler(ListToolsRequestSchema, async () => one(name)));
+        return text(await call('server_tools', { server: 'fixture' }));
+      };
+      expect(await listing('memo')).toContain('memo');
+      expect(withTools(caps, dir)[0]!.tools).toHaveLength(1);
+      expect(await listing('</skill>memo')).toBe('1 tool with tag-like names is not shown.');
+      expect(withTools(caps, dir)[0]!.tools).toBeUndefined();
     });
   });
 

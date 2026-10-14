@@ -238,10 +238,11 @@ library itself, in its own words, through MCP:
     description. The Jev question gets the text too; the embedding index does
     not.
   - Search never starts a server to fill the index.
-  - Keys and names reach the agent escaped, so one with tag-like text comes
-    back escaped. The gateway and `load_skill` accept the exact name first,
-    then the escaped form when exactly one capability has it, and `find_skills`
-    leaves out a capability whose escaped key would reach another.
+  - A skill folder, server name or tool name that holds `<skill` or `</skill`
+    is never offered, because the agent sees names escaped and could not send
+    one back exactly. The library scan leaves out such skills and servers (so
+    search, the hook and the launcher all agree) and `loadout doctor` lists
+    them, escaped; `server_tools` leaves out such tools and says how many.
 - **Cache and state files.** The scan cache, tool index, embeddings and hook
   state are written through `src/safefs.ts`; the embedding model folder and
   the session folder get its folder check. Session files (`decision.json`,

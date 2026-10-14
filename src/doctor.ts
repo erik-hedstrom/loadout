@@ -6,7 +6,7 @@ import { parse as parseToml } from 'smol-toml';
 import { paths, resolveApiKey, type Config } from './config.js';
 import { EmbeddingStore, hasTransformers } from './embed.js';
 import type { SystemOneClient } from './jev.js';
-import { which } from './launch.js';
+import { escapeSkillTags, which } from './launch.js';
 import { scanLibrary } from './library.js';
 import type { Capability } from './types.js';
 
@@ -104,7 +104,8 @@ export async function doctor(config: Config, client: (apiKey: string) => SystemO
 
   let library: Capability[] = [];
   try {
-    library = scanLibrary(paths.library());
+    const skipped: string[] = [];
+    library = scanLibrary(paths.library(), { skipped });
     const skills = library.filter((c) => c.kind === 'skill').length;
     checks.push({
       name: 'library',
@@ -112,6 +113,14 @@ export async function doctor(config: Config, client: (apiKey: string) => SystemO
       detail: `${skills} skills, ${library.length - skills} MCP servers in ${paths.library()}`,
       fix: 'loadout add <dir|github-url>',
     });
+    if (skipped.length > 0) {
+      checks.push({
+        name: 'library names',
+        ok: false,
+        detail: `left out, because the name holds "<skill" or "</skill": ${skipped.map(escapeSkillTags).join(', ')}`,
+        fix: 'rename the skill folder or the mcp.json server; these names are never offered to an agent',
+      });
+    }
   } catch (err) {
     // A broken library is what doctor is for: report it and run the remaining checks.
     checks.push({ name: 'library', ok: false, detail: err instanceof Error ? err.message : 'cannot be read', fix: `fix mcp.json, or check that ${paths.library()} is readable` });

@@ -222,7 +222,7 @@ function readScanCache(dir: string, root: string): ScanCache | undefined {
   }
 }
 
-export function scanLibrary(libraryDir: string, options: { cache?: boolean } = {}): Capability[] {
+export function scanLibrary(libraryDir: string, options: { cache?: boolean; skipped?: string[] } = {}): Capability[] {
   const dirs = subdirs(join(libraryDir, 'skills'));
   // Routing opts in; audit, doctor and other read-only callers must neither create nor refresh the cache.
   const cacheDir = options.cache ? paths.index() : undefined;
@@ -234,6 +234,10 @@ export function scanLibrary(libraryDir: string, options: { cache?: boolean } = {
   let changed = cache === undefined;
   const capabilities: Capability[] = [];
   for (const dir of dirs) {
+    if (hasTagText(basename(dir))) {
+      options.skipped?.push(basename(dir));
+      continue;
+    }
     const stamp = cacheDir ? manifestStamp(dir, cutoffNs) : undefined;
     const cached = byFolder.get(basename(dir));
     const hit = stamp !== undefined && cached?.[1] === stamp;
@@ -248,6 +252,10 @@ export function scanLibrary(libraryDir: string, options: { cache?: boolean } = {
 
   const mcpFile = join(libraryDir, 'mcp.json');
   for (const [name, { description = '', autoApprove, gateway, ...server }] of Object.entries(readMcpServers(libraryDir))) {
+    if (hasTagText(name)) {
+      options.skipped?.push(`mcp:${name}`);
+      continue;
+    }
     capabilities.push({ id: `mcp:${name}`, kind: 'mcp', name, description, source: mcpFile, server, autoApprove: autoApprove === true, gateway: gateway === true });
   }
 
@@ -272,6 +280,12 @@ export function librarySources(libraryDir: string): { origin: string; skills: nu
 }
 
 /** Unique key of a capability: the skill's folder (names repeat across sources) or `mcp:<server>`. */
+/**
+ * Whether `escapeSkillTags` (launch.ts, which imports this module) would change the text. Skill folders, server
+ * names and tool names the agent must name back exactly cannot hold tag text, so such ones are never offered.
+ */
+export const hasTagText = (text: string) => /<\/?skill/i.test(text);
+
 export const capabilityKey = (c: Capability) => (c.kind === 'skill' ? basename(c.source) : `mcp:${c.name}`);
 
 /** A folder name made only of lowercase letters, digits and hyphens. */
