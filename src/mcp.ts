@@ -187,13 +187,13 @@ type ListedTool = Awaited<ReturnType<Client['listTools']>>['tools'][number];
 /** Schema keywords that add or define arguments somewhere other than `properties`. */
 const COMPOSING = ['$ref', 'oneOf', 'anyOf', 'allOf', 'not', 'if', 'patternProperties'];
 
+/** Whether a listing shows a name unchanged (no tag text to escape, one line, within `max`), so the agent can send it back. */
+const shownExactly = (name: string, max: number) => !hasTagText(name) && oneLine(name, max) === name;
+
 /**
  * A tool's argument names, optional ones marked with `?`, from an untrusted schema. "none" only when the
  * schema has no properties and nothing that could add some; otherwise the agent is told to fetch the schema.
  */
-/** Whether a listing shows a name unchanged (no tag text to escape, one line, within `max`), so the agent can send it back. */
-const shownExactly = (name: string, max: number) => !hasTagText(name) && oneLine(name, max) === name;
-
 function argumentNames(schema: ListedTool['inputSchema']): string {
   const names = Object.keys(schema.properties ?? {});
   const composing = [...COMPOSING.filter((k) => k in schema), ...(schema.additionalProperties ? ['additionalProperties'] : [])];
