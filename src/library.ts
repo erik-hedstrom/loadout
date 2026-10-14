@@ -253,8 +253,8 @@ export function scanLibrary(libraryDir: string, options: { cache?: boolean; skip
 
   const mcpFile = join(libraryDir, 'mcp.json');
   for (const [name, { description = '', autoApprove, gateway, ...server }] of Object.entries(readMcpServers(libraryDir))) {
-    // A server named "mcp:x" would share the key of a server named "x".
-    if (name.startsWith('mcp:') || unofferable(`mcp:${name}`)) {
+    // A server named "mcp:x" would share the key of a server named "x"; an empty name cannot be sent back.
+    if (name === '' || name.startsWith('mcp:') || unofferable(`mcp:${name}`)) {
       options.skipped?.push(`mcp:${name}`);
       continue;
     }

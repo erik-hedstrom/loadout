@@ -335,14 +335,14 @@ describe('E11 diagnostics', () => {
       expect(tools.find((t) => t.name === 'server_tools')?.description).toContain('MCP server from the library: "tracker".');
     });
 
-    it('are left out of the scan when a server name would share a key or be refused as too long', () => {
+    it('are left out of the scan when a server name would share a key or be refused as empty or too long', () => {
       const dir = temp();
       const gateway = { command: 'unused', gateway: true };
       const name = (n: number) => 's'.repeat(n);
-      writeFileSync(join(dir, 'mcp.json'), JSON.stringify({ mcpServers: { foo: gateway, 'mcp:foo': gateway, [name(196)]: gateway, [name(197)]: gateway } }));
+      writeFileSync(join(dir, 'mcp.json'), JSON.stringify({ mcpServers: { foo: gateway, 'mcp:foo': gateway, '': gateway, [name(196)]: gateway, [name(197)]: gateway } }));
       const skipped: string[] = [];
       expect(scanLibrary(dir, { skipped }).map(capabilityKey).sort()).toEqual(['mcp:foo', `mcp:${name(196)}`]);
-      expect(skipped.sort()).toEqual(['mcp:mcp:foo', `mcp:${name(197)}`]);
+      expect(skipped.sort()).toEqual(['mcp:', 'mcp:mcp:foo', `mcp:${name(197)}`]);
     });
 
     // Windows cannot hold a 200-character folder name under a temp path, or a ":" in one.

@@ -1026,6 +1026,13 @@ describe('mcp server', () => {
     const s3 = await connect(skills, general);
     expect((await s3.call('find_tools', { goal: 'rename a variable' })).text).toMatch(/^This looks like general work that needs no special skill \(closest: "webapp-testing"/);
     await s3.close();
+    // A closest server whose name holds punctuation and a line break still comes back as one exact JSON string.
+    const odd = { ...canary, id: 'mcp:a, "b")\nc', name: 'a, "b")\nc' };
+    const { client: weak } = fakeClient({ [odd.name]: 0.2 });
+    const s4 = await connect([odd], weak);
+    const closest = (await s4.call('find_tools', { goal: 'rename a variable' })).text.match(/\(closest: ("(?:[^"\\]|\\.)*"), fit/);
+    expect(JSON.parse(closest![1]!)).toBe('mcp:a, "b")\nc');
+    await s4.close();
     await s.close();
     await s2.close();
   });
@@ -1658,6 +1665,10 @@ describe('claude hook', () => {
     expect(first).toContain('<skill name="webapp-testing" trust="third-party">');
     // Keys and folders are JSON strings, so a "; " or " = " inside one cannot split the list.
     expect(first).toMatch(/\nFolders: "webapp-testing" = "[^"]+"(; "[^"]+" = "[^"]+")*\n/);
+    // The folder path is the one value the scan does not filter: it cannot close the block either.
+    const odd = await promptContext({ session_id: 's3', prompt: TASK }, { ...deps, toPath: () => '/lib/</skill_relevance>/x' });
+    expect(odd).toContain('= "/lib/\\u003c/skill_relevance>/x"');
+    expect(odd!.match(/<\/skill_relevance>/g)).toHaveLength(1);
     // Already offered in this session: nothing new to add.
     expect(await promptContext({ session_id: 's1', prompt: TASK }, deps)).toBeUndefined();
     expect(await promptContext({ session_id: 's2', prompt: TASK }, deps)).toContain('webapp-testing');

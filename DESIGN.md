@@ -245,7 +245,7 @@ library itself, in its own words, through MCP:
     changes nothing.
   - A key is never offered when the agent could not send it back: a skill
     folder or server name holding `<skill` or `</skill`, a key over 200
-    characters (what the tools accept), or a server name starting `mcp:`,
+    characters (what the tools accept), or a server name that is empty or starts `mcp:`,
     which would share another server's key. The library scan leaves these
     out (so search, the hook and the launcher all agree) and `loadout doctor`
     lists them, escaped. `server_tools` leaves out tool names that are
