@@ -109,6 +109,12 @@ const INJECT_MAX_CHARS = 12_000;
 /** Third-party text cannot open or close loadout's wrappers (<skill>, <skill_file>, …). */
 export const escapeSkillTags = (text: string) => text.replace(/<(\/?skill)/gi, '&lt;$1');
 
+/**
+ * A value the agent may send back (a key, a tool or argument name, a path, a schema), as JSON with each `<` written
+ * `\u003c`: quotes keep separators inside a name, and tag escaping cannot change it.
+ */
+export const asJson = (value: unknown) => JSON.stringify(value).replace(/</g, '\\u003c');
+
 export const attr = (v: string) => v.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 /**

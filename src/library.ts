@@ -234,7 +234,8 @@ export function scanLibrary(libraryDir: string, options: { cache?: boolean; skip
   let changed = cache === undefined;
   const capabilities: Capability[] = [];
   for (const dir of dirs) {
-    if (unofferable(basename(dir))) {
+    // A skill folder named "mcp:x" would share the key of the server x.
+    if (basename(dir).startsWith('mcp:') || unofferable(basename(dir))) {
       options.skipped?.push(basename(dir));
       continue;
     }

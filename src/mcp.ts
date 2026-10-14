@@ -28,7 +28,7 @@ import type { EmbeddingStore } from './embed.js';
 import type { SystemOneClient } from './jev.js';
 import { diagnostic } from './diagnostic.js';
 import { capabilityKey, hasTagText, KEY_CHARS, readConfined, skillExcerpt } from './library.js';
-import { attr, escapeSkillTags, injectionBlock, oneLine } from './launch.js';
+import { asJson, attr, escapeSkillTags, injectionBlock, oneLine } from './launch.js';
 import { route } from './route.js';
 import { rememberTools, withTools } from './toolindex.js';
 import type { Capability, RepoSignals } from './types.js';
@@ -88,7 +88,7 @@ export async function findTools(deps: SearchDeps, goal: string, keywords: string
   const note = d.warning ? `(${d.warning})\n` : '';
   if (matches.length === 0) {
     const top = d.scored[0];
-    const closest = top ? ` (closest: ${capabilityKey(top.capability)}, fit ${top.p.toFixed(2)})` : '';
+    const closest = top ? ` (closest: ${asJson(capabilityKey(top.capability))}, fit ${top.p.toFixed(2)})` : '';
     return general
       ? `${note}This looks like general work that needs no special skill${closest}. Search again with more specific words if it involves a particular format, product, service or domain.`
       : `${note}No skill${hasServers ? ' or MCP server' : ''} in the library fits this well${closest}. Carry on without one, or search again with different words.`;
@@ -183,12 +183,6 @@ export function loadSkill(deps: SearchDeps, skill: string, file?: string): strin
 
 type ListedTool = Awaited<ReturnType<Client['listTools']>>['tools'][number];
 
-/**
- * A value the agent may send back (a key, a tool or argument name, a schema), as JSON with each `<` written `\u003c`:
- * quotes keep commas and `?` inside a name, and tag escaping cannot change it.
- */
-const asJson = (value: unknown) => JSON.stringify(value).replace(/</g, '\\u003c');
-
 /** Schema keywords that add or define arguments somewhere other than `properties`. */
 const COMPOSING = ['$ref', 'oneOf', 'anyOf', 'allOf', 'not', 'if', 'patternProperties'];
 
@@ -203,10 +197,10 @@ function argumentNames(schema: ListedTool['inputSchema']): string {
   const properties = schema.properties ?? {};
   const names = Object.keys(properties);
   const composing = [...COMPOSING.filter((k) => k in schema), ...(schema.additionalProperties ? ['additionalProperties'] : [])];
-  // A shortened or escaped argument name would be sent back wrong, and a required one missing from properties
-  // would not be listed at all, so then only the full schema will do.
+  // A shortened argument name would be sent back wrong, and a required one missing from properties would not be
+  // listed at all, so then only the full schema will do.
   const unlisted = (schema.required ?? []).some((n) => !Object.hasOwn(properties, n));
-  if (unlisted || names.slice(0, COMPACT_ARGUMENTS).some((n) => !shownExactly(n, ARGUMENT_CHARS))) return 'not listed exactly, fetch the full schema';
+  if (unlisted || names.slice(0, COMPACT_ARGUMENTS).some((n) => n.length > ARGUMENT_CHARS)) return 'not listed exactly, fetch the full schema';
   const required = new Set(schema.required);
   const shown = names.slice(0, COMPACT_ARGUMENTS).map((n) => `${asJson(n)}${required.has(n) ? '' : '?'}`);
   const list = `${shown.join(', ')}${names.length > shown.length ? ', …' : ''}`;

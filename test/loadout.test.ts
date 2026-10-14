@@ -1024,7 +1024,7 @@ describe('mcp server', () => {
     // General work (below the need gate): a merely plausible match is not shown.
     const { client: general } = fakeClient({ 'webapp-testing': 0.8 }, { need: 0.1, exact: 0.5 });
     const s3 = await connect(skills, general);
-    expect((await s3.call('find_tools', { goal: 'rename a variable' })).text).toMatch(/^This looks like general work that needs no special skill \(closest: webapp-testing/);
+    expect((await s3.call('find_tools', { goal: 'rename a variable' })).text).toMatch(/^This looks like general work that needs no special skill \(closest: "webapp-testing"/);
     await s3.close();
     await s.close();
     await s2.close();
@@ -1654,8 +1654,10 @@ describe('claude hook', () => {
     expect(calls).toHaveLength(0);
 
     const first = await promptContext({ session_id: 's1', prompt: TASK }, deps);
-    expect(first).toMatch(/^<skill_relevance>\n[\s\S]*Most relevant:\n- webapp-testing \(fit 0\.95\): /);
+    expect(first).toMatch(/^<skill_relevance>\n[\s\S]*Most relevant:\n- "webapp-testing" \(fit 0\.95\): /);
     expect(first).toContain('<skill name="webapp-testing" trust="third-party">');
+    // Keys and folders are JSON strings, so a "; " or " = " inside one cannot split the list.
+    expect(first).toMatch(/\nFolders: "webapp-testing" = "[^"]+"(; "[^"]+" = "[^"]+")*\n/);
     // Already offered in this session: nothing new to add.
     expect(await promptContext({ session_id: 's1', prompt: TASK }, deps)).toBeUndefined();
     expect(await promptContext({ session_id: 's2', prompt: TASK }, deps)).toContain('webapp-testing');
