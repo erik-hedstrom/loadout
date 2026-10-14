@@ -236,12 +236,13 @@ Learnings (cloud half): [fixtures and protocol](../../bench/fixtures/c2/PROTOCOL
   pre-approved `find_skills` call, which runs outside the Bash sandbox, and
   revoking later cannot undo that. So the primary layer is that the agent cannot
   read a key: files denied to Read and to the Bash sandbox, `apiKeyHelper`,
-  `/proc` denied, and a canary probe in the smoke run. Redaction before Jev is
+  a fresh `/proc` for `Bash`, and a canary probe in the smoke run. Redaction before Jev is
   E13, a prerequisite for the loadout arm; the workspace is archived before any
   output is scanned, judged or committed:
   [Credentials and spend](../../bench/fixtures/c2/PROTOCOL.md#credentials-and-spend).
-  A container may need `enableWeakerNestedSandbox`, which exposes `/proc`; then
-  a VM.
+  `enableWeakerNestedSandbox` is prohibited: it exposes `/proc` to `Bash`, and
+  permission rules do not stop a Python or Node child. Where bubblewrap cannot
+  mount `/proc`, use a VM.
 - What that gives up (refusal before the fact, a hard per-run limit, a record
   of the pins the agent cannot reach, per-run vendor cost) is listed in
   [PROTOCOL.md](../../bench/fixtures/c2/PROTOCOL.md#given-up-compared-with-a-harness-gateway).
