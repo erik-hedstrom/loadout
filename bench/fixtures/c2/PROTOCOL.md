@@ -59,7 +59,13 @@ of this:
 - Each run starts in a fresh folder holding a copy of only that task's `inputs`
   from [index.json](index.json) (not `task.md`, not `KEY.md`).
 - The plugin is a copy of `plugins/loadout` outside the checkout; `loadout`
-  comes from a packed build (`npm pack`), not from the checkout.
+  comes from a packed build (`npm pack`), not from the checkout. `Write` and
+  `Edit` run outside the Bash sandbox (sandboxing page), so what feeds the hook,
+  `loadout mcp` and the lazy import in `src/embed.ts` is root-owned and
+  read-only, outside the run folder and the temp directory: the plugin copy, the
+  `loadout` install with its `node_modules`, and the library and `config.json`
+  of `LOADOUT_HOME`. Only `<home>/sessions`, which holds the hook's state and no
+  code, is writable.
 - Nothing can be installed during a run, so the image, the same for all arms,
   comes with Node 22+, Python 3 with python-docx, openpyxl, python-pptx, pypdf,
   pdfplumber, pandas and matplotlib, and sqlite3. Versions go into the results.
@@ -132,23 +138,26 @@ hold:
 - In the container: no host path and no runtime socket exist, and there is no
   route to the host or to a metadata address.
 - In the container, connection: a TCP connect to a literal outside IP address
-  fails. (A literal
-  address takes name resolution out of the test.)
+  fails. (A literal address takes name resolution out of the test.)
 - In the container, resolution, apart from connection: a lookup of a canary
-  name through the container's resolver fails or is refused; the same lookup sent to a public
-  resolver, over port 53 and 853, gets no answer; and the resolver's counters
-  show the canary flag set, refused up by the lookups made and forwarded still
-  0. The canary is a random label under a domain the operator controls, if its
-  name server logs queries (it must see nothing), plus a name that does not
-  exist.
+  name through the container's resolver fails or is refused; the same lookup
+  sent to a public resolver, over port 53 and 853, gets no answer; and the
+  resolver's counters show the canary flag set, refused up by the lookups made
+  and forwarded still 0. The canary is a random label under a domain the
+  operator controls, if its name server logs queries (it must see nothing),
+  plus a name that does not exist.
 - Control: the gateway's name resolves and a minimal request through it
   succeeds, so a dead network cannot pass.
 - The configured limits show.
-- In `claude`'s Bash tool: the sandbox is on (a write outside the run folder
-  fails with `Read-only file system`); a TCP connect to the gateway's address
-  and to a literal outside IP address fails; `curl --noproxy '*'` and a request
-  through the proxy variables to the gateway fail; and no process outside the
-  sandbox is visible in `/proc`.
+- In `claude`'s Bash tool, each attempt carries its own nonce, and it passes
+  only if the gateway's own counter for that nonce is 0, never the tool output
+  in the stream, which the model can forge. The attempts: a TCP connect to the
+  gateway's address and to a literal outside IP address; `curl --noproxy '*'`;
+  a request through the proxy variables; a SOCKS attempt through `ALL_PROXY`;
+  an AF_UNIX connect to a socket the runner listens on at a nonce path; and
+  each of these again with `dangerouslyDisableSandbox: true`. Also the sandbox
+  is on (a write outside the run folder fails with `Read-only file system`) and
+  no process outside the sandbox is visible in `/proc`.
 
 Its output goes into the results.
 
@@ -180,7 +189,7 @@ claude -p "$PROMPT" --output-format stream-json --verbose --include-hook-events 
   --model "$MODEL" --no-session-persistence --setting-sources '' \
   --strict-mcp-config --mcp-config "$MCP" --settings "$SANDBOX" \
   --permission-mode acceptEdits --allowedTools Bash $EXTRA_TOOLS \
-  --disallowedTools WebFetch WebSearch Task
+  --disallowedTools WebFetch WebSearch Task Agent Workflow SendMessage Skill
 ```
 
 | Arm | `$MODEL` | `$MCP` | Additions |
@@ -203,7 +212,9 @@ claude -p "$PROMPT" --output-format stream-json --verbose --include-hook-events 
   sandbox cannot start. Claude's own requests, hooks and local MCP servers "run
   outside it", so only `claude` reaches the gateway, and the hook and `loadout
   mcp` still reach Jev.
-  - Linux needs `bubblewrap` and `socat` in the image. In an unprivileged
+  - Linux needs `bubblewrap` and `socat` in the image, and the optional seccomp
+    filter, which "adds Unix domain socket blocking" and comes with
+    `npm install -g @anthropic-ai/sandbox-runtime`. In an unprivileged
     container `bwrap` can fail on `/proc`; the docs' remedy,
     `enableWeakerNestedSandbox`, "considerably weakens security" and does not
     say whether the network namespace stays. Use it only if the smoke probe
@@ -211,18 +222,29 @@ claude -p "$PROMPT" --output-format stream-json --verbose --include-hook-events 
   - No task needs network from `Bash`: the Docker tasks cannot run `docker`,
     `ctl-ratelimiter-bug` runs `node --test` with no dependency, and the rest
     use the preinstalled tools.
-- **No subagents.** `Task` (`Agent` in builds that renamed it) is disallowed in
-  every arm: it opens conversations of its own, which the one-conversation
-  check would reject. The arms stay equal, at the cost of any gain from
-  subagents (a stated limit).
+- **No delegation.** `Task` and `Agent` are both disallowed in every arm. The
+  [sub-agents page](https://code.claude.com/docs/en/sub-agents) (read
+  2026-10-14) says `Task` became `Agent` in v2.1.63, `Task(...)` rules "still
+  work as aliases", and "to stop all delegation, deny the `Agent` tool itself".
+  A bare name in `--disallowedTools` "removes the matching tools from Claude's
+  context" (CLI reference). The [tools reference](https://code.claude.com/docs/en/tools-reference)
+  lists three more paths, denied the same way: `Workflow` ("orchestrates many
+  subagents in the background"), `SendMessage` (writes to another agent or
+  session) and `Skill` (a skill with `context: fork` runs in a subagent). The
+  smoke run's stub step checks each is refused. Delegation opens conversations
+  the one-conversation check rejects; the arms stay equal, at the cost of any
+  gain from subagents (a stated limit).
 - **No compaction, in every arm.** A compaction rewrites the assistant turns,
   which the one-conversation check rejects: it would make the run `invalid`, mostly
   for `small-loadout`, whose hook context and skill text fill the window
   sooner. `DISABLE_COMPACT=1` turns off all of it, `/compact` included. A run
   that fills the window ends at the provider's context error and is judged as it
   stands, flagged `context full`. A compaction that happens anyway is `invalid`.
-- **Pinned CLI.** The image holds one `claude` version, part of the treatment
-  hashes, with auto-update off (see the env list above).
+- **Pinned CLI.** The image holds one `claude` version, v2.1.285 or later,
+  part of the treatment hashes, with auto-update off (see the env list above).
+  The sandboxing page (read 2026-10-14) gives v2.1.219 for `strictAllowlist`
+  and v2.1.285 for the admin-required sandbox and for an
+  `allowUnsandboxedCommands: false` to hold against a project's `true`.
 - **Caps.** 15 minutes wall clock per run, measured by the runner. On a timeout
   the folder as it stands is judged and the run is flagged `capped`; the rate
   per arm is reported (in the
@@ -232,9 +254,10 @@ claude -p "$PROMPT" --output-format stream-json --verbose --include-hook-events 
   pushed or shared: the stream, the `claude` stderr, the final message (the
   `result` text, or the last assistant text when there is no `result`), every
   file added or changed relative to the inputs, and the gateway's record.
-- **Order and concurrency.** Arms run in separate batches, resumable per
-  task, one run at a time (GATEWAY.md has the run-end order); parallel runs
-  would change how often the limits hit.
+- **Order and concurrency.** Task by task in the order under Expected spend,
+  all three arms of a task before the next task, resumable per task, one run at
+  a time (GATEWAY.md has the run-end order); parallel runs would change how
+  often the limits hit. Within a task the arms rotate with the task's position.
 - **Failed runs.** A run is rerun once from a clean folder only for a fault the
   engine reports on its own side: the container failed to start, or the engine
   or host restarted. An upstream 5xx, 529 or 429, a stream cut and a drain abort
@@ -319,8 +342,9 @@ It passes when:
 - the sandbox self-check and the credential probe have run and their output is
   recorded;
 - the first request at the gateway lists the same tools in all arms, apart from
-  the plugin hook and the two loadout tools in `small-loadout`, and names the
-  model asked for (the init event agrees);
+  the plugin hook and the two loadout tools in `small-loadout`, and none of the
+  tools denied under Arms, and names the model asked for (the init event
+  agrees);
 - the first request of the `small-loadout` run holds the hook's
   `<skill_relevance>` context, and none of a bare run does (the hook event
   shows exit 0);
@@ -331,7 +355,10 @@ It passes when:
   `max_tokens` stop and a context-overflow 400 in turn, and records exactly what
   it resends after each. A resend that differs from the request it repeats
   (another `max_tokens`, a trimmed context) goes on the list of fields the
-  conversation check lets change, or stops the plan for Erik.
+  conversation check lets change, or stops the plan for Erik. It also answers
+  with a `tool_use` for each of `Task`, `Agent`, `Workflow`, `SendMessage` and
+  `Skill`: each must come back as a refused or unknown tool, with no request
+  outside the one conversation.
 
 The run records what the gateway saw: the fields that change within a run (the
 only ones the conversation check lets differ), Jev requests per hook decision
@@ -518,8 +545,9 @@ arm it is reading. Steps taken:
 
 ## Analysis
 
-- **Primary set: the 14 non-control tasks.** The 4 controls are reported
-  separately, with the skills the hook loaded on each.
+- **Primary set: the 14 non-control tasks,** or those in the funded prefix (see
+  Expected spend). The 4 controls are reported separately, likewise, with the
+  skills the hook loaded on each.
 - **Primary comparisons, fixed before any run:** `small-loadout` vs
   `small-bare` (does loadout help the small tier) and `small-loadout` vs
   `large-bare` (does it close the gap). The third pair is context.
@@ -604,19 +632,23 @@ measured. Honest traffic fits under it (the smoke run checks).
 | Haiku 5.5 | $0.205 | $0.485 ($0.075 + 2 x $0.205) |
 | Haiku 4.5 | $2.05 | $4.85 ($0.75 + 2 x $2.05) |
 
-**Approvals.** The runner starts an attempt only if the approved cost minus the
-finished attempts' priced cost (Jev and invalid runs included) is at least the
-arm's ceiling. The approval is (n - 1) x high + ceiling, and the provider cap on
-the batch's key (GATEWAY.md), with n = 36 per arm (a rerun for every run,
-though reruns are limited to engine faults). It funds n attempts only if each
-costs at most its high figure; one can spend up to its ceiling, so a batch can
-stop early. Attempts run in an order fixed now: the first attempts of all 18
-tasks sorted by the SHA-256 of the task id, the same in every arm, so a
-shortfall falls on the same tasks everywhere and not on a kind of task, then the
-reruns. If the cap stops a batch, the runner reports the attempts it left
-unrun and Erik decides whether to raise the cap. Those tasks are "not run": the
-results list them, their pairs stay out of the win rate, and they are never
-counted as losses.
+**Approvals.** For each arm the approval is (n - 1) x high + ceiling, which is
+also the provider cap on that arm's key (GATEWAY.md), with n = 36 (a rerun for
+every run, though reruns are limited to engine faults). It funds n attempts
+only if each costs at most its high figure; one can spend up to its ceiling.
+
+**One stopping rule for all arms, fixed now, before any output exists.**
+- Tasks run in the order of the SHA-256 of the task id, all three arms of a task
+  before the next task. Reruns come after all first attempts.
+- Before each task, the runner checks that every arm's approved cost minus its
+  priced cost (Jev and invalid runs included) is at least that arm's ceiling,
+  and that the approved hours cover the task. If any arm fails, every arm stops
+  at that same position.
+- The tasks after it are "not run" in all arms. The stop is final: no cap is
+  raised once outputs exist, and a bigger cap is a new pre-registered run.
+- The reported sample is the prefix of that hash-random order which every arm
+  could fund; controls and non-controls fall into it as they come. Nothing in
+  the rate depends on one arm's spending alone.
 
 | Batch | Approved | Haiku 4.5 |
 |---|---:|---:|
@@ -631,8 +663,7 @@ These are caps, not expectations: the expected cost is the no-reruns figure
 above. Wall clock is about 108 x 17 minutes (15-minute cap, 2-minute drain;
 about 31 h) plus the smoke run and up to 10 minutes per attempt for collection
 and extraction: a planning figure, since the drain runs longer where the smoke
-run measured a slower response. The runner also stops at the approved hours and
-reports what it left unrun. The smoke run replaces these assumptions with
+run measured a slower response. The smoke run replaces these assumptions with
 measured figures before the full run is approved.
 
 ## Open for Erik
@@ -643,14 +674,12 @@ measured figures before the full run is approved.
 - The sandbox: container or VM (a throwaway user is ruled out above), and the
   engine, egress mechanism, resolver, gateway and collector sandbox. In a
   container, `claude`'s Bash sandbox may need `enableWeakerNestedSandbox`
-  (Arms). If the smoke probe fails with it, I recommend a VM; the alternative
-  is to let `Bash` reach the gateway, where every request is priced under the
-  cap but hidden help from the arm's own model is not prevented.
-- Approvals (Expected spend): I recommend (n - 1) x high + ceiling in the fixed
-  order, about $78 with Haiku 5.5 or $136 with Haiku 4.5. The alternative, n x
-  ceiling, funds every attempt at its worst case: $349.20 for `large-bare`,
-  about $395 in all (Haiku 4.5: about $718).
-- Subagents are off in every arm (see Arms). Confirm, or ask for a subagent
+  (Arms). If the smoke probe fails with it, I recommend a VM.
+- Approvals (Expected spend): I recommend (n - 1) x high + ceiling with the
+  shared, final stopping rule, about $78 with Haiku 5.5 or $136 with Haiku 4.5.
+  The alternative, n x ceiling, funds every attempt at its worst case: $349.20
+  for `large-bare`, about $395 in all (Haiku 4.5: about $718).
+- Delegation is off in every arm (see Arms). Confirm, or ask for a subagent
   rule the gateway can verify, which is more to build and test.
 - Invalid and `output rejected` runs count as a loss for their arm in the win
   rate, shown also without them (see Analysis). Confirm, or leave them out of

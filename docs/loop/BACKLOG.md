@@ -243,8 +243,11 @@ Learnings (cloud half): [fixtures and protocol](../../bench/fixtures/c2/PROTOCOL
 - The documented env switches turn off compaction, the non-streaming fallback,
   the 1-hour cache TTL and the background title request in all arms. Every
   `invalid` run halts the batch for Erik to classify. Approvals are
-  (n - 1) x high + ceiling in a fixed order, about $78 with Haiku 5.5 and $136
-  with Haiku 4.5, as caps; unrun attempts are "not run", not losses.
+  (n - 1) x high + ceiling, about $78 with Haiku 5.5 and $136 with Haiku 4.5, as
+  caps. One shared, final stopping rule: tasks in a hash order, all arms of a
+  task before the next, every arm stops where any arm cannot fund its next
+  task; the rest is "not run". `Task`, `Agent`, `Workflow`, `SendMessage` and
+  `Skill` are denied in every arm.
 
 **C3. Tier choice.**
 
