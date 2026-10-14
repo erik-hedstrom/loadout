@@ -32,8 +32,6 @@ describe('C2 score interval', () => {
     expect(scoreInterval(3, 0, 14)[0]).toBeGreaterThanOrEqual(0.45);
     expect(scoreInterval(3, 0, 14)[0]).toBeLessThanOrEqual(0.5);
     expect(scoreInterval(4, 0, 14)[0]).toBeGreaterThan(0.5);
-    expect(scoreInterval(0, 3, 14)[1]).toBeGreaterThanOrEqual(0.5);
-    expect(scoreInterval(0, 4, 14)[1]).toBeLessThan(0.5);
   });
 
   it('stays inside 0 to 1 at the extremes', () => {

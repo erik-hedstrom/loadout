@@ -39,25 +39,23 @@ of this:
   credential: the batch's keys, in `<keys>`, are the only credentials inside
   (Credentials and spend). So the Docker tasks (`devops-*`) cannot run
   `docker`; the judge reads the files.
-- **Limits set from outside**, so the agent cannot lift them: CPU, memory,
-  process count, disk for the run folder and the writable layer, and the
-  15-minute wall clock.
+- **Limits set from outside**: CPU, memory, process count, disk for the run
+  folder and the writable layer, and the 15-minute wall clock.
 - **Egress enforced outside the container** (a network rule, not a setting
   inside it). The only routes are TCP 443 to the Anthropic API host and, in the
   `small-loadout` arm, the Jev host, at the addresses the resolver below returns
   for those names. Denied: everything else, the host, other containers,
   private and link-local addresses (cloud metadata included). WebFetch and
-  WebSearch are disallowed too, as a tool setting only. Traffic to the two hosts
-  goes straight there; nothing of the harness sits on it.
+  WebSearch are also disallowed, as a tool setting only. Nothing of the harness
+  sits on the traffic to the two hosts.
 - **Name resolution is egress too.** A lookup of `<secret>.attacker.example`
-  reaches the attacker's name server with no connection from the container, and
+  reaches the attacker's name server with no connection from the container, so
   a skill can encode a credential into DNS labels. The only resolver the
-  container can reach is the harness's. It answers those names exactly
-  (no wildcard or suffix match) and REFUSED for every other name, forwarding
-  nothing. It keeps counters, never names (answered, refused, forwarded, which
-  must stay 0, per run, and a flag set when a query equals the self-check's
-  canary). The egress rule denies port 53, DNS over TLS (853) and DNS over
-  HTTPS to any other address.
+  container can reach is the harness's. It answers those two names exactly (no
+  wildcard or suffix match) and REFUSED for every other, forwarding nothing. It
+  keeps counters, never names (answered, refused, forwarded, which must stay 0,
+  per run, and a flag set when a query equals the self-check's canary). The
+  egress rule denies port 53, DNS over TLS (853) and DNS over HTTPS elsewhere.
 - Each run starts in a fresh folder holding a copy of only that task's `inputs`
   from [index.json](index.json) (not `task.md`, not `KEY.md`).
 - The plugin is a copy of `plugins/loadout` outside the checkout; `loadout`
@@ -69,7 +67,7 @@ of this:
   of `LOADOUT_HOME`. Only `<home>/sessions`, with the hook's state and no code,
   is writable.
 - Nothing can be installed during a run, so the image, the same for all arms,
-  comes with Node 22+, Python 3 with python-docx, openpyxl, python-pptx, pypdf,
+  holds Node 22+, Python 3 with python-docx, openpyxl, python-pptx, pypdf,
   pdfplumber, pandas and matplotlib, and sqlite3. Versions go into the results.
 - **Collection, checks and text extraction run in a second sandbox.** When
   `claude` exits, or the runner stops it at the cap, the runner stops the
@@ -82,18 +80,13 @@ of this:
   unittest, docx and pptx files), so they never run on Erik's machine, and the
   host never walks, opens or parses the agent's folder itself.
 - **The collector looks before it opens, and every later step on the agent's
-  bytes has a bound** ([COLLECTION.md](COLLECTION.md)). The collector walks with
-  `lstat` only, accepts regular files and directories only, and reads no more
-  than it measured; the host reads only its capped tar stream. A violation
-  fails the run as `output rejected`: nothing from its folder is scanned,
-  extracted or judged; the run is counted per arm, not rerun (see
-  [Arms](#arms)). A step that hits its bound fails that check or extraction,
-  never the batch.
+  bytes has a bound** ([COLLECTION.md](COLLECTION.md)); a violation fails the
+  run as `output rejected` (see [Arms](#arms)).
 - Runs and judging happen on a local machine where the CLIs are logged in.
 
 The smoke run starts with a self-check from two places: the container as a
 plain process (the runner's exec), and `claude`'s Bash tool with the settings
-under Arms, the only place the Bash sandbox applies. It passes when:
+under Arms. It passes when:
 - In the container: no host path and no runtime socket exist, and there is no
   route to the host or to a metadata address.
 - In the container, connection: a TCP connect to a literal outside IP address
@@ -119,8 +112,8 @@ under Arms, the only place the Bash sandbox applies. It passes when:
   every nonce is 0, never the tool output in the stream, which the model can
   forge. Control: the same attempts from a runner exec must each be counted, so
   a dead sink cannot pass. Also the sandbox is on (a write outside the run
-  folder fails with `Read-only file system`) and no process outside the sandbox
-  is visible in `/proc`.
+  folder fails with `Read-only file system`, a symlink made in it is not
+  followed) and no process outside the sandbox is visible in `/proc`.
 - The credential-read probe under Credentials and spend, and no
   `enableWeakerNestedSandbox` in the effective settings.
 
@@ -148,7 +141,8 @@ against the vendor's record take a gateway's place.
   credential and put it into a pre-approved `find_skills` call (PR #39 renames
   it `find_tools`). That call runs outside the Bash sandbox and sends its `goal`
   (up to 4,000 characters) and `keywords` to Jev, where a live key could sit in
-  logs for the run, up to about 27 h; revoking later does not undo that. The
+  logs until the batch's keys are revoked, up to about 27 h; revoking does not
+  undo that. The
   model's own turns go to Anthropic, which already holds the Anthropic key.
 - **Layer 1, the primary one: the agent cannot read a key.**
   - Both keys are files under one directory `<keys>`, outside the run folder.
@@ -169,24 +163,43 @@ against the vendor's record take a gateway's place.
     Python or Node script that opens files itself"
     ([permissions](https://code.claude.com/docs/en/permissions)). Each path:
 
-    | Path | OS layer for `Bash` and its children | Permission rule, `claude`'s own tools |
+    | Path | OS layer for `Bash` and its children | `claude`'s own tools (fence, then rule) |
     |---|---|---|
-    | key files in `<keys>` | `sandbox.filesystem.denyRead` and `sandbox.credentials.files` (`deny`) | `Read`, `Edit(//<keys>/**)`; Grep and Glob "best-effort" |
-    | `/proc/<pid>/{environ,cmdline,root,cwd,fd,mem,maps}` of `claude`, `loadout mcp`, the hook | the default bubblewrap sandbox mounts a fresh `/proc` (below) | `Read(//proc/**)` |
-    | helper script, `$SETTINGS` | no key in either; both live in `<keys>`, so `Bash` cannot read them, and it writes only in the run folder | `Edit(//<keys>/**)` |
+    | key files in `<keys>` | `sandbox.filesystem.denyRead` and `sandbox.credentials.files` (`deny`) | fence; `Read`, `Edit(//<keys>/**)` |
+    | `/proc/<pid>/{environ,cmdline,root,cwd,fd,mem,maps}` of `claude`, `loadout mcp`, the hook | the default bubblewrap sandbox mounts a fresh `/proc` (below) | fence; `Read(//proc/**)` |
+    | helper script, `$SETTINGS` | no key in either; both live in `<keys>`, so `Bash` cannot read them, and it writes only in the run folder | fence; `Edit(//<keys>/**)` |
     | temp copies, environment, argv | none holds a key: no step writes a copy (`--no-session-persistence`, no `--debug`), `ANTHROPIC_API_KEY` is unset, the Jev key is a file | |
 
     Sandbox paths use `/` for absolute, permission paths `//`; "A `denyRead`
     entry doesn't stop the Read tool", so both kinds are needed.
+  - **Other spellings of a path.** For symlinks the docs say a deny rule applies
+    "when either the requested path or the file it resolves to matches"; on hard
+    links, `..`, `/dev/fd/*`, `/proc/self/*`, `/proc/thread-self/*`, relative
+    paths and case they say nothing, so the protocol relies on none of it. The
+    fence, `permissions.blockReadsOutsideWorkingDirectories`, is an allowlist:
+    it denies "`Read`, `Grep`, `Glob`, and `LSP` calls" outside the working
+    directories in every permission mode
+    ([settings](https://code.claude.com/docs/en/settings-reference)), and
+    `acceptEdits` approves edits only inside them
+    ([permission modes](https://code.claude.com/docs/en/permission-modes)). A
+    spelling outside the run folder is refused as given or as resolved. Inside
+    it:
+    - *Symlinks:* the run folder and the sandbox temp directory, the only places
+      `Bash` can write, are mounted `nosymfollow` (a kernel flag, not from the
+      Claude docs): no process follows a link made there.
+    - *Hard links:* `<keys>` is on another filesystem, so `link(2)` fails.
+    - *Case:* the filesystem is case-sensitive.
+    - *`..` under the run folder's prefix* passes only if the check does not
+      normalise it; the probe tests it.
   - **The weaker mode is prohibited.** The default bubblewrap sandbox gives
     `Bash` a fresh `/proc`. `enableWeakerNestedSandbox` bind-mounts the
     container's instead, which "exposes process information to sandboxed
     commands that a fresh `/proc` mount would hide", and "considerably weakens
     security" (sandboxing). I infer a same-user child can then open
-    `/proc/<claude pid>/root/<keys>/...` or `/proc/<claude pid>/mem`, which
-    resolve in `claude`'s mount namespace, past bubblewrap's mounts. Denying
-    `/proc` through `denyRead` instead is undocumented under bubblewrap, so the
-    alternative is a VM ("its own kernel",
+    `/proc/<claude pid>/root/<keys>/...` or `.../mem`, which resolve in
+    `claude`'s mount namespace, past bubblewrap's mounts. Denying `/proc`
+    through `denyRead` is undocumented under bubblewrap, so the alternative is a
+    VM ("its own kernel",
     [sandbox environments](https://code.claude.com/docs/en/sandbox-environments)).
     The runner refuses to start if `$SETTINGS` or a managed settings file sets
     the mode, and the self-check needs `claude` absent from `Bash`'s `/proc`.
@@ -194,24 +207,27 @@ against the vendor's record take a gateway's place.
     ([env-vars](https://code.claude.com/docs/en/env-vars)) keep credentials out
     of the environments of `Bash`, hooks and MCP servers, a second layer.
   - **Probe, in the smoke run.** Canaries stand where the keys stand: a file in
-    `<keys>`, and a variable in `claude`'s environment and in the MCP server's.
+    `<keys>`, and a variable in `claude`'s environment and the MCP server's.
     `Bash` tries every path in the table with recognised commands (`cat`) and
     with arbitrary subprocesses: `python3 -c` with `open()` and `node -e` with
     `fs.readFileSync`, including `environ`, `cmdline`, `mem` (at the offsets in
     `maps`) and `/proc/<pid>/root/<keys>/...` for `claude` and the MCP server,
-    `/proc/self/environ`, and a walk of `/proc/<pid>/fd` and of its own
-    descriptors 0 to 1023. `Read`, `Grep` and `Glob` try the same paths. It
-    passes only if no nonce appears anywhere in the stream; the model's account
-    of what it saw is not used. It proves these reads fail on this image and CLI
-    version. It cannot prove that no other path exists, that the Grep and Glob
-    rule holds for every spelling, or that the real key sits where the canary
-    does.
+    and a walk of `/proc/<pid>/fd` and of its own descriptors 0 to 1023. `Bash`
+    also makes, in the run folder, a symlink and a hard link to
+    `<keys>/<canary>` and to `/proc/self/environ`. `Read` and `Grep` try each of
+    those, the table's paths, `/dev/fd/../environ`, `/proc/self/environ`,
+    `/proc/thread-self/environ`, `<run>/../<keys>/<canary>` and an upper-case
+    spelling; `Grep` rooted at `/` and at the parent of `<keys>`, and `Glob
+    /**`, search for the canary. It passes only if no nonce appears anywhere in
+    the stream; the model's account of what it saw is not used. It proves these
+    reads fail on this image and CLI version. It cannot prove that no other path
+    or spelling exists, or that the real key sits where the canary does.
 - **Layer 2, not in this PR:** loadout redacts strings that match the key
   shapes in `scan-patterns.json` from everything it sends to Jev. BACKLOG E13
   records it as a prerequisite for the loadout arm. Base64 or splitting defeats
   it, so it is secondary.
-- **Layer 3, not adopted:** a key per task would need a service to mint keys;
-  the 7-day expiry bounds a leak instead.
+- **Layer 3, not adopted:** a key per task needs a service to mint keys; the
+  7-day expiry bounds a leak instead.
 - **Revoked, and confirmed.** When a batch's last run (reruns included) ends,
   its workspace is archived, which "deactivates the workspace and archives every
   API key created for it", "within seconds", and "cannot be undone" (workspaces).
@@ -219,9 +235,9 @@ against the vendor's record take a gateway's place.
   refused, else nothing from the batch is judged or committed: revocation comes
   before judging, and judging before committing.
 - **Spend.** An arm's cost is the vendor's usage for its key (1-minute buckets
-  by key, model and token class) at list prices (Expected spend), plus Jev. That
-  data "typically appears within 5 minutes of API request completion, though
-  delays may occasionally be longer", so the runner reads it after the archive.
+  by key, model and token class) at list prices (Expected spend), plus Jev. It
+  "typically appears within 5 minutes of API request completion, though delays
+  may occasionally be longer", so the runner reads it after the archive.
   Per-run figures are the stream's, priced the same way; per arm they must sum
   to within 5% of the vendor's (tokens exactly in the smoke run), else per-run
   costs are "not shown". Before each task the pre-check takes the higher.
@@ -290,16 +306,10 @@ the run is rerun after the fix).
   covers "most requests") and compaction rest on the stream.
 - Per-run cost from the vendor, and a check of each Jev request.
 - No key kept out of the container. The keys are files the hook and `loadout
-  mcp` read, and the Anthropic key is in `claude`'s memory. The defence is that
-  the OS denies the paths to `Bash` and its children and permission rules
-  deny them to `claude`'s own tools (layer 1), then redaction before Jev (layer
-  2, not built), then expiry and revocation. Two channels leave the Bash
-  sandbox: the model's turns to Anthropic, which already holds that key, and the
-  `find_skills` `goal` and `keywords` to Jev, where a live Jev key could sit in
-  logs for the run, and revocation cannot undo that. If layer 1 holds, nothing
-  reads the keys. Grep and Glob rest on a "best-effort" permission rule, and the
-  probe proves only that its canary reads, from recognised commands and from
-  arbitrary subprocesses, fail on one image and CLI version.
+  mcp` read, and the Anthropic key is in `claude`'s memory. The defences, and
+  what the probe cannot prove, are under [Credentials and
+  spend](#credentials-and-spend); redaction before Jev (layer 2) is not built,
+  and revocation cannot undo a leak to Jev.
 
 ## Arms
 
@@ -331,7 +341,8 @@ files, `<helper>` and this file; no secret is in the JSON):
 
 ```json
 {"apiKeyHelper":"<helper>",
- "permissions":{"deny":["Read(//<keys>/**)","Edit(//<keys>/**)","Read(//proc/**)"]},
+ "permissions":{"blockReadsOutsideWorkingDirectories":true,
+  "deny":["Read(//<keys>/**)","Edit(//<keys>/**)","Read(//proc/**)"]},
  "sandbox":{"enabled":true,"failIfUnavailable":true,"allowUnsandboxedCommands":false,
   "network":{"strictAllowlist":true},
   "filesystem":{"denyRead":["<keys>"]},
@@ -369,10 +380,9 @@ claude -p "$PROMPT" --output-format stream-json --verbose --include-hook-events 
   still reach Jev.
   - Linux needs `bubblewrap` and `socat` in the image, and the optional seccomp
     filter, which "adds Unix domain socket blocking" and comes with
-    `npm install -g @anthropic-ai/sandbox-runtime`. In an unprivileged
-    container `bwrap` can fail on `/proc`; the docs' remedy,
-    `enableWeakerNestedSandbox`, is prohibited (Credentials and spend). Then
-    use a VM (Open for Erik).
+    `npm install -g @anthropic-ai/sandbox-runtime`. Where `bwrap` cannot mount
+    `/proc`, `enableWeakerNestedSandbox` is prohibited (Credentials and
+    spend): use a VM (Open for Erik).
   - No task needs network from `Bash`: the Docker tasks cannot run `docker`,
     `ctl-ratelimiter-bug` runs `node --test` with no dependency, and the rest
     use the preinstalled tools.
@@ -391,6 +401,10 @@ claude -p "$PROMPT" --output-format stream-json --verbose --include-hook-events 
   must list none of them (Evidence). A subagent would start conversations the
   one-conversation reading of the stream does not cover; the arms stay equal, at
   the cost of any gain from subagents (a stated limit).
+- **`Read`, `Grep` and `Glob` stay in the run folder** in every arm (the fence
+  under Credentials and spend), so a SKILL.md outside it is read through `Bash`
+  or `load_skill`; the smoke run records whether `small-loadout` still opens
+  skills.
 - **No compaction, in every arm.** A compaction rewrites the assistant turns,
   so the run would no longer be one conversation: mostly for `small-loadout`,
   whose hook context and skill text fill the window sooner. `DISABLE_COMPACT=1`
@@ -416,7 +430,7 @@ claude -p "$PROMPT" --output-format stream-json --verbose --include-hook-events 
 - **Collected per run**: the stream, the `claude` stderr, the final message (the
   `result` text, or the last assistant text when there is no `result`), every
   file added or changed relative to the inputs, and the per-message usage read
-  from the stream. What is kept and committed is under What is committed.
+  from the stream. What is committed is under What is committed.
 - **Order and concurrency.** Task by task in the order under Expected spend,
   all three arms of a task before the next, resumable per task, one run at a
   time, since parallel runs would change how often the limits hit. Within a task
@@ -424,17 +438,16 @@ claude -p "$PROMPT" --output-format stream-json --verbose --include-hook-events 
 - **Failed runs.** A run is rerun once from a clean folder only for a fault the
   engine reports on its own side: the container failed to start, or the engine
   or host restarted. An upstream 5xx, 529 or 429 and a stream cut are never
-  causes, since a run's own traffic can provoke them: they are transport events,
-  and the run stands, flagged, with its cost. Nor is an out-of-memory kill, a
-  process or disk limit or a full run volume (the agent can reach them), a
-  `result` event saying "API error" (the sandbox's word) or how the output looks.
+  causes, since a run's own traffic can provoke them: the run stands, flagged,
+  with its cost. Nor is an out-of-memory kill, a process or disk limit or a full
+  run volume (the agent can reach them), a `result` event saying "API error"
+  (the sandbox's word) or how the output looks.
   The failed attempt must be valid. The rerun follows at once, under the check
   in Expected spend; if it cannot be funded or fails too, the task is "not run".
 - **Invalid and rejected runs are results.** A run that fails an Evidence check
-  is `invalid`; one whose folder fails collection (Isolation) is
-  `output rejected`. Neither is rerun. An `invalid` run halts the plan as under
-  [Evidence](#evidence). Both are counted per arm and task, and their cost
-  counts toward the spend.
+  is `invalid` and halts the plan ([Evidence](#evidence)); one that fails
+  collection is `output rejected`. Neither is rerun; both are counted per arm and
+  task, and their cost counts toward the spend.
 
 ## What is committed
 
@@ -584,25 +597,8 @@ judged results. The judge does not see them.
 ## Template leakage
 
 A skill's template or wording can show in the output and tell the judge which
-arm it is reading. Steps taken:
-1. The judge sees only the final message and the files.
-2. **Redaction**, the same for both arms of every pair: one whole-word,
-   case-insensitive list replaced by `[redacted]` in every output. The list:
-   "loadout", "skill" and "skills", the loadout context tags, and the names of
-   all skills the hook selected in any run. Names that are file extensions or
-   ordinary words (`pdf`, `xlsx`, `docx`, `review`) stay out of the list, and
-   matches inside longer words are left ("skillet" stays). Redaction counts
-   are reported per arm, since uneven counts would themselves unblind.
-3. **Guess metric.** From the guess calls, for pairs with `small-loadout`, a
-   guess is correct when it names the `small-loadout` output. Accuracy is
-   correct / (correct + wrong) with a Wilson interval; `unsure` is left out and
-   its rate is reported. Near 50% means no leakage is detected; clearly above
-   means blindness failed, and the win rates carry that caveat. For
-   `small-bare` vs `large-bare` no output had guidance, so every non-`unsure`
-   guess is a false alarm: that rate is the baseline.
-4. Not removed: a style a skill imposes (section order, checklists). A user
-   would see it too, so it counts as part of the result, but it can reach the
-   judge: a stated limit.
+arm it is reading. The redaction, the guess metric and what is not removed are
+in [LEAKAGE.md](LEAKAGE.md).
 
 ## Analysis
 
@@ -628,13 +624,10 @@ arm it is reading. Steps taken:
   bound is below 0.5, else "not shown". Wins, ties and losses are always shown
   beside it.
 - **What 14 pairs can and cannot show.** All 14 tied: S = 0.50, interval 0.39
-  to 0.61. One win and 13 ties: 0.54, 0.42 to 0.66. Nine wins, one tie, four
-  losses: 0.68, 0.43 to 0.85. With no losses the lower bound reaches 0.40 from
-  one win and 0.5 from four. So one pair flips the label: 14 ties are "not
-  shown" (lower bound 0.392) and one win with 13 ties is "match". At this margin
-  "match" means "not clearly worse", and ties reach it cheaply. A margin of 0.05
-  (lower bound 0.45) needs 3 wins and no loss. The margin is an assumption (Open
-  for Erik).
+  to 0.61, "not shown". One win and 13 ties: 0.54, 0.42 to 0.66, "match". Nine
+  wins, one tie, four losses: 0.68, 0.43 to 0.85. So one pair flips the label,
+  and "match" means "not clearly worse", which ties reach cheaply. A margin of
+  0.05 needs 3 wins and no loss. The margin is an assumption (Open for Erik).
 - **Secondary, never a conclusion: the decisive-pair win rate,** wins / (wins +
   losses) with a 95% Wilson interval, next to the tie and split counts. It
   leaves ties out, so it reads 100% for one win and 13 ties. It is also shown

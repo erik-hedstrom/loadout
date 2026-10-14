@@ -235,8 +235,8 @@ Learnings (cloud half): [fixtures and protocol](../../bench/fixtures/c2/PROTOCOL
   A skill can tell `claude` to read a key and send it to Jev through a
   pre-approved `find_skills` call, which runs outside the Bash sandbox, and
   revoking later cannot undo that. So the primary layer is that the agent cannot
-  read a key: files denied to Read and to the Bash sandbox, `apiKeyHelper`,
-  a fresh `/proc` for `Bash`, and a canary probe in the smoke run. Redaction before Jev is
+  read a key: files denied to the Bash sandbox, Read, Grep and Glob fenced to the run
+  folder, `apiKeyHelper`, a fresh `/proc` for `Bash`, and a canary probe in the smoke run. Redaction before Jev is
   E13, a prerequisite for the loadout arm; the workspace is archived before any
   output is scanned, judged or committed:
   [Credentials and spend](../../bench/fixtures/c2/PROTOCOL.md#credentials-and-spend).
