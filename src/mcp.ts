@@ -63,6 +63,7 @@ const LISTING_MAX_CHARS = 12_000;
 const COMPACT_MAX_CHARS = 8_000;
 const NAMES_MAX_CHARS = 4_000;
 const NAME_CHARS = 128;
+const ARGUMENT_CHARS = 40;
 const COMPACT_DESCRIPTION_CHARS = 120;
 const COMPACT_ARGUMENTS = 8;
 const EMBEDDINGS_WAIT_MS = 3000;
@@ -190,11 +191,16 @@ const COMPOSING = ['$ref', 'oneOf', 'anyOf', 'allOf', 'not', 'if', 'patternPrope
  * A tool's argument names, optional ones marked with `?`, from an untrusted schema. "none" only when the
  * schema has no properties and nothing that could add some; otherwise the agent is told to fetch the schema.
  */
+/** Whether a listing shows a name unchanged (no tag text to escape, one line, within `max`), so the agent can send it back. */
+const shownExactly = (name: string, max: number) => !hasTagText(name) && oneLine(name, max) === name;
+
 function argumentNames(schema: ListedTool['inputSchema']): string {
   const names = Object.keys(schema.properties ?? {});
   const composing = [...COMPOSING.filter((k) => k in schema), ...(schema.additionalProperties ? ['additionalProperties'] : [])];
+  // A shortened or escaped argument name would be sent back wrong, so then only the full schema will do.
+  if (names.some((n) => !shownExactly(n, ARGUMENT_CHARS))) return 'not listed exactly, fetch the full schema';
   const required = new Set(schema.required);
-  const shown = names.slice(0, COMPACT_ARGUMENTS).map((n) => `${oneLine(n, 40)}${required.has(n) ? '' : '?'}`);
+  const shown = names.slice(0, COMPACT_ARGUMENTS).map((n) => `${n}${required.has(n) ? '' : '?'}`);
   const list = `${shown.join(', ')}${names.length > shown.length ? ', …' : ''}`;
   if (composing.length === 0) return names.length ? list : 'none';
   return `${names.length ? `${list}, and more via` : 'not listed, the schema uses'} ${composing.join('/')}`;
@@ -212,7 +218,7 @@ function formatTools(tools: ListedTool[]): string {
   const names: string[] = [];
   let hidden = 0;
   for (const t of tools) {
-    const name = oneLine(t.name, NAME_CHARS);
+    const name = t.name;
     const schema = JSON.stringify(t.inputSchema);
     const full = `- ${name}: ${oneLine(t.description ?? '', 300)}\n  input schema: ${schema}`;
     const compact = `- ${name}: ${oneLine(t.description ?? '', COMPACT_DESCRIPTION_CHARS)}\n  arguments: ${argumentNames(t.inputSchema)} (full schema: server_tools with tool ${JSON.stringify(name)})`;
@@ -303,10 +309,10 @@ export class Gateway {
       cursor = res.nextCursor;
       if (!cursor) break;
     }
-    // The agent must be able to name a tool back exactly, and escaping would change a tag-like name.
-    const tools = listed.filter((t) => !hasTagText(t.name));
+    // The agent must be able to name a tool back exactly.
+    const tools = listed.filter((t) => shownExactly(t.name, NAME_CHARS));
     const left = listed.length - tools.length;
-    const note = left ? `${left} tool${left === 1 ? '' : 's'} with tag-like names ${left === 1 ? 'is' : 'are'} not shown.` : '';
+    const note = left ? `${left} tool${left === 1 ? '' : 's'} with ${left === 1 ? 'a name' : 'names'} that cannot be shown exactly (tag-like, over ${NAME_CHARS} characters or not on one line) ${left === 1 ? 'is' : 'are'} not shown.` : '';
     // connect() found the server, so it is in the library with its config. An empty listing clears what was remembered.
     if (this.toolIndex) rememberTools(this.toolIndex, this.find(name)!, this.servers, tools);
     if (tools.length === 0) return note || 'the server has no tools.';

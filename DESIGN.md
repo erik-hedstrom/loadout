@@ -243,7 +243,10 @@ library itself, in its own words, through MCP:
     is never offered, because the agent sees names escaped and could not send
     one back exactly. The library scan leaves out such skills and servers (so
     search, the hook and the launcher all agree) and `loadout doctor` lists
-    them, escaped; `server_tools` leaves out such tools and says how many.
+    them, escaped. `server_tools` also leaves out tool names over 128
+    characters or not on one line, which a listing would show shortened, and
+    says how many it left out. An argument name it cannot show whole sends
+    the agent to the tool's full schema.
 - **Cache and state files.** The scan cache, tool index, embeddings and hook
   state are written through `src/safefs.ts`; the embedding model folder and
   the session folder get its folder check. Session files (`decision.json`,

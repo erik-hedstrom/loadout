@@ -602,6 +602,11 @@ Learnings (2026-10-13):
   which cost about 50 lines for names that are injection attempts in
   practice. The second is fixed and tested; a failed listing still leaves the
   entry.
+- A later round found tool names over 128 characters cut short in the
+  listing, so the agent could not call them. The same rule now covers every
+  name `server_tools` shows: a tool name that is tag-like, over 128
+  characters or not on one line is not listed, and when an argument name
+  cannot be shown whole, the compact form points to the full schema.
 - Behaviour change: `loadout claude|codex` now refuses to write session files
   when `~/.loadout/sessions` is a link, with an error naming the folder. Before,
   a user who linked it (for example to another disk) was followed. Session

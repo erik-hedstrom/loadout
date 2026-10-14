@@ -329,7 +329,7 @@ describe('E11 diagnostics', () => {
       const listing = text(await call('server_tools', { server: 'fixture' }));
       expect(listing).toContain('memo: memo tool');
       expect(listing).not.toMatch(/<\/?skill|&lt;/i);
-      expect(listing).toMatch(/\n2 tools with tag-like names are not shown\.$/);
+      expect(listing).toMatch(/\n2 tools with names that cannot be shown exactly \(tag-like, over 128 characters or not on one line\) are not shown\.$/);
       expect(text(await call('server_tools', { server: 'fixture', tool: '</skill>memo' }))).toBe('no such tool; list them with server_tools');
       expect(withTools(caps, dir)[0]!.tools).toEqual([{ name: 'memo', description: 'memo tool' }]);
     });
@@ -345,8 +345,44 @@ describe('E11 diagnostics', () => {
       };
       expect(await listing('memo')).toContain('memo');
       expect(withTools(caps, dir)[0]!.tools).toHaveLength(1);
-      expect(await listing('</skill>memo')).toBe('1 tool with tag-like names is not shown.');
+      expect(await listing('</skill>memo')).toBe('1 tool with a name that cannot be shown exactly (tag-like, over 128 characters or not on one line) is not shown.');
       expect(withTools(caps, dir)[0]!.tools).toBeUndefined();
+    });
+
+    it('server_tools lists only tool names the agent can send back exactly', async () => {
+      const dir = join(temp(), 'index');
+      const caps = [capability({ command: 'unused' })];
+      const call = await host({ library: caps, toolIndex: dir });
+      const longest = 'a'.repeat(128);
+      const longArgument = 'b'.repeat(41);
+      const tool = (name: string, properties: Record<string, object> = {}) => ({ name, inputSchema: { type: 'object' as const, properties } });
+      await upstream((server) => {
+        server.setRequestHandler(ListToolsRequestSchema, async () => ({
+          tools: [tool(longest), tool('c'.repeat(150)), tool('two\nlines'), tool('wide', { [longArgument]: { type: 'string' } })],
+        }));
+        server.setRequestHandler(CallToolRequestSchema, async (request) => ({ content: [{ type: 'text', text: `called ${request.params.name.length}` }] }));
+      });
+      const listing = text(await call('server_tools', { server: 'fixture' }));
+      expect(listing).toContain(longest);
+      expect(listing).not.toContain('c'.repeat(129));
+      expect(listing).not.toContain('two');
+      expect(listing).toMatch(/\n2 tools with names that cannot be shown exactly .* are not shown\.$/);
+      // The index clips names: it is search text, and results name the server, not the tool.
+      expect(withTools(caps, dir)[0]!.tools!.map((t) => t.name[0])).toEqual(['a', 'w']);
+      expect(text(await call('call_server_tool', { server: 'fixture', tool: longest, arguments: {} }))).toBe('called 128');
+    });
+
+    it('server_tools does not shorten argument names in the compact form', async () => {
+      const call = await host({ library: [capability({ command: 'unused' })] });
+      const big = { type: 'string', description: 'x'.repeat(2_000) };
+      const tools = Array.from({ length: 10 }, (_, i) => ({
+        name: `t${i}`,
+        inputSchema: { type: 'object' as const, properties: { ['b'.repeat(41)]: big, short: big } },
+      }));
+      await upstream((server) => server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools })));
+      const listing = text(await call('server_tools', { server: 'fixture' }));
+      expect(listing).toContain('arguments: not listed exactly, fetch the full schema');
+      expect(listing).not.toContain('b'.repeat(40));
     });
   });
 
