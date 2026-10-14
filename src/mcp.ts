@@ -192,7 +192,7 @@ const COMPOSING = ['$ref', 'oneOf', 'anyOf', 'allOf', 'not', 'if', 'patternPrope
  */
 function argumentNames(schema: ListedTool['inputSchema']): string {
   const names = Object.keys(schema.properties ?? {});
-  const composing = [...COMPOSING.filter((k) => k in schema), ...(schema.additionalProperties && schema.additionalProperties !== false ? ['additionalProperties'] : [])];
+  const composing = [...COMPOSING.filter((k) => k in schema), ...(schema.additionalProperties ? ['additionalProperties'] : [])];
   const required = new Set(schema.required);
   const shown = names.slice(0, COMPACT_ARGUMENTS).map((n) => `${oneLine(n, 40)}${required.has(n) ? '' : '?'}`);
   const list = `${shown.join(', ')}${names.length > shown.length ? ', …' : ''}`;

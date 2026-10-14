@@ -1,8 +1,9 @@
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import fs, { existsSync, lutimesSync, utimesSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { createHash } from 'node:crypto';
+import crypto, { createHash } from 'node:crypto';
+import { syncBuiltinESMExports } from 'node:module';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { basename, join } from 'node:path';
+import { basename, join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CONFIG, type Config } from '../src/config.js';
@@ -18,7 +19,9 @@ import { createServer as createHttpServer, request } from 'node:http';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { EmptyResultSchema } from '@modelcontextprotocol/sdk/types.js';
-import { addSkills, parseGitHub, parseSkill as parseSkillDir, scanLibrary, writeCacheFile } from '../src/library.js';
+import { addSkills, parseGitHub, parseSkill as parseSkillDir, scanLibrary } from '../src/library.js';
+import { isPlainFolder, readNoFollow, writeCacheFile } from '../src/safefs.js';
+import { EMBED_MODEL, EmbeddingStore } from '../src/embed.js';
 import { bm25 } from '../src/prefilter.js';
 import { mentionedSkills, NONE, optionKeys, route } from '../src/route.js';
 import { reportJson, type Capability, type RepoSignals } from '../src/types.js';
@@ -1367,7 +1370,7 @@ describe('mcp server', () => {
           expect(errors).toHaveBeenCalledWith('loadout: library metadata cache could not be saved');
           // Session files can hold server credentials.
           symlinkSync(target, join(home, 'sessions'));
-          expect(() => materialize({ selected: [], suggested: [], tier: 'medium' } as never, 'claude', DEFAULT_CONFIG, join(home, 'sessions'))).toThrow(/sessions folder is a link/);
+          expect(() => materialize({ selected: [], suggested: [], tier: 'medium' } as never, 'claude', DEFAULT_CONFIG, join(home, 'sessions'))).toThrow(new RegExp(`^${join(home, 'sessions')} is a link, and session files can hold server credentials`));
           expect(readdirSync(target)).toEqual([]);
         } finally {
           errors.mockRestore();
@@ -1387,6 +1390,176 @@ describe('mcp server', () => {
         await s.close();
       });
     });
+  });
+});
+
+describe('cache and state folders under the loadout home', () => {
+  const home = () => {
+    const dir = realpathSync(tempDir('loadout-home-'));
+    vi.stubEnv('LOADOUT_HOME', dir);
+    return dir;
+  };
+  const cacheFile = (keys: string[]) => {
+    const header = Buffer.from(JSON.stringify({ model: EMBED_MODEL, dim: 384, keys }), 'utf8');
+    const length = Buffer.alloc(4);
+    length.writeUInt32LE(header.byteLength);
+    return Buffer.concat([length, header, Buffer.alloc(keys.length * 384 * 4)]);
+  };
+  afterAll(() => vi.unstubAllEnvs());
+
+  it('tells real folders from links, files and folders outside the home', () => {
+    const dir = home();
+    const outside = tempDir('loadout-outside-');
+    mkdirSync(join(dir, 'index'));
+    writeFileSync(join(dir, 'file'), 'x');
+    symlinkSync(outside, join(dir, 'linked'));
+    expect(isPlainFolder(dir)).toBe(true);
+    expect(isPlainFolder(join(dir, 'index'))).toBe(true);
+    expect(isPlainFolder(join(dir, 'index', 'missing', 'deeper'))).toBe(true);
+    expect(isPlainFolder(join(dir, 'linked'))).toBe(false);
+    expect(isPlainFolder(join(dir, 'linked', 'below'))).toBe(false);
+    expect(isPlainFolder(join(dir, 'file'))).toBe(false);
+    expect(isPlainFolder(join(dir, 'file', 'below'))).toBe(false);
+    // Not under the home: not ours to police, however it is spelled.
+    expect(isPlainFolder(outside)).toBe(true);
+    expect(isPlainFolder(join(dir, '..', 'elsewhere'))).toBe(true);
+    // A relative home, and a home that is itself a link, are fine.
+    vi.stubEnv('LOADOUT_HOME', relative(process.cwd(), dir));
+    expect(isPlainFolder(join(dir, 'index'))).toBe(true);
+    expect(isPlainFolder(join(dir, 'linked'))).toBe(false);
+    const homeLink = join(tempDir('loadout-link-'), 'home');
+    symlinkSync(dir, homeLink);
+    vi.stubEnv('LOADOUT_HOME', homeLink);
+    expect(isPlainFolder(join(homeLink, 'index'))).toBe(true);
+    expect(isPlainFolder(join(homeLink, 'linked'))).toBe(false);
+  });
+
+  it.skipIf(process.platform === 'win32')('writes owner-only files, and never through a link at the temp name', () => {
+    const dir = join(home(), 'index');
+    writeCacheFile(dir, 'a.json', '{}', 'test');
+    expect(statSync(join(dir, 'a.json')).mode & 0o777).toBe(0o600);
+    const victim = join(tempDir('loadout-outside-'), 'victim.txt');
+    writeFileSync(victim, 'precious');
+    const id = '11111111-1111-4111-8111-111111111111';
+    symlinkSync(victim, join(dir, `b.json.${id}.tmp`));
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const uuid = vi.spyOn(crypto, 'randomUUID').mockReturnValue(id);
+    syncBuiltinESMExports();
+    try {
+      writeCacheFile(dir, 'b.json', 'overwritten', 'test');
+    } finally {
+      uuid.mockRestore();
+      syncBuiltinESMExports();
+    }
+    expect(readFileSync(victim, 'utf8')).toBe('precious');
+    expect(existsSync(join(dir, 'b.json'))).toBe(false);
+    expect(errors).toHaveBeenCalledWith('loadout: test cache could not be saved');
+    errors.mockRestore();
+  });
+
+  it('does not truncate anything when the folder turns into a link after the check', () => {
+    const dir = join(home(), 'index');
+    const outside = tempDir('loadout-outside-');
+    writeFileSync(join(outside, 'precious.txt'), 'precious');
+    const mkdir = fs.mkdirSync;
+    const swap = vi.spyOn(fs, 'mkdirSync').mockImplementation(((p: fs.PathLike, o?: never) => {
+      const made = mkdir(p, o);
+      rmSync(dir, { recursive: true });
+      symlinkSync(outside, dir);
+      return made;
+    }) as typeof fs.mkdirSync);
+    syncBuiltinESMExports();
+    try {
+      writeCacheFile(dir, 'a.json', 'new', 'test');
+    } finally {
+      swap.mockRestore();
+      syncBuiltinESMExports();
+    }
+    // The gap cannot be closed without openat. What it cannot do is touch a file loadout did not name.
+    expect(readFileSync(join(outside, 'precious.txt'), 'utf8')).toBe('precious');
+    expect(readdirSync(outside).sort()).toEqual(['a.json', 'precious.txt']);
+  });
+
+  it('reads a final file only when it is not a link', () => {
+    const dir = tempDir('loadout-read-');
+    const outside = join(tempDir('loadout-outside-'), 'secret.txt');
+    writeFileSync(outside, 'secret');
+    symlinkSync(outside, join(dir, 'link'));
+    writeFileSync(join(dir, 'real'), 'ok');
+    expect(readNoFollow(join(dir, 'real')).toString()).toBe('ok');
+    expect(() => readNoFollow(join(dir, 'link'))).toThrow();
+  });
+
+  it('ignores an embedding cache behind a link, and does not save into one', () => {
+    const dir = home();
+    const target = tempDir('loadout-outside-');
+    writeFileSync(join(target, 'embeddings.bin'), cacheFile(['k']));
+    mkdirSync(join(dir, 'index'));
+    const real = join(dir, 'index', 'embeddings');
+    mkdirSync(real);
+    writeFileSync(join(real, 'embeddings.bin'), cacheFile(['k']));
+    expect(new EmbeddingStore(real).size).toBe(1);
+    // The cache file itself is the link.
+    rmSync(join(real, 'embeddings.bin'));
+    symlinkSync(join(target, 'embeddings.bin'), join(real, 'embeddings.bin'));
+    expect(new EmbeddingStore(real).size).toBe(0);
+    // The folder is the link.
+    rmSync(real, { recursive: true });
+    symlinkSync(target, real);
+    const store = new EmbeddingStore(real);
+    expect(store.size).toBe(0);
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      store['vectors'].set('new', new Float32Array(384));
+      store['dirty'] = true;
+      store.save();
+    } finally {
+      errors.mockRestore();
+    }
+    expect(readdirSync(target)).toEqual(['embeddings.bin']);
+    expect(new EmbeddingStore(target).size).toBe(1);
+  });
+
+  it('removes only the file names loadout writes when it prunes', () => {
+    const outside = tempDir('loadout-outside-');
+    writeFileSync(join(outside, 'precious.json'), 'precious');
+    const dir = tempDir('loadout-toolindex-');
+    const folder = join(dir, 'mcp-tools');
+    const mine: Capability = { id: 'mcp:mine', kind: 'mcp', name: 'mine', description: '', source: '', gateway: true, server: { command: 'mine' } };
+    const entry = `${createHash('sha256').update('mine').digest('hex').slice(0, 32)}.json`;
+    const gone = `${'a'.repeat(32)}.json`;
+    mkdirSync(folder);
+    for (const f of [gone, 'notes.json', `${'A'.repeat(32)}.json`, `${gone}.bak`, 'x.txt']) writeFileSync(join(folder, f), 'keep');
+    symlinkSync(join(outside, 'precious.json'), join(folder, `${'b'.repeat(32)}.json`));
+    rememberTools(dir, mine, [mine], [{ name: 't', description: '' }]);
+    expect(readdirSync(folder).sort()).toEqual([`${'A'.repeat(32)}.json`, `${gone}.bak`, entry, 'notes.json', 'x.txt'].sort());
+    // A link with a matching name is removed as a link; its target is not touched.
+    expect(readFileSync(join(outside, 'precious.json'), 'utf8')).toBe('precious');
+  });
+
+  it('never trusts or removes hook state through links and odd names', async () => {
+    const library = scanLibrary(LIBRARY);
+    const stateDir = tempDir('loadout-hook-');
+    const outside = tempDir('loadout-outside-');
+    const old = new Date(Date.now() - 30 * 24 * 3600 * 1000);
+    const stateName = (id: string) => `${createHash('sha256').update(id).digest('hex').slice(0, 32)}.json`;
+    // A state file that is a link to a valid state saying everything was offered: it must not be believed.
+    writeFileSync(join(outside, 'state.json'), JSON.stringify({ offered: ['webapp-testing'], injected: [] }));
+    symlinkSync(join(outside, 'state.json'), join(stateDir, stateName('s1')));
+    // Old files: ours by name (state, temp), a link by our name, and files that are not ours.
+    const staleState = `${'c'.repeat(32)}.json`;
+    const staleTmp = `${'d'.repeat(32)}.json.11111111-1111-4111-8111-111111111111.tmp`;
+    const staleLink = `${'e'.repeat(32)}.json`;
+    writeFileSync(join(outside, 'precious.json'), 'precious');
+    symlinkSync(join(outside, 'precious.json'), join(stateDir, staleLink));
+    for (const f of [staleState, staleTmp, 'precious.json', 'notes.txt']) writeFileSync(join(stateDir, f), 'x');
+    for (const f of [staleState, staleTmp, 'precious.json', 'notes.txt']) utimesSync(join(stateDir, f), old, old);
+    lutimesSync(join(stateDir, staleLink), old, old);
+    const { client } = fakeClient({ 'webapp-testing': 0.95 }, { exact: 1 });
+    expect(await promptContext({ session_id: 's1', prompt: TASK }, { library, config: DEFAULT_CONFIG, client, stateDir })).toContain('webapp-testing');
+    expect(readdirSync(stateDir).sort()).toEqual(['notes.txt', 'precious.json', stateName('s1')].sort());
+    expect(readFileSync(join(outside, 'precious.json'), 'utf8')).toBe('precious');
+    expect(readFileSync(join(outside, 'state.json'), 'utf8')).toContain('webapp-testing');
   });
 });
 

@@ -160,7 +160,9 @@ loadout library (`loadout add <dir>`).
 `loadout mcp` serves the library as an MCP server (**546 input tokens** of
 tool definitions in Claude Code for a skills-only library,
 [B1](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request);
-gateway servers add some text, see [D15](docs/loop/BACKLOG.md)),
+with gateway servers, the server instructions and the `find_skills` and
+`server_tools` descriptions gain a few words about MCP servers, sized in the
+D15 learnings in [the backlog](docs/loop/BACKLOG.md)),
 so an agent can look for know-how when the work drifts away from what the
 session started with, in its own words:
 

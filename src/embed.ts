@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { isPlainFolder } from './config.js';
+import { isPlainFolder, readNoFollow, writeCacheFile } from './safefs.js';
 import type { Capability } from './types.js';
 
 /**
@@ -35,6 +35,8 @@ async function getExtractor(modelDir: string): Promise<Extractor> {
     } catch {
       throw new Error('embeddings need the optional dependency @huggingface/transformers (npm install @huggingface/transformers)');
     }
+    // The model folder is written by the library, so a link in its place would send the download elsewhere.
+    if (!isPlainFolder(modelDir)) throw new Error('the model cache folder is a link');
     transformers.env.cacheDir = modelDir;
     // Its failed-inference log prints the model inputs (the prompt's token ids), and info goes to
     // stdout, where hook JSON and MCP stdio travel. Failures surface through loadout's own handling.
@@ -65,7 +67,7 @@ export class EmbeddingStore {
     const file = join(dir, CACHE_FILE);
     if (!isPlainFolder(dir) || !existsSync(file)) return;
     try {
-      const buf = readFileSync(file);
+      const buf = readNoFollow(file);
       const headerLength = buf.readUInt32LE(0);
       const header = JSON.parse(buf.subarray(4, 4 + headerLength).toString('utf8')) as { model: string; dim: number; keys: string[] };
       const offset = 4 + headerLength;
@@ -120,18 +122,15 @@ export class EmbeddingStore {
   }
 
   save(): void {
-    if (!this.dirty || !isPlainFolder(this.dir)) return;
-    mkdirSync(this.dir, { recursive: true });
+    if (!this.dirty) return;
     const keys = [...this.vectors.keys()];
     const header = Buffer.from(JSON.stringify({ model: EMBED_MODEL, dim: DIM, keys }), 'utf8');
     const vectors = new Float32Array(keys.length * DIM);
     keys.forEach((k, i) => vectors.set(this.vectors.get(k)!, i * DIM));
     const length = Buffer.alloc(4);
     length.writeUInt32LE(header.byteLength);
-    // Unique temp name, then one atomic rename: concurrent writers each publish a consistent file.
-    const tmp = join(this.dir, `${CACHE_FILE}.${process.pid}.${Date.now()}.tmp`);
-    writeFileSync(tmp, Buffer.concat([length, header, Buffer.from(vectors.buffer)]));
-    renameSync(tmp, join(this.dir, CACHE_FILE));
+    // One atomic rename: concurrent writers each publish a consistent file.
+    writeCacheFile(this.dir, CACHE_FILE, Buffer.concat([length, header, Buffer.from(vectors.buffer)]), 'embeddings');
     this.dirty = false;
   }
 

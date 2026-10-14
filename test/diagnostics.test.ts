@@ -228,6 +228,7 @@ describe('E11 diagnostics', () => {
       allof: { type: 'object', allOf: [{ properties: { a: { type: 'string' } } }], $defs: bulky },
       anyof: { type: 'object', anyOf: [{ properties: { a: { type: 'string' } } }], $defs: bulky },
       open: { type: 'object', additionalProperties: true, $defs: bulky },
+      openschema: { type: 'object', additionalProperties: { type: 'string' }, $defs: bulky },
       mixed: { type: 'object', properties: { a: { type: 'string' } }, required: ['a'], oneOf: [{ required: ['a'] }], $defs: bulky },
       empty: { type: 'object', properties: {}, additionalProperties: false, $defs: bulky },
     };
@@ -242,6 +243,7 @@ describe('E11 diagnostics', () => {
     expect(args('anyof')).toContain('arguments: not listed, the schema uses anyOf ');
     expect(args('open')).toContain('arguments: not listed, the schema uses additionalProperties ');
     expect(args('mixed')).toContain('arguments: a, and more via oneOf ');
+    expect(args('openschema')).toContain('arguments: not listed, the schema uses additionalProperties ');
     expect(args('empty')).toContain('arguments: none ');
     expect(text.match(/arguments: none/g)).toHaveLength(1);
   });

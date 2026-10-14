@@ -2,7 +2,8 @@ import { execFileSync, spawn } from 'node:child_process';
 import { accessSync, constants, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { basename, delimiter, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { isPlainFolder, tierTarget, type Config } from './config.js';
+import { tierTarget, type Config } from './config.js';
+import { isPlainFolder } from './safefs.js';
 import { capabilityKey, copySkillConfined, skillBody } from './library.js';
 import { reportJson, type Capability, type McpServerConfig, type RouteDecision } from './types.js';
 
@@ -156,8 +157,9 @@ export function materialize(
 ): Session {
   const id = `${new Date().toISOString().replace(/[:.]/g, '-')}-${Math.random().toString(36).slice(2, 6)}`;
   const dir = join(sessionsDir, id);
-  // Session files can hold MCP server credentials, so they never go through a link.
-  if (!isPlainFolder(sessionsDir)) throw new Error('the loadout sessions folder is a link; refusing to write session files there');
+  // Session files can hold MCP server credentials, so they never go through a link below the loadout home
+  // (a linked home is the user's own choice; a linked sessions folder is not something loadout made).
+  if (!isPlainFolder(sessionsDir)) throw new Error(`${sessionsDir} is a link, and session files can hold server credentials. Remove the link (what it points to is left alone) and run again, or link the whole loadout home instead.`);
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   writeFileSync(join(dir, 'decision.json'), reportJson(decision));
 

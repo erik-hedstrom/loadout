@@ -7,13 +7,14 @@
  * dependencies, is sent to TypeSafe's Jev API.
  */
 import { createHash } from 'node:crypto';
-import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { isPlainFolder, type Config } from './config.js';
+import { lstatSync, readdirSync, rmSync } from 'node:fs';
+import { basename, dirname, join } from 'node:path';
+import type { Config } from './config.js';
 import type { EmbeddingStore } from './embed.js';
 import type { SystemOneClient } from './jev.js';
 import { escapeSkillTags, injectionBlock, oneLine } from './launch.js';
 import { capabilityKey, skillExcerpt } from './library.js';
+import { isPlainFolder, readNoFollow, writeCacheFile } from './safefs.js';
 import { route } from './route.js';
 import type { Capability, RepoSignals } from './types.js';
 
@@ -52,7 +53,7 @@ interface SessionState {
 function readState(file: string | undefined): SessionState {
   try {
     if (!isPlainFolder(dirname(file!))) throw new Error('state folder is a link');
-    const raw = JSON.parse(readFileSync(file!, 'utf8')) as { offered?: string[]; injected?: string[] };
+    const raw = JSON.parse(readNoFollow(file!).toString('utf8')) as { offered?: string[]; injected?: string[] };
     return { offered: new Set(raw.offered ?? []), injected: new Set(raw.injected ?? []) };
   } catch {
     return { offered: new Set(), injected: new Set() };
@@ -61,18 +62,16 @@ function readState(file: string | undefined): SessionState {
 
 /** State files untouched this long are removed when another session writes. */
 const STATE_TTL_MS = 7 * 24 * 3600 * 1000;
+/** What this module writes in the state folder (a state file, or its temp file); nothing else is ever removed. */
+const STATE_FILE = /^[0-9a-f]{32}\.json(\.[0-9a-f-]{36}\.tmp)?$/;
 
 function writeState(dir: string, file: string, state: SessionState): void {
+  writeCacheFile(dir, basename(file), JSON.stringify({ offered: [...state.offered], injected: [...state.injected], updatedAt: new Date().toISOString() }), 'hook state');
   if (!isPlainFolder(dir)) return;
-  mkdirSync(dir, { recursive: true });
-  // Write then rename, so a concurrent reader never sees half a file.
-  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
-  writeFileSync(tmp, JSON.stringify({ offered: [...state.offered], injected: [...state.injected], updatedAt: new Date().toISOString() }));
-  renameSync(tmp, file);
   for (const f of readdirSync(dir)) {
     const p = join(dir, f);
     try {
-      if (Date.now() - statSync(p).mtimeMs > STATE_TTL_MS) rmSync(p, { force: true });
+      if (STATE_FILE.test(f) && Date.now() - lstatSync(p).mtimeMs > STATE_TTL_MS) rmSync(p, { force: true });
     } catch {
       // Removed by another session meanwhile.
     }

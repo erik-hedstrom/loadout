@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto';
 import { readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { isPlainFolder } from './config.js';
 import { oneLine } from './launch.js';
-import { readConfined, writeCacheFile } from './library.js';
+import { readConfined } from './library.js';
+import { isPlainFolder, writeCacheFile } from './safefs.js';
 import type { Capability, McpServerConfig, ToolSummary } from './types.js';
 
 /**
@@ -24,6 +24,7 @@ const MAX_TOOLS = 100;
 const NAME_CHARS = 100;
 const DESCRIPTION_CHARS = 200;
 
+const ENTRY_FILE = /^[0-9a-f]{32}\.json$/;
 const entryFile = (name: string) => `${createHash('sha256').update(name).digest('hex').slice(0, 32)}.json`;
 
 /** Env and headers in a fixed order, so the same config always gives the same fingerprint. */
@@ -75,7 +76,7 @@ export function rememberTools(dir: string, server: Capability, gateway: Capabili
   if (!isPlainFolder(folder)) return;
   const current = new Set(gateway.map((c) => entryFile(c.name)));
   try {
-    for (const f of readdirSync(folder)) if (f.endsWith('.json') && !current.has(f)) rmSync(join(folder, f), { force: true });
+    for (const f of readdirSync(folder)) if (ENTRY_FILE.test(f) && !current.has(f)) rmSync(join(folder, f), { force: true });
   } catch {
     // No folder yet, or another session already removed it.
   }

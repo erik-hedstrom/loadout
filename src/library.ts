@@ -23,7 +23,8 @@ import {
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { parse as parseYaml } from 'yaml';
-import { isPlainFolder, paths } from './config.js';
+import { paths } from './config.js';
+import { isPlainFolder, writeCacheFile } from './safefs.js';
 import type { Capability, McpServerConfig } from './types.js';
 
 const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---/;
@@ -218,27 +219,6 @@ function readScanCache(dir: string, root: string): ScanCache | undefined {
     return c as ScanCache;
   } catch {
     return undefined;
-  }
-}
-
-/** Write a cache file next to its siblings: a unique temp name, then one atomic rename. Never throws. */
-export function writeCacheFile(dir: string, file: string, body: string, what: string): void {
-  const tmp = join(dir, `${file}.${randomUUID()}.tmp`);
-  try {
-    if (!isPlainFolder(dir)) throw Object.assign(new Error('folder is a link'), { code: 'ELOOP' });
-    mkdirSync(dir, { recursive: true });
-    writeFileSync(tmp, body, { flag: 'wx' });
-    renameSync(tmp, join(dir, file));
-  } catch (err) {
-    // Cache persistence cannot prevent routing, and errors may quote untrusted paths or contents.
-    const code = (err as NodeJS.ErrnoException).code;
-    // Another Windows hook may still hold the destination open; a later scan can retry quietly.
-    if (code !== 'EPERM' && code !== 'EBUSY') console.error(`loadout: ${what} cache could not be saved`);
-    // The failure is reported once above. A cleanup error (ENOTDIR on Linux when the index
-    // path is a file) adds nothing, and a leftover temp file has a unique name.
-    try {
-      rmSync(tmp, { force: true });
-    } catch {}
   }
 }
 

@@ -577,19 +577,28 @@ Learnings (2026-10-13):
   format carries one, and a second field would drift from the server. The
   index is filled by `server_tools` instead; before that call, search sees only
   the library description.
-- The index is untrusted on read (shape and size checks; its fingerprint of
-  command, URL, env and headers only marks staleness), and tool text is
-  escaped before it reaches Jev. It is one file per server, so concurrent
-  sessions cannot overwrite each other. Codex's review (PR #39) found the
-  single shared file lost entries under concurrent writers, and that a
-  linked index folder redirected reads and writes; every cache and state
-  folder under the loadout home is now checked to be a real folder. `SEARCH_HINT` (hook and launcher text) still says
-  "skill library"; changing it alters measured behaviour, so it waits for B7.
+- The index is untrusted on read and tool text is escaped before it reaches
+  Jev; the design is in DESIGN (search server). `SEARCH_HINT` (hook and
+  launcher text) still says "skill library"; changing it alters measured
+  behaviour, so it waits for B7.
+- Codex's review (PR #39) found four things in the first design:
+  - one shared index file lost entries under concurrent writers (now one
+    file per server);
+  - a linked index folder redirected reads and writes (now every cache and
+    state folder under the loadout home is checked, and the check-then-use gap
+    is made harmless; threat model in DESIGN);
+  - the compact listing showed "arguments: none" for `$ref` and `oneOf`
+    schemas;
+  - the fingerprint ignored env and headers.
+- Behaviour change: `loadout claude|codex` now refuses to write session files
+  when `~/.loadout/sessions` is a link, with an error naming the folder. Before,
+  a user who linked it (for example to another disk) was followed. Session
+  files hold server credentials; replace the link with a real folder, or link
+  the whole loadout home instead, which is still allowed.
 - `server_tools` was unbounded (up to 3,000 characters of schema per tool).
-  Past 12,000 characters of schemas, tools show argument names (up to 8,000
-  more), then bare names (up to 4,000), then a count of the rest, and one
-  tool's full schema is one call away. Whether agents call correctly from the compact form
-  is not measured; it is part of the local check.
+  It is now capped in tiers (caps in DESIGN, search server), and one tool's
+  full schema is one call away. Whether agents call correctly from the compact
+  form is not measured; it is part of the local check.
 - Possible follow-up, only if the local check shows agents struggling with
   the generic `call_server_tool`: D4 (`tools/list_changed`).
 

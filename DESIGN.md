@@ -199,13 +199,14 @@ library itself, in its own words, through MCP:
   returns at most 5 matches with fit ≥ 0.5, one line each (key, fit, a
   180-character description; "MCP server" and its tool count for a server),
   with the exact next call: `load_skill` for a skill, `server_tools` then
-  `call_server_tool` for a server. The name stays `find_skills`: the launcher's
-  pre-approval, the Codex plugin, the hook text, the benchmarks and users'
-  own approval rules all name it, and a rename would break them for no gain
-  in what the agent does. The need gate is softened, since the agent asked: when Jev judges the goal to be
-  general work, only near-certain exact fits (P ≥ 0.8) are shown. Otherwise
-  the answer says nothing fits and names the closest skill, so the agent does
-  not load a near miss. About 1 s and $0.001 per search.
+  `call_server_tool` for a server. The name stays `find_skills`: the
+  launcher's pre-approval, the Codex plugin, the hook text, the benchmarks and
+  users' own approval rules all name it, and a rename would break them for no
+  gain in what the agent does. The need gate is softened, since the agent
+  asked: when Jev judges the goal to be general work, only near-certain exact
+  fits (P ≥ 0.8) are shown. Otherwise the answer says nothing fits and names
+  the closest skill, so the agent does not load a near miss. About 1 s and
+  $0.001 per search.
 - The tool description and the server's `instructions` ask for a search
   before the first specialised step, even in a familiar domain, and again when
   the domain changes. Measured uptake is still partial (bench/RESULTS.md, v4),
@@ -218,24 +219,43 @@ library itself, in its own words, through MCP:
   servers, started on first use and kept for the session. Registered only when
   the library has servers, so a skills-only library costs two tool definitions
   and its tool text is unchanged; only a library with gateway servers adds MCP
-  wording to the instructions and descriptions (sizes: [D15](docs/loop/BACKLOG.md)).
+  wording to the instructions and descriptions (sizes: D15 learnings in the
+  [backlog](docs/loop/BACKLOG.md)).
 - **Tool index.** A server's tools are known only once it has run. After a
   successful `server_tools`, the names and clipped descriptions are written to
   one file per server under `~/.loadout/index/mcp-tools/`, so sessions that
   list different servers at once cannot overwrite each other. Each file also
   carries a hash of the server's command or URL, env and headers; only the
   hash is stored. The hash marks an entry stale when the config changes. It is
-  not an integrity check, since anyone can compute it. Search reads the files
-  as untrusted: it checks the shape and the sizes (128 KB file, 100 tools,
-  100/200 characters), ignores what fails, and escapes the text before it
-  reaches Jev. A planted entry can therefore only change how a server ranks,
-  never what the agent is told. In BM25 each remembered tool word counts once
-  and does not lengthen the server's entry, so tool text cannot outweigh the
-  server's own name and description; the Jev question gets the text too. The
-  embedding index does not. Search never starts a server to fill it. Cache and
-  state folders under the loadout home (index, sessions and the hook state
-  inside it) are checked before every read and write to be real folders, not
-  links.
+  not an integrity check, since anyone can compute it.
+  - Search reads the files as untrusted: it checks the shape and the sizes
+    (128 KB file, 100 tools, 100/200 characters), ignores what fails, and
+    escapes the text before it reaches Jev. A planted entry can change how a
+    server ranks and the tool count shown for it, nothing else.
+  - In BM25 each remembered tool word counts once and does not lengthen the
+    server's entry, so tool text cannot outweigh the server's own name and
+    description. The Jev question gets the text too; the embedding index does
+    not.
+  - Search never starts a server to fill the index.
+- **Cache and state files.** All of them (scan cache, tool index, embeddings
+  and the model folder, hook state, session files) go through the checks in
+  `src/safefs.ts`.
+  - Threat model: anyone who can plant a link in the loadout home can already
+    edit `library/mcp.json`, which names commands the gateway runs. The checks
+    are not a privilege boundary. They stop a link planted earlier, or left by
+    accident, from redirecting a write or being trusted on read, and they make
+    the gap between check and use harmless to existing files (Node has no
+    `openat` to pin a folder).
+  - Before each read and write, every folder below the loadout home on the
+    way must be a real folder. The home itself may be a link: where loadout
+    keeps its data is the user's choice, and a link below it is not something
+    loadout made. Session files hold server credentials, so a linked
+    `sessions/` is refused with an error that names it.
+  - Temp files are created exclusively with mode 0600 and then renamed. Final
+    files are opened without following a link (`O_NOFOLLOW`; Windows has none
+    and checks with `lstat`). Deletions match only the names loadout writes.
+  - What remains: a folder swapped for a link in that gap can receive one new
+    file with a random temp name, and have a same-named cache file replaced.
 - **Listing size.** `server_tools` prints each tool's input schema until the
   schemas reach 12,000 characters. Further tools show their description and
   argument names (up to 8,000 characters), then their bare names (up to
