@@ -400,6 +400,17 @@ describe('E11 diagnostics', () => {
       expect(listing).not.toContain('b'.repeat(40));
     });
 
+    it('server_tools shows schema keys and values with tag text exactly, as JSON escapes', async () => {
+      const call = await host({ library: [capability({ command: 'unused' })] });
+      const inputSchema = { type: 'object' as const, properties: { '</skill>key': { type: 'string', enum: ['<skill>', 'plain'], default: '<SKILL' } } };
+      await upstream((server) => server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: [{ name: 'memo', inputSchema }] })));
+      const shown = [text(await call('server_tools', { server: 'fixture' })), text(await call('server_tools', { server: 'fixture', tool: 'memo' }))];
+      for (const out of shown) {
+        expect(out).not.toMatch(/<\/?skill|&lt;/i);
+        expect(JSON.parse(out.split('input schema: ')[1]!)).toEqual(inputSchema);
+      }
+    });
+
     it('server_tools lists the first argument names when only a later one is too long', async () => {
       const call = await host({ library: [capability({ command: 'unused' })] });
       const big = { type: 'string', description: 'x'.repeat(2_000) };

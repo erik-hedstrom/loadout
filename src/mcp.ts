@@ -206,6 +206,9 @@ function argumentNames(schema: ListedTool['inputSchema']): string {
   return `${names.length ? `${list}, and more via` : 'not listed, the schema uses'} ${composing.join('/')}`;
 }
 
+/** A schema as JSON with each `<` written `\u003c`, so tag escaping never changes a key or value the agent sends back. */
+const schemaJson = (schema: ListedTool['inputSchema']) => JSON.stringify(schema).replace(/</g, '\\u003c');
+
 /**
  * One entry per tool, in three sizes so a long listing stays small. Its input schema comes verbatim ($defs,
  * oneOf, enums untouched) while the schemas shown so far total under LISTING_MAX_CHARS and it is under
@@ -218,7 +221,7 @@ function formatTools(tools: ListedTool[]): string {
   const names: string[] = [];
   let hidden = 0;
   for (const t of tools) {
-    const schema = JSON.stringify(t.inputSchema);
+    const schema = schemaJson(t.inputSchema);
     const full = `- ${t.name}: ${oneLine(t.description ?? '', 300)}\n  input schema: ${schema}`;
     const compact = `- ${t.name}: ${oneLine(t.description ?? '', COMPACT_DESCRIPTION_CHARS)}\n  arguments: ${argumentNames(t.inputSchema)} (full schema: server_tools with tool ${JSON.stringify(t.name)})`;
     if (schema.length <= SCHEMA_MAX_CHARS && used.full + full.length <= LISTING_MAX_CHARS) {
@@ -318,7 +321,7 @@ export class Gateway {
     if (tool) {
       const t = tools.find((x) => x.name === tool);
       if (!t) throw new Error('no such tool; list them with server_tools');
-      return escapeSkillTags(`${t.name}: ${t.description ?? ''}\ninput schema: ${JSON.stringify(t.inputSchema)}`);
+      return escapeSkillTags(`${t.name}: ${t.description ?? ''}\ninput schema: ${schemaJson(t.inputSchema)}`);
     }
     return escapeSkillTags(formatTools(tools)) + (note ? `\n${note}` : '');
   }
