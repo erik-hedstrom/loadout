@@ -142,8 +142,8 @@ against the vendor's record take a gateway's place.
   it `find_tools`). That call runs outside the Bash sandbox and sends its `goal`
   (up to 4,000 characters) and `keywords` to Jev, where a live key could sit in
   logs until the batch's keys are revoked, up to about 27 h; revoking does not
-  undo that. The
-  model's own turns go to Anthropic, which already holds the Anthropic key.
+  undo that. The model's own turns go to Anthropic, which already holds the
+  Anthropic key.
 - **Layer 1, the primary one: the agent cannot read a key.**
   - Both keys are files under one directory `<keys>`, outside the run folder.
     The Anthropic key reaches `claude` through `apiKeyHelper`, a harness-owned
@@ -181,12 +181,13 @@ against the vendor's record take a gateway's place.
     directories in every permission mode
     ([settings](https://code.claude.com/docs/en/settings-reference)), and
     `acceptEdits` approves edits only inside them
-    ([permission modes](https://code.claude.com/docs/en/permission-modes)). A
-    spelling outside the run folder is refused as given or as resolved. Inside
-    it:
-    - *Symlinks:* the run folder and the sandbox temp directory, the only places
-      `Bash` can write, are mounted `nosymfollow` (a kernel flag, not from the
-      Claude docs): no process follows a link made there.
+    ([permission modes](https://code.claude.com/docs/en/permission-modes)). I
+    infer that a spelling outside the run folder is refused whether the check
+    sees it as given or resolved; the probe tests it. Inside the folder:
+    - *Symlinks:* the run folder is mounted `nosymfollow` (mount(8),
+      `MS_NOSYMFOLLOW`, Linux 5.10 or later; from the man pages, not re-read
+      here), so no process follows a link made there. The self-check shows it.
+      Links the agent makes stop working, `python -m venv` included.
     - *Hard links:* `<keys>` is on another filesystem, so `link(2)` fails.
     - *Case:* the filesystem is case-sensitive.
     - *`..` under the run folder's prefix* passes only if the check does not
@@ -361,7 +362,7 @@ claude -p "$PROMPT" --output-format stream-json --verbose --include-hook-events 
 | Arm | `$MODEL` | `$MCP` | Additions |
 |---|---|---|---|
 | `small-bare` | `claude-haiku-5-5` | `{"mcpServers":{}}` | none |
-| `small-loadout` | `claude-haiku-5-5` | `{"mcpServers":{"loadout":{"command":"loadout","args":["mcp"],"env":{"LOADOUT_HOME":"<home>"}}}}` | `--plugin-dir <plugin copy>`; `$EXTRA_TOOLS` = `mcp__loadout__find_skills mcp__loadout__load_skill`; `LOADOUT_HOME=<home>` in the environment, a loadout home with the full library, whose `config.json` points `jev.apiKeyFile` at the batch's Jev key file in `<keys>` and leaves `jev.baseUrl` at its default |
+| `small-loadout` | `claude-haiku-5-5` | `{"mcpServers":{"loadout":{"command":"loadout","args":["mcp"],"env":{"LOADOUT_HOME":"<home>"}}}}` | `--plugin-dir <plugin copy>`; `--add-dir <home>/library`; `$EXTRA_TOOLS` = `mcp__loadout__find_skills mcp__loadout__load_skill`; `LOADOUT_HOME=<home>` in the environment, a loadout home with the full library, whose `config.json` points `jev.apiKeyFile` at the batch's Jev key file in `<keys>` and leaves `jev.baseUrl` at its default |
 | `large-bare` | `claude-sonnet-5-5` | `{"mcpServers":{}}` | none |
 
 - `plugins/loadout` is hook-only. The hook tells the agent to call
@@ -402,9 +403,12 @@ claude -p "$PROMPT" --output-format stream-json --verbose --include-hook-events 
   one-conversation reading of the stream does not cover; the arms stay equal, at
   the cost of any gain from subagents (a stated limit).
 - **`Read`, `Grep` and `Glob` stay in the run folder** in every arm (the fence
-  under Credentials and spend), so a SKILL.md outside it is read through `Bash`
-  or `load_skill`; the smoke run records whether `small-loadout` still opens
-  skills.
+  under Credentials and spend). `small-loadout` alone adds `--add-dir
+  <home>/library`, so the hook's "read SKILL.md in the folder given" works as for
+  a user. The settings reference says directories added with `--add-dir` "count
+  as working directories for the block". The library is root-owned and
+  read-only (Isolation), the snapshot step rejects symlinks in it, and `<keys>`
+  is not under it. The probe runs with each arm's argv.
 - **No compaction, in every arm.** A compaction rewrites the assistant turns,
   so the run would no longer be one conversation: mostly for `small-loadout`,
   whose hook context and skill text fill the window sooner. `DISABLE_COMPACT=1`
