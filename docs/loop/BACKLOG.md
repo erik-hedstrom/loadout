@@ -308,7 +308,7 @@ Acceptance: a third row in that RESULTS table, with raw results. The README's
 
 Why: Erik (2026-10-12) wants routing to keep working without a TypeSafe key,
 using a small host model (Claude Haiku 5.5, or Codex's small Luna model), with
-a warning that loadout is not fully set up (D13).
+a warning that loadout is not fully set up (D16).
 
 Constraints:
 - Official CLIs only (`claude -p`, `codex exec`), never proxying (hard rule 1).
@@ -346,7 +346,7 @@ Acceptance:
 | D8 | P1 | Host capability matrix (verified vs generated) | Claude | cloud | done ([#18](https://github.com/erik-hedstrom/loadout/pull/18)) |
 | D9 | P1 | Codex parity: neutral session skill dir, tier presets | Claude | cloud | done ([#21](https://github.com/erik-hedstrom/loadout/pull/21)); Codex launch not re-run live |
 | D12 | P0 | Codex: install the hook and search as one step, if Codex allows it | Codex | local | done ([#23](https://github.com/erik-hedstrom/loadout/pull/23)): `plugins/loadout-codex` through `.agents/plugins/marketplace.json`; install checked offline; the hook still needs `/hooks` trust; the live run is D2 |
-| D13 | P1 | Warn when the hook runs without a TypeSafe key | Claude | cloud | in progress ([#27](https://github.com/erik-hedstrom/loadout/pull/27)): once per session, as a `systemMessage`, which Claude Code and Codex both show |
+| D16 | P1 | Warn when the hook runs without a TypeSafe key | Claude | cloud | in progress ([#27](https://github.com/erik-hedstrom/loadout/pull/27)): once per session, as a `systemMessage`, which Claude Code and Codex both show |
 
 **D10. In-host first: loadout as a Claude Code plugin.**
 
@@ -533,7 +533,7 @@ because `--plugin-dir` needs that layout. The Codex launch path was not re-run
 live (no `codex` in the cloud session); run `loadout codex --dry-run` before
 relying on it.
 
-**D13. Warn when the hook runs without a TypeSafe key.**
+**D16. Warn when the hook runs without a TypeSafe key.**
 
 Why: with `router: "jev"` and no key, the hook falls back to keyword routing
 and adds nothing unless a skill is named. The user, in a host CLI or app,
