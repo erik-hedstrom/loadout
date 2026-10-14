@@ -1,20 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { closeSync, constants, lstatSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { lstatSync, mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join, relative, sep } from 'node:path';
 import { loadoutHome } from './config.js';
 
-/*
- * Cache and state files under the loadout home (scan cache, tool index, embeddings, hook state).
- *
- * Threat model: anyone who can plant a link in the loadout home can already edit library/mcp.json,
- * which names commands the gateway runs. These checks are not a privilege boundary. They stop a link that
- * was planted earlier, or left by accident, from redirecting a write or trusting a read, and they keep a
- * link swapped in during the check-then-use gap (Node has no openat to pin a folder) from truncating a file
- * or deleting one loadout did not write: temp files are created exclusively (a link already at the name is
- * refused), final files are read without following a link, and deletions match only the exact names loadout
- * writes. A swapped folder can still receive one new file with a random temp name, and have a cache file of
- * the same name replaced by the rename.
- */
+// Cache and state files under the loadout home. They refuse links planted before loadout runs; scope in DESIGN.md, "Cache and state files".
 
 /**
  * False when a link, or anything but a folder, stands where a folder of the loadout home should be. The home
@@ -35,17 +24,6 @@ export function isPlainFolder(dir: string): boolean {
     }
   }
   return true;
-}
-
-/** Read a file whose last component must not be a link. Windows has no O_NOFOLLOW, so it checks with lstat there. */
-export function readNoFollow(file: string): Buffer {
-  if (constants.O_NOFOLLOW === undefined && lstatSync(file).isSymbolicLink()) throw new Error('file is a link');
-  const fd = openSync(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
-  try {
-    return readFileSync(fd);
-  } finally {
-    closeSync(fd);
-  }
 }
 
 /** Write a cache file next to its siblings: an exclusive, owner-only temp file, then one atomic rename. Never throws. */

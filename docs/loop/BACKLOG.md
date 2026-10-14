@@ -585,8 +585,9 @@ Learnings (2026-10-13):
   - one shared index file lost entries under concurrent writers (now one
     file per server);
   - a linked index folder redirected reads and writes (now every cache and
-    state folder under the loadout home is checked, and the check-then-use gap
-    is made harmless; threat model in DESIGN);
+    state folder under the loadout home is checked; links planted before
+    loadout runs are refused, a same-user process racing the check is out of
+    scope, see DESIGN);
   - the compact listing showed "arguments: none" for `$ref` and `oneOf`
     schemas;
   - the fingerprint ignored env and headers.

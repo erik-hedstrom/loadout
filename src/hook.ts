@@ -13,8 +13,8 @@ import type { Config } from './config.js';
 import type { EmbeddingStore } from './embed.js';
 import type { SystemOneClient } from './jev.js';
 import { escapeSkillTags, injectionBlock, oneLine } from './launch.js';
-import { capabilityKey, skillExcerpt } from './library.js';
-import { isPlainFolder, readNoFollow, writeCacheFile } from './safefs.js';
+import { capabilityKey, readConfined, skillExcerpt } from './library.js';
+import { isPlainFolder, writeCacheFile } from './safefs.js';
 import { route } from './route.js';
 import type { Capability, RepoSignals } from './types.js';
 
@@ -53,7 +53,7 @@ interface SessionState {
 function readState(file: string | undefined): SessionState {
   try {
     if (!isPlainFolder(dirname(file!))) throw new Error('state folder is a link');
-    const raw = JSON.parse(readNoFollow(file!).toString('utf8')) as { offered?: string[]; injected?: string[] };
+    const raw = JSON.parse(readConfined(dirname(file!), basename(file!), STATE_MAX_BYTES).toString('utf8')) as { offered?: string[]; injected?: string[] };
     return { offered: new Set(raw.offered ?? []), injected: new Set(raw.injected ?? []) };
   } catch {
     return { offered: new Set(), injected: new Set() };
@@ -62,8 +62,10 @@ function readState(file: string | undefined): SessionState {
 
 /** State files untouched this long are removed when another session writes. */
 const STATE_TTL_MS = 7 * 24 * 3600 * 1000;
-/** What this module writes in the state folder (a state file, or its temp file); nothing else is ever removed. */
-const STATE_FILE = /^[0-9a-f]{32}\.json(\.[0-9a-f-]{36}\.tmp)?$/;
+/** A session's offered and injected skill keys: a few KB, so a file past this is not ours. */
+const STATE_MAX_BYTES = 1024 * 1024;
+/** What this module writes in the state folder (a state file, or its temp file, including earlier versions' pid.ms names); nothing else is ever removed. */
+const STATE_FILE = /^[0-9a-f]{32}\.json(\.[0-9a-f-]{36}\.tmp|\.\d+\.\d+\.tmp)?$/;
 
 function writeState(dir: string, file: string, state: SessionState): void {
   writeCacheFile(dir, basename(file), JSON.stringify({ offered: [...state.offered], injected: [...state.injected], updatedAt: new Date().toISOString() }), 'hook state');

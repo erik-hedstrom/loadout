@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { expect, it, vi } from 'vitest';
 import { EmbeddingStore } from '../src/embed.js';
 
@@ -46,13 +46,14 @@ it('keeps model-load text out of embeddings stderr', async () => {
   }
 });
 
-it('does not download the model through a linked model folder', async () => {
+it.each(['models', 'models/Xenova', 'models/Xenova/bge-small-en-v1.5'])('does not download the model through a link at index/%s', async (level) => {
   vi.resetModules();
   const { libraryEmbeddings } = await import('../src/embed.js');
   const home = mkdtempSync(join(tmpdir(), 'loadout-embed-'));
   const outside = mkdtempSync(join(tmpdir(), 'loadout-outside-'));
-  mkdirSync(join(home, 'index'));
-  symlinkSync(outside, join(home, 'index', 'models'));
+  const link = join(home, 'index', level);
+  mkdirSync(dirname(link), { recursive: true });
+  symlinkSync(outside, link);
   vi.stubEnv('LOADOUT_HOME', home);
   lib.env.cacheDir = '';
   const log = vi.fn();

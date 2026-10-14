@@ -237,25 +237,29 @@ library itself, in its own words, through MCP:
     description. The Jev question gets the text too; the embedding index does
     not.
   - Search never starts a server to fill the index.
-- **Cache and state files.** All of them (scan cache, tool index, embeddings
-  and the model folder, hook state, session files) go through the checks in
-  `src/safefs.ts`.
-  - Threat model: anyone who can plant a link in the loadout home can already
-    edit `library/mcp.json`, which names commands the gateway runs. The checks
-    are not a privilege boundary. They stop a link planted earlier, or left by
-    accident, from redirecting a write or being trusted on read, and they make
-    the gap between check and use harmless to existing files (Node has no
-    `openat` to pin a folder).
+- **Cache and state files.** The scan cache, tool index, embeddings and hook
+  state are written through `src/safefs.ts`; the embedding model folder and
+  the session folder get its folder check. Session files (`decision.json`,
+  the plugin files, `mcp.json`) are written with plain `writeFileSync`, and
+  only `mcp.json` is owner-only (0600).
+  - Scope: the checks refuse links that were there before loadout ran (synced
+    dotfiles, extracted archives, mistakes). They are not a defence against a
+    process of the same user racing them: it already has the user's
+    privileges, including write access to `library/mcp.json`, which names the
+    commands the gateway runs. Node has no `openat` to bind a folder, so the
+    gap between a check and its use is not closed.
   - Before each read and write, every folder below the loadout home on the
-    way must be a real folder. The home itself may be a link: where loadout
-    keeps its data is the user's choice, and a link below it is not something
-    loadout made. Session files hold server credentials, so a linked
-    `sessions/` is refused with an error that names it.
-  - Temp files are created exclusively with mode 0600 and then renamed. Final
-    files are opened without following a link (`O_NOFOLLOW`; Windows has none
-    and checks with `lstat`). Deletions match only the names loadout writes.
-  - What remains: a folder swapped for a link in that gap can receive one new
-    file with a random temp name, and have a same-named cache file replaced.
+    way must be a real folder. For the model, that is every level down to
+    `models/<org>/<model>`, since transformers.js reads and writes there. The
+    home itself may be a link: where loadout keeps its data is the user's
+    choice, and a link below it is not something loadout made. Session files
+    hold server credentials, so a linked `sessions/` is refused with an error
+    that names it.
+  - Temp files are created exclusively (a link already at the name is
+    refused) with mode 0600 and then renamed. Final files are read through
+    `readConfined`, which refuses a link as the last component and caps the
+    size (64 MB for embeddings, about 40,000 vectors; 1 MB for hook state; 128
+    KB for tool entries). Deletions match only the names loadout writes.
 - **Listing size.** `server_tools` prints each tool's input schema until the
   schemas reach 12,000 characters. Further tools show their description and
   argument names (up to 8,000 characters), then their bare names (up to

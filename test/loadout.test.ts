@@ -20,7 +20,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { EmptyResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { addSkills, parseGitHub, parseSkill as parseSkillDir, scanLibrary } from '../src/library.js';
-import { isPlainFolder, readNoFollow, writeCacheFile } from '../src/safefs.js';
+import { isPlainFolder, writeCacheFile } from '../src/safefs.js';
 import { EMBED_MODEL, EmbeddingStore } from '../src/embed.js';
 import { bm25 } from '../src/prefilter.js';
 import { mentionedSkills, NONE, optionKeys, route } from '../src/route.js';
@@ -1457,39 +1457,6 @@ describe('cache and state folders under the loadout home', () => {
     errors.mockRestore();
   });
 
-  it('does not truncate anything when the folder turns into a link after the check', () => {
-    const dir = join(home(), 'index');
-    const outside = tempDir('loadout-outside-');
-    writeFileSync(join(outside, 'precious.txt'), 'precious');
-    const mkdir = fs.mkdirSync;
-    const swap = vi.spyOn(fs, 'mkdirSync').mockImplementation(((p: fs.PathLike, o?: never) => {
-      const made = mkdir(p, o);
-      rmSync(dir, { recursive: true });
-      symlinkSync(outside, dir);
-      return made;
-    }) as typeof fs.mkdirSync);
-    syncBuiltinESMExports();
-    try {
-      writeCacheFile(dir, 'a.json', 'new', 'test');
-    } finally {
-      swap.mockRestore();
-      syncBuiltinESMExports();
-    }
-    // The gap cannot be closed without openat. What it cannot do is touch a file loadout did not name.
-    expect(readFileSync(join(outside, 'precious.txt'), 'utf8')).toBe('precious');
-    expect(readdirSync(outside).sort()).toEqual(['a.json', 'precious.txt']);
-  });
-
-  it('reads a final file only when it is not a link', () => {
-    const dir = tempDir('loadout-read-');
-    const outside = join(tempDir('loadout-outside-'), 'secret.txt');
-    writeFileSync(outside, 'secret');
-    symlinkSync(outside, join(dir, 'link'));
-    writeFileSync(join(dir, 'real'), 'ok');
-    expect(readNoFollow(join(dir, 'real')).toString()).toBe('ok');
-    expect(() => readNoFollow(join(dir, 'link'))).toThrow();
-  });
-
   it('ignores an embedding cache behind a link, and does not save into one', () => {
     const dir = home();
     const target = tempDir('loadout-outside-');
@@ -1550,10 +1517,12 @@ describe('cache and state folders under the loadout home', () => {
     const staleState = `${'c'.repeat(32)}.json`;
     const staleTmp = `${'d'.repeat(32)}.json.11111111-1111-4111-8111-111111111111.tmp`;
     const staleLink = `${'e'.repeat(32)}.json`;
+    // Left by an earlier version, whose temp names ended in pid and time.
+    const legacyTmp = `${'f'.repeat(32)}.json.4242.1700000000000.tmp`;
     writeFileSync(join(outside, 'precious.json'), 'precious');
     symlinkSync(join(outside, 'precious.json'), join(stateDir, staleLink));
-    for (const f of [staleState, staleTmp, 'precious.json', 'notes.txt']) writeFileSync(join(stateDir, f), 'x');
-    for (const f of [staleState, staleTmp, 'precious.json', 'notes.txt']) utimesSync(join(stateDir, f), old, old);
+    for (const f of [staleState, staleTmp, legacyTmp, 'precious.json', 'notes.txt']) writeFileSync(join(stateDir, f), 'x');
+    for (const f of [staleState, staleTmp, legacyTmp, 'precious.json', 'notes.txt']) utimesSync(join(stateDir, f), old, old);
     lutimesSync(join(stateDir, staleLink), old, old);
     const { client } = fakeClient({ 'webapp-testing': 0.95 }, { exact: 1 });
     expect(await promptContext({ session_id: 's1', prompt: TASK }, { library, config: DEFAULT_CONFIG, client, stateDir })).toContain('webapp-testing');

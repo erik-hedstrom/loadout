@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { isPlainFolder, readNoFollow, writeCacheFile } from './safefs.js';
+import { readConfined } from './library.js';
+import { isPlainFolder, writeCacheFile } from './safefs.js';
 import type { Capability } from './types.js';
 
 /**
@@ -12,6 +13,8 @@ import type { Capability } from './types.js';
 export const EMBED_MODEL = 'Xenova/bge-small-en-v1.5';
 const DIM = 384;
 const CACHE_FILE = 'embeddings.bin';
+/** About 1.6 KB per vector (384 floats and a key), so this holds some 40,000 vectors, more than a realistic library plus its cached queries. */
+const CACHE_MAX_BYTES = 64 * 1024 * 1024;
 /** bge models expect this prefix on queries, not on documents. */
 const QUERY_PREFIX = 'Represent this sentence for searching relevant passages: ';
 const MAX_CACHED_QUERIES = 1000;
@@ -35,8 +38,9 @@ async function getExtractor(modelDir: string): Promise<Extractor> {
     } catch {
       throw new Error('embeddings need the optional dependency @huggingface/transformers (npm install @huggingface/transformers)');
     }
-    // The model folder is written by the library, so a link in its place would send the download elsewhere.
-    if (!isPlainFolder(modelDir)) throw new Error('the model cache folder is a link');
+    // transformers.js reads and writes below modelDir at <org>/<model>/..., so a link at any level, down to
+    // the model's own folder, would send the download or the model load elsewhere.
+    if (!isPlainFolder(join(modelDir, ...EMBED_MODEL.split('/')))) throw new Error('the model cache folder is a link');
     transformers.env.cacheDir = modelDir;
     // Its failed-inference log prints the model inputs (the prompt's token ids), and info goes to
     // stdout, where hook JSON and MCP stdio travel. Failures surface through loadout's own handling.
@@ -67,7 +71,7 @@ export class EmbeddingStore {
     const file = join(dir, CACHE_FILE);
     if (!isPlainFolder(dir) || !existsSync(file)) return;
     try {
-      const buf = readNoFollow(file);
+      const buf = readConfined(dir, CACHE_FILE, CACHE_MAX_BYTES);
       const headerLength = buf.readUInt32LE(0);
       const header = JSON.parse(buf.subarray(4, 4 + headerLength).toString('utf8')) as { model: string; dim: number; keys: string[] };
       const offset = 4 + headerLength;
