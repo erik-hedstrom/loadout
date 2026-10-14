@@ -571,11 +571,11 @@ Learnings (2026-10-13):
   search server), with a description that leads with tools and MCP servers.
   No alias. `load_skill`, `server_tools` and `call_server_tool` keep their
   names.
-- Sizes in characters. Skills-only library: server instructions 337 → 336,
-  `find_tools` description 473 → 492. With one gateway server: instructions 424,
-  `find_tools` 582, `server_tools` 120 (76 before D15, plus the server
-  names). The skills-only text differs from what B1 measured, so the B1
-  token figure is not remeasured for either case.
+- Sizes in characters. Skills-only library: see the
+  [note under B1 results](../../bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request).
+  With one gateway server: instructions 424, `find_tools` 582, `server_tools`
+  120 (76 before D15, plus the server names). Neither case is remeasured in
+  tokens.
 - A declared tool list in `mcp.json` was not added: nothing in the standard
   format carries one, and a second field would drift from the server. The
   index is filled by `server_tools` instead; before that call, search sees only

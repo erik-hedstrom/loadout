@@ -288,6 +288,21 @@ describe('E11 diagnostics', () => {
     expect(withTools(library, dir)[0]!.tools).toBeUndefined();
   });
 
+  it('an empty listing still answers when a folder sits at the entry name', async () => {
+    const dir = join(temp(), 'index');
+    const library = [capability({ command: 'unused' })];
+    const listing = async (tools: { name: string; inputSchema: { type: 'object' } }[]) => {
+      const call = await host({ library, toolIndex: dir });
+      await upstream((server) => server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools })));
+      return call('server_tools', { server: 'fixture' });
+    };
+    await listing([{ name: 'memo', inputSchema: { type: 'object' } }]);
+    const [entry] = fs.readdirSync(join(dir, 'mcp-tools'));
+    rmSync(join(dir, 'mcp-tools', entry!));
+    mkdirSync(join(dir, 'mcp-tools', entry!));
+    expect(await listing([])).toMatchObject({ content: [{ text: 'the server has no tools.' }] });
+  });
+
   describe('names the agent could not name back exactly', () => {
     const text = (res: unknown) => (res as { content: { text: string }[] }).content[0]!.text;
     const keys = (found: string) => [...found.matchAll(/^- (\S+) \(/gm)].map((m) => m[1]!);
@@ -383,6 +398,15 @@ describe('E11 diagnostics', () => {
       const listing = text(await call('server_tools', { server: 'fixture' }));
       expect(listing).toContain('arguments: not listed exactly, fetch the full schema');
       expect(listing).not.toContain('b'.repeat(40));
+    });
+
+    it('server_tools lists the first argument names when only a later one is too long', async () => {
+      const call = await host({ library: [capability({ command: 'unused' })] });
+      const big = { type: 'string', description: 'x'.repeat(2_000) };
+      const properties = Object.fromEntries([...Array.from({ length: 8 }, (_, i) => [`a${i}`, big]), ['b'.repeat(41), big]]);
+      const tools = Array.from({ length: 10 }, (_, i) => ({ name: `t${i}`, inputSchema: { type: 'object' as const, properties } }));
+      await upstream((server) => server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools })));
+      expect(text(await call('server_tools', { server: 'fixture' }))).toContain('arguments: a0?, a1?, a2?, a3?, a4?, a5?, a6?, a7?, …');
     });
   });
 

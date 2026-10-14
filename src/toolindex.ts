@@ -74,13 +74,13 @@ export function rememberTools(dir: string, server: Capability, gateway: Capabili
     writeCacheFile(folder, entryFile(server.name), JSON.stringify({ version: VERSION, name: server.name, fingerprint: fingerprint(server.server!), tools: kept }), 'MCP tool index');
   }
   if (!isPlainFolder(folder)) return;
-  // A listing with no tools means the old entry is wrong now, so it goes rather than keep advertising them.
-  if (kept.length === 0) rmSync(join(folder, entryFile(server.name)), { force: true });
   const current = new Set(gateway.map((c) => entryFile(c.name)));
   try {
+    // A listing with no tools means the old entry is wrong now, so it goes rather than keep advertising them.
+    if (kept.length === 0) rmSync(join(folder, entryFile(server.name)), { force: true });
     for (const f of readdirSync(folder)) if (ENTRY_FILE.test(f) && !current.has(f)) rmSync(join(folder, f), { force: true });
   } catch {
-    // No folder yet, or another session already removed it.
+    // No folder yet, another session already removed it, or something other than a file sits at an entry's name.
   }
 }
 

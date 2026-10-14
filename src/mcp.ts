@@ -198,7 +198,7 @@ function argumentNames(schema: ListedTool['inputSchema']): string {
   const names = Object.keys(schema.properties ?? {});
   const composing = [...COMPOSING.filter((k) => k in schema), ...(schema.additionalProperties ? ['additionalProperties'] : [])];
   // A shortened or escaped argument name would be sent back wrong, so then only the full schema will do.
-  if (names.some((n) => !shownExactly(n, ARGUMENT_CHARS))) return 'not listed exactly, fetch the full schema';
+  if (names.slice(0, COMPACT_ARGUMENTS).some((n) => !shownExactly(n, ARGUMENT_CHARS))) return 'not listed exactly, fetch the full schema';
   const required = new Set(schema.required);
   const shown = names.slice(0, COMPACT_ARGUMENTS).map((n) => `${n}${required.has(n) ? '' : '?'}`);
   const list = `${shown.join(', ')}${names.length > shown.length ? ', …' : ''}`;
@@ -218,19 +218,18 @@ function formatTools(tools: ListedTool[]): string {
   const names: string[] = [];
   let hidden = 0;
   for (const t of tools) {
-    const name = t.name;
     const schema = JSON.stringify(t.inputSchema);
-    const full = `- ${name}: ${oneLine(t.description ?? '', 300)}\n  input schema: ${schema}`;
-    const compact = `- ${name}: ${oneLine(t.description ?? '', COMPACT_DESCRIPTION_CHARS)}\n  arguments: ${argumentNames(t.inputSchema)} (full schema: server_tools with tool ${JSON.stringify(name)})`;
+    const full = `- ${t.name}: ${oneLine(t.description ?? '', 300)}\n  input schema: ${schema}`;
+    const compact = `- ${t.name}: ${oneLine(t.description ?? '', COMPACT_DESCRIPTION_CHARS)}\n  arguments: ${argumentNames(t.inputSchema)} (full schema: server_tools with tool ${JSON.stringify(t.name)})`;
     if (schema.length <= SCHEMA_MAX_CHARS && used.full + full.length <= LISTING_MAX_CHARS) {
       used.full += full.length;
       lines.push(full);
     } else if (used.compact + compact.length <= COMPACT_MAX_CHARS) {
       used.compact += compact.length;
       lines.push(compact);
-    } else if (used.names + name.length + 2 <= NAMES_MAX_CHARS) {
-      used.names += name.length + 2;
-      names.push(name);
+    } else if (used.names + t.name.length + 2 <= NAMES_MAX_CHARS) {
+      used.names += t.name.length + 2;
+      names.push(t.name);
     } else {
       hidden++;
     }

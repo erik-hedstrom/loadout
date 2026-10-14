@@ -246,7 +246,8 @@ library itself, in its own words, through MCP:
     them, escaped. `server_tools` also leaves out tool names over 128
     characters or not on one line, which a listing would show shortened, and
     says how many it left out. An argument name it cannot show whole sends
-    the agent to the tool's full schema.
+    the agent to the tool's full schema; a tag-like argument name is escaped
+    there too, so that argument cannot be sent back exactly.
 - **Cache and state files.** The scan cache, tool index, embeddings and hook
   state are written through `src/safefs.ts`; the embedding model folder and
   the session folder get its folder check. Session files (`decision.json`,
