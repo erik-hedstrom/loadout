@@ -3,6 +3,11 @@ import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { afterAll, describe, expect, it } from 'vitest';
+import { DEFAULT_CONFIG } from '../src/config.js';
+import { materialize } from '../src/launch.js';
+import type { Capability } from '../src/types.js';
+import { decisionFor } from '../bench/lib.js';
+import type { SweepRow } from '../bench/sweep.js';
 
 const temps: string[] = [];
 afterAll(() => temps.forEach((dir) => rmSync(dir, { recursive: true, force: true })));
@@ -44,4 +49,28 @@ describe('bench/outcome.ts judging', () => {
     // Two orders per request: overlapping calls would show "start" twice in a row.
     expect(readFileSync(log, 'utf8').trim().split('\n')).toEqual(Array(ids.length * 2).fill(['start', 'end']).flat());
   }, 60_000);
+});
+
+describe('bench decisionFor', () => {
+  it('gives the bare and loadout arms the same model, the row\'s tier', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'loadout-outcome-test-'));
+    temps.push(dir);
+    const skillDir = join(dir, 'pdf');
+    mkdirSync(skillDir);
+    writeFileSync(join(skillDir, 'SKILL.md'), '---\nname: pdf\ndescription: d\n---\nbody\n');
+    const library: Capability[] = [{ id: 'skill:pdf', kind: 'skill', name: 'pdf', description: 'd', source: skillDir }];
+    const row: SweepRow = { id: 'a', category: 'c', request: 'r', tier: 'small', loaded: [{ key: 'pdf', fit: 0.9 }], offered: [], shortlist: [], costUsd: 0, ms: 0 };
+    // The default tier is medium, so a bare arm that dropped the row's tier would show it.
+    expect(DEFAULT_CONFIG.tiers.codex.small).not.toEqual(DEFAULT_CONFIG.tiers.codex[DEFAULT_CONFIG.defaultTier]);
+
+    for (const agent of ['claude', 'codex'] as const) {
+      const bare = materialize(decisionFor(row, library, true), agent, DEFAULT_CONFIG, join(dir, 'sessions'));
+      const loadout = materialize(decisionFor(row, library, false), agent, DEFAULT_CONFIG, join(dir, 'sessions'));
+      expect(bare.skills).toEqual([]);
+      expect(loadout.skills.map((c) => c.name)).toEqual(['pdf']);
+      expect(bare.model).toBe(loadout.model);
+      expect(bare.effort).toBe(loadout.effort);
+    }
+    expect(materialize(decisionFor(row, library, true), 'codex', DEFAULT_CONFIG, join(dir, 'sessions')).model).toBe('gpt-5.6-luna');
+  });
 });
