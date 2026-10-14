@@ -40,8 +40,8 @@ not start until the sandbox meets all of this:
   process count, disk for the run folder and the writable layer, and the
   15-minute wall clock.
 - **Egress enforced outside the container** (a network rule, not a setting
-  inside it). The only route is to the harness gateway (see Credentials), by its
-  exact address. Denied: everything else, the host, other containers, private
+  inside it). The only route is to the harness gateway ([GATEWAY.md](GATEWAY.md)),
+  by its exact address. Denied: everything else, the host, other containers, private
   and link-local addresses (cloud metadata included), and any direct route to
   the Anthropic and Jev APIs. WebFetch and WebSearch are disallowed too, as a
   tool setting only.
@@ -142,18 +142,25 @@ The smoke run starts with a self-check from inside the sandbox, as the agent's
 
 Its output goes into the results.
 
-## Credentials
-
-No real key goes into the sandbox: the harness gateway holds the keys and
-accounts for every request. Its rules are in [GATEWAY.md](GATEWAY.md).
-
 ## Arms
 
 One run per task and arm. `$PROMPT` is `task.md` verbatim, read by the runner
-from outside the run folder. All arms share this
-argv, and the environment `ANTHROPIC_BASE_URL=<gateway>`, a placeholder
-`ANTHROPIC_API_KEY` (see Credentials) and `DISABLE_AUTO_COMPACT=1`; only
-`small-loadout` adds to it:
+from outside the run folder. All arms share this argv and this environment;
+only `small-loadout` adds to it. No real key is in the sandbox: the gateway
+holds them ([GATEWAY.md](GATEWAY.md)).
+- `ANTHROPIC_BASE_URL=<gateway>` and a placeholder `ANTHROPIC_API_KEY`.
+- `DISABLE_COMPACT=1`, `CLAUDE_CODE_DISABLE_NONSTREAMING_FALLBACK=1` and
+  `CLAUDE_CODE_MAX_RETRIES=5` (the N in GATEWAY.md). Compaction and the
+  fallback would rewrite or re-send turns.
+- `FORCE_PROMPT_CACHING_5M=1`, since the gateway refuses the 1-hour cache TTL.
+- `CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1` (the background title request) and
+  `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`, the documented switches for
+  requests outside the conversation; the smoke run must see none.
+- All are in [env-vars](https://code.claude.com/docs/en/env-vars) (read
+  2026-10-13; `DISABLE_NON_ESSENTIAL_MODEL_CALLS` is not). The smoke run
+  confirms each on the pinned CLI.
+
+The argv:
 
 ```bash
 claude -p "$PROMPT" --output-format stream-json --verbose --include-hook-events \
@@ -166,7 +173,7 @@ claude -p "$PROMPT" --output-format stream-json --verbose --include-hook-events 
 | Arm | `$MODEL` | `$MCP` | Additions |
 |---|---|---|---|
 | `small-bare` | `claude-haiku-5-5` | `{"mcpServers":{}}` | none |
-| `small-loadout` | `claude-haiku-5-5` | `{"mcpServers":{"loadout":{"command":"loadout","args":["mcp"],"env":{"LOADOUT_HOME":"<home>"}}}}` | `--plugin-dir <plugin copy>`; `$EXTRA_TOOLS` = `mcp__loadout__find_skills mcp__loadout__load_skill`; `LOADOUT_HOME=<home>` in the environment, a loadout home with the full library, whose `config.json` points `jev.baseUrl` at the gateway and `jev.apiKeyFile` at a placeholder (see Credentials) |
+| `small-loadout` | `claude-haiku-5-5` | `{"mcpServers":{"loadout":{"command":"loadout","args":["mcp"],"env":{"LOADOUT_HOME":"<home>"}}}}` | `--plugin-dir <plugin copy>`; `$EXTRA_TOOLS` = `mcp__loadout__find_skills mcp__loadout__load_skill`; `LOADOUT_HOME=<home>` in the environment, a loadout home with the full library, whose `config.json` points `jev.baseUrl` at the gateway and `jev.apiKeyFile` at a placeholder |
 | `large-bare` | `claude-sonnet-5-5` | `{"mcpServers":{}}` | none |
 
 - `plugins/loadout` is hook-only. The hook tells the agent to call
@@ -174,17 +181,15 @@ claude -p "$PROMPT" --output-format stream-json --verbose --include-hook-events 
   `loadout mcp` with its two read-only tools pre-approved, as the launchers
   do.
 - **No subagents.** `Task` (`Agent` in builds that renamed it) is disallowed in
-  every arm: it opens conversations of its own, and recognising them would need
-  a second rule the gateway can verify. That keeps the arms equal and the chain
-  rule single, at the cost of any gain from subagents (a stated limit).
-- **No auto-compaction, in every arm.** A compaction rewrites the assistant
-  turns, which the chain rule cannot accept: it would make the run `invalid`,
-  mostly for `small-loadout`, whose hook context and skill text fill the window
-  sooner. `DISABLE_AUTO_COMPACT=1` is the documented switch
-  ([env-vars](https://code.claude.com/docs/en/env-vars), read 2026-10-13; the
-  smoke run confirms it on the pinned CLI). A run that fills the window ends at
-  the provider's context error and is judged as it stands, flagged `context
-  full`. A compaction that happens anyway is class (d).
+  every arm: it opens conversations of its own, which would need a second rule
+  the gateway can verify. The arms stay equal and the chain rule single, at the
+  cost of any gain from subagents (a stated limit).
+- **No compaction, in every arm.** A compaction rewrites the assistant turns,
+  which the chain rule cannot accept: it would make the run `invalid`, mostly
+  for `small-loadout`, whose hook context and skill text fill the window
+  sooner. `DISABLE_COMPACT=1` turns off all of it, `/compact` included. A run
+  that fills the window ends at the provider's context error and is judged as it
+  stands, flagged `context full`. A compaction that happens anyway is off-chain.
 - **Pinned CLI.** The image holds one `claude` version, part of the treatment
   hashes, with auto-update off (`DISABLE_AUTOUPDATER=1`).
 - **Caps.** 15 minutes wall clock per run, measured by the runner. On a timeout
@@ -198,26 +203,21 @@ claude -p "$PROMPT" --output-format stream-json --verbose --include-hook-events 
 - **Order and concurrency.** Arms run in separate batches, resumable per
   task, one run at a time (GATEWAY.md has the run-end order); parallel runs
   would change how often the limits hit.
-- **Failed runs.** A run is rerun once from a clean folder only for a cause
-  the sandbox cannot produce, read outside it: an upstream 5xx or 529, an
-  `error` event inside a 200 stream, or an upstream close before `message_stop`
-  (not a client cut), on a request of class (a) or (b); or a fault the engine
-  reports on its own side (the sandbox failed to start, the engine or host
-  restarted). Never a 429, which the key's own usage can cause; never an
-  out-of-memory kill, a process or disk limit or a full run volume, which the
-  agent can reach; never a `result` event saying "API error", the sandbox's
-  word. The failed attempt must have no class (d) request. If the rerun fails
-  too, the run is reported as missing. A run is never rerun because of how its
-  output looks. The expected spend includes these reruns.
-- **Invalid and rejected runs are results.** A run with a class (d) request
+- **Failed runs.** A run is rerun once from a clean folder only for a fault the
+  engine reports on its own side: the sandbox failed to start, or the engine or
+  host restarted. An upstream 5xx, 529 or 429, a stream cut and a drain abort
+  are never causes, since `Bash` could fish for them: they are transport
+  events, and the run stands, flagged, with its cost. Nor is an out-of-memory
+  kill, a process or disk limit or a full run volume (the agent can reach them),
+  a `result` event saying "API error" (the sandbox's word) or how the output
+  looks. The failed attempt must be valid. If the rerun fails too, the run is
+  reported as missing.
+- **Invalid and rejected runs are results.** A run with an off-chain request
   or other off-list gateway traffic (GATEWAY.md) is `invalid`; one whose folder
   fails collection (Isolation) is `output rejected`. The arm's skill text or the
   agent's own commands caused both, so neither is rerun; a harness fault that
   caused one is handled under Frozen. Both are counted per arm and task, and
-  their cost counts toward the spend. Status, cut and completion never make a
-  request invalid on their own: a retry, a non-2xx or cut-off request, a
-  request in flight at the end or priced at its reservation, and a missing
-  `result` are transport events. Only class (d) counts.
+  their cost counts toward the spend.
 
 ## What is committed
 
@@ -234,8 +234,9 @@ harness computes or reads from named fields, never agent text:
   model calls, tokens and priced cost (as billed and uncached), the runner's
   duration, the model and tool list of the first request, whether it held the
   hook's `<skill_relevance>` context, the Jev cost, the gateway and resolver
-  counters, the requests by class (a) to (d), the transport events (retries,
-  cut or aborted requests, requests priced at their reservation), `invalid` or
+  counters, the requests by kind (links, exact retries, off-chain), the
+  transport events (upstream failures, cut or aborted requests, requests priced
+  at their reservation), `invalid` or
   `output rejected` with the number of violations by kind, and the
   names of selected skills when each is a name in the library (read from the
   first request). Next to them, labelled as reported by the sandbox:
@@ -292,16 +293,23 @@ It passes when:
   `<skill_relevance>` context, and none of a bare run does (the hook event
   shows exit 0);
 - the collector and the extraction script run on each smoke output folder;
-- the gateway classes every request of each smoke run as (a), (b) or (c), and
-  the stream cross-check agrees with it exactly on message ids and token sums.
-  The run records what the gateway saw: each arm's side-call templates with
-  their slots, count and `max_tokens`, Jev requests per hook decision and per
-  `find_skills` call, the most requests in flight, the keys, tool types,
-  models, `cache_control` ttl and beta values the allowlists will hold,
-  `claude`'s `max_tokens`, context window and retry limit, the slowest
-  response, and the largest reservation of an honest request. It must fit under
-  the arm's ceiling; if not, the ceilings and the cost table change together
-  before the full run.
+- the gateway sorts every request of each smoke run as a next link or an exact
+  retry, sees zero side calls (requests outside the conversation) with the Arms
+  switches set, and the stream cross-check agrees with it exactly on message ids
+  and token sums;
+- a stub-upstream step answers `claude` with a 529, a mid-stream cut, a
+  `max_tokens` stop and a context-overflow 400 in turn, and records exactly what
+  it resends after each. The gateway's retry and continuation rules accept those
+  resends and no others; a resend that differs (another `max_tokens`, a trimmed
+  context) is listed as an accepted change or stops the plan for Erik.
+
+The run records what the gateway saw: the fields that change within a run (the
+only ones the pin to position 1 lets differ), Jev requests per hook decision
+and per `find_skills` call, the most requests in flight, the keys, tool types,
+models and beta values the allowlists will hold, `claude`'s `max_tokens`,
+context window and retry limit, the slowest response, and the largest
+reservation of an honest request. It must fit under the arm's ceiling; if not,
+the ceilings and the cost table change together before the full run.
 
 Recorded, not a gate: whether the `small-loadout` run opened a skill
 (`load_skill` or a read of a SKILL.md). A miss is reported; the treatment is
@@ -490,7 +498,8 @@ arm it is reading. Steps taken:
   see how many tasks it rests on. A pair with an `invalid` or `output rejected`
   run is not judged. It counts as a loss for the arm that has the bad run (a
   tie if both do), and the rate is also shown with those pairs left out, with
-  their number beside it. With 14 decided tasks the interval clears
+  their number beside it. It is shown too without the pairs where a run is
+  `context full`, which the loadout arm reaches sooner, with their number. With 14 decided tasks the interval clears
   50% only from 11 wins (79%); with fewer decided tasks the bar is higher (7 of
   8, 9 of 10, 10 of 12). Anything smaller is "not shown".
 - **Cost per task:** mean and median per arm of the gateway-priced cost (upstream
@@ -507,8 +516,8 @@ arm it is reading. Steps taken:
 ## Frozen before the first run
 
 The commit that merges this protocol fixes the tasks, `KEY.md`, the checks,
-the redaction rules, the limits under Isolation, the accounting rules under
-Credentials, the primary comparisons and the analysis. The runner, collector,
+the redaction rules, the limits under Isolation, the accounting rules in
+[GATEWAY.md](GATEWAY.md), the primary comparisons and the analysis. The runner, collector,
 gateway, resolver, sandbox self-check, credential probe, extraction script,
 check script with its tests and both judge prompts do not exist yet; they are
 committed before the smoke run and change only as set out under Smoke run
@@ -550,36 +559,45 @@ Prices are Anthropic's list prices as of 2026-10-06, not figures from RESULTS.
 Expected Claude cost at list price, with no reruns: about $7-31 with Haiku 5.5,
 $12-57 with Haiku 4.5. It is cash: the runs use an API key behind the gateway.
 
-A reservation (GATEWAY.md) is 200k input tokens at the cache-write rate plus
-32k output tokens, both at the 5x tier: for Sonnet 5.5, 0.2M x $12.50 + 0.032M
-x $50 = $2.50 + $1.60. The 200k window and 32k `max_tokens` are assumptions the
-smoke run replaces. A run's ceiling is its high per-run figure plus two
-reservations (2 requests in flight), and never below three times that figure or
-three times the largest the smoke run measured. Honest traffic fits under it by
-construction (the smoke run checks); it only stops a run that spends far more
-than an agent does.
+A reservation (GATEWAY.md, Pricing) is at most 200k input tokens at the
+5-minute cache-write price plus 32k output tokens, both at the 5x tier: for
+Sonnet 5.5, 0.2M x $12.50 + 0.032M x $50 = $2.50 + $1.60. The 200k window and
+32k `max_tokens` are assumptions the smoke run replaces. A run's ceiling is its
+high per-run figure plus two reservations (2 requests in flight), and never
+below three times that figure or three times the largest the smoke run
+measured. Honest traffic fits under it (the smoke run checks).
 
 | Model | One reservation | Per-run ceiling |
 |---|---:|---:|
 | Sonnet 5.5 | $4.10 | $9.70 ($1.50 + 2 x $4.10) |
-| Haiku 5.5 | $0.21 | $0.49 ($0.075 + 2 x $0.205) |
+| Haiku 5.5 | $0.205 | $0.485 ($0.075 + 2 x $0.205) |
+| Haiku 4.5 | $2.05 | $4.85 ($0.75 + 2 x $2.05) |
 
-**High estimate, with the reruns.** If all 54 runs fail outside the agent and
-are rerun once, there are 108 attempts, each charged at its high figure: 36
-`large-bare` attempts $54.00, 72 small attempts $5.40 (Haiku 4.5: $54.00), Jev
-about $0.04, the smoke run $1.65 (Haiku 4.5: $3.00). That is about $61 with
-Haiku 5.5 and $111 with Haiku 4.5. Wall clock is about 108 x 17 minutes (the
-15-minute cap and a 2-minute drain; about 31 h) plus the smoke run, with up to
-10 minutes more per attempt for collection and extraction. That is a planning
-figure, not a maximum: the drain runs longer where the smoke run measured a
-slower response. Neither figure is expected. The runner stops at the totals
-Erik approves: it starts no attempt unless the approved cost minus the
-finished runs' priced cost (Jev included, invalid runs included) is at least
-the arm's ceiling, or once the elapsed time reaches the approved hours, and it
-reports what it left unrun. Reservations count against the cap on each key
-(GATEWAY.md), the approved total for its batch, so nothing overshoots it. The
-smoke run replaces these assumptions with measured figures before the full run
-is approved.
+**Approvals.** The runner starts an attempt only if the approved cost minus the
+finished attempts' priced cost (Jev and invalid runs included) is at least the
+arm's ceiling. So n attempts at their high figures need (n - 1) x high +
+ceiling. That is the approval and the provider cap on the batch's key
+(GATEWAY.md), with n = 36 per arm (a rerun for every run, though reruns are
+limited to engine faults); the plan does not reduce the attempts.
+
+| Batch | Approved | Haiku 4.5 |
+|---|---:|---:|
+| `large-bare` | 35 x $1.50 + $9.70 = $62.20 | same |
+| `small-bare` | 35 x $0.075 + $0.485 = $3.11 | 35 x $0.75 + $4.85 = $31.10 |
+| `small-loadout` | $3.11 | $31.10 |
+| Smoke run (two small arms first, then `large-bare`) | 2 x $0.075 + $9.70 = $9.85 | 2 x $0.75 + $9.70 = $11.20 |
+| Jev, `small-loadout` and smoke | about $0.04 | same |
+| **Total** | **about $78** | **about $136** |
+
+These are caps, not expectations: the expected cost is the no-reruns figure
+above. The gateway refuses the 1-hour cache TTL, whose write price is 2x input
+instead of 1.25x; allowing it would put the reservations at 2x. Wall clock is
+about 108 x 17 minutes (15-minute cap, 2-minute drain; about 31 h) plus the
+smoke run and up to 10 minutes per attempt for collection and extraction: a
+planning figure, since the drain runs longer where the smoke run measured a
+slower response. The runner also stops at the approved hours and reports what
+it left unrun. The smoke run replaces these assumptions with measured figures
+before the full run is approved.
 
 ## Open for Erik
 
@@ -587,10 +605,12 @@ is approved.
   not record what it resolved to.
 - Sonnet 5.5 or Opus as the large tier (the `invoke.ts` runs used Sonnet 5.5).
 - The sandbox: container or VM (a throwaway user is ruled out above), and the
-  engine, egress mechanism, resolver, gateway and collector sandbox that
-  enforce Isolation and Credentials.
-- Gateway abuse is detected and priced, not prevented, apart from what it
-  refuses (GATEWAY.md). Confirm, or say what you would give up for prevention.
+  engine, egress mechanism, resolver, gateway and collector sandbox.
+- The gateway detects and prices abuse; it prevents only what it refuses
+  (GATEWAY.md). Confirm, or say what you would give up for prevention.
+- A side call in the smoke run despite the Arms switches halts the plan. The
+  fallback, binding each slot of a side-call template to one designated field,
+  is unbuilt: build it, or drop the arm.
 - Subagents are off in every arm (see Arms). Confirm, or ask for a subagent
   rule the gateway can verify, which is more to build and test.
 - Invalid and `output rejected` runs count as a loss for their arm in the win
@@ -601,9 +621,9 @@ is approved.
 - AGENTS.md rule 1: is a harness gateway that adds a credential header inside
   the benchmark's sandbox "proxying an agent's API traffic"? If so, the
   fallback is real keys in the sandbox (GATEWAY.md).
-- Auto-compaction is off in every arm (see Arms): a run that fills the window
-  stops instead of compacting. Confirm, or ask for a compaction rule the
-  gateway can verify.
+- Compaction is off in every arm (see Arms): a run that fills the window stops
+  instead of compacting. Confirm, or ask for a compaction rule the gateway can
+  verify.
 - The prompt cache is shared between runs (GATEWAY.md): accept it as a stated
   limit, or pay for a provider workspace per run.
 - The credentials. The Anthropic credential is an API key with a spend cap
