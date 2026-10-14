@@ -224,14 +224,16 @@ claude -p "$PROMPT" --output-format stream-json --verbose --include-hook-events 
     use the preinstalled tools.
 - **No delegation.** `Task` and `Agent` are both disallowed in every arm. The
   [sub-agents page](https://code.claude.com/docs/en/sub-agents) (read
-  2026-10-14) says `Task` became `Agent` in v2.1.63, `Task(...)` rules "still
-  work as aliases", and "to stop all delegation, deny the `Agent` tool itself".
-  A bare name in `--disallowedTools` "removes the matching tools from Claude's
+  2026-10-14) says `Task` became `Agent` in v2.1.63, `Task(...)` references
+  "still work as aliases", and "To prevent Claude from delegating to any
+  subagent, deny the `Agent` tool itself". A bare name in `--disallowedTools` "removes the matching tools from Claude's
   context" (CLI reference). The [tools reference](https://code.claude.com/docs/en/tools-reference)
   lists three more paths, denied the same way: `Workflow` ("orchestrates many
   subagents in the background"), `SendMessage` (writes to another agent or
-  session) and `Skill` (a skill with `context: fork` runs in a subagent). The
-  smoke run's stub step checks each is refused. Delegation opens conversations
+  session) and `Skill` (a skill with `context: fork` runs in a subagent).
+  Denying `Skill` disables all skills in every arm, bundled ones such as
+  `/code-review` included (skills page: "Disable all skills by denying the
+  Skill tool"). The smoke run's stub step checks each is refused. Delegation opens conversations
   the one-conversation check rejects; the arms stay equal, at the cost of any
   gain from subagents (a stated limit).
 - **No compaction, in every arm.** A compaction rewrites the assistant turns,
@@ -265,15 +267,16 @@ claude -p "$PROMPT" --output-format stream-json --verbose --include-hook-events 
   transport events, and the run stands, flagged, with its cost. Nor is an
   out-of-memory kill, a process or disk limit or a full run volume (the agent
   can reach them), a `result` event saying "API error" (the sandbox's word) or
-  how the output looks. The failed attempt must be valid. If the rerun fails too, the run is
-  reported as missing.
+  how the output looks. The failed attempt must be valid. The rerun follows at
+  once, under the check in Expected spend. If the rerun cannot be funded or
+  fails too, the task is "not run" in all arms.
 - **Invalid and rejected runs are results.** A run with a request that fails the
   conversation check or other off-list gateway traffic (GATEWAY.md) is
-  `invalid`; one whose folder fails collection (Isolation) is `output rejected`. Neither is rerun. Every
-  `invalid` run halts the batch until Erik classifies it as caused by the agent
-  (it stands) or by `claude` (a deviation under Frozen, and the run is rerun
-  after the fix). Both are counted per arm and task, and their cost counts
-  toward the spend.
+  `invalid`; one whose folder fails collection (Isolation) is
+  `output rejected`. Neither is rerun. Every `invalid` run halts the plan (all
+  arms) until Erik classifies it as caused by the agent (it stands) or by
+  `claude` (a deviation under Frozen, and the run is rerun after the fix). Both
+  are counted per arm and task, and their cost counts toward the spend.
 
 ## What is committed
 
@@ -639,13 +642,16 @@ only if each costs at most its high figure; one can spend up to its ceiling.
 
 **One stopping rule for all arms, fixed now, before any output exists.**
 - Tasks run in the order of the SHA-256 of the task id, all three arms of a task
-  before the next task. Reruns come after all first attempts.
-- Before each task, the runner checks that every arm's approved cost minus its
-  priced cost (Jev and invalid runs included) is at least that arm's ceiling,
-  and that the approved hours cover the task. If any arm fails, every arm stops
-  at that same position.
-- The tasks after it are "not run" in all arms. The stop is final: no cap is
-  raised once outputs exist, and a bigger cap is a new pre-registered run.
+  before the next task. An engine-fault rerun (Arms) runs at once, before the
+  next run.
+- Before each task and each rerun, the runner checks that every arm's approved
+  cost minus its priced cost (Jev and invalid runs included) is at least that
+  arm's ceiling, and that the approved hours cover it. If any arm fails, every
+  arm stops at that same position.
+- The task whose rerun cannot be funded, and every task after the stop, are
+  "not run" in all arms; the runs already made for that task are set aside and
+  listed. The stop is final: no cap is raised once outputs exist, and a bigger
+  cap is a new pre-registered run.
 - The reported sample is the prefix of that hash-random order which every arm
   could fund; controls and non-controls fall into it as they come. Nothing in
   the rate depends on one arm's spending alone.
@@ -675,6 +681,8 @@ measured figures before the full run is approved.
   engine, egress mechanism, resolver, gateway and collector sandbox. In a
   container, `claude`'s Bash sandbox may need `enableWeakerNestedSandbox`
   (Arms). If the smoke probe fails with it, I recommend a VM.
+- Approved hours (Expected spend): about 31 h for 108 attempts of 17 minutes,
+  plus the smoke run and the collection and extraction time. Set the figure.
 - Approvals (Expected spend): I recommend (n - 1) x high + ceiling with the
   shared, final stopping rule, about $78 with Haiku 5.5 or $136 with Haiku 4.5.
   The alternative, n x ceiling, funds every attempt at its worst case: $349.20
@@ -683,7 +691,8 @@ measured figures before the full run is approved.
   rule the gateway can verify, which is more to build and test.
 - Invalid and `output rejected` runs count as a loss for their arm in the win
   rate, shown also without them (see Analysis). Confirm, or leave them out of
-  the primary rate. Each `invalid` run halts the batch for you to classify.
+  the primary rate. Each `invalid` run halts the plan (all arms) for you to
+  classify.
 - Raw outputs stay local (What is committed), against AGENTS.md's "commit raw
   results". Confirm, or say which you will read and publish.
 - AGENTS.md rule 1: is a harness gateway that adds a credential header inside

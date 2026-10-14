@@ -241,13 +241,12 @@ Learnings (cloud half): [fixtures and protocol](../../bench/fixtures/c2/PROTOCOL
   smoke probe from `Bash`; a container may need `enableWeakerNestedSandbox`,
   else a VM.
 - The documented env switches turn off compaction, the non-streaming fallback,
-  the 1-hour cache TTL and the background title request in all arms. Every
-  `invalid` run halts the batch for Erik to classify. Approvals are
-  (n - 1) x high + ceiling, about $78 with Haiku 5.5 and $136 with Haiku 4.5, as
-  caps. One shared, final stopping rule: tasks in a hash order, all arms of a
-  task before the next, every arm stops where any arm cannot fund its next
-  task; the rest is "not run". `Task`, `Agent`, `Workflow`, `SendMessage` and
-  `Skill` are denied in every arm.
+  the 1-hour cache TTL and the background title request in all arms, and every
+  delegation tool is denied. Every `invalid` run halts the plan (all arms) for
+  Erik to classify. Approvals are (n - 1) x high + ceiling, about $78 with
+  Haiku 5.5 and $136 with Haiku 4.5, under one shared stopping rule: see
+  [Arms](../../bench/fixtures/c2/PROTOCOL.md#arms) and
+  [Expected spend](../../bench/fixtures/c2/PROTOCOL.md#expected-spend-local-run).
 
 **C3. Tier choice.**
 

@@ -49,22 +49,23 @@ tell keys apart inside TLS. So no real key goes into the sandbox:
   of the conversation completed so far (the turns of the latest completed
   request, plus its response) and at least as many turns as that request
   carried: a retry carries as many, the next turn one more. Turns are compared
-  by a hash of the parsed, canonical JSON of their `text` and `tool_use` blocks,
-  since `claude` re-serializes `tool_use.input`, and not of their `thinking` or
-  `redacted_thinking` blocks, which `claude` may drop from old turns (the smoke
-  run records whether it does). A
+  by a hash of the canonical JSON (RFC 8785, JCS) of their `text` and `tool_use`
+  blocks, since `claude` re-serializes `tool_use.input`, and not of their
+  `thinking` or `redacted_thinking` blocks, which `claude` may drop from old
+  turns (the smoke run records whether it does). Any other assistant block type
+  fails the check. A
   request *completes* when the gateway has read `message_stop` from upstream
   while the client is still connected; an `error` event inside a 200 stream is
   a failure. A retry, a `max_tokens` continuation and the next turn pass; a
   compaction, a fork, a second conversation, a side call and another `model`
   do not. Such a request, whatever its status, makes the run `invalid`.
 
-  Every `invalid` run halts the batch. Its record names what broke, from a fixed
-  set (a pin field by name, the prefix check, an allowlist), never a value. Erik
-  classifies the run as caused by the agent, which stands, or by `claude`, which
-  is a deviation under Frozen: the runs it touched are rerun after the fix. A
-  change of `system` across midnight (the prompt holds the date) is one such
-  halt.
+  Every `invalid` run halts the plan (all arms). Its record names what broke,
+  from a fixed set (a pin field by name, the prefix check, an allowlist), never
+  a value. Erik classifies the run as caused by the agent, which stands, or by
+  `claude`, which is a deviation under Frozen: the runs it touched are rerun
+  after the fix. A change of `system` across midnight (the prompt holds the
+  date) is one such halt.
 - **The gateway reads every forwarded request to the end,** whoever cut the
   client, within the drain (below).
 - **Pricing.** Cost is the gateway's usage at list prices (Expected spend) plus
@@ -97,7 +98,7 @@ tell keys apart inside TLS. So no real key goes into the sandbox:
   and cost final, and collection or the next run can begin: the next run waits
   for the drain. A request refused between (2) and (3) does nothing and is not
   `invalid`; one on the revoked key after (3) means the stop failed, and the
-  batch halts for Erik.
+  plan halts (all arms) for Erik.
 - **Keys per batch, with a cap.** Each batch (one arm, and the smoke run) has
   its own Anthropic key, and the `small-loadout` batch its own Jev key. A key is
   used nowhere else and has a provider spend cap set to the approved total for
@@ -153,7 +154,7 @@ is counted, scanned or not kept:
 
 | Record | Handling |
 |---|---|
-| Gateway | Per run: requests per allowed path, refused requests, bytes, status codes. Per request: whether it passed the conversation check, `model` and beta values (from the fixed sets), usage (input and cache tokens in `message_start`, output in the last `message_delta`), the response's message id and stop reason, a hash of the parsed, canonical JSON of its content blocks (`text` and `tool_use`: `type`, text, `id`, `name`, `input`; `thinking` and `redacted_thinking` blocks are left out), the hashes of the assistant turns the request carries, and `max_tokens`. Bodies are parsed, never stored; no body, header, query string or refused path is logged. Local: ids and hashes carry bits the agent chose, so only sums and the counts by outcome are committed. |
+| Gateway | Per run: requests per allowed path, refused requests, bytes, status codes. Per request: whether it passed the conversation check, `model` and beta values (from the fixed sets), usage (input and cache tokens in `message_start`, output in the last `message_delta`), the response's message id and stop reason, a hash of the canonical JSON (RFC 8785) of its content blocks (`text` and `tool_use`: `type`, text, `id`, `name`, `input`; `thinking` and `redacted_thinking` blocks are left out), the hashes of the assistant turns the request carries, and `max_tokens`. Bodies are parsed, never stored; no body, header, query string or refused path is logged. Local: ids and hashes carry bits the agent chose, so only sums and the counts by outcome are committed. |
 | Firewall drop log, container engine log | Not kept (a refused address and port carry bits; the log driver is off). Refusals are counted only. |
 | Stream JSON with hook events, final message, `claude` stderr | Local, never committed; scanned in pass one. |
 
