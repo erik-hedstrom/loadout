@@ -143,8 +143,6 @@ async function runHook(rest: string[]): Promise<number> {
     // No retries and a short timeout: two Jev requests must fit well inside the deadline.
     const client = apiKey ? jevClient({ apiKey, baseUrl: config.jev.baseUrl, model: config.jev.model, timeoutMs: 8_000, retries: 0 }) : undefined;
     const stateDir = join(paths.sessions(), 'hook');
-    // Before the follow-up fast path, so a session of short prompts still sees it.
-    const warning = noKeyWarning(input, { config, client, stateDir });
     // Follow-ups add no context, so skip the library and embedding startup cost.
     const context = isFollowUp(prompt) ? undefined : await promptContext(input, {
       library: scanLibrary(paths.library(), { cache: true }),
@@ -155,6 +153,8 @@ async function runHook(rest: string[]): Promise<number> {
       stateDir,
       ...(values['windows-paths'] ? { toPath: windowsPath } : {}),
     });
+    // After promptContext, so a throw there cannot use up the once-per-session marker unseen.
+    const warning = noKeyWarning(input, { config, client, stateDir });
     if (context || warning) console.log(hookOutput(context, warning));
   } catch {
     console.error(HOOK_FAILURE_NOTE);

@@ -1383,6 +1383,16 @@ describe('claude hook', () => {
       expect(run('claude', home, 'short', 'continue').stdout).toBe('');
     });
 
+    it('keeps the warning for a later prompt when building context fails', () => {
+      const home = homeWith({});
+      mkdirSync(join(home, 'library'));
+      writeFileSync(join(home, 'library/mcp.json'), '{ not json');
+      const failed = run('claude', home, 'broken');
+      expect(failed.status).toBe(0);
+      expect(failed.stdout).toBe('');
+      expect(JSON.parse(run('claude', home, 'broken', 'ok').stdout)).toEqual({ systemMessage: NO_KEY_WARNING });
+    });
+
     it('never names the key file, whether it is missing or unreadable', () => {
       const missing = join(tempDir('loadout-keydir-'), 'KEYFILE-CANARY-missing');
       const unreadable = join(tempDir('loadout-keydir-'), 'KEYFILE-CANARY-dir');
