@@ -1351,11 +1351,11 @@ describe('claude hook', () => {
   });
 
   describe('no-key warning through the hook process', () => {
-    const run = (host: 'claude' | 'codex', home: string, session: string) =>
+    const run = (host: 'claude' | 'codex', home: string, session: string, prompt = 'fix the flaky login test on CI') =>
       spawnSync(process.execPath, ['--import', 'tsx', join(import.meta.dirname, '../src/cli.ts'), 'hook', host], {
         encoding: 'utf8', timeout: 10_000,
         env: { ...process.env, TYPESAFE_API_KEY: '', LOADOUT_HOME: home },
-        input: JSON.stringify({ session_id: session, prompt: 'fix the flaky login test on CI', cwd: home }),
+        input: JSON.stringify({ session_id: session, prompt, cwd: home }),
       });
     const homeWith = (jev: Record<string, unknown>) => {
       const home = tempDir('loadout-nokey-');
@@ -1373,6 +1373,14 @@ describe('claude hook', () => {
         expect(again.stdout).toBe('');
         expect(again.stderr).toBe('');
       }
+    });
+
+    it('warns when the session opens with a short follow-up-style prompt', () => {
+      const home = homeWith({});
+      const first = run('claude', home, 'short', 'fix tests');
+      expect(first.status, first.stderr).toBe(0);
+      expect(JSON.parse(first.stdout)).toEqual({ systemMessage: NO_KEY_WARNING });
+      expect(run('claude', home, 'short', 'continue').stdout).toBe('');
     });
 
     it('never names the key file, whether it is missing or unreadable', () => {
