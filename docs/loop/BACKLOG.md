@@ -229,17 +229,25 @@ Acceptance:
 - Report win rates with intervals, plus cost per task.
 
 Learnings (cloud half): [fixtures and protocol](../../bench/fixtures/c2/PROTOCOL.md).
-- The Jev key cannot be hidden from the agent's `Bash` in one sandbox: the
-  hook and `loadout mcp` run as the same user. The protocol keeps real keys in
-  a harness gateway outside the sandbox (`jev.baseUrl` already allows it).
-- The gateway cannot tell `claude` from `Bash`, and patching its chain rule did
-  not converge over 7 review rounds. `claude`'s Bash sandbox
-  (`sandbox.network.strictAllowlist`, `allowUnsandboxedCommands: false`,
-  `failIfUnavailable`, via `--settings`) leaves `Bash` no network, so every
-  request is `claude`'s and the gateway only prices it and checks one
-  conversation ([GATEWAY.md](../../bench/fixtures/c2/GATEWAY.md)). Gated by a
-  smoke probe from `Bash`; a container may need `enableWeakerNestedSandbox`,
-  else a VM.
+- No key can be hidden from the agent's `Bash` in one container: the hook and
+  `loadout mcp` run as the same user, and `claude` needs its own key. A harness
+  gateway that held the keys would intercept the agent's API traffic, which
+  AGENTS.md rule 1 forbids, so the protocol has none. Each arm calls the vendor
+  directly with a workspace key under a monthly spend limit, `claude`'s Bash
+  sandbox (`sandbox.network.strictAllowlist`, `allowUnsandboxedCommands: false`,
+  `failIfUnavailable`, via `--settings`) leaves `Bash` no network, and the
+  workspace is archived before any output is scanned, judged or committed:
+  [Credentials and spend](../../bench/fixtures/c2/PROTOCOL.md#credentials-and-spend).
+  Gated by a smoke probe from `Bash` against a runner-owned sink; a container
+  may need `enableWeakerNestedSandbox`, else a VM.
+- What that gives up (refusal before the fact, a hard per-run limit, a record
+  of the pins the agent cannot reach, per-run vendor cost) is listed in
+  [PROTOCOL.md](../../bench/fixtures/c2/PROTOCOL.md#given-up-compared-with-a-harness-gateway).
+  Spend is the vendor's usage for the key, checked against the stream to 5%.
+- The score is the mean over all paired tasks (win 1, tie 0.5, loss 0) with a
+  Wilson interval and a margin of 0.10. With 14 pairs "match" needs about two
+  thirds of the points, so it is likely "not shown"; the decisive-pair rate is
+  secondary ([Analysis](../../bench/fixtures/c2/PROTOCOL.md#analysis)).
 - The documented env switches turn off compaction, the non-streaming fallback,
   the 1-hour cache TTL and the background title request in all arms, and every
   delegation tool is denied. Every `invalid` run halts the plan (all arms) for
@@ -247,6 +255,9 @@ Learnings (cloud half): [fixtures and protocol](../../bench/fixtures/c2/PROTOCOL
   Haiku 5.5 and $136 with Haiku 4.5, under one shared stopping rule: see
   [Arms](../../bench/fixtures/c2/PROTOCOL.md#arms) and
   [Expected spend](../../bench/fixtures/c2/PROTOCOL.md#expected-spend-local-run).
+- Raw results are committed after a secret scan and a paths and usernames scan,
+  and Erik reads the folder before any push
+  ([What is committed](../../bench/fixtures/c2/PROTOCOL.md#what-is-committed)).
 
 **C3. Tier choice.**
 
