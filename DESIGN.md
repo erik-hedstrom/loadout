@@ -250,7 +250,8 @@ library itself, in its own words, through MCP:
     gap between a check and its use is not closed.
   - Before each read and write, every folder below the loadout home on the
     way must be a real folder. For the model, that is every level down to
-    `models/<org>/<model>`, since transformers.js reads and writes there. The
+    `models/<org>/<model>`, since transformers.js reads and writes there; the
+    files inside that folder are transformers.js's own and are not checked. The
     home itself may be a link: where loadout keeps its data is the user's
     choice, and a link below it is not something loadout made. Session files
     hold server credentials, so a linked `sessions/` is refused with an error
@@ -258,8 +259,7 @@ library itself, in its own words, through MCP:
   - Temp files are created exclusively (a link already at the name is
     refused) with mode 0600 and then renamed. Final files are read through
     `readConfined`, which refuses a link as the last component and caps the
-    size (64 MB for embeddings, about 40,000 vectors; 1 MB for hook state; 128
-    KB for tool entries). Deletions match only the names loadout writes.
+    size. Deletions match only the names loadout writes.
 - **Listing size.** `server_tools` prints each tool's input schema until the
   schemas reach 12,000 characters. Further tools show their description and
   argument names (up to 8,000 characters), then their bare names (up to
