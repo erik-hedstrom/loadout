@@ -25,8 +25,10 @@ Backlog item C2. The fixtures and this protocol were written before any run.
 ## Isolation
 
 The repo is public and holds the answers (`KEY.md`, the generator). `Bash` runs
-without limits, so the sandbox, not the tool list, is the boundary. A run does
-not start until the sandbox meets all of this:
+without limits, so the sandbox, not the tool list, is the boundary: the
+container below, and `claude`'s own Bash sandbox, which leaves `Bash` no
+network (see [Arms](#arms)). A run does not start until the container meets all
+of this:
 - **A container or VM, one per run, destroyed after it.** A throwaway user on
   the host does not qualify: it shares the host's files, processes, disk and
   network. Nothing is mounted back; the runner copies the outputs out.
@@ -123,14 +125,17 @@ each rejected inside 60 s. Tar: a wrong entry type, a size mismatch, an
 oversize stream, an unchecked name. Stream: an over-long line, deep nesting, a
 bad number, an oversize stream, no `result`.
 
-The smoke run starts with a self-check from inside the sandbox, as the agent's
-`Bash` would see it. It passes when all of these hold:
-- No host path and no runtime socket exist, and there is no route to the host
-  or to a metadata address.
-- Connection: a TCP connect to a literal outside IP address fails. (A literal
+The smoke run starts with a self-check from two places: the container as a
+plain process (the runner's exec), and `claude`'s Bash tool with the settings
+under Arms, the only place the Bash sandbox applies. It passes when all of these
+hold:
+- In the container: no host path and no runtime socket exist, and there is no
+  route to the host or to a metadata address.
+- In the container, connection: a TCP connect to a literal outside IP address
+  fails. (A literal
   address takes name resolution out of the test.)
-- Resolution, apart from connection: a lookup of a canary name through the
-  container's resolver fails or is refused; the same lookup sent to a public
+- In the container, resolution, apart from connection: a lookup of a canary
+  name through the container's resolver fails or is refused; the same lookup sent to a public
   resolver, over port 53 and 853, gets no answer; and the resolver's counters
   show the canary flag set, refused up by the lookups made and forwarded still
   0. The canary is a random label under a domain the operator controls, if its
@@ -139,6 +144,11 @@ The smoke run starts with a self-check from inside the sandbox, as the agent's
 - Control: the gateway's name resolves and a minimal request through it
   succeeds, so a dead network cannot pass.
 - The configured limits show.
+- In `claude`'s Bash tool: the sandbox is on (a write outside the run folder
+  fails with `Read-only file system`); a TCP connect to the gateway's address
+  and to a literal outside IP address fails; `curl --noproxy '*'` and a request
+  through the proxy variables to the gateway fail; and no process outside the
+  sandbox is visible in `/proc`.
 
 Its output goes into the results.
 
@@ -149,9 +159,8 @@ from outside the run folder. All arms share this argv and this environment;
 only `small-loadout` adds to it. No real key is in the sandbox: the gateway
 holds them ([GATEWAY.md](GATEWAY.md)).
 - `ANTHROPIC_BASE_URL=<gateway>` and a placeholder `ANTHROPIC_API_KEY`.
-- `DISABLE_COMPACT=1`, `CLAUDE_CODE_DISABLE_NONSTREAMING_FALLBACK=1` and
-  `CLAUDE_CODE_MAX_RETRIES=5` (the N in GATEWAY.md). Compaction and the
-  fallback would rewrite or re-send turns.
+- `DISABLE_COMPACT=1` and `CLAUDE_CODE_DISABLE_NONSTREAMING_FALLBACK=1`:
+  compaction rewrites turns, and the fallback sends a request without a stream.
 - `FORCE_PROMPT_CACHING_5M=1`, since the gateway refuses the 1-hour cache TTL.
 - `CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1` (the background title request),
   `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` (auto-updates among others) and
@@ -163,12 +172,13 @@ holds them ([GATEWAY.md](GATEWAY.md)).
   2026-10-14; `DISABLE_NON_ESSENTIAL_MODEL_CALLS` is not). The smoke run
   confirms each on the pinned CLI.
 
-The argv:
+The argv, with `$SANDBOX` set to
+`{"sandbox":{"enabled":true,"failIfUnavailable":true,"allowUnsandboxedCommands":false,"network":{"strictAllowlist":true}}}`:
 
 ```bash
 claude -p "$PROMPT" --output-format stream-json --verbose --include-hook-events \
   --model "$MODEL" --no-session-persistence --setting-sources '' \
-  --strict-mcp-config --mcp-config "$MCP" \
+  --strict-mcp-config --mcp-config "$MCP" --settings "$SANDBOX" \
   --permission-mode acceptEdits --allowedTools Bash $EXTRA_TOOLS \
   --disallowedTools WebFetch WebSearch Task
 ```
@@ -183,22 +193,41 @@ claude -p "$PROMPT" --output-format stream-json --verbose --include-hook-events 
   `load_skill` or read a skill's SKILL.md, so the loadout arm also gets
   `loadout mcp` with its two read-only tools pre-approved, as the launchers
   do.
+- **`Bash` has no network.** `$SANDBOX` goes in with `--settings`, the "Command
+  line" settings level, which `--setting-sources` (`user`, `project`, `local`)
+  does not exclude ([CLI reference](https://code.claude.com/docs/en/cli-reference),
+  read 2026-10-14). Per the [sandboxing page](https://code.claude.com/docs/en/sandboxing)
+  (same date), `Bash` and its children then run in a namespace "that has no
+  connection to your network", the sandbox proxy refuses every host, `claude`
+  ignores the `dangerouslyDisableSandbox` retry, and it exits at startup if the
+  sandbox cannot start. Claude's own requests, hooks and local MCP servers "run
+  outside it", so only `claude` reaches the gateway, and the hook and `loadout
+  mcp` still reach Jev.
+  - Linux needs `bubblewrap` and `socat` in the image. In an unprivileged
+    container `bwrap` can fail on `/proc`; the docs' remedy,
+    `enableWeakerNestedSandbox`, "considerably weakens security" and does not
+    say whether the network namespace stays. Use it only if the smoke probe
+    still passes, else a VM (Open for Erik).
+  - No task needs network from `Bash`: the Docker tasks cannot run `docker`,
+    `ctl-ratelimiter-bug` runs `node --test` with no dependency, and the rest
+    use the preinstalled tools.
 - **No subagents.** `Task` (`Agent` in builds that renamed it) is disallowed in
-  every arm: it opens conversations of its own, which would need a second rule
-  the gateway can verify. The arms stay equal and the chain rule single, at the
-  cost of any gain from subagents (a stated limit).
+  every arm: it opens conversations of its own, which the one-conversation
+  check would reject. The arms stay equal, at the cost of any gain from
+  subagents (a stated limit).
 - **No compaction, in every arm.** A compaction rewrites the assistant turns,
-  which the chain rule cannot accept: it would make the run `invalid`, mostly
+  which the one-conversation check rejects: it would make the run `invalid`, mostly
   for `small-loadout`, whose hook context and skill text fill the window
   sooner. `DISABLE_COMPACT=1` turns off all of it, `/compact` included. A run
   that fills the window ends at the provider's context error and is judged as it
-  stands, flagged `context full`. A compaction that happens anyway is off-chain.
+  stands, flagged `context full`. A compaction that happens anyway is `invalid`.
 - **Pinned CLI.** The image holds one `claude` version, part of the treatment
   hashes, with auto-update off (see the env list above).
 - **Caps.** 15 minutes wall clock per run, measured by the runner. On a timeout
   the folder as it stands is judged and the run is flagged `capped`; the rate
-  per arm is reported (in the [pilot](../../RESULTS.md#is-the-work-better-outcome-pilot-2026-10-07),
-  loadout runs hit the 6-minute cap 4 times, bare runs twice).
+  per arm is reported (in the
+  [pilot](../../RESULTS.md#is-the-work-better-outcome-pilot-2026-10-07), loadout
+  runs hit the 6-minute cap 4 times, bare runs twice).
 - **Collected per run, kept local** in a folder outside the checkout, never
   pushed or shared: the stream, the `claude` stderr, the final message (the
   `result` text, or the last assistant text when there is no `result`), every
@@ -207,17 +236,17 @@ claude -p "$PROMPT" --output-format stream-json --verbose --include-hook-events 
   task, one run at a time (GATEWAY.md has the run-end order); parallel runs
   would change how often the limits hit.
 - **Failed runs.** A run is rerun once from a clean folder only for a fault the
-  engine reports on its own side: the sandbox failed to start, or the engine or
-  host restarted. An upstream 5xx, 529 or 429, a stream cut and a drain abort
-  are never causes, since `Bash` could fish for them: they are transport
-  events, and the run stands, flagged, with its cost. Nor is an out-of-memory
-  kill, a process or disk limit or a full run volume (the agent can reach them),
-  a `result` event saying "API error" (the sandbox's word) or how the output
-  looks. The failed attempt must be valid. If the rerun fails too, the run is
+  engine reports on its own side: the container failed to start, or the engine
+  or host restarted. An upstream 5xx, 529 or 429, a stream cut and a drain abort
+  are never causes, since a run's own traffic can provoke them: they are
+  transport events, and the run stands, flagged, with its cost. Nor is an
+  out-of-memory kill, a process or disk limit or a full run volume (the agent
+  can reach them), a `result` event saying "API error" (the sandbox's word) or
+  how the output looks. The failed attempt must be valid. If the rerun fails too, the run is
   reported as missing.
-- **Invalid and rejected runs are results.** A run with an off-chain request
-  or other off-list gateway traffic (GATEWAY.md) is `invalid`; one whose folder
-  fails collection (Isolation) is `output rejected`. Neither is rerun. Every
+- **Invalid and rejected runs are results.** A run with a request that fails the
+  conversation check or other off-list gateway traffic (GATEWAY.md) is
+  `invalid`; one whose folder fails collection (Isolation) is `output rejected`. Neither is rerun. Every
   `invalid` run halts the batch until Erik classifies it as caused by the agent
   (it stands) or by `claude` (a deviation under Frozen, and the run is rerun
   after the fix). Both are counted per arm and task, and their cost counts
@@ -238,12 +267,11 @@ harness computes or reads from named fields, never agent text:
   model calls, tokens and priced cost (as billed and uncached), the runner's
   duration, the model and tool list of the first request, whether it held the
   hook's `<skill_relevance>` context, the Jev cost, the gateway and resolver
-  counters, the requests by kind (links, exact retries, off-chain), the
+  counters, the requests that passed or failed the conversation check, the
   transport events (upstream failures, cut or aborted requests, requests priced
-  at their reservation), `invalid` or
-  `output rejected` with the number of violations by kind, and the
-  names of selected skills when each is a name in the library (read from the
-  first request). Next to them, labelled as reported by the sandbox:
+  at their reservation), `invalid` or `output rejected` with the number of
+  violations by kind, and the names of selected skills when each is a name in
+  the library (read from the first request). Next to them, labelled as reported by the sandbox:
   `total_cost_usd`, `num_turns`, `duration_ms` and the hook's exit status;
 - every check result, with the counts the check reads (tests run, rows,
   slides) and the number of files each check dropped from its copy;
@@ -297,20 +325,19 @@ It passes when:
   `<skill_relevance>` context, and none of a bare run does (the hook event
   shows exit 0);
 - the collector and the extraction script run on each smoke output folder;
-- the gateway sorts every request of each smoke run as a next link or an exact
-  retry, and the stream cross-check agrees with it exactly on message ids and
-  token sums;
+- the gateway's conversation check passes every request of each smoke run, and
+  the stream cross-check agrees with it exactly on message ids and token sums;
 - a stub-upstream step answers `claude` with a 529, a mid-stream cut, a
   `max_tokens` stop and a context-overflow 400 in turn, and records exactly what
-  it resends after each. The gateway's retry and continuation rules accept those
-  resends and no others; a resend that differs (another `max_tokens`, a trimmed
-  context) is listed as an accepted change or stops the plan for Erik.
+  it resends after each. A resend that differs from the request it repeats
+  (another `max_tokens`, a trimmed context) goes on the list of fields the
+  conversation check lets change, or stops the plan for Erik.
 
 The run records what the gateway saw: the fields that change within a run (the
-only ones the pin to position 1 lets differ), Jev requests per hook decision
+only ones the conversation check lets differ), Jev requests per hook decision
 and per `find_skills` call, the most requests in flight, the keys, tool types,
 models and beta values the allowlists will hold, `claude`'s `max_tokens`,
-context window and retry limit, the slowest response, and the largest
+context window, the slowest response, and the largest
 reservation of an honest request. It must fit under the arm's ceiling; if not,
 the ceilings and the cost table change together before the full run.
 
@@ -579,10 +606,17 @@ measured. Honest traffic fits under it (the smoke run checks).
 
 **Approvals.** The runner starts an attempt only if the approved cost minus the
 finished attempts' priced cost (Jev and invalid runs included) is at least the
-arm's ceiling. So n attempts at their high figures need (n - 1) x high +
-ceiling. That is the approval and the provider cap on the batch's key
-(GATEWAY.md), with n = 36 per arm (a rerun for every run, though reruns are
-limited to engine faults); the plan does not reduce the attempts.
+arm's ceiling. The approval is (n - 1) x high + ceiling, and the provider cap on
+the batch's key (GATEWAY.md), with n = 36 per arm (a rerun for every run,
+though reruns are limited to engine faults). It funds n attempts only if each
+costs at most its high figure; one can spend up to its ceiling, so a batch can
+stop early. Attempts run in an order fixed now: the first attempts of all 18
+tasks sorted by the SHA-256 of the task id, the same in every arm, so a
+shortfall falls on the same tasks everywhere and not on a kind of task, then the
+reruns. If the cap stops a batch, the runner reports the attempts it left
+unrun and Erik decides whether to raise the cap. Those tasks are "not run": the
+results list them, their pairs stay out of the win rate, and they are never
+counted as losses.
 
 | Batch | Approved | Haiku 4.5 |
 |---|---:|---:|
@@ -607,12 +641,15 @@ measured figures before the full run is approved.
   not record what it resolved to.
 - Sonnet 5.5 or Opus as the large tier (the `invoke.ts` runs used Sonnet 5.5).
 - The sandbox: container or VM (a throwaway user is ruled out above), and the
-  engine, egress mechanism, resolver, gateway and collector sandbox.
-- The gateway detects and prices abuse; it prevents only what it refuses
-  (GATEWAY.md). Confirm, or say what you would give up for prevention.
-- A side call in the smoke run despite the Arms switches halts the plan. The
-  fallback, binding each slot of a side-call template to one designated field,
-  is unbuilt: build it, or drop the arm.
+  engine, egress mechanism, resolver, gateway and collector sandbox. In a
+  container, `claude`'s Bash sandbox may need `enableWeakerNestedSandbox`
+  (Arms). If the smoke probe fails with it, I recommend a VM; the alternative
+  is to let `Bash` reach the gateway, where every request is priced under the
+  cap but hidden help from the arm's own model is not prevented.
+- Approvals (Expected spend): I recommend (n - 1) x high + ceiling in the fixed
+  order, about $78 with Haiku 5.5 or $136 with Haiku 4.5. The alternative, n x
+  ceiling, funds every attempt at its worst case: $349.20 for `large-bare`,
+  about $395 in all (Haiku 4.5: about $718).
 - Subagents are off in every arm (see Arms). Confirm, or ask for a subagent
   rule the gateway can verify, which is more to build and test.
 - Invalid and `output rejected` runs count as a loss for their arm in the win

@@ -33,67 +33,45 @@ tell keys apart inside TLS. So no real key goes into the sandbox:
   header values the smoke run did not see `claude` send, whose `cache_control`
   has a `ttl` other than 5 minutes (see Arms), or whose assistant turns hold a
   block type other than `text`, `tool_use`, `thinking` and `redacted_thinking`
-  (so an unhashed block such as `compaction` cannot be forged in). That closes
-  the server-side tools (web search, web fetch, code execution) and
-  `mcp_servers`, which would give `Bash` web access and remote tools. Such a
-  refusal invalidates the run. The `claude` version is pinned (see Arms).
-- **The gateway cannot tell `claude` from `Bash`,** which is a child of
-  `claude` and inherits its environment: the placeholder key, the base URL and
-  anything else `claude` holds are readable by `Bash`, and a secret only
-  `claude` has does not exist. The placeholder key is unique per run, which
-  attributes each request to its run and refuses a straggler from an earlier
-  run, and binds nothing more. So a skill can POST to the allowed paths itself,
-  to get help from the arm's own model or to spend the cap, or stop its parent
-  `claude` and run the chain itself, rewriting earlier user turns (which the
-  chain rule does not compare, below). The protocol does not prevent that. It
-  sorts every request by what it is, never by who sent it, and prices all of
-  them.
-- **Every request is a next link, an exact retry or off-chain,** by its body and
-  the links before it, whatever its status and whether its stream was cut or
-  completed. There is no fourth kind: `claude` makes no call outside the
-  conversation (Arms switches the background ones off), and subagents are off.
-  A request carrying k-1 assistant turns is at position k. It *completes* when
-  the gateway has read `message_stop` from upstream while the client is still
-  connected; an `error` event inside a 200 stream is a failure. The *link* at
-  position k is the first request there to complete: the first completed retry
-  becomes the link, and a candidate that completes later is priced and never a
-  link.
-  - **Next link:** the first request at position k that
-    1. carries links 1 to k-1 as its assistant turns, in order and equal by
-       hash. The hash covers a turn's `text` and `tool_use` blocks, not its
-       `thinking` or `redacted_thinking` blocks, which `claude` may drop from
-       old turns (the smoke run records whether it does);
-    2. has a last user turn that answers exactly the `tool_use` ids of link
-       k-1; for a link without `tool_use` that stopped at `max_tokens`, it is
-       ordinary text (the continuation); any other stop has no next link;
-    3. equals position 1 in `model`, `system`, `tools`, `max_tokens` and every
-       other top-level key, apart from the fields the smoke run shows change
-       within a run. It lists them with the allowlists; expected are
-       `messages` and where `cache_control` markers sit. Position 1 itself
-       carries the arm's `model` and the tool names the smoke run saw.
-
-    Earlier user turns are not compared, since `claude` may rewrite old tool
-    results.
-  - **Exact retry** of the request that fixed position k, at most N = 5 times
-    (`CLAUDE_CODE_MAX_RETRIES`, see Arms): the same body hash, or a resend body
-    the stub step of the smoke run recorded for a failure it injected, and
-    nothing else.
-  - **Off-chain,** and the run `invalid`: everything else, cut or not, 2xx or
-    not. That includes a second request at a position with another body (a
-    fork, or `Bash` and `claude` both extending the chain), an assistant turn
-    that is not a link, a second conversation, another `model`, `system`,
-    `tools` or `max_tokens`, a compaction, and any call outside the
-    conversation.
+  (so a `compaction` block is refused). That closes the server-side tools (web
+  search, web fetch, code execution) and `mcp_servers`, which would give a
+  request web access and remote tools. Such a refusal invalidates the run. The `claude` version is pinned (see Arms).
+- **`Bash` has no network.** The gateway cannot tell `claude` from `Bash`, a
+  child of `claude` that inherits its environment, the placeholder key and the
+  base URL. So `Bash` must not reach the gateway at all, and `claude`'s Bash
+  sandbox ([sandboxing](https://code.claude.com/docs/en/sandboxing), read
+  2026-10-14) is how: on Linux a sandboxed command "runs in a separate network
+  namespace that has no connection to your network", and with `strictAllowlist`
+  on and `allowedDomains` empty the sandbox proxy refuses every host. The
+  sandbox covers `Bash` and its children, not `claude`'s own requests, the hook
+  or `loadout mcp`, which "run with your full access". The settings in Arms
+  turn off the unsandboxed retry and make `claude` exit if the sandbox cannot
+  start. The smoke run gates on a probe from `Bash` (Smoke run first). The
+  placeholder key is unique per run, which attributes each request to its run
+  and refuses a straggler from an earlier one. If the sandbox cannot be made to
+  hold in the chosen container, the plan stops for Erik (Open for Erik).
+- **The gateway checks one conversation.** Every Anthropic request is then
+  `claude`'s own, so the gateway prices all of them and checks only that
+  `claude` behaved as designed. A request must (1) equal the first request in
+  `model`, `system`, `tools` and `max_tokens`, apart from the fields the smoke
+  run lists as changing within a run (expected: `messages`, and where
+  `cache_control` markers sit), and (2) carry assistant turns that are a prefix
+  of the conversation completed so far: the turns of the latest completed
+  request, plus its response. Turns are compared by a hash of their `text` and
+  `tool_use` blocks, not their `thinking` or `redacted_thinking` blocks, which
+  `claude` may drop from old turns (the smoke run records whether it does). A
+  request *completes* when the gateway has read `message_stop` from upstream
+  while the client is still connected; an `error` event inside a 200 stream is
+  a failure. A retry, a `max_tokens` continuation and the next turn pass; a
+  compaction, a fork, a second conversation, a side call and another `model`
+  do not. Such a request, whatever its status, makes the run `invalid`. A
+  request from a `Bash` that reached the gateway would most likely fail the
+  check too, so it also detects a failed sandbox.
 
   Every `invalid` run halts the batch. Its record names what broke, from a fixed
-  set (a pin field by name, the hash, the answered `tool_use` ids, an allowlist,
-  the retry limit), never a value. Erik classifies the run as caused by the
-  agent, which stands, or by `claude`, which is a deviation under Frozen: the
-  runs it touched are rerun after the fix.
-
-  Assistant turns reach `claude` only through the gateway, and `tool_use` ids
-  are made upstream, so no request carries a turn the gateway did not return. A
-  request `Bash` sends becomes the link, and `claude`'s own is then off-chain.
+  set (a pin field by name, the prefix check, an allowlist), never a value. Erik
+  classifies the run as caused by the agent, which stands, or by `claude`, which
+  is a deviation under Frozen: the runs it touched are rerun after the fix.
 - **The gateway reads every forwarded request to the end,** whoever cut the
   client, within the drain (below), so a request cannot be cut after the
   answer and before `message_delta` to pay one output token.
@@ -109,27 +87,21 @@ tell keys apart inside TLS. So no real key goes into the sandbox:
   documents (a token is at least a byte), plus 6,000 per image (an assumption;
   the smoke run checks the provider's maximum) and the whole context window per
   document block (its pages cannot be read from its bytes), at most the window.
-- **Jev requests, `small-loadout` only.** The hook and `loadout mcp` send them
-  as the same user as `Bash`, so the gateway cannot say who sent one. It
-  verifies the path; the top-level keys `jevClient` sends (`model`, `state`,
+- **Jev requests, `small-loadout` only.** Only the hook and `loadout mcp` send
+  them, outside the Bash sandbox and driven by `claude`. The gateway verifies
+  the path; the top-level keys `jevClient` sends (`model`, `state`,
   `questions`); the configured `model`; question ids and types equal to the
-  sets `wideQuestions` and `closeQuestions` build; the 4 MiB limit; and a
-  count. `askJev` sends two requests per decision (`src/route.ts`), none for an
-  empty or follow-up prompt (`src/hook.ts`), and `jevClient` retries once on a
-  429, 5xx, timeout or network error. With D = 1 + F (one hook decision, since
-  `-p` takes one prompt; F the `find_skills` `tool_use` blocks in the chain's
-  responses), 2xx requests are at most 2D and all requests at most 4D. More
-  makes the run `invalid`; fewer is reported. Not verified: who sent a request,
-  and `state` and the instructions, which carry the prompt, so `Bash` can spend
-  up to the bound on well-formed Jev requests. Their cost is the 2xx requests
-  at the rate the smoke run records.
+  sets `wideQuestions` and `closeQuestions` build; and the 4 MiB limit. It
+  counts them and reports the count with the hook decisions (`askJev` sends two
+  per decision, `src/route.ts`) and `find_skills` calls. Their cost is the 2xx
+  requests at the rate the smoke run records.
 - **A run ends in a fixed order.** (1) `claude` exits, or the runner stops it
   at the cap or the ceiling. (2) The gateway revokes the run's placeholder key;
   a new request on it is refused unread and counted. (3) The runner stops the
   sandbox and reads its state. (4) The gateway drains: it reads every upstream
   request of the run still in flight, Anthropic and Jev, for at most 2 minutes
   (twice the slowest response the smoke run measured, if longer), then aborts
-  the rest at their reservations. (5) Only then are the run's record, kinds
+  the rest at their reservations. (5) Only then are the run's record, outcomes
   and cost final, and collection or the next run can begin: the next run waits
   for the drain. A request refused between (2) and (3) does nothing and is not
   `invalid`; one on the revoked key after (3) means the stop failed, and the
@@ -152,17 +124,13 @@ tell keys apart inside TLS. So no real key goes into the sandbox:
   and a connection straight to an API's address getting an answer. Against a
   stub upstream the gateway is shown to:
   - replace a credential header, and refuse a path, tool type, body, model,
-    `cache_control` ttl and beta value off its lists;
-  - call off-chain a second conversation, a fork, a copy beyond the retry
-    limit, a forged assistant turn, a next link on another `model`, `system`,
-    `tools` or `max_tokens`, any call outside the conversation, and a cut
-    request that is neither a next link nor a retry, whatever its status. With
-    a forged `result` event added to the stream, neither verdict nor cost
-    change;
-  - take a 529 on a link candidate whose retry completes as valid, and an
-    original that completes after its retry as priced and not a link;
-  - take a `max_tokens` stop and its continuation as a link, and a request
-    after an `end_turn` stop as off-chain;
+    `cache_control` ttl, beta value and assistant-turn block type off its
+    lists;
+  - make `invalid` a fork, a second conversation, a compaction, a side call, a
+    forged assistant turn and a change of `model`, `system`, `tools` or
+    `max_tokens`, and pass a retry after a 529, a cut stream and a `max_tokens`
+    continuation. A forged `result` event added to the stream changes neither
+    verdict nor cost;
   - treat an `error` event inside a 200 as a failure;
   - price a client cut after the full answer from upstream's final usage;
     price reservations with a cache write, an over-100k body, an image and a PDF
@@ -186,7 +154,7 @@ the gateway; the smoke run must agree exactly.
 
 | Source | Pieces |
 |---|---|
-| Outside the agent's reach | The gateway's record (requests, kinds, models, usage, ids, block hashes, the first request's tools, prompt and hook context, `find_skills` calls in returned responses, Jev shape and count); the runner's clock and kill reason; the engine's sandbox state; resolver and egress counters; collector, extraction and check results from the second sandbox; the self-check and probe (they run before any agent text exists); judge verdicts |
+| Outside the agent's reach | The gateway's record (requests, outcomes, models, usage, ids, block hashes, the first request's tools, prompt and hook context, `find_skills` calls in returned responses, Jev shape and count); the runner's clock and kill reason; the engine's sandbox state; resolver and egress counters; collector, extraction and check results from the second sandbox; the self-check and probe (they run before any agent text exists); judge verdicts |
 | Written in the sandbox, forgeable | The stream (init, `assistant` ids and usage, `result` fields such as `total_cost_usd`, `modelUsage`, `num_turns`, `duration_ms`, hook events), stderr, hook and `loadout mcp` output: reported only, labelled "reported by the sandbox", and the stream decides nothing. The files and final message are the output judged, not accounting |
 
 Records kept outside the sandbox can carry what the agent put in them, so each
@@ -194,7 +162,7 @@ is counted, scanned or not kept:
 
 | Record | Handling |
 |---|---|
-| Gateway | Per run: requests per allowed path, refused requests, bytes, status codes. Per request: kind, `model` and beta values (from the fixed sets), usage (input and cache tokens in `message_start`, output in the last `message_delta`), the response's message id and stop reason, a hash of its content blocks (`text` and `tool_use`: `type`, text, `id`, `name`, `input`; `thinking` and `redacted_thinking` blocks are left out), the hashes of the assistant turns the request carries, and `max_tokens`. Bodies are parsed, never stored; no body, header, query string or refused path is logged. Local: ids and hashes carry bits the agent chose, so only sums and the kinds by count are committed. |
+| Gateway | Per run: requests per allowed path, refused requests, bytes, status codes. Per request: whether it passed the conversation check, `model` and beta values (from the fixed sets), usage (input and cache tokens in `message_start`, output in the last `message_delta`), the response's message id and stop reason, a hash of its content blocks (`text` and `tool_use`: `type`, text, `id`, `name`, `input`; `thinking` and `redacted_thinking` blocks are left out), the hashes of the assistant turns the request carries, and `max_tokens`. Bodies are parsed, never stored; no body, header, query string or refused path is logged. Local: ids and hashes carry bits the agent chose, so only sums and the counts by outcome are committed. |
 | Firewall drop log, container engine log | Not kept (a refused address and port carry bits; the log driver is off). Refusals are counted only. |
 | Stream JSON with hook events, final message, `claude` stderr | Local, never committed; scanned in pass one. |
 
@@ -205,8 +173,7 @@ Between runs, a new sandbox, run volume, loadout home, placeholder key, ceiling
 and counters for each attempt, reruns included; the gateway and resolver keep
 nothing else. The provider's prompt cache is not isolated: runs on the account
 share it within its lifetime, so a run can start warm because of the one before
-it, honestly (same tools and system prompt) or by a request `Bash` sent to warm
-a prefix. A hit makes requests faster and billed cost lower. It can move the
+it, (same tools and system prompt). A hit makes requests faster and billed cost lower. It can move the
 `capped` flag and the duration by the seconds per request a cached prefix
 saves, and through `capped` the files a run has when it is cut, so a check or a
 verdict. It does not change what a request returns or the uncached cost behind

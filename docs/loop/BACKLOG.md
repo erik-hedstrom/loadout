@@ -232,16 +232,19 @@ Learnings (cloud half): [fixtures and protocol](../../bench/fixtures/c2/PROTOCOL
 - The Jev key cannot be hidden from the agent's `Bash` in one sandbox: the
   hook and `loadout mcp` run as the same user. The protocol keeps real keys in
   a harness gateway outside the sandbox (`jev.baseUrl` already allows it).
-- Anything `claude` writes to stdout is forgeable by `Bash` (same user, via
-  `/proc/<pid>/fd/1`), so validity and cost come only from the gateway, by
-  conversation structure ([GATEWAY.md](../../bench/fixtures/c2/GATEWAY.md)).
-- The gateway sorts every request into one of three kinds (next link, exact
-  retry, off-chain) by its body, whatever its status, and reads each to the end
-  for usage. The documented env switches turn off compaction, the
-  non-streaming fallback, the 1-hour cache TTL and the background title
-  request in all arms, so there is no side-call kind; the smoke run must see
-  none. Every `invalid` run halts the batch for Erik to classify. Approvals are (n - 1) x high + ceiling: about $78 with Haiku 5.5,
-  $136 with Haiku 4.5, as caps.
+- The gateway cannot tell `claude` from `Bash`, and patching its chain rule did
+  not converge over 7 review rounds. `claude`'s Bash sandbox
+  (`sandbox.network.strictAllowlist`, `allowUnsandboxedCommands: false`,
+  `failIfUnavailable`, via `--settings`) leaves `Bash` no network, so every
+  request is `claude`'s and the gateway only prices it and checks one
+  conversation ([GATEWAY.md](../../bench/fixtures/c2/GATEWAY.md)). Gated by a
+  smoke probe from `Bash`; a container may need `enableWeakerNestedSandbox`,
+  else a VM.
+- The documented env switches turn off compaction, the non-streaming fallback,
+  the 1-hour cache TTL and the background title request in all arms. Every
+  `invalid` run halts the batch for Erik to classify. Approvals are
+  (n - 1) x high + ceiling in a fixed order, about $78 with Haiku 5.5 and $136
+  with Haiku 4.5, as caps; unrun attempts are "not run", not losses.
 
 **C3. Tier choice.**
 
