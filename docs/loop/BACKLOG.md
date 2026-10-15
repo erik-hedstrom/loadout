@@ -115,7 +115,7 @@ Acceptance:
 | B4 | P1 | Repo polish: description, topics, social preview, badges | Claude | cloud + erik | todo |
 | B6 | P2 | GitHub profile README draft | Claude | cloud | todo |
 | B5 | P2 | Awesome-list and directory submissions (drafts) | Codex | erik | todo (repo public since 2026-10-12; agents draft, Erik submits) |
-| B7 | P1 | MCP overhead study: what configured MCP servers cost per request, natively and through loadout | Claude | cloud (harness, done) + local (runs) | review ([PR #38](https://github.com/erik-hedstrom/loadout/pull/38)): harness and offline mode built; live runs wait for Erik's approval of the estimate |
+| B7 | P1 | MCP overhead study: what configured MCP servers cost per request, natively and through loadout | Claude | cloud (harness, done) + local (runs) | review ([PR #38](https://github.com/erik-hedstrom/loadout/pull/38)): no ambient Claude plugins (2026-10-15 decision); live runs wait for Erik's approval of the estimate |
 
 **B1. Token-waste study.**
 
@@ -232,12 +232,14 @@ Acceptance:
   number, and the cost of using the gateway (find, list, call turns).
 - The pilot confirms what the harness could not check here: Claude
   `--input-format stream-json` with the isolated flags, `--max-turns` per
-  stdin message and the listing in `init.tools`; Codex `-c mcp_servers`
+  stdin message, token login on an empty config directory and the listing in
+  `init.tools`; Codex `-c mcp_servers`
   surviving `--ignore-user-config` (the n1 delta over the baseline), and the
   `app-server` inventory listing without a login on an empty `CODEX_HOME`.
 
-How to run locally (a machine with `claude` and `codex` logged in with a
-subscription; the children get an allowlisted environment, so base-URL, provider
+How to run locally (Claude needs `CLAUDE_CODE_OAUTH_TOKEN` for Erik's personal
+subscription; Codex needs its subscription login; the children get an allowlisted
+environment, so base-URL, provider
 and API-key variables do not reach them):
 
 ```bash
@@ -273,12 +275,22 @@ Isolation, and where it stops. The plan prints `LOADS`, `HOST STATE`, `ENV` and
   memory, CLAUDE.md files and managed skills off, and MCP servers scrubbed of
   credentials, per the `claudeEnv()` docblock; Codex has no update check in
   `exec` or `app-server`. B1 is unchanged and still inherits the environment.
+- Decided by Erik, 2026-10-15: no ambient Claude plugins; every run gets a fresh
+  empty `CLAUDE_CONFIG_DIR` under the work root and requires `CLAUDE_CODE_OAUTH_TOKEN`
+  from the environment, passed only at launch. Init must report `plugins: []`;
+  missing, malformed or non-empty plugin inventories refuse the measurement,
+  without enumerating plugin locations.
 - Managed configuration overrides `--settings` and `--ignore-user-config`, and
-  Claude's policy limits refresh whatever the setting sources, so their files
-  are refused (`hostState()`). So is any instruction, rule, skill or config file
-  in a folder above the temp working directory: the run's own directory is
+  its system files are refused (`hostState()`). Claude's unused user caches are
+  excluded by the fresh home; live server-managed settings and policy limits
+  remain an unchecked precondition. Any instruction, rule, skill or config file
+  in a folder above the temp working directory is also refused: the run's own directory is
   fresh, but its ancestors (`/tmp` and up) are not ours, so they are checked
   instead, and `assertTemporary` cannot enforce that.
+- Claude settings, history and plugins move under `CLAUDE_CONFIG_DIR`
+  ([env-vars](https://code.claude.com/docs/en/env-vars), variable row).
+  Relocation of `~/.claude.json` bookkeeping and the MCP log cache is unverified;
+  both remain listed as possible host writes.
 
 Host state the runs load: `hostState()` is the one list, with a decision and a
 source per item (refuse, neutralise with a flag, identical across arms and
@@ -292,27 +304,19 @@ Decisions for Erik:
 - Approve the pilots, then the full run, with the host-state writes and the
   preconditions the plan prints. `--run` is the approval; there is no
   confirmation flag.
-- Whether to move the host state out of the real homes. Two options, both
-  verified only in source or docs, neither implemented, and both **switch the cost
-  from subscription quota to API cash**: (a) Codex with a temporary `CODEX_HOME`
+- Whether to move Codex host state out of the real home. This option is
+  verified only in source or docs, not implemented, and **switches the cost
+  from subscription quota to API cash**: Codex with a temporary `CODEX_HOME`
   (it must be an existing directory, `codex-rs/utils/home-dir/src/lib.rs`) and
   `CODEX_API_KEY`, which `codex exec` honors for model requests
   (`codex-rs/exec/src/lib.rs`, `enable_codex_api_key_env: true`, cf0ed4c), so no
   credential file is written, config.toml is absent and logs stay in the temp
-  directory; (b) Claude with a temporary `CLAUDE_CONFIG_DIR` and
-  `ANTHROPIC_API_KEY`, which the Claude Code docs say is always used under `-p`
-  (code.claude.com/docs/en/env-vars); whether a fresh config dir blocks `-p` on
-  first-run state is unverified. Neither was run here.
+  directory. This was not run here.
 - The free Codex commands run on empty temporary `CODEX_HOME`s, so `debug
   prompt-input` no longer sees the user's global `AGENTS.md` (read from that
   home, `codex-rs/cli/src/main.rs`). The paid exec still does, in every arm; the
   preflight records the built-in context only, and nothing re-checks it at the
-  end. Accept, or supply the key options above.
-- Claude's `policy-limits.json` (the organization's cached feature policy on
-  some account types) blocks the Claude arms when present, so a Team or
-  Enterprise login is likely blocked until it is run from an individual
-  subscription. The alternative, hashing the file before and after each run,
-  would only report a refresh after the fact.
+  end. Accept, or supply the Codex key option above.
 - Whether the Codex arms wait for `unified_exec` as in B1.
 
 ## C. Skill decision-making (router quality)

@@ -57,6 +57,10 @@ backlog, B7).
   the built-in tool search tool is not removed. Arms: no MCP; native with
   `ENABLE_TOOL_SEARCH` default, `false` and `auto`; the servers behind
   loadout's gateway (default and `false`). Codex: no MCP, native, gateway.
+- No ambient Claude plugins: every run gets a fresh empty `CLAUDE_CONFIG_DIR`
+  under the work root and requires `CLAUDE_CODE_OAUTH_TOKEN` for Erik's personal
+  subscription. Init must report `plugins: []`; missing, malformed or non-empty
+  plugins refuse the measurement, regardless of where plugin files live.
 - Two fresh sessions per arm, strictly one command at a time, every command of
   every arm in one working directory that is emptied before it (both hosts put
   the working directory in the prompt). Claude sends two requests in one process
@@ -92,18 +96,20 @@ backlog, B7).
   list. No model-free tool inventory was found for Claude (`init.tools` lists
   what is loaded; whether `/context` runs under `-p` is unverified); Codex's
   `mcpServerStatus/list` is one.
-- What the real homes make each CLI load, and what the harness does about it
+- What each CLI can load, and what the harness does about it
   (refuse, neutralise with a flag, or record as identical across arms), is one
   table: backlog, B7, "Isolation". The plan prints it, and a `--run` saves the
   names of the identical items present in `host-state.json`. A live Codex cloud
-  bundle, server-managed Claude settings that were not cached and the Windows
+  bundle, live server-managed Claude settings and the Windows
   registry policy are not seen; the plan prints them as preconditions.
 - The host version is stored on each row and may not change during the study;
-  Claude's plugin, skill and command inventory and Codex's version may not
+  Claude's skill, command and agent inventory and Codex's version may not
   drift.
-- Host state a `--run` leaves in the real homes is printed by the plan; the flags
-  that stop it do not exist for `~/.claude.json` bookkeeping or the Codex
-  databases, and the API-key alternatives are Erik's decision (backlog, B7).
+- Host writes are printed by the plan. Claude settings, history and plugins
+  move to its temporary home ([env-vars, `CLAUDE_CONFIG_DIR`](https://code.claude.com/docs/en/env-vars));
+  relocation of `~/.claude.json` bookkeeping and the MCP log cache is unverified,
+  so both remain listed conservatively. Codex's database writes and API-key
+  alternative remain Erik's decision (backlog, B7).
 
 ## B1 results (2026-10-07): what installed skills cost per request
 

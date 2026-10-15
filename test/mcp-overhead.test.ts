@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { DISABLED_FEATURES, claudeIsolation, execute, parseClaudeTurns, stopChild, withAppServer, type Command, type ToolCall } from '../bench/overhead.js';
@@ -16,6 +16,9 @@ afterAll(() => temps.forEach((dir) => rmSync(dir, { recursive: true, force: true
 const serverPath = join(import.meta.dirname, '../bench/mcp-fixture-server.ts');
 const jsonl = (...events: unknown[]) => events.map((e) => JSON.stringify(e)).join('\n');
 const never = async (): Promise<string> => { throw new Error('a host was started'); };
+const OAUTH_CANARY = 'b7-private-oauth-canary-never-in-output';
+beforeEach(() => vi.stubEnv('CLAUDE_CODE_OAUTH_TOKEN', OAUTH_CANARY));
+afterEach(() => vi.unstubAllEnvs());
 
 describe('fixture catalogues', () => {
   it('are deterministic, prefix-stable and well formed', () => {
@@ -125,9 +128,51 @@ describe('arms and environment', () => {
 });
 
 describe('plan', () => {
-  const clean = { PATH: process.env.PATH };
+  const clean = { PATH: process.env.PATH, CLAUDE_CODE_OAUTH_TOKEN: OAUTH_CANARY };
   const plan = (only = {}, env: NodeJS.ProcessEnv = clean) => buildPlan(temp(), only, env, []);
   const mcpOf = (r: Run) => JSON.parse(r.command.args[r.command.args.indexOf('--mcp-config') + 1]!).mcpServers as Record<string, { env?: { LOADOUT_HOME: string } }>;
+
+  it('blocks Claude without the subscription token, but does not block Codex', async () => {
+    for (const token of [undefined, '']) {
+      const env = { PATH: process.env.PATH, CLAUDE_CODE_OAUTH_TOKEN: token };
+      const p = plan({ hosts: ['claude'] }, env);
+      expect(p.blockers).toHaveLength(1);
+      expect(p.blockers[0]).toContain('CLAUDE_CODE_OAUTH_TOKEN');
+      await expect(runStudy(p, temp(), { run: never })).rejects.toThrow('blocked');
+      expect(plan({ hosts: ['codex'] }, env).blockers).toEqual([]);
+    }
+    expect(plan({ hosts: ['claude'] }).blockers).toEqual([]);
+  });
+
+  it('keeps the subscription token out of planned commands, blockers and plan output', async () => {
+    const p = plan({}, { ...clean, claude_code_oauth_token: OAUTH_CANARY });
+    expect(JSON.stringify(p)).not.toContain(OAUTH_CANARY);
+    const lines: string[] = [];
+    await main(['--hosts', 'claude', '--configs', 'n1', '--repeats', '1'], { print: (s) => lines.push(s), run: never, claudeManaged: [] });
+    expect(lines.join('\n')).not.toContain(OAUTH_CANARY);
+    expect(lines.join('\n')).not.toContain('BLOCKED:');
+  });
+
+  it('gives every Claude run a fresh empty config directory under the work root', () => {
+    const real = temp();
+    writeFileSync(join(real, 'settings.json'), '{"enabledPlugins":{"private":true}}');
+    const root = temp();
+    const homes: string[] = [];
+    for (let i = 0; i < 2; i++) {
+      const p = buildPlan(root, { hosts: ['claude'], configs: ['n1'] }, { ...clean, CLAUDE_CONFIG_DIR: real }, []);
+      for (const r of p.runs) {
+        const home = r.command.env!.CLAUDE_CONFIG_DIR!;
+        expect(home.startsWith(join(root, 'claude-homes') + (process.platform === 'win32' ? '\\' : '/'))).toBe(true);
+        expect(home).not.toBe(real);
+        expect(home).not.toBe(join(homedir(), '.claude'));
+        expect(readdirSync(home)).toEqual([]);
+        homes.push(home);
+        writeFileSync(join(home, 'stale-plugin'), 'left by a previous run');
+      }
+    }
+    expect(new Set(homes).size).toBe(homes.length);
+    expect(readFileSync(join(real, 'settings.json'), 'utf8')).toContain('private');
+  });
 
   it('builds 46 runs: Claude sends its requests through one process, with a bounded canary message where deferral may be claimed', () => {
     const p = plan();
@@ -187,7 +232,7 @@ describe('plan', () => {
     const items = hostState({}, 'linux');
     expect(items.find((i) => i.item.includes('.env'))!.files).toEqual([join(homedir(), '.codex', '.env')]);
     const files = (host: string, decision: string) => items.filter((i) => i.host === host && i.decision.startsWith(decision)).flatMap((i) => i.files);
-    expect(files('claude', 'refuse')).toContain(join(homedir(), '.claude', 'policy-limits.json'));
+    expect(files('claude', 'refuse')).not.toContain(join(homedir(), '.claude', 'policy-limits.json'));
     expect(files('claude', 'identical')).toContain('/etc/claude-code/CLAUDE.md');
     expect(files('claude', 'identical')).toContain('/etc/claude-code/.claude/skills');
     expect(files('claude', 'refuse')).toContain(join(tmpdir(), 'CLAUDE.local.md'));
@@ -236,7 +281,7 @@ describe('plan', () => {
     mkdirSync(join(codexHome, 'skills'));
     const items = hostState({ CLAUDE_CONFIG_DIR: claudeHome, CODEX_HOME: codexHome }, 'linux').filter((i) => i.decision.startsWith('identical'));
     const ours = items.flatMap(presentFiles).filter((f) => f.startsWith(claudeHome) || f.startsWith(codexHome));
-    expect(ours.map((f) => f.slice(f.lastIndexOf('/') + 1)).sort()).toEqual(['plugins', 'skills']);
+    expect(ours.map((f) => f.slice(Math.max(f.lastIndexOf('/'), f.lastIndexOf('\\')) + 1)).sort()).toEqual(['skills']);
   });
 
   it('keeps every directory it creates or configures under the temp root', () => {
@@ -283,7 +328,7 @@ describe('plan', () => {
     }
     // each host gets only its own names: no Claude token or config dir in a Codex child, no CODEX_* in a Claude one
     for (const r of p.runs) {
-      const own = r.arm.host === 'claude' ? ['CLAUDE_CONFIG_DIR', 'CLAUDE_CODE_OAUTH_TOKEN', 'NODE_EXTRA_CA_CERTS'] : ['CODEX_HOME'];
+      const own = r.arm.host === 'claude' ? ['CLAUDE_CONFIG_DIR', 'NODE_EXTRA_CA_CERTS'] : ['CODEX_HOME'];
       const other = r.arm.host === 'claude' ? ['CODEX_HOME'] : ['CLAUDE_CONFIG_DIR', 'CLAUDE_CODE_OAUTH_TOKEN', 'NODE_EXTRA_CA_CERTS'];
       for (const name of own) expect(r.command.env).toHaveProperty(name);
       for (const name of other) expect(r.command.env).not.toHaveProperty(name);
@@ -299,7 +344,7 @@ describe('plan', () => {
       expect(r.command.env).toMatchObject({ CLAUDE_CODE_MCP_ALLOWLIST_ENV: '1', CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1' });
       for (const server of Object.values(mcpOf(r))) expect(Object.keys(server.env ?? {})).toEqual(server.env ? ['LOADOUT_HOME'] : []);
     }
-    // the token may sit in the Claude child's own env, which needs it; it is in no argument and no file the plan wrote
+    expect(JSON.stringify(p)).not.toContain(canary);
     const files = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? files(join(dir, e.name)) : [join(dir, e.name)]));
     for (const r of p.runs) for (const arg of [...r.command.args, ...(r.command.stdin ?? [])]) expect(arg).not.toContain(canary);
     for (const file of files(p.root)) expect(readFileSync(file, 'utf8')).not.toContain(canary);
@@ -320,7 +365,7 @@ describe('plan', () => {
       const args = [...r.command.args];
       const i = args.indexOf('--mcp-config');
       if (i >= 0) args[i + 1] = '<mcp>';
-      return JSON.stringify({ args: args.map((a) => a.replace(/^mcp_servers=.*/, 'mcp_servers=<mcp>')), stdin: r.command.stdin?.slice(0, 2), env: { ...r.command.env, ENABLE_TOOL_SEARCH: undefined }, bin: r.command.bin, cwd: r.command.cwd });
+      return JSON.stringify({ args: args.map((a) => a.replace(/^mcp_servers=.*/, 'mcp_servers=<mcp>')), stdin: r.command.stdin?.slice(0, 2), env: { ...r.command.env, ENABLE_TOOL_SEARCH: undefined, CLAUDE_CONFIG_DIR: undefined }, bin: r.command.bin, cwd: r.command.cwd });
     };
     for (const host of ['claude', 'codex']) {
       const runs = p.runs.filter((r) => r.arm.host === host);
@@ -348,36 +393,30 @@ describe('plan', () => {
   });
 
   it('blocks the Claude arms, naming the files, when managed Claude settings exist', () => {
-    expect(managedClaudeFiles('linux', { CLAUDE_CONFIG_DIR: '/cc' })).toEqual(['/etc/claude-code/managed-settings.json', '/etc/claude-code/managed-settings.d', '/etc/claude-code/managed-mcp.json', join('/cc', 'remote-settings.json')]);
-    expect(managedClaudeFiles('linux', {})).toContain(join(homedir(), '.claude', 'remote-settings.json'));
-    const mac = managedClaudeFiles('darwin', {});
+    expect(managedClaudeFiles('linux')).toEqual(['/etc/claude-code/managed-settings.json', '/etc/claude-code/managed-settings.d', '/etc/claude-code/managed-mcp.json']);
+    const mac = managedClaudeFiles('darwin');
     expect(mac[0]).toBe('/Library/Application Support/ClaudeCode/managed-settings.json');
     expect(mac).toContain('/Library/Managed Preferences/com.anthropic.claudecode.plist');
     expect(mac.some((f) => f.startsWith('/Library/Managed Preferences/') && f.endsWith('/com.anthropic.claudecode.plist'))).toBe(true);
-    expect(managedClaudeFiles('linux', {}).some((f) => f.includes('Managed Preferences'))).toBe(false);
-    expect(managedClaudeFiles('win32', {})[0]).toContain('ClaudeCode');
+    expect(managedClaudeFiles('linux').some((f) => f.includes('Managed Preferences'))).toBe(false);
+    expect(managedClaudeFiles('win32')[0]).toContain('ClaudeCode');
     const fake = '/fake/managed-settings.json';
     expect(buildPlan(temp(), {}, clean, [fake]).blockers[0]).toContain(fake);
     expect(buildPlan(temp(), { hosts: ['codex'] }, clean, [fake]).blockers).toEqual([]);
     expect(plan().blockers).toEqual([]);
   });
 
-  it('blocks the Claude arms by default when a server-managed or policy-limits cache exists, naming it without the user\'s directory', () => {
+  it('does not block Claude on caches in the unused user config directory', () => {
     const dir = temp();
     const saved = process.env.CLAUDE_CONFIG_DIR;
     process.env.CLAUDE_CONFIG_DIR = dir;
     try {
-      const blockers = () => buildPlan(temp(), { hosts: ['claude'], configs: ['n1'], repeats: 1 }, clean).blockers;
-      expect(blockers().filter((b) => b.includes(dir))).toEqual([]);
+      const blockers = () => buildPlan(temp(), { hosts: ['claude'], configs: ['n1'], repeats: 1 }, { ...clean, CLAUDE_CONFIG_DIR: dir }).blockers;
+      expect(blockers().filter((b) => /remote-settings|policy-limits/.test(b))).toEqual([]);
       writeFileSync(join(dir, 'remote-settings.json'), '{}');
-      expect(blockers()[0]).toContain('$CLAUDE_CONFIG_DIR/remote-settings.json');
-      rmSync(join(dir, 'remote-settings.json'));
       writeFileSync(join(dir, 'policy-limits.json'), '{}');
-      expect(blockers()[0]).toContain('$CLAUDE_CONFIG_DIR/policy-limits.json');
+      expect(blockers().filter((b) => /remote-settings|policy-limits/.test(b))).toEqual([]);
     } finally { if (saved === undefined) delete process.env.CLAUDE_CONFIG_DIR; else process.env.CLAUDE_CONFIG_DIR = saved; }
-    const blocker = buildPlan(temp(), { hosts: ['claude'], configs: ['n1'], repeats: 1 }, clean, [join(homedir(), '.claude', 'policy-limits.json')]).blockers[0]!;
-    expect(blocker).toContain('policy-limits.json');
-    expect(blocker).not.toContain(homedir());
   });
 
   it('shows the user\'s directories as variables in anything that can be committed', () => {
@@ -399,11 +438,14 @@ describe('plan', () => {
 
   it('names whole resolved directories as writable, with the known files only as examples', () => {
     const [claude, codex] = hostWrites({});
-    for (const dir of [join(homedir(), '.claude'), join(homedir(), '.claude.json'), 'claude-cli-nodejs']) expect(claude).toContain(dir);
+    for (const dir of ['claude-homes/', join(homedir(), '.claude.json'), 'claude-cli-nodejs']) expect(claude).toContain(dir);
+    expect(claude).toContain('unverified');
     expect(codex).toContain(`anywhere in ${join(homedir(), '.codex')},`);
     expect(codex).toContain('managed Codex config');
     const moved = hostWrites({ CLAUDE_CONFIG_DIR: '/c', CODEX_HOME: '/x', XDG_CACHE_HOME: '/cache' });
-    for (const dir of ['anywhere in /c,', join('/c', '.claude.json')]) expect(moved[0]).toContain(dir);
+    expect(moved[0]).not.toContain('anywhere in /c,');
+    expect(moved[0]).not.toContain(join('/c', '.claude.json'));
+    expect(moved[0]).toContain(join(homedir(), '.claude.json'));
     if (process.platform === 'linux') expect(moved[0]).toContain(join('/cache', 'claude-cli-nodejs'));
     expect(moved[1]).toContain('anywhere in /x,');
     expect(hostWrites({ CODEX_HOME: '/x', CODEX_SQLITE_HOME: '/db' })[1]).toContain('anywhere in /x and /db,');
@@ -682,7 +724,7 @@ describe('positive controls', () => {
 describe('measurement', () => {
   const SECRET_PLUGIN = 'ambient-private-plugin';
   type Lookup = 'found' | 'missing' | 'error' | 'echo';
-  interface Opts { canary?: (run: Run) => Lookup; version?: (call: number) => string | undefined; plugin?: (call: number) => string; model?: (call: number) => string; agents?: (call: number) => string[] | undefined; status?: string; extraServer?: boolean; toolUse2?: boolean; numTurns1?: number; tools?: (run: Run, base: string[]) => string[]; flat?: boolean; features?: boolean; codexVersion?: (call: number) => string; inventory?: (run: Run) => Map<string, string[]>; byOrder?: boolean; findSkills?: boolean }
+  interface Opts { canary?: (run: Run) => Lookup; version?: (call: number) => string | undefined; plugins?: (call: number) => unknown; model?: (call: number) => string; agents?: (call: number) => string[] | undefined; status?: string; extraServer?: boolean; toolUse2?: boolean; numTurns1?: number; tools?: (run: Run, base: string[]) => string[]; flat?: boolean; features?: boolean; codexVersion?: (call: number) => string; inventory?: (run: Run) => Map<string, string[]>; byOrder?: boolean; findSkills?: boolean }
   /**
    * A fake Claude and Codex that report what the plan declared: tools follow the tool search setting (under it loadout's own
    * four are deferred as well), counters grow with the servers. Each command finds the work directory empty or the test fails.
@@ -691,12 +733,12 @@ describe('measurement', () => {
     const calls: Command[] = [];
     const listings: string[][] = [];
     let claudeCalls = 0, versions = 0, order = 0;
-    const owner = new Map<Command, Run>(p.runs.flatMap((r) => [r.command, ...Object.values(r.free ?? {})].map((c): [Command, Run] => [c, r])));
+    const owner = new Map<string[], Run>(p.runs.flatMap((r) => [r.command, ...Object.values(r.free ?? {})].map((c): [string[], Run] => [c.args, r])));
     const run = async (command: Command) => {
       calls.push(command);
       listings.push(readdirSync(command.cwd));
       writeFileSync(join(command.cwd, 'stale'), 'left by a host');
-      const r = o.byOrder ? p.runs[order++]! : owner.get(command)!;
+      const r = o.byOrder ? p.runs[order++]! : owner.get(command.args)!;
       const args = command.args;
       if (args.includes('features')) return DISABLED_FEATURES.map((name) => `${name} stable ${o.features === false ? 'true' : 'false'}`).join('\n');
       if (args.includes('prompt-input')) return JSON.stringify([{ type: 'message', content: [{ type: 'input_text', text: 'rendered' }] }]);
@@ -729,7 +771,7 @@ describe('measurement', () => {
       };
       const canaryTurn = !r.canary ? [] : [...lookup(), ...turn({ input_tokens: 5, cache_creation_input_tokens: 0, cache_read_input_tokens: 100, output_tokens: 1 }, 5)];
       return jsonl(
-        { type: 'system', subtype: 'init', claude_code_version: o.version ? o.version(call) : '2.0.0', model: o.model?.(call) ?? 'haiku-resolved', skills: ['s'], plugins: [{ name: o.plugin?.(call) ?? SECRET_PLUGIN }], slash_commands: ['c'], ...(o.agents ? { agents: o.agents(call) } : {}),
+        { type: 'system', subtype: 'init', claude_code_version: o.version ? o.version(call) : '2.0.0', model: o.model?.(call) ?? 'haiku-resolved', skills: ['s'], plugins: o.plugins ? o.plugins(call) : [], slash_commands: ['c'], ...(o.agents ? { agents: o.agents(call) } : {}),
           tools: o.tools ? o.tools(r, base) : base, mcp_servers: listed.map((name) => ({ name, status: o.status ?? 'connected' })) },
         ...turn({ input_tokens: 5, cache_creation_input_tokens: 100 + delta, cache_read_input_tokens: 0, output_tokens: 1 }, o.numTurns1 ?? 1),
         ...turn({ input_tokens: 5, cache_creation_input_tokens: 0, cache_read_input_tokens: 100 + delta, output_tokens: 1 }, 2, o.toolUse2 ? [{ type: 'tool_use', name: 'x' }] : undefined),
@@ -743,8 +785,56 @@ describe('measurement', () => {
     };
     return { run, inventory, calls, listings };
   }
-  const small = () => buildPlan(temp(), { configs: ['n1'], repeats: 1 }, { PATH: process.env.PATH }, []);
+  const small = () => buildPlan(temp(), { configs: ['n1'], repeats: 1 }, { PATH: process.env.PATH, CLAUDE_CODE_OAUTH_TOKEN: OAUTH_CANARY }, []);
   const study = (o: Opts = {}, p = small()) => { const h = fakeHost(p, o); return runStudy(p, temp(), { run: h.run, inventory: h.inventory, refused: () => [] }); };
+
+  it('refuses any plugin, including one appearing after a clean baseline, before saving that run', async () => {
+    for (const afterBaseline of [false, true]) {
+      const p = small();
+      const out = temp();
+      const h = fakeHost(p, { plugins: (n) => afterBaseline && n === 0 ? [] : [{ name: SECRET_PLUGIN }] });
+      await expect(runStudy(p, out, { run: h.run, inventory: h.inventory, refused: () => [] })).rejects.toThrow('plugins');
+      const saved = existsSync(join(out, 'rows.jsonl')) ? readFileSync(join(out, 'rows.jsonl'), 'utf8') : '';
+      expect(saved.trim().split('\n').filter(Boolean)).toHaveLength(afterBaseline ? 2 : 0);
+      expect(saved).not.toContain(SECRET_PLUGIN);
+    }
+    expect((await study({ plugins: () => [] })).rows.filter((r) => r.host === 'claude')).toHaveLength(12);
+  });
+
+  it('fails closed when init plugins is missing, not an array, or has invalid entries', async () => {
+    for (const plugins of [undefined, null, {}, 'private-plugin', [null], [17]]) {
+      const out = temp();
+      const p = small();
+      const h = fakeHost(p, { plugins: () => plugins });
+      await expect(runStudy(p, out, { run: h.run, inventory: h.inventory, refused: () => [] })).rejects.toThrow('init inventory');
+      expect(existsSync(join(out, 'rows.jsonl'))).toBe(false);
+    }
+  });
+
+  it('passes the token only at launch and starts Claude on an empty home even if stale state appeared after planning', async () => {
+    const p = small();
+    for (const r of p.runs.filter((r) => r.arm.host === 'claude')) writeFileSync(join(r.command.env!.CLAUDE_CONFIG_DIR!, 'stale-plugin'), 'x');
+    const h = fakeHost(p);
+    const out = temp();
+    const result = await runStudy(p, out, { run: async (command) => {
+      if (command.stdin) {
+        expect(command.env!.CLAUDE_CODE_OAUTH_TOKEN).toBe(OAUTH_CANARY);
+        expect(readdirSync(command.env!.CLAUDE_CONFIG_DIR!)).toEqual([]);
+        writeFileSync(join(command.env!.CLAUDE_CONFIG_DIR!, 'plugin-state'), 'x');
+      }
+      return h.run(command);
+    }, inventory: h.inventory, refused: () => [] });
+    expect(result.rows.filter((r) => r.host === 'claude')).toHaveLength(12);
+    expect(JSON.stringify(p)).not.toContain(OAUTH_CANARY);
+    expect(JSON.stringify(result)).not.toContain(OAUTH_CANARY);
+    expect(readFileSync(join(out, 'rows.jsonl'), 'utf8')).not.toContain(OAUTH_CANARY);
+  });
+
+  it('refuses Claude if the token disappears between planning and launch', async () => {
+    const p = small();
+    vi.stubEnv('CLAUDE_CODE_OAUTH_TOKEN', undefined);
+    await expect(runStudy(p, temp(), { run: never, refused: () => [] })).rejects.toThrow('CLAUDE_CODE_OAUTH_TOKEN');
+  });
 
   it('measures both Claude requests of a run and one Codex request, without keeping inventory names', async () => {
     const p = small();
@@ -807,7 +897,7 @@ describe('measurement', () => {
     expect((await runStudy(p, temp(), { run: clear.run, inventory: clear.inventory, refused: () => [] })).rows.some((r) => r.host === 'codex')).toBe(true);
   });
 
-  it('refuses the Codex arms when $CODEX_HOME/.env exists, and the Claude arms when a server-managed cache does', async () => {
+  it('refuses the Codex arms when $CODEX_HOME/.env exists, and ignores caches in the unused Claude home', async () => {
     const codexHome = temp();
     const claudeHome = temp();
     expect(refusedFiles('codex', { CODEX_HOME: codexHome }, 'linux').filter((f) => f.startsWith(codexHome))).toEqual([]);
@@ -815,22 +905,7 @@ describe('measurement', () => {
     expect(refusedFiles('codex', { CODEX_HOME: codexHome }, 'linux').filter((f) => f.startsWith(codexHome))).toEqual([join(codexHome, '.env')]);
     writeFileSync(join(claudeHome, 'remote-settings.json'), '{}');
     writeFileSync(join(claudeHome, 'policy-limits.json.stamp.json'), '{}');
-    expect(refusedFiles('claude', { CLAUDE_CONFIG_DIR: claudeHome }, 'linux').filter((f) => f.startsWith(claudeHome)).sort()).toEqual([join(claudeHome, 'policy-limits.json.stamp.json'), join(claudeHome, 'remote-settings.json')]);
-    // A plugin that sets a default main agent is refused; one whose settings name no agent, or are not JSON, is not.
-    const plugin = (name: string, settings: string) => { const dir = join(claudeHome, 'plugins', 'cache', 'market', name, '1.0.0'); mkdirSync(dir, { recursive: true }); writeFileSync(join(dir, 'settings.json'), settings); return join(dir, 'settings.json'); };
-    const agent = plugin('with-agent', '{"agent":"reviewer"}');
-    plugin('no-agent', '{"other":1}');
-    plugin('broken', '{"agent":');
-    // The manifest form, settings.agent in .claude-plugin/plugin.json, is refused too; a manifest without it is not.
-    const manifest = (name: string, json: string) => { const dir = join(claudeHome, 'plugins', 'cache', 'market', name, '1.0.0', '.claude-plugin'); mkdirSync(dir, { recursive: true }); writeFileSync(join(dir, 'plugin.json'), json); return join(dir, 'plugin.json'); };
-    const declared = manifest('manifest-agent', '{"name":"m","settings":{"agent":"reviewer"}}');
-    manifest('manifest-plain', '{"name":"p","agent":"not-a-setting"}');
-    // A marketplace entry serves as the manifest when plugin.json is absent, so an agent declared there is refused too.
-    const market = (json: string) => { const dir = join(claudeHome, 'plugins', 'marketplaces', 'market', '.claude-plugin'); mkdirSync(dir, { recursive: true }); writeFileSync(join(dir, 'marketplace.json'), json); return join(dir, 'marketplace.json'); };
-    const entry = market('{"name":"market","plugins":[{"name":"plain"},{"name":"entry-agent","settings":{"agent":"reviewer"}}]}');
-    expect(refusedFiles('claude', { CLAUDE_CONFIG_DIR: claudeHome }, 'linux').filter((f) => f.includes('plugins')).sort()).toEqual([declared, agent, entry].sort());
-    market('{"name":"market","plugins":[{"name":"plain"},{"name":"other","agent":"not-a-setting"}]}');
-    expect(refusedFiles('claude', { CLAUDE_CONFIG_DIR: claudeHome }, 'linux').filter((f) => f.includes('plugins')).sort()).toEqual([declared, agent].sort());
+    expect(refusedFiles('claude', { CLAUDE_CONFIG_DIR: claudeHome }, 'linux').filter((f) => f.startsWith(claudeHome))).toEqual([]);
     const p = small();
     const h = fakeHost(p);
     const { rows, notes } = await runStudy(p, temp(), { run: h.run, inventory: h.inventory, refused: () => refusedFiles('codex', { CODEX_HOME: codexHome }, 'linux') });
@@ -873,7 +948,6 @@ describe('measurement', () => {
   it('refuses a row when a server did not connect, extra servers are present, or the ambient inventory drifts', async () => {
     await expect(study({ status: 'failed' })).rejects.toThrow('did not connect');
     await expect(study({ extraServer: true })).rejects.toThrow('differ from the arm');
-    await expect(study({ plugin: (n) => (n < 1 ? 'a' : 'b') })).rejects.toThrow('inventory drift');
     await expect(study({ agents: (n) => (n < 1 ? ['a'] : ['b']) })).rejects.toThrow('inventory drift');
     await expect(study({ model: (n) => (n < 1 ? 'haiku-resolved' : 'haiku-other') })).rejects.toThrow('resolved model changed');
     await expect(study({ model: () => 'sonnet-resolved' })).rejects.toThrow('not the requested haiku');
@@ -915,7 +989,7 @@ describe('measurement', () => {
   it('leaves INCOMPLETE beside the partial rows of a run that stops, and removes it when the run finishes', async () => {
     const only = ['--run', '--hosts', 'claude', '--configs', 'n1', '--repeats', '1'];
     const stopped = temp();
-    const p = buildPlan(temp(), { hosts: ['claude'], configs: ['n1'], repeats: 1 }, { PATH: process.env.PATH }, []);
+    const p = buildPlan(temp(), { hosts: ['claude'], configs: ['n1'], repeats: 1 }, { PATH: process.env.PATH, CLAUDE_CODE_OAUTH_TOKEN: OAUTH_CANARY }, []);
     const bad = fakeHost(p, { byOrder: true, tools: (r, base) => (r.arm.kind === 'gateway' ? ['Bash'] : base) });
     await expect(main(only, { print: () => {}, run: bad.run, out: stopped, claudeManaged: [] })).rejects.toThrow();
     expect(existsSync(join(stopped, 'INCOMPLETE'))).toBe(true);
