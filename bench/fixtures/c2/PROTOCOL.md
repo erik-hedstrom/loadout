@@ -121,10 +121,8 @@ Its output goes into the results.
 
 ## Credentials and spend
 
-Each arm calls the vendor directly. No harness sits between `claude` and the
-Anthropic API, or between loadout and Jev (AGENTS.md rule 1). Keys the agent
-cannot read, a vendor spend limit, keys that die with the batch and checks
-against the vendor's record take a gateway's place.
+Each arm calls its vendor directly (AGENTS.md rule 1). Unreadable keys, spend
+limits, batch revocation and usage checks replace a gateway.
 
 - **A workspace and a key per batch** (an arm; the smoke run). It needs a
   Console organization: the Admin and Usage APIs "are unavailable for individual
@@ -137,15 +135,13 @@ against the vendor's record take a gateway's place.
   3 hours to 30 days,
   [authentication](https://platform.claude.com/docs/en/manage-claude/authentication)),
   so a forgotten key dies by itself.
-- **The threat.** Skill text is third-party. It can tell `claude` to read a
-  credential and put it into a pre-approved `find_skills` call (PR #39 renames
-  it `find_tools`). That call runs outside the Bash sandbox and sends its `goal`
-  (up to 4,000 characters) and `keywords` to Jev, where a live key could sit in
-  logs until the batch's keys are revoked, up to about 27 h; revoking does not
-  undo that. The model's own turns go to Anthropic, which already holds the
-  Anthropic key.
+- **The threat.** Third-party skills can request a credential read and a
+  pre-approved `find_skills` call (`find_tools` in PR #39). Outside the Bash
+  sandbox, it sends `goal` (up to 4,000 characters) and `keywords` to Jev: a key
+  could stay live in logs until batch revocation, up to about 27 h. Revocation
+  cannot undo that. Anthropic already holds the key for the model's own turns.
 - **Layer 1, the primary one: the agent cannot read a key.**
-  - Both keys are files under one directory `<keys>`, outside the run folder.
+  - Both keys are under `<keys>`, outside the run folder.
     The Anthropic key reaches `claude` through `apiKeyHelper`, a harness-owned
     command that prints the file, with `ANTHROPIC_API_KEY` unset because the
     variable outranks the helper ([authentication](https://code.claude.com/docs/en/authentication),
@@ -154,18 +150,17 @@ against the vendor's record take a gateway's place.
     the key goes in the environment and the fresh `/proc` is the layer. The Jev
     key is the file `jev.apiKeyFile` names, not an MCP `env` entry: the hook has
     no configured `env`.
-  - **The rule: every path to a key is denied by the OS for `Bash` and every
-    process it starts.** The helper, the hook and `loadout mcp` run outside the
-    Bash sandbox "with your full access" ([sandboxing](https://code.claude.com/docs/en/sandboxing)),
-    as the agent's user. A permission rule is a defence only for `claude`'s own
-    `Read`, `Edit`, `Grep` and `Glob`: it reaches "file commands Claude Code
-    recognizes in Bash, such as `cat`", not "arbitrary subprocesses ... like a
-    Python or Node script that opens files itself"
+  - **The rule: `Bash` and its children cannot read `<keys>`, `<home>/library`,
+    `<home>/config.json` or `<home>/sessions`.** The helper, hook and `loadout
+    mcp` run outside it "with your full access"
+    ([sandboxing](https://code.claude.com/docs/en/sandboxing)). Permission rules
+    alone cannot block arbitrary Python or Node file reads
     ([permissions](https://code.claude.com/docs/en/permissions)). Each path:
 
     | Path | OS layer for `Bash` and its children | `claude`'s own tools (fence, then rule) |
     |---|---|---|
     | key files in `<keys>` | `sandbox.filesystem.denyRead` and `sandbox.credentials.files` (`deny`) | fence; `Read`, `Edit(//<keys>/**)` |
+    | `<home>/library`, `<home>/config.json`, `<home>/sessions` | `sandbox.filesystem.denyRead` | fence; `Read`, `Edit` for each (Arms) |
     | `/proc/<pid>/{environ,cmdline,root,cwd,fd,mem,maps}` of `claude`, `loadout mcp`, the hook | the default bubblewrap sandbox mounts a fresh `/proc` (below) | fence; `Read(//proc/**)` |
     | helper script, `$SETTINGS` | no key in either; both live in `<keys>`, so `Bash` cannot read them, and it writes only in the run folder | fence; `Edit(//<keys>/**)` |
     | temp copies, environment, argv | none holds a key: no step writes a copy (`--no-session-persistence`, no `--debug`), `ANTHROPIC_API_KEY` is unset, the Jev key is a file | |
@@ -176,19 +171,18 @@ against the vendor's record take a gateway's place.
     "when either the requested path or the file it resolves to matches"; on hard
     links, `..`, `/dev/fd/*`, `/proc/self/*`, `/proc/thread-self/*`, relative
     paths and case they say nothing, so the protocol relies on none of it. The
-    fence, `permissions.blockReadsOutsideWorkingDirectories`, is an allowlist:
-    it denies "`Read`, `Grep`, `Glob`, and `LSP` calls" outside the working
-    directories in every permission mode
+    `permissions.blockReadsOutsideWorkingDirectories` denies `Read`, `Grep`,
+    `Glob` and `LSP` outside working directories in every permission mode
     ([settings](https://code.claude.com/docs/en/settings-reference)), and
     `acceptEdits` approves edits only inside them
-    ([permission modes](https://code.claude.com/docs/en/permission-modes)). I
-    infer that a spelling outside the run folder is refused whether the check
-    sees it as given or resolved; the probe tests it. Inside the folder:
-    - *Symlinks:* the run folder is mounted `nosymfollow` (mount(8),
-      `MS_NOSYMFOLLOW`, Linux 5.10 or later; from the man pages, not re-read
-      here), so no process follows a link made there. The self-check shows it.
+    ([permission modes](https://code.claude.com/docs/en/permission-modes)).
+    Assumption, probed below: outside spellings are refused whether checked as
+    given or resolved. Inside the folder:
+    - *Symlinks:* the run folder is mounted `nosymfollow`; the
+      [self-check](#isolation) verifies that no process follows a link there.
       Links the agent makes stop working, `python -m venv` included.
-    - *Hard links:* `<keys>` is on another filesystem, so `link(2)` fails.
+    - *Hard links:* the run folder is its own mount, and `link(2)` fails
+      across mounts (`EXDEV`), so no protected path links into it.
     - *Case:* the filesystem is case-sensitive.
     - *`..` under the run folder's prefix* passes only if the check does not
       normalise it; the probe tests it.
@@ -207,24 +201,28 @@ against the vendor's record take a gateway's place.
   - `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` and `CLAUDE_CODE_MCP_ALLOWLIST_ENV=1`
     ([env-vars](https://code.claude.com/docs/en/env-vars)) keep credentials out
     of the environments of `Bash`, hooks and MCP servers, a second layer.
-  - **Probe, in the smoke run.** Canaries stand where the keys stand: a file in
-    `<keys>`, and a variable in `claude`'s environment and the MCP server's.
-    `Bash` tries every path in the table with recognised commands (`cat`) and
-    with arbitrary subprocesses: `python3 -c` with `open()` and `node -e` with
-    `fs.readFileSync`, including `environ`, `cmdline`, `mem` (at the offsets in
-    `maps`) and `/proc/<pid>/root/<keys>/...` for `claude` and the MCP server,
-    and a walk of `/proc/<pid>/fd` and of its own descriptors 0 to 1023. `Bash`
-    also makes, in the run folder, a symlink and a hard link to
-    `<keys>/<canary>` and to `/proc/self/environ`. `Read` and `Grep` try each of
-    those, the table's paths, `/dev/fd/../environ`, `/proc/self/environ`,
-    `/proc/thread-self/environ`, `<run>/../<keys>/<canary>` and an upper-case
-    spelling; `Grep` rooted at `/` and at the parent of `<keys>`, and `Glob
-    /**`, search for the canary. It passes only if no nonce appears anywhere in
-    the stream; the model's account of what it saw is not used. It proves these
-    reads fail on this image and CLI version. It cannot prove that no other path
-    or spelling exists, or that the real key sits where the canary does.
+  - **Probe, in every arm's smoke argv.** Canaries stand in `<keys>/<canary>`,
+    `<home>/config.json`, `<home>/sessions/<file>`, a library `SKILL.md`, and
+    `claude`'s and the MCP server's environments. `Read`, `Grep` and `Bash`
+    must fail on every table file. `Bash` tries every table path with `cat`,
+    Python `open()` and Node `fs.readFileSync`, plus `environ`, `cmdline`,
+    `mem` at `maps`
+    offsets, `/proc/<pid>/root/` paths to all four locations, and walks
+    `/proc/<pid>/fd` for `claude` and MCP, plus its own descriptors 0 to 1023.
+    For each protected file it tries symlinks and hard links from the run
+    folder; all three tools try those links, relative, `..` and upper-case
+    spellings. `Read` and `Grep` also try `/dev/fd/../environ`,
+    `/proc/self/environ` and `/proc/thread-self/environ`; `Bash` tries links to
+    `/proc/self/environ`.
+    `Grep` from `/` and each protected parent, and `Glob /**`, must find no
+    canary. `Edit` of each protected file and `Write` into the library must
+    fail; a runner exec checks unchanged bytes and no new file. No nonce may
+    reach the stream. Positive controls outside the Bash sandbox verify hook
+    access to config, sessions, library and keys, and MCP reads via `load_skill`.
+    Only framed loadout controls may return its library nonce.
+    This checks the pinned image and CLI, not every spelling or real key location.
 - **Layer 2, not in this PR:** loadout redacts strings that match the key
-  shapes in `scan-patterns.json` from everything it sends to Jev. BACKLOG E13
+  shapes in `scan-patterns.json` from everything it sends to Jev. BACKLOG E14
   records it as a prerequisite for the loadout arm. Base64 or splitting defeats
   it, so it is secondary.
 - **Layer 3, not adopted:** a key per task needs a service to mint keys; the
@@ -343,10 +341,13 @@ files, `<helper>` and this file; no secret is in the JSON):
 ```json
 {"apiKeyHelper":"<helper>",
  "permissions":{"blockReadsOutsideWorkingDirectories":true,
-  "deny":["Read(//<keys>/**)","Edit(//<keys>/**)","Read(//proc/**)"]},
+  "deny":["Read(//<keys>/**)","Edit(//<keys>/**)","Read(//proc/**)",
+   "Read(//<home>/library/**)","Edit(//<home>/library/**)",
+   "Read(//<home>/config.json)","Edit(//<home>/config.json)",
+   "Read(//<home>/sessions/**)","Edit(//<home>/sessions/**)"]},
  "sandbox":{"enabled":true,"failIfUnavailable":true,"allowUnsandboxedCommands":false,
   "network":{"strictAllowlist":true},
-  "filesystem":{"denyRead":["<keys>"]},
+  "filesystem":{"denyRead":["<keys>","<home>/library","<home>/config.json","<home>/sessions"]},
   "credentials":{"files":[{"path":"<keys>","mode":"deny"}]}}}
 ```
 
@@ -362,13 +363,12 @@ claude -p "$PROMPT" --output-format stream-json --verbose --include-hook-events 
 | Arm | `$MODEL` | `$MCP` | Additions |
 |---|---|---|---|
 | `small-bare` | `claude-haiku-5-5` | `{"mcpServers":{}}` | none |
-| `small-loadout` | `claude-haiku-5-5` | `{"mcpServers":{"loadout":{"command":"loadout","args":["mcp"],"env":{"LOADOUT_HOME":"<home>"}}}}` | `--plugin-dir <plugin copy>`; `--add-dir <home>/library`; `$EXTRA_TOOLS` = `mcp__loadout__find_skills mcp__loadout__load_skill`; `LOADOUT_HOME=<home>` in the environment, a loadout home with the full library, whose `config.json` points `jev.apiKeyFile` at the batch's Jev key file in `<keys>` and leaves `jev.baseUrl` at its default |
+| `small-loadout` | `claude-haiku-5-5` | `{"mcpServers":{"loadout":{"command":"loadout","args":["mcp"],"env":{"LOADOUT_HOME":"<home>"}}}}` | `--plugin-dir <plugin copy>`; `$EXTRA_TOOLS` = `mcp__loadout__find_skills mcp__loadout__load_skill`; `LOADOUT_HOME=<home>` with the full library, `config.json` pointing `jev.apiKeyFile` at the batch's Jev key in `<keys>` and `jev.baseUrl` left at default |
 | `large-bare` | `claude-sonnet-5-5` | `{"mcpServers":{}}` | none |
 
-- `plugins/loadout` is hook-only. The hook tells the agent to call
-  `load_skill` or read a skill's SKILL.md, so the loadout arm also gets
-  `loadout mcp` with its two read-only tools pre-approved, as the launchers
-  do.
+- `plugins/loadout` is hook-only; `loadout mcp` supplies two pre-approved
+  read-only tools. Agent-initiated library reads use only `load_skill`;
+  the hook can inject framed text.
 - **`Bash` has no network.** `$SETTINGS` goes in with `--settings`, the "Command
   line" settings level, which `--setting-sources` (`user`, `project`, `local`)
   does not exclude ([CLI reference](https://code.claude.com/docs/en/cli-reference),
@@ -403,12 +403,15 @@ claude -p "$PROMPT" --output-format stream-json --verbose --include-hook-events 
   one-conversation reading of the stream does not cover; the arms stay equal, at
   the cost of any gain from subagents (a stated limit).
 - **`Read`, `Grep` and `Glob` stay in the run folder** in every arm (the fence
-  under Credentials and spend). `small-loadout` alone adds `--add-dir
-  <home>/library`, so the hook's "read SKILL.md in the folder given" works as for
-  a user. The settings reference says directories added with `--add-dir` "count
-  as working directories for the block". The library is root-owned and
-  read-only (Isolation), the snapshot step rejects symlinks in it, and `<keys>`
-  is not under it. The probe runs with each arm's argv.
+  under Credentials and spend); the library is never a working directory, so
+  its `CLAUDE.md`, `AGENTS.md` and `.claude/` cannot load as memory.
+  **Stated limit:** the hook and `load_skill` listing suggest direct folder
+  reads; no config switch suppresses them. D18 removes those hints.
+  C2 does not depend on D18: denied reads cannot bypass `load_skill`'s
+  `escapeSkillTags` framing, though failed attempts count toward outcomes.
+  Native skill-folder loading is the host baseline (disabled here with `Skill`);
+  loadout's separate third-party library is measured as shipped, framed by
+  `load_skill` and the hook.
 - **No compaction, in every arm.** A compaction rewrites the assistant turns,
   so the run would no longer be one conversation: mostly for `small-loadout`,
   whose hook context and skill text fill the window sooner. `DISABLE_COMPACT=1`
@@ -545,8 +548,8 @@ dearest request must fit the worst-request figure under Expected spend, and each
 smoke run its arm's ceiling; if not, the ceilings and the cost table change
 together before the full run.
 
-Recorded, not a gate: whether the `small-loadout` run opened a skill
-(`load_skill` or a read of a SKILL.md). A miss is reported, not fixed.
+Recorded, not a gate: whether the `small-loadout` run called `load_skill`
+apart from the probe. A miss is reported, not fixed.
 
 A fault the smoke run shows in the harness is fixed before the first full run
 and goes into RESULTS as a deviation, with its reason.
@@ -774,7 +777,7 @@ ones before the full run is approved.
 - The Jev key is dedicated to the `small-loadout` batch, and you revoke it
   after. Say whether Jev reports usage per key. Two loadout changes are
   prerequisites for the loadout arm, neither in this PR: redacting key-shaped
-  strings before anything goes to Jev (BACKLOG E13), and recording each
+  strings before anything goes to Jev (BACKLOG E14), and recording each
   decision's calls, tokens and cost. The lexical router needs no Jev key but
   is a different product, so not the primary comparison.
 - The streams hold third-party skill text from `load_skill` results: before
