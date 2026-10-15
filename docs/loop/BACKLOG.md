@@ -41,7 +41,7 @@ Each PR body's **Review state** section has the round-by-round record.
 | [#40](https://github.com/erik-hedstrom/loadout/pull/40) | C10 bench quick fixes (P2) | both reviews clean; merge gate |
 | [#39](https://github.com/erik-hedstrom/loadout/pull/39) | D15 MCP discovery; renames `find_skills` to `find_tools` (P0) | both reviews approve at aa092ec; full matrix green; race scope accepted by Erik; ready to merge (needs Erik) |
 | [#38](https://github.com/erik-hedstrom/loadout/pull/38) | B7 MCP overhead study harness (P1) | root fix (no ambient plugins) in 9d9a9bf and 54bc488; both reviews approve at 54bc488; `ci-full` running; rename to `find_tools` after D15 |
-| [#37](https://github.com/erik-hedstrom/loadout/pull/37) | C2 fixtures and protocol; adds E14 as "E13" (rename it in this PR) | round 15 and 16 findings fixed; both reviews approve at 0a647dc; waits for Erik's C2 decisions (margin, VM, licence, scope) |
+| [#37](https://github.com/erik-hedstrom/loadout/pull/37) | C2 fixtures and protocol; adds E14 and D18 | round 15 and 16 findings fixed; both reviews approve at 0a647dc; waits for Erik's C2 decisions (margin, VM, licence, scope) |
 | [#36](https://github.com/erik-hedstrom/loadout/pull/36) | D14 Codex plugin forwards `LOADOUT_HOME` (P1) | clean; one `/proc` thread waits for Erik; merge before #28 |
 | [#35](https://github.com/erik-hedstrom/loadout/pull/35) | iteration 8 log row | superseded by the row below; close it once this file lands |
 | [#34](https://github.com/erik-hedstrom/loadout/pull/34) | B3 comparison | clean; skills.sh threads wait for Erik |
