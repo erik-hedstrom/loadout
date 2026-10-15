@@ -39,17 +39,17 @@ Each PR body's **Review state** section has the round-by-round record.
 | [#40](https://github.com/erik-hedstrom/loadout/pull/40) | C10 bench quick fixes (P2) | both reviews clean; merge gate |
 | [#39](https://github.com/erik-hedstrom/loadout/pull/39) | D15 MCP discovery; renames `find_skills` to `find_tools` (P0) | both reviews approve at aa092ec; full matrix green; race scope accepted by Erik; ready to merge (needs Erik) |
 | [#38](https://github.com/erik-hedstrom/loadout/pull/38) | B7 MCP overhead study harness (P1) | root fix (no ambient plugins) in 9d9a9bf and 54bc488; both reviews approve at 54bc488; full matrix green; rename to `find_tools` after D15; ready to merge (needs Erik) |
-| [#37](https://github.com/erik-hedstrom/loadout/pull/37) | C2 fixtures and protocol; adds E14 and D18 | round 15 and 16 findings fixed; both reviews approve at 0a647dc; full matrix green (one Windows timeout flake, rerun once); waits for Erik's C2 decisions (margin, VM, licence, scope) |
-| [#36](https://github.com/erik-hedstrom/loadout/pull/36) | D14 Codex plugin forwards `LOADOUT_HOME` (P1) | clean; one `/proc` thread waits for Erik; merge before #28 |
+| [#37](https://github.com/erik-hedstrom/loadout/pull/37) | C2 fixtures and protocol; adds E14 and D18 | round 15 and 16 findings fixed; both reviews approve at 0a647dc; full matrix green (one Windows timeout flake, rerun once); waits for Erik's C2 decisions (margin, VM, licence, scope) and two open Codex threads (P1 Jev key, P2 shared prompt cache) |
+| [#36](https://github.com/erik-hedstrom/loadout/pull/36) | D14 Codex plugin forwards `LOADOUT_HOME` (P1) | one open Codex P1 (`/proc`) waits for Erik: accept or override; merge before #28 |
 | [#35](https://github.com/erik-hedstrom/loadout/pull/35) | iteration 8 log row | superseded by the row below; close it once this file lands |
-| [#34](https://github.com/erik-hedstrom/loadout/pull/34) | B3 comparison | clean; skills.sh threads wait for Erik |
+| [#34](https://github.com/erik-hedstrom/loadout/pull/34) | B3 comparison | two open Codex P2 threads (skills.sh) wait for Erik: accept or override |
 | [#33](https://github.com/erik-hedstrom/loadout/pull/33) | B4 repo polish drafts | clean; merge gate |
 | [#32](https://github.com/erik-hedstrom/loadout/pull/32) | D5 `--isolate` | open Codex P1 (resume into a live session, declined from the docs) and two P2s (one documented as a gap, one disclosed): Erik accepts or overrides |
 | [#31](https://github.com/erik-hedstrom/loadout/pull/31) | B6 profile README draft | clean; merge gate |
 | [#30](https://github.com/erik-hedstrom/loadout/pull/30) | A3 init wizard | four open Codex P2 threads, three declined and one partly fixed: Erik accepts the rebuttals or overrides |
 | [#29](https://github.com/erik-hedstrom/loadout/pull/29) | E6 architecture diagram | clean; merge gate |
 | [#28](https://github.com/erik-hedstrom/loadout/pull/28) | A1 README rewrite | clean; merge after #36 |
-| [#27](https://github.com/erik-hedstrom/loadout/pull/27) | D16 no-key warning; adds C9 (host-model fallback router) | clean; Erik's questions open |
+| [#27](https://github.com/erik-hedstrom/loadout/pull/27) | D16 no-key warning; adds C9 (host-model fallback router) | open Codex P1 (concurrent regression test) and P2 (lost warning on persistence failure), left to Erik; and Erik's questions |
 | [#26](https://github.com/erik-hedstrom/loadout/pull/26) | E8 Markdown rest | one open Codex P1 (private reporting channel): needs Erik to turn on private vulnerability reporting, or to override |
 | [#25](https://github.com/erik-hedstrom/loadout/pull/25) | C8 plugin arm (measured); adds D13 (blocked: design, Erik) | not tracked by the 2026-10-13 to 15 cloud session; read its body first |
 
