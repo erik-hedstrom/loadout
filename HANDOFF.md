@@ -107,8 +107,8 @@ A cloud session ran the loop from 2026-10-12 to 2026-10-15 and opened
      fake host (`test/mcp-overhead.test.ts`), C8's plugin arm and any local
      `-c mcp_servers.loadout.tools.find_skills…` approval name the old
      tool. Merge D15 first, then update them.
-5. **Then new work, MCP token cost first:** D17 (measure `loadout mcp`'s
-   start-up, $0), B8 (backlog items from the launch-readiness review),
+5. **Then new work, MCP token cost first:** D17 (measured 2026-10-15;
+   what is left is docs and `required = true`), B8 (backlog items from the launch-readiness review),
    then the BACKLOG order.
 
 ## How the work continues
@@ -268,6 +268,8 @@ native machine:
   on general business requests. Generic skills such as
   `frontend-ui-engineering` load on simple UI work (C4).
 - **Tests:** `loadout.test.ts` still mixes modules (E3).
-- **MCP start-up in Codex:** `loadout mcp` scans the library before it
-  answers `initialize`. If that takes longer than Codex's grace for optional
-  servers, about 1 s, its tools join mid-session (D17, not measured).
+- **MCP start-up in Codex:** `loadout mcp` answers `initialize` in about
+  0.4 s from a Linux-filesystem checkout, but in 6–7 s from `/mnt/c` through
+  `wsl.exe`. That is past Codex's grace of about 1 s for optional servers,
+  so its tools join mid-session. The cost is module loading over 9P, not
+  the library scan ([D17](docs/loop/BACKLOG.md)).

@@ -393,7 +393,7 @@ Acceptance: a third row in that RESULTS table, with raw results. The README's
 | D6 | P2 | HTTP: cancellation reaches Jev | Claude | cloud | done ([#19](https://github.com/erik-hedstrom/loadout/pull/19)) |
 | D8 | P1 | Host capability matrix (verified vs generated) | Claude | cloud | done ([#18](https://github.com/erik-hedstrom/loadout/pull/18)) |
 | D9 | P1 | Codex parity: neutral session skill dir, tier presets | Claude | cloud | done ([#21](https://github.com/erik-hedstrom/loadout/pull/21)); Codex launch not re-run live |
-| D17 | P1 | `loadout mcp` ready within Codex's MCP start-up grace | Claude | local (measure) + cloud (fix) | todo (measure first) |
+| D17 | P1 | `loadout mcp` ready within Codex's MCP start-up grace | Claude | local (measure) + cloud (fix) | measured 2026-10-15: under 1 s from ext4, 6–7 s from `/mnt/c`; module loading, not the scan (see below) |
 | D12 | P0 | Codex: install the hook and search as one step, if Codex allows it | Codex | local | done ([#23](https://github.com/erik-hedstrom/loadout/pull/23)): `plugins/loadout-codex` through `.agents/plugins/marketplace.json`; install checked offline; the hook still needs `/hooks` trust; the live run is D2 |
 
 **D17. MCP start-up inside Codex's grace period.** Codex leaves an optional
@@ -411,6 +411,30 @@ Acceptance:
   gateway tools exist); `find_tools` waits for the scan. Test the order.
 - Document `required = true` for Codex users, after checking whether the
   Codex plugin's `.mcp.json` accepts it.
+
+Measured (2026-10-15, $0; `main` at `fbee5cb`, 1,262-skill library on
+ext4, Node 24.15, WSL2 on Windows 11). This is the time from process start
+to the `initialize` reply, over three or four warm runs:
+
+| How it runs | Reply |
+|---|---|
+| inside WSL, checkout on ext4 | 0.41 s |
+| inside WSL, checkout on `/mnt/c` | 5.9 s |
+| `wsl.exe --exec node` from Windows, ext4 | 0.54–0.79 s |
+| `wsl.exe --exec node` from Windows, `/mnt/c` | 6.0–7.0 s |
+
+Split on `/mnt/c`: importing `dist/mcp.js` and the MCP SDK took 3.9 s, the
+other CLI modules 0.75 s, and the cached library scan 0.04 s (0.75 s
+cold). On ext4 the same three took 0.11, 0.03 and 0.04 s. **The scan is not
+the cost: loading many small module files over 9P is.** So the second
+acceptance bullet would save about 40 ms and is not worth doing as
+written. What is left:
+- Tell WSL users to run `loadout mcp` from a Linux-filesystem install
+  (ORCHESTRATOR.md already says so for this machine), and say why.
+- `required = true`, as above. Through `wsl.exe` from ext4 the first run
+  took 0.79 s, close to the grace.
+- Bundling `dist` would cut the file count. Only if the steps above are
+  not enough: it adds a build step.
 
 **D10. In-host first: loadout as a Claude Code plugin.**
 
