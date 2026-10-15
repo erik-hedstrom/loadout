@@ -68,8 +68,6 @@ Scope / tests / docs:
 Net: ≈ N lines could be removed without losing behavior. (Only when Simplify has findings.)
 ```
 
-Apply AGENTS.md's severity and disposition rules to every section. Material
-simplifications are Medium and block approval, just like correctness findings.
-Only Low items can be follow-ups if the orchestrator agrees. A rebuttal needs
-evidence; acknowledge it explicitly on re-review or keep the finding open.
-Say "none" for a pass with no findings. Do not invent findings to fill the template.
+Apply AGENTS.md's "Severity and disposition" to every section. On re-review,
+say for each earlier finding whether it is fixed, rebutted to your satisfaction,
+or still open. Say "none" for a pass with no findings. Do not invent findings to fill the template.
