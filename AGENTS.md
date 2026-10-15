@@ -142,8 +142,7 @@ Codex's GitHub reviews and the `pr-reviewer` subagent both apply these. Flag
 violations with file:line and a concrete fix. Review correctness/security and
 necessity as separate passes; passing tests or finding no runtime bug does not
 establish that added code belongs. Review the implementation against the backlog
-acceptance criteria, not just the author's summary. Trace callers and contracts
-before proposing additions or deletions.
+acceptance criteria, not just the author's summary.
 
 1. **Secrets and user config.**
    - No code path may print, log, commit or send the TypeSafe key or any
@@ -182,8 +181,7 @@ before proposing additions or deletions.
    One caller alone is not a defect: keep helpers that isolate a trust boundary,
    platform contract or meaningful invariant. Keep external-input validation,
    security controls, compatibility paths and diagnostic sanitization unless
-   evidence proves them redundant. Do not demand speculative defenses while
-   reviewing speculative code.
+   evidence proves them redundant.
 5. **Evidence.** Every bug fix and security-relevant path has a test. Bench
    changes keep the dev/test split and commit their raw results. New claims
    link to `bench/RESULTS.md`.
@@ -194,6 +192,10 @@ before proposing additions or deletions.
 
 ### Severity and disposition
 
+- One scale for every reviewer and pass: P0 and P1 are High, P2 is Medium, P3
+  is Low. Any open High or Medium blocks approval and merge, whether it is a
+  correctness, security or necessity finding. A Low can become a follow-up if
+  the orchestrator agrees.
 - Report actionable necessity findings even when behavior is correct. Material
   unnecessary complexity, duplicated policy, unsupported options or scope creep
   are P2 / Medium review findings and block approval until fixed or rebutted with

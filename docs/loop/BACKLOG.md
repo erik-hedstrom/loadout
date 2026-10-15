@@ -702,21 +702,6 @@ Learnings (2026-10-09):
 | E12 | P1 | A tool-less Codex bench backend (codex-cli 0.160.1 keeps unified_exec on) | Codex | local | todo |
 | E13 | P1 | Apply Engineer standards to both review paths, with a blocking necessity pass | Codex + Claude review | cloud | review ([#41](https://github.com/erik-hedstrom/loadout/pull/41)) |
 
-**E13. Stricter engineering reviews.** Requested by Erik on 2026-10-13.
-Port the applicable standards from the PC's `Engineer.md` into AGENTS.md;
-GitHub reviewers cannot rely on a local agent file. Require a separate necessity
-pass with caller/contract evidence and a safe deletion or replacement. Material
-unnecessary complexity blocks approval; justified boundaries remain valid.
-Align `pr-reviewer` and the orchestrator's review prompt and gate. Validation:
-local checks and cross-model review; GitHub behavior remains unverified until
-the rules are published and exercised on a representative PR.
-
-Local validation: `npm test` passed (337 passed, 9 skipped), `npm run typecheck`
-and `npm run build` passed. Tests required an unsandboxed run with repository-local
-TEMP/TMP after sandbox temp-file loading failed. No Jev/API spend. Claude login
-recovered, but the review retry hit the session quota; no completed
-cross-model review yet.
-
 **E10. Build without optional dependencies.** src/embed.ts:24 types
 `@huggingface/transformers` with `typeof import(...)`. So `tsc` fails when npm
 skips the optional install, which happened once on Ubuntu with Node 24 in CI.
@@ -770,6 +755,18 @@ judge sees the skill catalog.
 Acceptance: a Codex configuration whose `exec` exposes no tool that reads
 files, runs commands or reaches the network, checked by lib.ts before every
 run; an adversarial test with the canary probe; `@codex security review`.
+
+**E13. Stricter engineering reviews.** Requested by Erik on 2026-10-13.
+Port the applicable standards from the PC's `Engineer.md` into AGENTS.md;
+GitHub reviewers cannot rely on a local agent file. Require a separate necessity
+pass with caller/contract evidence and a safe deletion or replacement. Material
+unnecessary complexity blocks approval; justified boundaries remain valid.
+Align `pr-reviewer` and the orchestrator's review prompt and gate. Validation:
+local checks and cross-model review; GitHub behavior remains unverified until
+the rules are published and exercised on a representative PR.
+
+Learned: on Windows, `npm test` needed repository-local TEMP/TMP when the
+sandbox could not load Vitest's temp files.
 
 **E1. CI.**
 
