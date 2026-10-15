@@ -78,8 +78,18 @@ These rules are why the numbers can be trusted. Keep it that way.
 
 ## Engineering conventions
 
+- **Grounding:** before editing or reviewing, read the changed files, their
+  callers, relevant tests, data flow and contracts (package versions, schemas,
+  CLI flags and host docs). Verify APIs and config keys from source or official
+  docs; do not invent them from memory. Follow existing patterns.
 - **Code style:** match the surrounding code. Small modules, pure functions
   where possible (`decide()` is pure on purpose).
+- **Boundaries:** validate external input at system boundaries. Handle errors
+  that can actually occur; do not swallow failures or guard impossible internal
+  states without evidence. No speculative abstraction or configurability.
+- **Debugging:** state the observed failure, hypothesis and confidence; confirm
+  with the smallest experiment before fixing the root cause. Do not hide an
+  unrelated refactor inside a bug fix.
 - **Comments** explain *why*, not what.
 - **Dependencies:** no new runtime dependency without a reason in the PR.
   `@huggingface/transformers` stays optional.
@@ -91,6 +101,10 @@ These rules are why the numbers can be trusted. Keep it that way.
   any prompt or context.
 - **Docs:** plain, concrete, measured. No superlatives a benchmark does not
   back. README claims link to RESULTS.
+- **Completion:** run the relevant tests and checks and report commands and
+  results, including failures or checks that could not run. Meet the whole
+  requested scope; disclose missing work and why. Fix or rebut each cross-model
+  review finding in writing before calling substantial work ready.
 
 ## Git and review
 
@@ -124,7 +138,11 @@ These rules are why the numbers can be trusted. Keep it that way.
 ## Code Review Rules
 
 Codex's GitHub reviews and the `pr-reviewer` subagent both apply these. Flag
-violations with file:line and a concrete fix.
+violations with file:line and a concrete fix. Review correctness/security and
+necessity as separate passes; passing tests or finding no runtime bug does not
+establish that added code belongs. Review the implementation against the backlog
+acceptance criteria, not just the author's summary. Trace callers and contracts
+before proposing additions or deletions.
 
 1. **Secrets and user config.**
    - No code path may print, log, commit or send the TypeSafe key or any
@@ -138,20 +156,53 @@ violations with file:line and a concrete fix.
    - Skill files are read only through `readConfined()`.
 3. **No proxying, nothing public.** No interception of an agent's API
    traffic. No code or CI that publishes, posts, or changes repo visibility.
-4. **Smallest change that works.** Flag:
-   - dead or unused code;
-   - single-use abstractions;
-   - options nobody asked for;
-   - defensive checks for impossible states;
-   - duplicated helpers;
-   - comments that narrate code;
-   - docs that repeat other docs or make claims without a number from
-     `bench/RESULTS.md`.
+4. **Smallest change that works.** For each added helper, wrapper, interface,
+   option, fallback and dependency, identify the current caller, requirement or
+   invariant that needs it. "Might be useful later" is not justification. Flag:
+   - dead code, unused exports/parameters, and configuration with no required
+     consumer; search production callers, not just tests;
+   - single-use abstractions or renaming wrappers that only add indirection;
+     propose inlining or an existing helper;
+   - speculative extensibility, unrelated refactors and behavior outside the
+     acceptance criteria; propose removing the extra scope;
+   - duplicated logic, repeated validation of already guaranteed internal
+     state, impossible-state guards and fallbacks that conceal real errors;
+   - tests that only mirror implementation, redundant cases and test-only
+     production seams without a required behavior to verify;
+   - narrating comments, filler text, repeated docs (link instead), and claims
+     without evidence in `bench/RESULTS.md`.
 
-   Prefer deleting to adding.
+   Each finding must name the unnecessary construct, show why current callers
+   and contracts do not need it, explain the maintenance or behavior cost, and
+   give the smallest safe deletion/replacement. Do not merely ask for more
+   abstraction, validation or tests. First consider whether deleting code solves
+   the issue. State what behavior and invariants the simplification preserves.
+
+   One caller alone is not a defect: keep helpers that isolate a trust boundary,
+   platform contract or meaningful invariant. Keep external-input validation,
+   security controls, compatibility paths and diagnostic sanitization unless
+   evidence proves them redundant. Do not demand speculative defenses while
+   reviewing speculative code.
 5. **Evidence.** Every bug fix and security-relevant path has a test. Bench
    changes keep the dev/test split and commit their raw results. New claims
    link to `bench/RESULTS.md`.
+   Check that tests observe the actual behavior or failure, not just a mock or
+   implementation detail. Flag stubs, silently reduced scope and unrun "done"
+   claims; distinguish missing evidence from a proven defect. Never claim a
+   command ran without its result.
+
+### Severity and disposition
+
+- Report actionable necessity findings even when behavior is correct. Material
+  unnecessary complexity, duplicated policy, unsupported options or scope creep
+  are P2 / Medium review findings and block approval until fixed or rebutted with
+  evidence accepted by the reviewer (or overridden by Erik).
+- Cosmetic wording and harmless local nits are P3 / Low. Do not inflate severity
+  to force GitHub comments, invent findings or require a quota of deletions.
+- Include the applicable rule, evidence, impact and concrete fix in each
+  finding. In a full review report, cover correctness/security, simplification
+  and scope/tests/docs; say when a pass found nothing. Keep it concise without
+  truncating actionable findings.
 
 ## Environment notes
 

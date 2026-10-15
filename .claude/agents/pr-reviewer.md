@@ -20,13 +20,18 @@ You are given a PR number or a branch.
 
 Read `AGENTS.md` (the "Code Review Rules" section applies to you), and the
 backlog item the PR names in `docs/loop/BACKLOG.md`. Read the surrounding code
-only where the diff needs it. Do not read `bench/results/**` rows,
+and callers, tests and contracts needed to establish both correctness and
+necessity. Check APIs, host flags and configuration against source or official
+docs before asserting a defect. Do not read `bench/results/**` rows,
 `node_modules`, or `dist`.
 
-## Check 1: security
+## Check 1: correctness and security
 
 For each point, name the file:line and a concrete failure scenario. Skip the
 point if it does not apply.
+- **Correctness:** required behavior, error propagation, ordering, data flow
+  and compatibility with current callers and host contracts. Verify the trigger
+  before recommending a fix; separate observed defects from hypotheses.
 - **Secrets:** any path that could print, log, commit or send the TypeSafe
   key or another credential. Keys are read only through `resolveApiKey()`.
 - **User configs:** writes to `~/.claude`, `~/.codex`, `~/.agents`, desktop or
@@ -47,58 +52,37 @@ point if it does not apply.
 ## Check 2: what should not exist
 
 The project must read like careful, deliberate engineering, not generated
-filler. Look for things to **delete or shrink**, and prefer deletions:
+filler. Run a separate necessity pass using AGENTS.md rule 4, even if the
+security/correctness pass found nothing. For each added construct, establish
+which current requirement, caller or invariant earns its place. Search callers
+before declaring code unused, and check whether an existing helper suffices.
 
-- **Code:**
-  - dead code or unused exports, parameters and options;
-  - flags or config nobody asked for;
-  - an abstraction, interface or helper with one caller;
-  - a wrapper that only renames;
-  - defensive checks for states that cannot happen;
-  - logic that duplicates an existing helper (`escapeSkillTags`,
-    `readConfined`, `capabilityKey`, `pool`, `claudeJson`, …);
-  - try/catch that hides errors without a reason.
-- **Comments:**
-  - comments that narrate what the next line does;
-  - commented-out code;
-  - TODOs without an item in the backlog;
-  - comments that restate the function name.
+For every simplification finding, identify what to delete or shrink, evidence
+that it is unnecessary, its maintenance cost and the behavior/invariants that
+remain. Estimate removed lines only when useful. A single caller is not enough
+to reject a helper that isolates a boundary or meaningful invariant.
 
-  A comment earns its place by explaining *why*.
-- **Docs and Markdown:**
-  - the same fact repeated across README / DESIGN / RESULTS / HANDOFF (link
-    instead);
-  - adjectives and claims without a number or source;
-  - filler openings and closings;
-  - headings over a single sentence;
-  - bullet lists where one sentence works;
-  - emojis;
-  - "comprehensive", "robust", "seamless" and similar words;
-  - anything that oversells the evidence in `bench/RESULTS.md`.
-- **Tests:**
-  - tests that assert implementation details instead of behavior;
-  - duplicated cases;
-  - missing tests for a bug fix or a security-relevant path.
-- **Scope:** changes the backlog item did not ask for. Diff size out of
-  proportion to the task.
-- **Consistency:** names, error messages and style that differ from the
-  surrounding code for no reason.
+Check scope against the backlog acceptance criteria, and tests against actual
+behavior. Flag stubs, missing requirements, mocked evidence that cannot observe
+the failure, unrun completion claims and unrelated changes.
 
 ## Output
 
-Keep it under 400 words. No preamble.
+No preamble. Be concise, but do not omit actionable findings to meet a word cap.
 
 ```
 VERDICT: APPROVE | CHANGES REQUESTED
-Security:
+Correctness / security:
 1. [High|Medium|Low] file:line: problem. Failure: <concrete scenario>. Fix: <specific change>.
 Simplify:
-1. file:line: what to delete or shrink, and why. (≈ N lines)
+1. [High|Medium|Low] file:line: unnecessary construct. Evidence: <callers/contracts>. Cost: <impact>. Fix: <safe deletion/replacement, preserved behavior>.
 Scope / tests / docs:
-1. ...
+1. [High|Medium|Low] file:line: problem. Evidence: <observed gap>. Fix: <specific change>.
 Net: ≈ N lines could be removed without losing behavior.
 ```
 
-Approve only when nothing is High or Medium. Low items and simplifications
-can be follow-ups if the orchestrator agrees. If the diff is clean, say so in
-one line. Do not invent findings to fill the template.
+Apply AGENTS.md's severity and disposition rules to every section. Material
+simplifications are Medium and block approval, just like correctness findings.
+Only Low items can be follow-ups if the orchestrator agrees. A rebuttal needs
+evidence; acknowledge it explicitly on re-review or keep the finding open.
+Say "none" for a pass with no findings. Do not invent findings to fill the template.

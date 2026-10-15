@@ -43,6 +43,8 @@ reviews. GitHub is the shared bus: `agent/*` branches, PRs, CI and
     is enough: `--base <the head Codex last reviewed>`. pr-reviewer reviews
     the delta too.
   - Record each reviewed SHA in the PR.
+  - The focus must request both correctness/security and a separate necessity
+    pass under AGENTS.md rule 4. A clean bug pass is not simplification coverage.
 - **Tests on both platforms.**
   - Windows: `npm test` and `npm run typecheck` in the worktree.
   - Linux: the same in WSL, in a clone that fetches the branch from the
@@ -84,10 +86,15 @@ when his local Claude usage runs out.
     annotation: on 2026-10-12 it was the spending limit, before the repo went
     public.
 - **`pr-reviewer` APPROVE.**
-- **Codex review** of the final head, with no open High or Medium finding,
-  from Sol through the companion or from Codex on GitHub. A declined finding
-  stays open until the reviewer accepts the reason on re-review, or Erik
-  overrides it.
+- **Codex review** of the final head, with no open High, Medium or P1
+  finding, from Sol through the companion or from Codex on GitHub. A declined
+  finding stays open until the reviewer accepts the reason on re-review, or
+  Erik overrides it.
+- **Simplification coverage from both reviewers.** Apply AGENTS.md's severity
+  and disposition rules: material unnecessary complexity is Medium, not an
+  automatic follow-up. Record each finding's fix or accepted rebuttal. A GitHub
+  thumbs-up or absence of comments alone does not prove this pass ran; if the
+  GitHub report omits it, obtain an explicit local necessity review before merge.
 - **Acceptance criteria met**, with the backlog row updated in the PR.
 
 Squash-merge with `--delete-branch`, one PR at a time. After each merge, wait
@@ -277,9 +284,16 @@ you were unsure about.
 
 ```
 @codex review. This is an adversarial pass: assume the change is wrong until the
-code proves otherwise. Apply the Code Review Rules in AGENTS.md. Look hardest at
-secrets and user configs, untrusted skill text, file access, and anything that
-should be deleted rather than kept. Report findings by severity with file:line.
+code proves otherwise. Apply the Code Review Rules in AGENTS.md in two passes:
+correctness/security, then necessity. Trace callers, tests and contracts. For
+added helpers, wrappers, options, fallbacks and dependencies, identify the current
+requirement or invariant; flag dead code, needless indirection, duplicate policy,
+speculative defenses and scope creep with a concrete safe deletion/replacement.
+Material unnecessary complexity is P2 / Medium even without a runtime bug; keep
+cosmetic nits Low. Preserve justified boundaries and security controls. Report
+evidence, impact, file:line and fix. Explicitly cover simplification in the full
+report even if that pass is clean; do not invent findings or inflate severity.
+Look for any other instance of each finding's class anywhere in the PR.
 ```
 
 ## Lanes
