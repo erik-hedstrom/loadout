@@ -194,12 +194,13 @@ acceptance criteria, not just the author's summary.
 
 - One scale for every reviewer and pass: P0 and P1 are High, P2 is Medium, P3
   is Low. Any open High or Medium blocks approval and merge, whether it is a
-  correctness, security or necessity finding. A Low can become a follow-up if
-  the orchestrator agrees.
+  correctness, security or necessity finding. It clears when it is fixed, when
+  its reviewer accepts an evidenced rebuttal on re-review, or when Erik
+  overrides it; a reviewer does not block on a finding Erik has overridden. A
+  Low can become a follow-up if the orchestrator agrees.
 - Report actionable necessity findings even when behavior is correct. Material
   unnecessary complexity, duplicated policy, unsupported options or scope creep
-  are P2 / Medium review findings and block approval until fixed or rebutted with
-  evidence accepted by the reviewer (or overridden by Erik).
+  are P2 / Medium.
 - Cosmetic wording and harmless local nits are P3 / Low. Do not inflate severity
   to force GitHub comments, invent findings or require a quota of deletions.
 - Include the applicable rule, evidence, impact and concrete fix in each

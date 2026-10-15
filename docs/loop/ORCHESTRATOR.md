@@ -184,12 +184,12 @@ about it. Work in this order:
 - **`pr-reviewer` APPROVE.**
 - **Codex review** of the final head, with no open High or Medium finding
   (AGENTS.md, "Severity and disposition"), from Sol through the companion or
-  from Codex on GitHub. A declined finding stays open until the reviewer
-  accepts the reason on re-review, or Erik overrides it.
-- **Simplification coverage from both reviewers.** Record each finding's fix
-  or accepted rebuttal. A GitHub thumbs-up or absence of comments alone does
-  not prove this pass ran; if the GitHub report omits it, obtain an explicit
-  local necessity review before merge.
+  from Codex on GitHub.
+- **Simplification coverage from both reviewers.** Record each finding's
+  disposition: fixed, rebuttal accepted, or overridden by Erik. A GitHub
+  thumbs-up or absence of comments alone does not prove this pass ran; if the
+  GitHub report omits it, obtain an explicit local necessity review before
+  merge.
 - **Acceptance criteria met**, with the backlog row updated in the PR.
 
 Squash-merge with `--delete-branch`, one PR at a time. After each merge, wait
@@ -320,8 +320,7 @@ Use these skills (Skill tool) at these points:
   dev/sandbox/loadout-wt/<item>.
 - superpowers:receiving-code-review: when pr-reviewer or Sol findings come back.
   Check each finding against the code, then fix it or decline it with a reason in
-  the PR. A declined High or Medium stays open until its reviewer accepts the reason
-  on re-review, or Erik overrides it.
+  the PR. AGENTS.md, "Severity and disposition", says when a declined finding clears.
 - superpowers:systematic-debugging: on any failing test or CI job, before a fix.
 - superpowers:verification-before-completion: before you call a PR ready, merge it,
   or write the iteration log row.
