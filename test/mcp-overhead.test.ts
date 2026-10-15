@@ -193,7 +193,9 @@ describe('plan', () => {
     expect(files('claude', 'refuse')).toContain(join(tmpdir(), 'CLAUDE.local.md'));
     expect(files('codex', 'refuse')).toContain(join(tmpdir(), 'AGENTS.override.md'));
     expect(files('codex', 'identical')).toContain('/etc/codex/skills');
+    expect(files('codex', 'identical')).toContain('/etc/codex/agents');
     expect(hostState({ ProgramData: 'D:\\PD' }, 'win32').flatMap((i) => i.files)).toContain(join('D:\\PD', 'OpenAI', 'Codex', 'skills'));
+    expect(hostState({ ProgramData: 'D:\\PD' }, 'win32').flatMap((i) => i.files)).toContain(join('D:\\PD', 'OpenAI', 'Codex', 'agents'));
     const lines: string[] = [];
     await main(['--hosts', 'claude', '--configs', 'n1', '--repeats', '1'], { print: (s) => lines.push(s), run: never });
     for (const i of hostState()) expect(lines.some((l) => l.startsWith(`LOADS ${i.host}: ${i.item}: ${i.decision}.`))).toBe(true);
@@ -678,7 +680,7 @@ describe('positive controls', () => {
 describe('measurement', () => {
   const SECRET_PLUGIN = 'ambient-private-plugin';
   type Lookup = 'found' | 'missing' | 'error' | 'echo';
-  interface Opts { canary?: (run: Run) => Lookup; version?: (call: number) => string | undefined; plugin?: (call: number) => string; agents?: (call: number) => string[] | undefined; status?: string; extraServer?: boolean; toolUse2?: boolean; numTurns1?: number; tools?: (run: Run, base: string[]) => string[]; flat?: boolean; features?: boolean; codexVersion?: (call: number) => string; inventory?: (run: Run) => Map<string, string[]>; byOrder?: boolean; findSkills?: boolean }
+  interface Opts { canary?: (run: Run) => Lookup; version?: (call: number) => string | undefined; plugin?: (call: number) => string; model?: (call: number) => string; agents?: (call: number) => string[] | undefined; status?: string; extraServer?: boolean; toolUse2?: boolean; numTurns1?: number; tools?: (run: Run, base: string[]) => string[]; flat?: boolean; features?: boolean; codexVersion?: (call: number) => string; inventory?: (run: Run) => Map<string, string[]>; byOrder?: boolean; findSkills?: boolean }
   /**
    * A fake Claude and Codex that report what the plan declared: tools follow the tool search setting (under it loadout's own
    * four are deferred as well), counters grow with the servers. Each command finds the work directory empty or the test fails.
@@ -725,7 +727,7 @@ describe('measurement', () => {
       };
       const canaryTurn = !r.canary ? [] : [...lookup(), ...turn({ input_tokens: 5, cache_creation_input_tokens: 0, cache_read_input_tokens: 100, output_tokens: 1 }, 5)];
       return jsonl(
-        { type: 'system', subtype: 'init', claude_code_version: o.version ? o.version(call) : '2.0.0', model: 'haiku-resolved', skills: ['s'], plugins: [{ name: o.plugin?.(call) ?? SECRET_PLUGIN }], slash_commands: ['c'], ...(o.agents ? { agents: o.agents(call) } : {}),
+        { type: 'system', subtype: 'init', claude_code_version: o.version ? o.version(call) : '2.0.0', model: o.model?.(call) ?? 'haiku-resolved', skills: ['s'], plugins: [{ name: o.plugin?.(call) ?? SECRET_PLUGIN }], slash_commands: ['c'], ...(o.agents ? { agents: o.agents(call) } : {}),
           tools: o.tools ? o.tools(r, base) : base, mcp_servers: listed.map((name) => ({ name, status: o.status ?? 'connected' })) },
         ...turn({ input_tokens: 5, cache_creation_input_tokens: 100 + delta, cache_read_input_tokens: 0, output_tokens: 1 }, o.numTurns1 ?? 1),
         ...turn({ input_tokens: 5, cache_creation_input_tokens: 0, cache_read_input_tokens: 100 + delta, output_tokens: 1 }, 2, o.toolUse2 ? [{ type: 'tool_use', name: 'x' }] : undefined),
@@ -812,6 +814,12 @@ describe('measurement', () => {
     writeFileSync(join(claudeHome, 'remote-settings.json'), '{}');
     writeFileSync(join(claudeHome, 'policy-limits.json.stamp.json'), '{}');
     expect(refusedFiles('claude', { CLAUDE_CONFIG_DIR: claudeHome }, 'linux').filter((f) => f.startsWith(claudeHome)).sort()).toEqual([join(claudeHome, 'policy-limits.json.stamp.json'), join(claudeHome, 'remote-settings.json')]);
+    // A plugin that sets a default main agent is refused; one whose settings name no agent, or are not JSON, is not.
+    const plugin = (name: string, settings: string) => { const dir = join(claudeHome, 'plugins', 'cache', 'market', name, '1.0.0'); mkdirSync(dir, { recursive: true }); writeFileSync(join(dir, 'settings.json'), settings); return join(dir, 'settings.json'); };
+    const agent = plugin('with-agent', '{"agent":"reviewer"}');
+    plugin('no-agent', '{"other":1}');
+    plugin('broken', '{"agent":');
+    expect(refusedFiles('claude', { CLAUDE_CONFIG_DIR: claudeHome }, 'linux').filter((f) => f.includes('plugins'))).toEqual([agent]);
     const p = small();
     const h = fakeHost(p);
     const { rows, notes } = await runStudy(p, temp(), { run: h.run, inventory: h.inventory, refused: () => refusedFiles('codex', { CODEX_HOME: codexHome }, 'linux') });
@@ -856,6 +864,7 @@ describe('measurement', () => {
     await expect(study({ extraServer: true })).rejects.toThrow('differ from the arm');
     await expect(study({ plugin: (n) => (n < 1 ? 'a' : 'b') })).rejects.toThrow('inventory drift');
     await expect(study({ agents: (n) => (n < 1 ? ['a'] : ['b']) })).rejects.toThrow('inventory drift');
+    await expect(study({ model: (n) => (n < 1 ? 'haiku-resolved' : 'sonnet-resolved') })).rejects.toThrow('resolved model changed');
     await expect(study({ agents: (n) => (n < 1 ? [] : undefined) })).rejects.toThrow('inventory drift');
   });
 

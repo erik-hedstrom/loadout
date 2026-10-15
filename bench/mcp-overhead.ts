@@ -9,7 +9,7 @@
  * deferral may be claimed) share one process with `--no-session-persistence`, so no transcript lands in ~/.claude;
  * Codex gets one `--ephemeral` request.
  */
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { homedir, tmpdir, userInfo } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
@@ -418,6 +418,7 @@ export function hostState(env: NodeJS.ProcessEnv = process.env, platform: NodeJS
     item('claude', 'neutralised', 'CLAUDE.md (user, project in the working directory and every parent, .claude/CLAUDE.md), CLAUDE.local.md, rules folders and their @path imports', '--setting-sources "" leaves out user, project and local, and CLAUDE_CODE_DISABLE_CLAUDE_MDS=1 skips any CLAUDE.md memory file', `${SDK}; docs/en/env-vars`),
     item('claude', 'neutralised', 'AGENTS.md and .claude/AGENTS.md in the working directory and above', 'pluginConfigs "agents-md@builtin" instructionFiles "managed-only" in --settings', 'docs/en/memory: AGENTS.md, Choose which instruction files load'),
     item('claude', 'neutralised', 'user and project skills, agents and commands, and skills synced from claude.ai (~/.claude/skills/synced)', '--setting-sources "" leaves out user and project, which also stops the claude.ai sync', `${SDK}; docs/en/skills: Where synced skills load`),
+    item('claude', 'refuse if present', 'installed plugins that set a default main agent (settings.json "agent")', 'the agent replaces the main thread\'s system prompt and model and the last plugin loaded wins, which the plugin and agent names do not pin', 'docs/en/plugins/components: Default settings', pluginAgentSettings(join(claude, 'plugins'))),
     item('claude', 'neutralised', 'managed skills directory (.claude/skills in the managed settings directory)', 'CLAUDE_CODE_DISABLE_POLICY_SKILLS=1', 'docs/en/env-vars'),
     item('claude', 'neutralised', 'background runs of plugin marketplace command sources, which could change files outside this list mid-study', 'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1', 'docs/en/env-vars'),
     item('claude', 'neutralised', 'hooks from settings, plugins, skills or agents, and the status line command', '"disableAllHooks":true in --settings', 'docs/en/settings-reference: disableAllHooks'),
@@ -438,12 +439,28 @@ export function hostState(env: NodeJS.ProcessEnv = process.env, platform: NodeJS
     item('codex', 'neutralised', 'rules/*.rules', '--ignore-rules', 'codex-rs/exec/src/cli.rs'),
     item('codex', 'neutralised', 'plugins, marketplaces and skill MCP dependencies', '--disable plugins and --disable skill_mcp_dependency_install', 'codex-rs/features/src/lib.rs'),
     item('codex', 'identical across arms, recorded', 'AGENTS.md and AGENTS.override.md', 'read at startup into every arm\'s prompt; the free prompt-input check runs on an empty home and does not see them', 'codex-rs/codex-home/src/instructions/mod.rs', at(codex, 'AGENTS.md', 'AGENTS.override.md')),
-    item('codex', 'identical across arms, recorded', 'skills (user, ~/.agents and the admin root next to the system config) and agents (custom roles, which add to the spawn tool description)', '--ignore-user-config does not skip them: the user layer keeps CODEX_HOME as its folder, and the system layer\'s folder is a skills root', 'codex-rs/ext/skills/src/host_roots.rs, exec-server/src/discoverV2/capability_locations.rs, agent-roles/src/loader.rs', [...at(codex, 'skills', 'agents'), join(homedir(), '.agents', 'skills'), join(codexSystem, 'skills')]),
+    item('codex', 'identical across arms, recorded', 'skills (user, ~/.agents and the admin root next to the system config) and agents (custom roles in CODEX_HOME and the system config folder, which add to the spawn tool description)', '--ignore-user-config does not skip them: the user layer keeps CODEX_HOME as its folder, and the system layer\'s folder is a skills root', 'codex-rs/ext/skills/src/host_roots.rs, exec-server/src/discoverV2/capability_locations.rs, agent-roles/src/loader.rs', [...at(codex, 'skills', 'agents'), join(homedir(), '.agents', 'skills'), ...at(codexSystem, 'skills', 'agents')]),
     item('codex', 'needed', 'auth.json', 'the study runs on subscription quota; Codex may refresh it in place', 'codex-rs/login'),
     item('codex', 'not checked', 'models_cache.json: the model catalog cache', 'a five-minute cache of what the service returns, refreshed when the service sends a new ETag; a change mid-study would be the service\'s, the same for every arm that follows it, and is not detected', 'codex-rs/models-manager/src/manager.rs'),
     item('codex', 'not checked', 'Claude Code files (CLAUDE.md, .claude/settings.json)', 'read only by an app-server import request, which neither exec nor the free commands send', 'codex-rs/app-server/src/external_agent_migration'),
   ];
 }
+/**
+ * Installed plugins' settings.json files that set a default main agent. That agent replaces the main thread's system prompt and
+ * model, and the last plugin loaded wins, so neither the plugin names nor the agent names pin it. Bounded walk; links are not followed.
+ */
+export function pluginAgentSettings(pluginsDir: string, depth = 5): string[] {
+  let entries: string[];
+  try { entries = readdirSync(pluginsDir); } catch { return []; }
+  return entries.flatMap((name) => {
+    const path = join(pluginsDir, name);
+    const stat = lstatSync(path, { throwIfNoEntry: false });
+    if (stat?.isDirectory() && depth > 1 && name !== 'node_modules' && name !== '.git') return pluginAgentSettings(path, depth - 1);
+    if (!stat?.isFile() || name !== 'settings.json' || stat.size > 64 * 1024) return [];
+    try { return typeof JSON.parse(readFileSync(path, 'utf8'))?.agent === 'string' ? [path] : []; } catch { return []; }
+  });
+}
+
 export const presentFiles = (i: HostItem) => i.files.filter((f) => existsSync(f));
 /** The files of the refuse items of one host that exist: they stop that host's arms. */
 export const refusedFiles = (host: Host, env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform, workParent: string = tmpdir()) =>
@@ -494,6 +511,7 @@ export async function runStudy(plan: Plan, out: string, deps: Deps = {}): Promis
     const hash = session ? ambient(session.inventory) : null;
     const first = rows.find((m) => m.host === r.arm.host && m.kind === 'baseline');
     if (first && hash && first.ambientHash !== hash) throw new Error('Claude ambient inventory drift; measurement invalid');
+    if (session && rows.some((m) => m.host === 'claude' && m.model !== session.model)) throw new Error('Claude resolved model changed during the study; measurement invalid');
     if (session && (session.inventory.mcp.length !== r.servers.length || !r.servers.every((n) => session.inventory.mcp.some((m) => m.name === n && m.status === 'connected')))) throw new Error('MCP servers differ from the arm or did not connect; measurement invalid');
     const found = r.canary && session ? canaryFound(r.arm, r.canary, session.calls!) : null;
     const made = turns.map((u, i): Row => {
