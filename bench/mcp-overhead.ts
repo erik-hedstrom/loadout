@@ -365,15 +365,19 @@ const firstLine = (text: string) => text.trim().split(/\r?\n/)[0] ?? '';
  * profile domain com.openai.codex, and the cache of a cloud config bundle in CODEX_HOME (cloud-config/src/cache.rs, valid for
  * an hour). The cache proves a bundle exists; its absence proves nothing.
  */
+/**
+ * Codex's system config folder. On Windows Codex asks for the ProgramData known folder and falls back to C:\ProgramData, not to
+ * the variable (loader/mod.rs). Node cannot ask without a dependency, so the variable and the fallback are both returned, once each.
+ */
+export function codexSystemDirs(platform: NodeJS.Platform = process.platform, env: NodeJS.ProcessEnv = process.env): string[] {
+  if (platform !== 'win32') return ['/etc/codex'];
+  return [...new Map([env.ProgramData, 'C:\\ProgramData'].filter((d): d is string => !!d).map((d) => [d.toLowerCase(), join(d, 'OpenAI', 'Codex')])).values()];
+}
+
 export function managedCodexFiles(platform: NodeJS.Platform = process.platform, env: NodeJS.ProcessEnv = process.env): string[] {
   const cloudCache = join(env.CODEX_HOME || join(homedir(), '.codex'), 'cloud-config-bundle-cache.json');
-  if (platform === 'win32') {
-    // Codex asks Windows for the ProgramData known folder and falls back to C:\ProgramData, not to the variable (loader/mod.rs).
-    // Node cannot ask without a dependency, so the variable and the fallback are both checked, once each.
-    const dirs = [...new Map([env.ProgramData, 'C:\\ProgramData'].filter((d): d is string => !!d).map((d) => [d.toLowerCase(), d])).values()];
-    return [...dirs.flatMap((dir) => ['config.toml', 'requirements.toml'].map((f) => join(dir, 'OpenAI', 'Codex', f))), cloudCache];
-  }
-  return [...['config.toml', 'requirements.toml', 'managed_config.toml'].map((f) => `/etc/codex/${f}`), ...(platform === 'darwin' ? managedPlists('com.openai.codex') : []), cloudCache];
+  const files = platform === 'win32' ? ['config.toml', 'requirements.toml'] : ['config.toml', 'requirements.toml', 'managed_config.toml'];
+  return [...codexSystemDirs(platform, env).flatMap((dir) => files.map((f) => join(dir, f))), ...(platform === 'darwin' ? managedPlists('com.openai.codex') : []), cloudCache];
 }
 
 export const CLAUDE_SCRUB_PRECONDITION = 'Claude MCP servers receive no login token only if this CLI honours CLAUDE_CODE_MCP_ALLOWLIST_ENV (introduced in a version the docs do not give) or CLAUDE_CODE_SUBPROCESS_ENV_SCRUB (2.1.83; credential names from 2.1.251); a CLI that knows neither ignores them silently. Codex starts stdio MCP servers with a small default environment plus the declared env (codex-rs/rmcp-client/src/utils.rs).';
@@ -405,7 +409,7 @@ export function hostState(env: NodeJS.ProcessEnv = process.env, platform: NodeJS
   const above = (dir: string): string[] => (dirname(dir) === dir ? [dir] : [dir, ...above(dirname(dir))]);
   // The user's own dot-folders in the home directory are the config directories listed separately.
   const ancestors = (names: string[], dotted: string[]) => above(workParent).flatMap((d) => [...at(d, ...names), ...(d === homedir() ? [] : at(d, ...dotted))]);
-  const codexSystem = platform === 'win32' ? join(env.ProgramData || 'C:\\ProgramData', 'OpenAI', 'Codex') : '/etc/codex';
+  const codexSystem = codexSystemDirs(platform, env);
   // files only for the decisions that read them: refuse and identical
   const item = (host: Host, decision: Decision, name: string, how: string, source: string, files: string[] = []): HostItem => ({ host, item: name, files, decision, how, source });
   const SDK = 'docs/en/agent-sdk/claude-code-features: What settingSources does not control, CLAUDE.md load locations';
@@ -439,7 +443,7 @@ export function hostState(env: NodeJS.ProcessEnv = process.env, platform: NodeJS
     item('codex', 'neutralised', 'rules/*.rules', '--ignore-rules', 'codex-rs/exec/src/cli.rs'),
     item('codex', 'neutralised', 'plugins, marketplaces and skill MCP dependencies', '--disable plugins and --disable skill_mcp_dependency_install', 'codex-rs/features/src/lib.rs'),
     item('codex', 'identical across arms, recorded', 'AGENTS.md and AGENTS.override.md', 'read at startup into every arm\'s prompt; the free prompt-input check runs on an empty home and does not see them', 'codex-rs/codex-home/src/instructions/mod.rs', at(codex, 'AGENTS.md', 'AGENTS.override.md')),
-    item('codex', 'identical across arms, recorded', 'skills (user, ~/.agents and the admin root next to the system config) and agents (custom roles in CODEX_HOME and the system config folder, which add to the spawn tool description)', '--ignore-user-config does not skip them: the user layer keeps CODEX_HOME as its folder, and the system layer\'s folder is a skills root', 'codex-rs/ext/skills/src/host_roots.rs, exec-server/src/discoverV2/capability_locations.rs, agent-roles/src/loader.rs', [...at(codex, 'skills', 'agents'), join(homedir(), '.agents', 'skills'), ...at(codexSystem, 'skills', 'agents')]),
+    item('codex', 'identical across arms, recorded', 'skills (user, ~/.agents and the admin root next to the system config) and agents (custom roles in CODEX_HOME and the system config folder, which add to the spawn tool description)', '--ignore-user-config does not skip them: the user layer keeps CODEX_HOME as its folder, and the system layer\'s folder is a skills root', 'codex-rs/ext/skills/src/host_roots.rs, exec-server/src/discoverV2/capability_locations.rs, agent-roles/src/loader.rs', [...at(codex, 'skills', 'agents'), join(homedir(), '.agents', 'skills'), ...codexSystem.flatMap((d) => at(d, 'skills', 'agents'))]),
     item('codex', 'needed', 'auth.json', 'the study runs on subscription quota; Codex may refresh it in place', 'codex-rs/login'),
     item('codex', 'not checked', 'models_cache.json: the model catalog cache', 'a five-minute cache of what the service returns, refreshed when the service sends a new ETag; a change mid-study would be the service\'s, the same for every arm that follows it, and is not detected', 'codex-rs/models-manager/src/manager.rs'),
     item('codex', 'not checked', 'Claude Code files (CLAUDE.md, .claude/settings.json)', 'read only by an app-server import request, which neither exec nor the free commands send', 'codex-rs/app-server/src/external_agent_migration'),

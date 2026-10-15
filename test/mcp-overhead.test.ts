@@ -196,6 +196,8 @@ describe('plan', () => {
     expect(files('codex', 'identical')).toContain('/etc/codex/agents');
     expect(hostState({ ProgramData: 'D:\\PD' }, 'win32').flatMap((i) => i.files)).toContain(join('D:\\PD', 'OpenAI', 'Codex', 'skills'));
     expect(hostState({ ProgramData: 'D:\\PD' }, 'win32').flatMap((i) => i.files)).toContain(join('D:\\PD', 'OpenAI', 'Codex', 'agents'));
+    // Codex resolves the ProgramData known folder, not the variable, so the fallback root is recorded too.
+    for (const root of ['D:\\PD', 'C:\\ProgramData']) for (const f of ['skills', 'agents']) expect(hostState({ ProgramData: 'D:\\PD' }, 'win32').flatMap((i) => i.files)).toContain(join(root, 'OpenAI', 'Codex', f));
     const lines: string[] = [];
     await main(['--hosts', 'claude', '--configs', 'n1', '--repeats', '1'], { print: (s) => lines.push(s), run: never });
     for (const i of hostState()) expect(lines.some((l) => l.startsWith(`LOADS ${i.host}: ${i.item}: ${i.decision}.`))).toBe(true);
