@@ -186,8 +186,8 @@ type ListedTool = Awaited<ReturnType<Client['listTools']>>['tools'][number];
 /** Schema keywords that add or define arguments somewhere other than `properties`. */
 const COMPOSING = ['$ref', 'oneOf', 'anyOf', 'allOf', 'not', 'if', 'patternProperties'];
 
-/** Whether a listing shows a name unchanged (no tag text to escape, one line, within `max`), so the agent can send it back. */
-const shownExactly = (name: string, max: number) => !hasTagText(name) && oneLine(name, max) === name;
+/** Whether a listing shows a name unchanged (not empty, no tag text to escape, one line, within `max`), so the agent can send it back. */
+const shownExactly = (name: string, max: number) => name !== '' && !hasTagText(name) && oneLine(name, max) === name;
 
 /**
  * A tool's argument names, optional ones marked with `?`, from an untrusted schema. "none" only when the
@@ -315,7 +315,7 @@ export class Gateway {
     // The agent must be able to name a tool back exactly.
     const tools = listed.filter((t) => shownExactly(t.name, NAME_CHARS));
     const left = listed.length - tools.length;
-    const note = left ? `${left} tool${left === 1 ? '' : 's'} with ${left === 1 ? 'a name' : 'names'} that cannot be shown exactly (tag-like, over ${NAME_CHARS} characters or not on one line) ${left === 1 ? 'is' : 'are'} not shown.` : '';
+    const note = left ? `${left} tool${left === 1 ? '' : 's'} with ${left === 1 ? 'a name' : 'names'} that cannot be shown exactly (empty, tag-like, over ${NAME_CHARS} characters or not on one line) ${left === 1 ? 'is' : 'are'} not shown.` : '';
     // connect() found the server, so it is in the library with its config. An empty listing clears what was remembered.
     if (this.toolIndex) rememberTools(this.toolIndex, this.find(name)!, this.servers, tools);
     if (tools.length === 0) return note || 'the server has no tools.';

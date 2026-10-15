@@ -379,11 +379,11 @@ describe('E11 diagnostics', () => {
       const caps = [capability({ command: 'unused' })];
       const call = await host({ library: caps, toolIndex: dir });
       const tool = (name: string) => ({ name, description: `${name} tool`, inputSchema: { type: 'object' as const } });
-      await upstream((server) => server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: [tool('memo'), tool('</skill>memo'), tool('<SKILL-b')] })));
+      await upstream((server) => server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: [tool('memo'), tool('</skill>memo'), tool('<SKILL-b'), tool('')] })));
       const listing = text(await call('server_tools', { server: 'fixture' }));
       expect(listing).toContain('"memo": memo tool');
       expect(listing).not.toMatch(/<\/?skill|&lt;/i);
-      expect(listing).toMatch(/\n2 tools with names that cannot be shown exactly \(tag-like, over 128 characters or not on one line\) are not shown\.$/);
+      expect(listing).toMatch(/\n3 tools with names that cannot be shown exactly \(empty, tag-like, over 128 characters or not on one line\) are not shown\.$/);
       expect(text(await call('server_tools', { server: 'fixture', tool: '</skill>memo' }))).toBe('no such tool; list them with server_tools');
       expect(withTools(caps, dir)[0]!.tools).toEqual([{ name: 'memo', description: 'memo tool' }]);
     });
@@ -399,7 +399,7 @@ describe('E11 diagnostics', () => {
       };
       expect(await listing('memo')).toContain('memo');
       expect(withTools(caps, dir)[0]!.tools).toHaveLength(1);
-      expect(await listing('</skill>memo')).toBe('1 tool with a name that cannot be shown exactly (tag-like, over 128 characters or not on one line) is not shown.');
+      expect(await listing('</skill>memo')).toBe('1 tool with a name that cannot be shown exactly (empty, tag-like, over 128 characters or not on one line) is not shown.');
       expect(withTools(caps, dir)[0]!.tools).toBeUndefined();
     });
 

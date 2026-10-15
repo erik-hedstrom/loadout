@@ -249,7 +249,7 @@ library itself, in its own words, through MCP:
     which would share another server's key. The library scan leaves these
     out (so search, the hook and the launcher all agree) and `loadout doctor`
     lists them, escaped. `server_tools` leaves out tool names that are
-    tag-like, over 128 characters or not on one line, and says how many. A
+    empty, tag-like, over 128 characters or not on one line, and says how many. A
     compact entry whose argument names cannot be shown whole, or whose schema
     requires an argument it does not list, sends the agent to the full schema.
 - **Cache and state files.** The scan cache, tool index, embeddings and hook
