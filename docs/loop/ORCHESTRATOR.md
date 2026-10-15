@@ -88,8 +88,8 @@ Codex rounds. They keep a PR converging instead of cycling.
 
 1. **Verify each finding.** Trace a realistic path from a real caller or
    input to the failure. Then fix it, or decline it with that path written
-   down. A declined High, Medium or P1 stays open until its reviewer accepts
-   the reason, or Erik overrides it.
+   down. AGENTS.md, "Severity and disposition", says when a declined finding
+   clears.
 2. **Fix the class, not the instance.** When a finding is one example of a
    rule (for example "every value the agent may send back must round-trip
    exactly"), state the rule, sweep the change for every other instance, and
