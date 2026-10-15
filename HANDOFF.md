@@ -5,30 +5,10 @@ Read this first if you are joining the project, human or agent. Then read
 (how the multi-agent loop runs) and [docs/loop/BACKLOG.md](docs/loop/BACKLOG.md)
 (what to do next).
 
-> **Local orchestrator, before anything else: Erik's machine is days behind
-> GitHub, which at this loop's pace is a lot of work.** From 2026-10-12 to
-> 2026-10-15 a cloud session and GitHub Codex reviews worked only on GitHub.
-> The 16 open PR branches (#25–#40) carry about 200 commits and about 8,800
-> added lines, after up to 20 review rounds each. None of it exists locally.
-> `git pull` on main will say "up to date": `origin/main` has not moved since
-> `fbee5cb` (2026-10-12), because nothing merged. Do not read that as "current".
->
-> Treat everything local as stale until checked against GitHub:
-> - **Branches and worktrees.** Local `agent/*` branches and the worktrees
->   under `dev/sandbox/loadout-wt/` predate their PRs' later rounds.
->   `git fetch origin`, then start each item from `origin/<branch>`, either
->   as a fresh worktree or with `git reset --hard origin/<branch>` once you
->   have checked nothing local is unpushed. Never push an older local copy
->   over a PR branch.
-> - **Sol threads.** `--resume-last` would resume a thread that has not seen
->   these rounds. Brief Sol fresh for every item listed under "In review".
-> - **Your picture of the code.** D15 changes `src/mcp.ts`, `src/library.ts`,
->   `src/hook.ts` and `src/doctor.ts`, and B7 adds `bench/mcp-overhead.ts`.
->   Before you touch an area, read the open PRs' diffs for it
->   (`gh pr diff N --name-only`, then the parts you need).
-> - **These four loop files** were rebuilt on 2026-10-15 from GitHub's state at
->   about 12:45 UTC. If time has passed since, GitHub wins: run `gh pr list`
->   and read each PR body's **Review state** before acting on anything here.
+> **After any gap, local state is stale.** The work lives on open PR
+> branches, and `main` can look current while it is not. Before acting on
+> anything here, follow [ORCHESTRATOR, Iteration protocol, step 1](docs/loop/ORCHESTRATOR.md#iteration-protocol).
+> GitHub wins over these files.
 
 ## The one-paragraph version
 
@@ -46,8 +26,8 @@ usage and [DESIGN.md](DESIGN.md) for the architecture.
 - **Owner:** Erik Hedström (GitHub `erik-hedstrom`). Commits use
   `63313283+erik-hedstrom@users.noreply.github.com`.
 - **Main** is at `fbee5cb` (D12, 2026-10-12). Nothing has merged since.
-  **16 PRs are open** (#25–#40), listed with their state under "In review"
-  in [BACKLOG](docs/loop/BACKLOG.md#in-review). Each PR body has a
+  The open PRs are listed with their state under "In review" in
+  [BACKLOG](docs/loop/BACKLOG.md#in-review). Each PR body has a
   **Review state** section.
 
 ### What exists
@@ -94,13 +74,9 @@ A cloud session ran the loop from 2026-10-12 to 2026-10-15 and opened
    outside the repo. It has the detail behind each open finding, Erik's
    local Codex A/B run with its analysis and $0 checks, and how to handle
    the launch-readiness review (2026-10-13). Never commit, paste or quote
-   it. Public text cites the review by that name only.
-3. **Drive the open findings** ([ORCHESTRATOR](docs/loop/ORCHESTRATOR.md#handling-review-findings)):
-   - C2 #37: Codex round 15 P1 and P2, and pr-reviewer round 11 Lows.
-     Also rename the item #37 adds from E13 to E14: local E13 had the ID first.
-   - B7 #38: Codex round 16 P2 is open. Erik chooses the root fix (decision
-     5), then both reviews run.
-   - D15 #39: pr-reviewer on 52f9ca9. Codex round 10 there is clean.
+   it ([private material](docs/loop/ORCHESTRATOR.md#local-the-default)).
+3. **Drive whatever the [In review](docs/loop/BACKLOG.md#in-review) table
+   lists as open** ([ORCHESTRATOR](docs/loop/ORCHESTRATOR.md#handling-review-findings)).
 4. **Run the merge gate** on the clean PRs, one at a time. Two order traps:
    - **#36 before #28.**
    - **D15 renames the search tool `find_skills` to `find_tools`.** B7's
@@ -161,6 +137,10 @@ branches, PRs and `docs/loop/BACKLOG.md`.
 - **MCP first (2026-10-13).** MCP servers take more of the context than
   skills, so MCP token cost leads the backlog (D15, B7, D17, B8).
 - **The launch-readiness review (2026-10-13) stays private.**
+- **Open PR decisions settled on 2026-10-15.** B7: no ambient plugins (a
+  fresh Claude home per run), Erik's personal subscription, and the Codex
+  arms keep the real `CODEX_HOME` with the writes the plan prints. D15: the
+  stated race scope is accepted.
 - **Public repo (2026-10-12).** The history was checked first (168 commits,
   without textconv): no key-shaped strings and no personal email, and the
   authors are noreply addresses. The one personal detail is the Windows
@@ -194,15 +174,6 @@ branches, PRs and `docs/loop/BACKLOG.md`.
      - scope: this protocol, or a smaller pilot first.
 
      Two threads are left for you: the Jev key, and the shared prompt cache.
-   - **B7 #38:**
-     - Which account runs it? A Team or Enterprise login is refused.
-     - The root fix for plugin default agents. Recommended: refuse any
-       ambient plugin and run on a clean Claude home. Alternative: resolve
-       every plugin root from Claude's registries.
-   - **D15 #39:** four round-3 race threads. A folder swapped for a link
-     after the check is only winnable by a same-user process. Either accept
-     the stated scope, or drop opportunistic pruning and re-check dev/ino
-     after each open.
    - **D13** (in #25): how the plugin opens what its hook routes to.
    - **#27:** your questions. **#34:** the skills.sh threads. **#36:** the
      `/proc` thread.
@@ -268,8 +239,6 @@ native machine:
   on general business requests. Generic skills such as
   `frontend-ui-engineering` load on simple UI work (C4).
 - **Tests:** `loadout.test.ts` still mixes modules (E3).
-- **MCP start-up in Codex:** `loadout mcp` answers `initialize` in about
-  0.4 s from a Linux-filesystem checkout, but in 6–7 s from `/mnt/c` through
-  `wsl.exe`. That is past Codex's grace of about 1 s for optional servers,
-  so its tools join mid-session. The cost is module loading over 9P, not
-  the library scan ([D17](docs/loop/BACKLOG.md)).
+- **MCP start-up in Codex:** from `/mnt/c` through `wsl.exe`, `loadout mcp`
+  misses Codex's grace for optional servers, so its tools join mid-session
+  ([D17](docs/loop/BACKLOG.md)).

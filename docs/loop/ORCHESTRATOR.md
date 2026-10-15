@@ -115,8 +115,8 @@ Codex rounds. They keep a PR converging instead of cycling.
      SHA, its verdict, what fixed each finding, and what stays open for Erik.
 7. **Cheap checks before every push:** `npm test`, `npm run typecheck`, a link
    check on every Markdown file you touched, and, for a Codex request, that
-   the SHA you name is the one you pushed. Write commit messages that contain
-   a literal `<` from a file: a heredoc can lose the escape.
+   the SHA you name is the one you pushed. Commit messages that contain a
+   literal `<` go through a file and `git commit -F`.
 
 ## Running Jev safely
 
@@ -247,7 +247,6 @@ The orchestrator repeats this until it hits a stop condition.
    - In a cloud session, skip `lane: local`. Skip `lane: erik` unless Erik is
      present.
    - Respect `depends`.
-   - New backlog IDs: take the next one free on main and on every open PR.
 5. **Dispatch.**
    - Code goes to Sol. The brief gives the item ID, its acceptance criteria,
      the files to stay within, the constraints, a budget, and "do not

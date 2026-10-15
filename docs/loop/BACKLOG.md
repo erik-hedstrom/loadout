@@ -30,9 +30,7 @@ launcher-only work is P2.
 ## In review
 
 These items' rows and detail sections arrive with their PRs, so they are
-not repeated in the tables below. Their work exists only on GitHub (see the
-note at the top of HANDOFF.md): work from `origin/<branch>`, never from an
-older local copy. Delete a line here when its PR merges.
+not repeated in the tables below. Delete a line here when its PR merges.
 Each PR body's **Review state** section has the round-by-round record.
 
 | PR | Item | State on 2026-10-15 |
@@ -152,8 +150,7 @@ Acceptance:
 | B9 | P1 | Savings from an adopted library: what a user saves after moving skills and MCP servers into loadout | Claude | local | todo (after B7) |
 
 **B8. Items from the launch-readiness review.** The review (2026-10-13) is
-private and stays on Erik's machine. Public text cites it only as
-"launch-readiness review, 2026-10-13".
+private ([ORCHESTRATOR](ORCHESTRATOR.md#local-the-default)).
 
 Acceptance:
 - Each finding the orchestrator agrees with becomes a row here, with the
@@ -427,8 +424,9 @@ Split on `/mnt/c`: importing `dist/mcp.js` and the MCP SDK took 3.9 s, the
 other CLI modules 0.75 s, and the cached library scan 0.04 s (0.75 s
 cold). On ext4 the same three took 0.11, 0.03 and 0.04 s. **The scan is not
 the cost: loading many small module files over 9P is.** So the second
-acceptance bullet would save about 40 ms and is not worth doing as
-written. What is left:
+acceptance bullet would save 0.04 s warm, or up to 0.75 s on a cold first
+run (measured on `/mnt/c`; a cold run on ext4 was not measured), against
+3.9 s of module loading. It is not worth doing as written. What is left:
 - Tell WSL users to run `loadout mcp` from a Linux-filesystem install
   (ORCHESTRATOR.md already says so for this machine), and say why.
 - `required = true`, as above. Through `wsl.exe` from ext4 the first run
