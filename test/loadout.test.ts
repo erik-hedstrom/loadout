@@ -1377,7 +1377,7 @@ describe('mcp server', () => {
           expect(errors).toHaveBeenCalledWith('loadout: library metadata cache could not be saved');
           // Session files can hold server credentials.
           symlinkSync(target, join(home, 'sessions'));
-          expect(() => materialize({ selected: [], suggested: [], tier: 'medium' } as never, 'claude', DEFAULT_CONFIG, join(home, 'sessions'))).toThrow(new RegExp(`^${join(home, 'sessions')} is a link, and session files can hold server credentials`));
+          expect(() => materialize({ selected: [], suggested: [], tier: 'medium' } as never, 'claude', DEFAULT_CONFIG, join(home, 'sessions'))).toThrow(`${join(home, 'sessions')} is a link, and session files can hold server credentials`);
           expect(readdirSync(target)).toEqual([]);
         } finally {
           errors.mockRestore();
@@ -1503,10 +1503,11 @@ describe('cache and state folders under the loadout home', () => {
     const entry = `${createHash('sha256').update('mine').digest('hex').slice(0, 32)}.json`;
     const gone = `${'a'.repeat(32)}.json`;
     mkdirSync(folder);
-    for (const f of [gone, 'notes.json', `${'A'.repeat(32)}.json`, `${gone}.bak`, 'x.txt']) writeFileSync(join(folder, f), 'keep');
+    // Not 'A' * 32: on case-insensitive file systems that is the same file as `gone`.
+    for (const f of [gone, 'notes.json', `${'C'.repeat(32)}.json`, `${gone}.bak`, 'x.txt']) writeFileSync(join(folder, f), 'keep');
     symlinkSync(join(outside, 'precious.json'), join(folder, `${'b'.repeat(32)}.json`));
     rememberTools(dir, mine, [mine], [{ name: 't', description: '' }]);
-    expect(readdirSync(folder).sort()).toEqual([`${'A'.repeat(32)}.json`, `${gone}.bak`, entry, 'notes.json', 'x.txt'].sort());
+    expect(readdirSync(folder).sort()).toEqual([`${'C'.repeat(32)}.json`, `${gone}.bak`, entry, 'notes.json', 'x.txt'].sort());
     // A link with a matching name is removed as a link; its target is not touched.
     expect(readFileSync(join(outside, 'precious.json'), 'utf8')).toBe('precious');
   });
