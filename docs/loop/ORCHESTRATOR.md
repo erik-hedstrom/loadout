@@ -89,11 +89,11 @@ when his local Claude usage runs out.
 - **Codex review** of the final head, with no open High or Medium finding
   (AGENTS.md, "Severity and disposition"), from Sol through the companion or
   from Codex on GitHub.
-- **Simplification coverage from both reviewers.** Record each finding's
-  disposition: fixed, rebuttal accepted, or overridden by Erik. A GitHub
-  thumbs-up or absence of comments alone does not prove this pass ran; if the
-  GitHub report omits it, obtain an explicit local necessity review before
-  merge.
+- **Every finding's disposition recorded** in the PR, from both reviewers and
+  every pass: fixed, rebuttal accepted, or overridden by Erik.
+- **Simplification coverage from both reviewers.** A GitHub thumbs-up or
+  absence of comments alone does not prove this pass ran; if the GitHub report
+  omits it, obtain an explicit local necessity review before merge.
 - **Acceptance criteria met**, with the backlog row updated in the PR.
 
 Squash-merge with `--delete-branch`, one PR at a time. After each merge, wait
