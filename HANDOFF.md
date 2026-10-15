@@ -176,7 +176,9 @@ branches, PRs and `docs/loop/BACKLOG.md`.
      Two threads are left for you: the Jev key, and the shared prompt cache.
    - **D13** (in #25): how the plugin opens what its hook routes to.
    - **#27:** your questions. **#34:** the skills.sh threads. **#36:** the
-     `/proc` thread.
+     `/proc` thread. **#26, #30, #32:** declined or partly fixed Codex
+     threads (accept the rebuttal or override; see
+     [In review](docs/loop/BACKLOG.md#in-review)).
    - **Stale branches:** the `wip/*` branches and worktrees from cloud
      sessions. Delete them or keep them.
 
