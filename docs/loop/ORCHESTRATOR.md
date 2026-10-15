@@ -90,7 +90,7 @@ when his local Claude usage runs out.
   (AGENTS.md, "Severity and disposition"), from Sol through the companion or
   from Codex on GitHub.
 - **Every finding's disposition recorded** in the PR, from both reviewers and
-  every pass: fixed, rebuttal accepted, or overridden by Erik.
+  every pass, as AGENTS.md's "Severity and disposition" defines it.
 - **Simplification coverage from both reviewers.** A GitHub thumbs-up or
   absence of comments alone does not prove this pass ran; if the GitHub report
   omits it, obtain an explicit local necessity review before merge.

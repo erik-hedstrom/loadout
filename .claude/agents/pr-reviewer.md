@@ -69,4 +69,5 @@ Net: ≈ N lines could be removed without losing behavior. (Only when Simplify h
 ```
 
 Apply AGENTS.md's "Severity and disposition" to every section. On re-review,
-record each earlier finding's disposition under that section. Say "none" for a pass with no findings. Do not invent findings to fill the template.
+record each earlier finding's disposition under that section. Say "none" for a
+pass with no findings. Do not invent findings to fill the template.
