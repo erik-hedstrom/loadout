@@ -171,7 +171,7 @@ describe('plan', () => {
         expect(JSON.parse(after('--settings')!)).toEqual(CLAUDE_SETTINGS);
         expect(CLAUDE_SETTINGS).toMatchObject({ disableAllHooks: true, pluginConfigs: { 'agents-md@builtin': { options: { instructionFiles: 'managed-only' } } } });
         expect(args).toContain('--strict-mcp-config');
-        expect(r.command.env).toMatchObject({ CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1', CLAUDE_CODE_DISABLE_CLAUDE_MDS: '1', CLAUDE_CODE_DISABLE_POLICY_SKILLS: '1' });
+        expect(r.command.env).toMatchObject({ CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1', CLAUDE_CODE_DISABLE_CLAUDE_MDS: '1', CLAUDE_CODE_DISABLE_POLICY_SKILLS: '1', CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1' });
       } else if (r.command.args.includes('exec')) {
         for (const flag of ['--ignore-user-config', '--ignore-rules']) expect(args).toContain(flag);
         expect(args).not.toContain('--profile');
@@ -179,7 +179,7 @@ describe('plan', () => {
         for (const feature of ['hooks', 'plugins', 'skill_mcp_dependency_install']) expect(disabled).toContain(feature);
       }
     }
-    expect(claudeEnv({ CLAUDE_CODE_DISABLE_AUTO_MEMORY: '0', CLAUDE_CODE_DISABLE_CLAUDE_MDS: '0', CLAUDE_CODE_DISABLE_POLICY_SKILLS: '0' })).toMatchObject({ CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1', CLAUDE_CODE_DISABLE_CLAUDE_MDS: '1', CLAUDE_CODE_DISABLE_POLICY_SKILLS: '1' });
+    expect(claudeEnv({ CLAUDE_CODE_DISABLE_AUTO_MEMORY: '0', CLAUDE_CODE_DISABLE_CLAUDE_MDS: '0', CLAUDE_CODE_DISABLE_POLICY_SKILLS: '0', CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '0' })).toMatchObject({ CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1', CLAUDE_CODE_DISABLE_CLAUDE_MDS: '1', CLAUDE_CODE_DISABLE_POLICY_SKILLS: '1', CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1' });
     expect(claudeIsolation({})).toContain('{"disableAllHooks":true}');
   });
 
@@ -678,7 +678,7 @@ describe('positive controls', () => {
 describe('measurement', () => {
   const SECRET_PLUGIN = 'ambient-private-plugin';
   type Lookup = 'found' | 'missing' | 'error' | 'echo';
-  interface Opts { canary?: (run: Run) => Lookup; version?: (call: number) => string | undefined; plugin?: (call: number) => string; status?: string; extraServer?: boolean; toolUse2?: boolean; numTurns1?: number; tools?: (run: Run, base: string[]) => string[]; flat?: boolean; features?: boolean; codexVersion?: (call: number) => string; inventory?: (run: Run) => Map<string, string[]>; byOrder?: boolean; findSkills?: boolean }
+  interface Opts { canary?: (run: Run) => Lookup; version?: (call: number) => string | undefined; plugin?: (call: number) => string; agents?: (call: number) => string[] | undefined; status?: string; extraServer?: boolean; toolUse2?: boolean; numTurns1?: number; tools?: (run: Run, base: string[]) => string[]; flat?: boolean; features?: boolean; codexVersion?: (call: number) => string; inventory?: (run: Run) => Map<string, string[]>; byOrder?: boolean; findSkills?: boolean }
   /**
    * A fake Claude and Codex that report what the plan declared: tools follow the tool search setting (under it loadout's own
    * four are deferred as well), counters grow with the servers. Each command finds the work directory empty or the test fails.
@@ -725,7 +725,7 @@ describe('measurement', () => {
       };
       const canaryTurn = !r.canary ? [] : [...lookup(), ...turn({ input_tokens: 5, cache_creation_input_tokens: 0, cache_read_input_tokens: 100, output_tokens: 1 }, 5)];
       return jsonl(
-        { type: 'system', subtype: 'init', claude_code_version: o.version ? o.version(call) : '2.0.0', model: 'haiku-resolved', skills: ['s'], plugins: [{ name: o.plugin?.(call) ?? SECRET_PLUGIN }], slash_commands: ['c'],
+        { type: 'system', subtype: 'init', claude_code_version: o.version ? o.version(call) : '2.0.0', model: 'haiku-resolved', skills: ['s'], plugins: [{ name: o.plugin?.(call) ?? SECRET_PLUGIN }], slash_commands: ['c'], ...(o.agents ? { agents: o.agents(call) } : {}),
           tools: o.tools ? o.tools(r, base) : base, mcp_servers: listed.map((name) => ({ name, status: o.status ?? 'connected' })) },
         ...turn({ input_tokens: 5, cache_creation_input_tokens: 100 + delta, cache_read_input_tokens: 0, output_tokens: 1 }, o.numTurns1 ?? 1),
         ...turn({ input_tokens: 5, cache_creation_input_tokens: 0, cache_read_input_tokens: 100 + delta, output_tokens: 1 }, 2, o.toolUse2 ? [{ type: 'tool_use', name: 'x' }] : undefined),
@@ -855,6 +855,8 @@ describe('measurement', () => {
     await expect(study({ status: 'failed' })).rejects.toThrow('did not connect');
     await expect(study({ extraServer: true })).rejects.toThrow('differ from the arm');
     await expect(study({ plugin: (n) => (n < 1 ? 'a' : 'b') })).rejects.toThrow('inventory drift');
+    await expect(study({ agents: (n) => (n < 1 ? ['a'] : ['b']) })).rejects.toThrow('inventory drift');
+    await expect(study({ agents: (n) => (n < 1 ? [] : undefined) })).rejects.toThrow('inventory drift');
   });
 
   it('refuses a tool_use on turn 2 and a turn 1 that reports two turns', async () => {

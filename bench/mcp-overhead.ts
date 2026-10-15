@@ -143,7 +143,7 @@ export const childEnv = (base: NodeJS.ProcessEnv, host: Host): NodeJS.ProcessEnv
 export const CLAUDE_SETTINGS = { disableAllHooks: true, pluginConfigs: { 'agents-md@builtin': { options: { instructionFiles: 'managed-only' } } } };
 
 export function claudeEnv(base: NodeJS.ProcessEnv, toolSearch: ToolSearch = 'default'): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...base, MCP_TIMEOUT: '60000', DISABLE_AUTOUPDATER: '1', DISABLE_UPDATES: '1', CLAUDE_CODE_MCP_ALLOWLIST_ENV: '1', CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1', CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1', CLAUDE_CODE_DISABLE_CLAUDE_MDS: '1', CLAUDE_CODE_DISABLE_POLICY_SKILLS: '1' };
+  const env: NodeJS.ProcessEnv = { ...base, MCP_TIMEOUT: '60000', DISABLE_AUTOUPDATER: '1', DISABLE_UPDATES: '1', CLAUDE_CODE_MCP_ALLOWLIST_ENV: '1', CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1', CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1', CLAUDE_CODE_DISABLE_CLAUDE_MDS: '1', CLAUDE_CODE_DISABLE_POLICY_SKILLS: '1', CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1' };
   if (toolSearch !== 'default') env.ENABLE_TOOL_SEARCH = toolSearch;
   return env;
 }
@@ -355,7 +355,8 @@ export async function codexMcpInventory(command: Command): Promise<Map<string, s
   });
 }
 
-const ambient = (inventory: { plugins: string[]; skills: string[]; slashCommands: string[] }) => createHash('sha256').update(JSON.stringify({ plugins: [...inventory.plugins].sort(), skills: [...inventory.skills].sort(), slashCommands: [...inventory.slashCommands].sort() })).digest('hex');
+// Agents stay enabled and are listed to the model, so a changed roster changes input too; null (not reported) is its own value.
+const ambient = (inventory: { plugins: string[]; skills: string[]; slashCommands: string[]; agents: string[] | null }) => createHash('sha256').update(JSON.stringify({ plugins: [...inventory.plugins].sort(), skills: [...inventory.skills].sort(), slashCommands: [...inventory.slashCommands].sort(), agents: inventory.agents ? [...inventory.agents].sort() : null })).digest('hex');
 const firstLine = (text: string) => text.trim().split(/\r?\n/)[0] ?? '';
 
 /**
@@ -418,6 +419,7 @@ export function hostState(env: NodeJS.ProcessEnv = process.env, platform: NodeJS
     item('claude', 'neutralised', 'AGENTS.md and .claude/AGENTS.md in the working directory and above', 'pluginConfigs "agents-md@builtin" instructionFiles "managed-only" in --settings', 'docs/en/memory: AGENTS.md, Choose which instruction files load'),
     item('claude', 'neutralised', 'user and project skills, agents and commands, and skills synced from claude.ai (~/.claude/skills/synced)', '--setting-sources "" leaves out user and project, which also stops the claude.ai sync', `${SDK}; docs/en/skills: Where synced skills load`),
     item('claude', 'neutralised', 'managed skills directory (.claude/skills in the managed settings directory)', 'CLAUDE_CODE_DISABLE_POLICY_SKILLS=1', 'docs/en/env-vars'),
+    item('claude', 'neutralised', 'background runs of plugin marketplace command sources, which could change files outside this list mid-study', 'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1', 'docs/en/env-vars'),
     item('claude', 'neutralised', 'hooks from settings, plugins, skills or agents, and the status line command', '"disableAllHooks":true in --settings', 'docs/en/settings-reference: disableAllHooks'),
     item('claude', 'neutralised', 'MCP servers in ~/.claude.json (user and local scope), .mcp.json, plugins and claude.ai connectors', '--strict-mcp-config with the arm\'s own --mcp-config', `docs/en/cli-reference: --strict-mcp-config; ${SDK}`),
     item('claude', 'neutralised', 'auto memory (projects/<project>/memory)', 'CLAUDE_CODE_DISABLE_AUTO_MEMORY=1', 'docs/en/env-vars'),
