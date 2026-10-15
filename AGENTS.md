@@ -133,7 +133,8 @@ These rules are why the numbers can be trusted. Keep it that way.
   merges; see [ORCHESTRATOR.md](docs/loop/ORCHESTRATOR.md#merge-gate).
 - **Never** force-push `main` or rewrite published history.
 - **Backlog:** update the item in `docs/loop/BACKLOG.md` (status, PR link,
-  learnings) in the same PR.
+  learnings) in the same PR. A new item takes the next ID free on `main` and
+  on every open PR.
 
 ## Code Review Rules
 
