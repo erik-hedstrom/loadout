@@ -177,7 +177,7 @@ cross-vendor agents). Erik publishes.
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
 | C1 | P0 | New held-out request set + re-measure v4 | Codex (seeds, expand) + Claude (judge) | local | done ([#16](https://github.com/erik-hedstrom/loadout/pull/16)): precision falls on new requests (64% vs 82%); judged through local `claude -p`, not the API (see Learnings) |
-| C2 | P1 | Outcome eval on the small tier with fixed fixtures | Claude (design) | cloud (fixtures) + local (runs) | todo |
+| C2 | P1 | Outcome eval on the small tier with fixed fixtures | Claude (design) | cloud (fixtures) + local (runs) | in progress ([#37](https://github.com/erik-hedstrom/loadout/pull/37), fixtures; runs: local) |
 | C3 | P2 | Does Jev pick a sensible model tier? | Claude | cloud | todo (launcher only: the hook and search keep the user's model) |
 | C4 | P0 | Demote generic "fits everything" skills | Codex | cloud | todo (next: C1 shows over-loading on general business requests) |
 | C5 | P2 | Retrieval beyond 200 candidates (Jev tournament) | Codex | cloud | todo |
@@ -227,6 +227,45 @@ Acceptance:
   - large tier bare.
 - Blind pairwise judging in both orders, longer caps (15 min).
 - Report win rates with intervals, plus cost per task.
+
+Learnings (cloud half): [fixtures and protocol](../../bench/fixtures/c2/PROTOCOL.md).
+- A harness gateway that held the keys would intercept the agent's API
+  traffic, which AGENTS.md rule 1 forbids, so the protocol has none. Each arm
+  calls the vendor directly with a workspace key under a monthly spend limit.
+  A skill can tell `claude` to read a key and send it to Jev through a
+  pre-approved `find_skills` call, which runs outside the Bash sandbox, and
+  revoking later cannot undo that. So the primary layer is that the agent cannot
+  read a key: files denied to the Bash sandbox, Read, Grep and Glob fenced to the run
+  folder, `apiKeyHelper`, a fresh `/proc` for `Bash`, and a canary probe in the smoke run. Redaction before Jev is
+  E14, a prerequisite for the loadout arm; the workspace is archived before any
+  output is scanned, judged or committed:
+  [Credentials and spend](../../bench/fixtures/c2/PROTOCOL.md#credentials-and-spend).
+  `enableWeakerNestedSandbox` is prohibited: it exposes `/proc` to `Bash`, and
+  permission rules do not stop a Python or Node child. Where bubblewrap cannot
+  mount `/proc`, use a VM.
+- The library, config and sessions are denied to Bash and file tools; skills
+  load through MCP, while the hook retains its framed injection. Folder hints
+  remain a stated limit. D18 is not a C2 prerequisite: probes must show the
+  hints cannot enable raw reads, and failed attempts count toward outcomes.
+- What that gives up (refusal before the fact, a hard per-run limit, a record
+  of the pins the agent cannot reach, per-run vendor cost) is listed in
+  [PROTOCOL.md](../../bench/fixtures/c2/PROTOCOL.md#given-up-compared-with-a-harness-gateway).
+  Spend is the vendor's usage for the key, checked against the stream to 5%.
+- The score is S = 0.5 + (W - L) / (2n) over all paired tasks, with a Tango
+  score interval (`bench/c2-score.ts`) and a margin of 0.10. With 14 pairs, 14
+  ties are "not shown" (0.39 to 0.61) but one win and 13 ties read "match"
+  (0.42 to 0.66), so the margin is Erik's to set; the decisive-pair rate is
+  secondary ([Analysis](../../bench/fixtures/c2/PROTOCOL.md#analysis)).
+- The documented env switches turn off compaction, the non-streaming fallback,
+  the 1-hour cache TTL and the background title request in all arms, and every
+  delegation tool is denied. Every `invalid` run halts the plan (all arms) for
+  Erik to classify. Approvals are (n - 1) x high + ceiling, about $78 with
+  Haiku 5.5 and $136 with Haiku 4.5, under one shared stopping rule: see
+  [Arms](../../bench/fixtures/c2/PROTOCOL.md#arms) and
+  [Expected spend](../../bench/fixtures/c2/PROTOCOL.md#expected-spend-local-run).
+- Raw results are committed after a secret scan and a paths and usernames scan,
+  and Erik reads the folder before any push
+  ([What is committed](../../bench/fixtures/c2/PROTOCOL.md#what-is-committed)).
 
 **C3. Tier choice.**
 
@@ -319,6 +358,21 @@ Acceptance: a third row in that RESULTS table, with raw results. The README's
 | D8 | P1 | Host capability matrix (verified vs generated) | Claude | cloud | done ([#18](https://github.com/erik-hedstrom/loadout/pull/18)) |
 | D9 | P1 | Codex parity: neutral session skill dir, tier presets | Claude | cloud | done ([#21](https://github.com/erik-hedstrom/loadout/pull/21)); Codex launch not re-run live |
 | D12 | P0 | Codex: install the hook and search as one step, if Codex allows it | Codex | local | done ([#23](https://github.com/erik-hedstrom/loadout/pull/23)): `plugins/loadout-codex` through `.agents/plugins/marketplace.json`; install checked offline; the hook still needs `/hooks` trust; the live run is D2 |
+| D18 | P1 | The hook and `load_skill` can offer `load_skill` only, with no folder | Codex | cloud | todo |
+
+**D18. The hook and `load_skill` can offer `load_skill` only, with no folder.**
+Both currently suggest reading skill files directly, even when the host's
+file fence denies that path ([C2, PR #37](https://github.com/erik-hedstrom/loadout/pull/37)).
+
+Acceptance:
+- An option or default omits the hook's folder text and direct-read suggestion
+  and the `load_skill` listing's folder text, offering only `load_skill`.
+- The binary refusal (`src/mcp.ts:138`, "binary file; use it from the skill
+  folder directly") also omits the direct-folder advice.
+- Tests cover these outputs, including `load_skill` with text and binary `file`
+  arguments.
+- C2 drops its folder-hint limit when this lands. C2 does not depend on D18:
+  its file fence, OS denies and probes enforce framed loading already.
 
 **D10. In-host first: loadout as a Claude Code plugin.**
 
@@ -584,6 +638,7 @@ Learnings (2026-10-09):
 | E10 | P1 | Build without optional dependencies | Codex | cloud | done ([PR #8](https://github.com/erik-hedstrom/loadout/pull/8)) |
 | E11 | P1 | Fixed-text diagnostics in the gateway and relay | Codex | cloud | done ([PR #10](https://github.com/erik-hedstrom/loadout/pull/10)) |
 | E12 | P1 | A tool-less Codex bench backend (codex-cli 0.160.1 keeps unified_exec on) | Codex | local | todo |
+| E14 | P1 | Redact key-shaped strings before anything goes to Jev (prerequisite for the C2 loadout arm) | Codex | cloud | todo |
 
 **E10. Build without optional dependencies.** src/embed.ts:24 types
 `@huggingface/transformers` with `typeof import(...)`. So `tsc` fails when npm
@@ -638,6 +693,24 @@ judge sees the skill catalog.
 Acceptance: a Codex configuration whose `exec` exposes no tool that reads
 files, runs commands or reaches the network, checked by lib.ts before every
 run; an adversarial test with the canary probe; `@codex security review`.
+
+**E14. Redact key-shaped strings before anything goes to Jev.** `find_skills`
+(renamed `find_tools` in #39) sends its `goal` (up to 4,000 characters) and
+`keywords` to Jev, and the hook sends the user's prompt. A pasted or injected
+credential then sits in Jev's logs while it is still live; a malicious skill can
+cause this (see Credentials and spend in the C2 protocol), and users paste
+secrets into prompts too.
+
+Acceptance:
+- One place that every Jev request passes through replaces strings that match
+  the key shapes in `bench/fixtures/c2/scan-patterns.json` (or a `src/` copy the
+  bench file reads) with a fixed token, in goals, keywords and prompts.
+- Adversarial tests for each shape, and for a key inside one `keywords` entry.
+- The session log counts redactions and never records the match.
+
+Limit: base64, splitting or any other encoding defeats pattern redaction, so
+this is defence in depth. The C2 protocol's primary layer is that the agent
+cannot read the key. Prerequisite for the C2 loadout arm.
 
 **E1. CI.**
 

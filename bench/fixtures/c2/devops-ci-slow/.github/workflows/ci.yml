@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2
+        with:
+          node-version: 18
+      - name: Install
+        run: npm install
+      - name: Lint
+        run: npm run lint
+      - name: Unit tests
+        run: npm test
+      - name: Integration tests
+        run: |
+          npm install
+          npm run test:integration
+      - name: Build
+        run: npm run build
+      - name: Build image
+        run: docker build -t shipments-api:${{ github.sha }} .
+      - name: Smoke test image
+        run: |
+          docker run -d --name smoke -p 3000:3000 shipments-api:${{ github.sha }}
+          sleep 20
+          curl -f http://localhost:3000/healthz
+      - name: Push image
+        if: github.ref == 'refs/heads/main'
+        run: |
+          echo "${{ secrets.REGISTRY_TOKEN }}" | docker login registry.example.com -u ci --password-stdin
+          docker tag shipments-api:${{ github.sha }} registry.example.com/shipments-api:latest
+          docker push registry.example.com/shipments-api:latest

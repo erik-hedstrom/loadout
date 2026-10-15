@@ -1,0 +1,20 @@
+[
+  { "id": "docx-lease-amendment", "inputs": ["lease.docx"] },
+  { "id": "xlsx-budget-cleanup", "inputs": ["budget.xlsx"] },
+  { "id": "pdf-invoice-extract", "inputs": ["invoices.pdf"] },
+  { "id": "pptx-board-deck", "inputs": ["update.pptx"] },
+  { "id": "docx-minutes", "inputs": ["transcript.txt"] },
+  { "id": "web-pricing-fix", "inputs": ["check.svg", "logo.svg", "pricing.css", "pricing.html", "x.svg"] },
+  { "id": "web-landing-new", "inputs": ["brief.md"] },
+  { "id": "web-signup-form", "inputs": ["signup.html", "signup.js"] },
+  { "id": "data-sales-clean", "inputs": ["sales.csv"] },
+  { "id": "data-ab-test", "inputs": ["experiment.csv"] },
+  { "id": "data-orders-sqlite", "inputs": ["orders.json"] },
+  { "id": "devops-ci-slow", "inputs": [".github/workflows/ci.yml", "Dockerfile", "package.json"] },
+  { "id": "devops-compose-debug", "inputs": ["api/Dockerfile", "api/package.json", "api/server.js", "compose.log", "docker-compose.yml"] },
+  { "id": "code-logsum-flags", "inputs": ["access.log", "logsum.py"] },
+  { "id": "ctl-ratelimiter-bug", "inputs": ["package.json", "ratelimiter.mjs", "ratelimiter.test.mjs"] },
+  { "id": "ctl-interval-merge", "inputs": ["bookings.py"] },
+  { "id": "ctl-merge-conflict", "inputs": ["pricing.py", "test_pricing.py"] },
+  { "id": "ctl-customer-reply", "inputs": ["email.txt", "policy.txt"] }
+]

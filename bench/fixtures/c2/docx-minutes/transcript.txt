@@ -1,0 +1,46 @@
+Product sync, Tue 10 Mar 2026. Present: Maya (PM), Tomas (eng lead), Ines (design), Raj (support), Colin (sales). Notes typed live, so messy.
+
+Maya: ok let's go. First thing, 2.3 release. Tomas where are we
+Tomas: code complete on the export feature, the sync fix is still in review. I think we can cut a release candidate by the 17th.
+Maya: so ship on the 17th?
+Tomas: no, QA needs a week on the RC, they said that last time. 24th.
+Maya: fine, 24th it is. Ship 2.3 on the 24th. I'll tell the customers who were promised "mid March" that it slipped a week.
+Colin: that's three of mine, I can email them if you give me the wording
+Maya: I'll send you the wording today.
+Colin: good
+
+Maya: dark mode. Ines?
+Ines: designs are done for the main screens but the settings screens and the onboarding flow aren't. Honestly it won't make 2.3.
+Tomas: agree, not in 2.3. If we rush it we'll ship half a dark mode.
+Maya: ok, dark mode is out of 2.3. Target 2.4. Ines can you finish the remaining screens by Friday so Tomas can estimate it?
+Ines: Friday works, I'll do settings first.
+Tomas: I'll have an estimate for dark mode the Wednesday after, once I've seen the designs.
+
+Maya: support. Raj, the ticket backlog.
+Raj: 212 open, up from 150 two weeks ago. Most are about the CSV import failing on files with a BOM.
+Tomas: that's a known bug, small fix. I can put it in 2.3 if we want
+Maya: yes put it in 2.3
+Raj: can I get a workaround for customers in the meantime? Something I can paste in replies
+Tomas: open the file in a text editor and save as UTF-8 without BOM. I'll write it up properly.
+Raj: great, by when?
+Tomas: tomorrow
+Raj: ok. I'll also tag all the BOM tickets so we can measure when they stop. I'll do that this week.
+Maya: this week, ok.
+
+Maya: pricing. Colin you wanted to talk about the team tier.
+Colin: yes, three prospects asked for something between Free and Pro. 5 seats, shared workspace. Not sure about price. 12 a seat? 15?
+Maya: I don't want to decide that today without numbers. We need to know what a seat costs us. Does anyone have the hosting numbers per workspace?
+Tomas: roughly, but not something I'd put in a pricing sheet.
+Maya: ok so open question, what does a seat cost us and what do we charge. Not deciding today.
+Colin: should we ask legal whether the shared workspace changes our terms? I think data ownership gets weird
+Maya: probably, yeah. Someone should ask legal.
+(nobody picked this up)
+
+Ines: one more thing, the new logo files. Marketing wants them on the website by end of next week.
+Maya: that's on you Ines?
+Ines: yes, I'll get the assets onto the site by end of next week.
+Maya: thanks.
+
+Maya: anything else? ok. Next sync is Tuesday the 17th as usual, though if we're all heads down on the RC we could skip it, let's decide on Monday.
+Tomas: skip, honestly.
+Maya: decide Monday. Done.
