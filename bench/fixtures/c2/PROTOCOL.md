@@ -64,8 +64,9 @@ of this:
   `loadout mcp` and the lazy import in `src/embed.ts` is root-owned and
   read-only, outside the run folder and the temp directory: the plugin copy, the
   `loadout` install with its `node_modules`, and the library and `config.json`
-  of `LOADOUT_HOME`. Only `<home>/sessions`, with the hook's state and no code,
-  is writable.
+  of `LOADOUT_HOME`. Only `<home>/sessions` (hook state) and `<home>/index`
+  (metadata and embedding caches) are writable by hook/MCP, keeping normal
+  cache writes behind the home deny (Arms).
 - Nothing can be installed during a run, so the image, the same for all arms,
   holds Node 22+, Python 3 with python-docx, openpyxl, python-pptx, pypdf,
   pdfplumber, pandas and matplotlib, and sqlite3. Versions go into the results.
@@ -136,9 +137,9 @@ limits, batch revocation and usage checks replace a gateway.
   [authentication](https://platform.claude.com/docs/en/manage-claude/authentication)),
   so a forgotten key dies by itself.
 - **The threat.** Third-party skills can request a credential read and a
-  pre-approved `find_skills` call (`find_tools` in PR #39). Outside the Bash
-  sandbox, it sends `goal` (up to 4,000 characters) and `keywords` to Jev: a key
-  could stay live in logs until batch revocation, up to about 27 h. Revocation
+  pre-approved `find_skills` call (`find_tools` in PR #39). That call runs outside
+  the Bash sandbox and sends `goal` (up to 4,000 characters) and `keywords` to
+  Jev: a key could stay live in logs until batch revocation, up to about 27 h. Revocation
   cannot undo that. Anthropic already holds the key for the model's own turns.
 - **Layer 1, the primary one: the agent cannot read a key.**
   - Both keys are under `<keys>`, outside the run folder.
@@ -150,9 +151,8 @@ limits, batch revocation and usage checks replace a gateway.
     the key goes in the environment and the fresh `/proc` is the layer. The Jev
     key is the file `jev.apiKeyFile` names, not an MCP `env` entry: the hook has
     no configured `env`.
-  - **The rule: `Bash` and its children cannot read `<keys>`, `<home>/library`,
-    `<home>/config.json` or `<home>/sessions`.** The helper, hook and `loadout
-    mcp` run outside it "with your full access"
+  - **The rule: `Bash` and its children cannot read `<keys>` or `<home>`.**
+    The helper, hook and `loadout mcp` run outside it "with your full access"
     ([sandboxing](https://code.claude.com/docs/en/sandboxing)). Permission rules
     alone cannot block arbitrary Python or Node file reads
     ([permissions](https://code.claude.com/docs/en/permissions)). Each path:
@@ -160,7 +160,7 @@ limits, batch revocation and usage checks replace a gateway.
     | Path | OS layer for `Bash` and its children | `claude`'s own tools (fence, then rule) |
     |---|---|---|
     | key files in `<keys>` | `sandbox.filesystem.denyRead` and `sandbox.credentials.files` (`deny`) | fence; `Read`, `Edit(//<keys>/**)` |
-    | `<home>/library`, `<home>/config.json`, `<home>/sessions` | `sandbox.filesystem.denyRead` | fence; `Read`, `Edit` for each (Arms) |
+    | all of `<home>`, caches included | `sandbox.filesystem.denyRead` | fence; `Read`, `Edit(//<home>/**)` |
     | `/proc/<pid>/{environ,cmdline,root,cwd,fd,mem,maps}` of `claude`, `loadout mcp`, the hook | the default bubblewrap sandbox mounts a fresh `/proc` (below) | fence; `Read(//proc/**)` |
     | helper script, `$SETTINGS` | no key in either; both live in `<keys>`, so `Bash` cannot read them, and it writes only in the run folder | fence; `Edit(//<keys>/**)` |
     | temp copies, environment, argv | none holds a key: no step writes a copy (`--no-session-persistence`, no `--debug`), `ANTHROPIC_API_KEY` is unset, the Jev key is a file | |
@@ -178,7 +178,8 @@ limits, batch revocation and usage checks replace a gateway.
     ([permission modes](https://code.claude.com/docs/en/permission-modes)).
     Assumption, probed below: outside spellings are refused whether checked as
     given or resolved. Inside the folder:
-    - *Symlinks:* the run folder is mounted `nosymfollow`; the
+    - *Symlinks:* the run folder is mounted `nosymfollow`
+      (mount(8); [`MS_NOSYMFOLLOW`](https://man7.org/linux/man-pages/man2/mount.2.html), Linux 5.10+); the
       [self-check](#isolation) verifies that no process follows a link there.
       Links the agent makes stop working, `python -m venv` included.
     - *Hard links:* the run folder is its own mount, and `link(2)` fails
@@ -202,12 +203,14 @@ limits, batch revocation and usage checks replace a gateway.
     ([env-vars](https://code.claude.com/docs/en/env-vars)) keep credentials out
     of the environments of `Bash`, hooks and MCP servers, a second layer.
   - **Probe, in every arm's smoke argv.** Canaries stand in `<keys>/<canary>`,
-    `<home>/config.json`, `<home>/sessions/<file>`, a library `SKILL.md`, and
-    `claude`'s and the MCP server's environments. `Read`, `Grep` and `Bash`
-    must fail on every table file. `Bash` tries every table path with `cat`,
+    `<home>/{config.json,sessions/<file>,library/.../SKILL.md}`, and `claude`'s
+    and MCP's environments. Before hashing, add a skill-description canary;
+    the runner verifies it in populated `<home>/index/library-scan.json`.
+    `Read`, `Grep` and `Bash` must fail on these and an embedding-cache file.
+    `Bash` tries each probe file with `cat`,
     Python `open()` and Node `fs.readFileSync`, plus `environ`, `cmdline`,
     `mem` at `maps`
-    offsets, `/proc/<pid>/root/` paths to all four locations, and walks
+    offsets, `/proc/<pid>/root/` paths to every probe file, and walks
     `/proc/<pid>/fd` for `claude` and MCP, plus its own descriptors 0 to 1023.
     For each protected file it tries symlinks and hard links from the run
     folder; all three tools try those links, relative, `..` and upper-case
@@ -215,10 +218,10 @@ limits, batch revocation and usage checks replace a gateway.
     `/proc/self/environ` and `/proc/thread-self/environ`; `Bash` tries links to
     `/proc/self/environ`.
     `Grep` from `/` and each protected parent, and `Glob /**`, must find no
-    canary. `Edit` of each protected file and `Write` into the library must
-    fail; a runner exec checks unchanged bytes and no new file. No nonce may
+    canary. `Edit` of each protected file and `Write` into library, sessions or
+    index must fail; a runner exec checks unchanged bytes and no new file. No nonce may
     reach the stream. Positive controls outside the Bash sandbox verify hook
-    access to config, sessions, library and keys, and MCP reads via `load_skill`.
+    access to home and keys, and MCP reads via `load_skill`.
     Only framed loadout controls may return its library nonce.
     This checks the pinned image and CLI, not every spelling or real key location.
 - **Layer 2, not in this PR:** loadout redacts strings that match the key
@@ -342,12 +345,10 @@ files, `<helper>` and this file; no secret is in the JSON):
 {"apiKeyHelper":"<helper>",
  "permissions":{"blockReadsOutsideWorkingDirectories":true,
   "deny":["Read(//<keys>/**)","Edit(//<keys>/**)","Read(//proc/**)",
-   "Read(//<home>/library/**)","Edit(//<home>/library/**)",
-   "Read(//<home>/config.json)","Edit(//<home>/config.json)",
-   "Read(//<home>/sessions/**)","Edit(//<home>/sessions/**)"]},
+   "Read(//<home>/**)","Edit(//<home>/**)"]},
  "sandbox":{"enabled":true,"failIfUnavailable":true,"allowUnsandboxedCommands":false,
   "network":{"strictAllowlist":true},
-  "filesystem":{"denyRead":["<keys>","<home>/library","<home>/config.json","<home>/sessions"]},
+  "filesystem":{"denyRead":["<keys>","<home>"]},
   "credentials":{"files":[{"path":"<keys>","mode":"deny"}]}}}
 ```
 
@@ -406,9 +407,12 @@ claude -p "$PROMPT" --output-format stream-json --verbose --include-hook-events 
   under Credentials and spend); the library is never a working directory, so
   its `CLAUDE.md`, `AGENTS.md` and `.claude/` cannot load as memory.
   **Stated limit:** the hook and `load_skill` listing suggest direct folder
-  reads; no config switch suppresses them. D18 removes those hints.
-  C2 does not depend on D18: denied reads cannot bypass `load_skill`'s
-  `escapeSkillTags` framing, though failed attempts count toward outcomes.
+  reads; no config switch suppresses them yet (D18).
+  Bash cannot run or copy library scripts or binary assets; `load_skill` refuses
+  binaries and points at the denied folder. This may hurt docx, pptx, xlsx and
+  pdf tasks.
+  D18 is not required: raw reads fail; `load_skill` frames text. Failed
+  attempts count toward outcomes.
   Native skill-folder loading is the host baseline (disabled here with `Skill`);
   loadout's separate third-party library is measured as shipped, framed by
   `load_skill` and the hook.

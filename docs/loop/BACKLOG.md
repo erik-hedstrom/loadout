@@ -367,7 +367,10 @@ file fence denies that path ([C2, PR #37](https://github.com/erik-hedstrom/loado
 Acceptance:
 - An option or default omits the hook's folder text and direct-read suggestion
   and the `load_skill` listing's folder text, offering only `load_skill`.
-- Tests cover both outputs, including `load_skill` with a `file` argument.
+- The binary refusal (`src/mcp.ts:138`, "binary file; use it from the skill
+  folder directly") also omits the direct-folder advice.
+- Tests cover these outputs, including `load_skill` with text and binary `file`
+  arguments.
 - C2 drops its folder-hint limit when this lands. C2 does not depend on D18:
   its file fence, OS denies and probes enforce framed loading already.
 
