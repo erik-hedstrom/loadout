@@ -19,10 +19,8 @@ You are given a PR number or a branch.
 - **Branch:** use `git fetch origin <branch> && git diff origin/main...origin/<branch>`.
 
 Read `AGENTS.md` (the "Code Review Rules" section applies to you), and the
-backlog item the PR names in `docs/loop/BACKLOG.md`. Read the surrounding code
-and callers, tests and contracts needed to establish both correctness and
-necessity. Check APIs, host flags and configuration against source or official
-docs before asserting a defect. Do not read `bench/results/**` rows,
+backlog item the PR names in `docs/loop/BACKLOG.md`. Ground each finding as
+AGENTS.md's Grounding rule says. Do not read `bench/results/**` rows,
 `node_modules`, or `dist`.
 
 ## Check 1: correctness and security
@@ -52,19 +50,8 @@ point if it does not apply.
 ## Check 2: what should not exist
 
 The project must read like careful, deliberate engineering, not generated
-filler. Run a separate necessity pass using AGENTS.md rule 4, even if the
-security/correctness pass found nothing. For each added construct, establish
-which current requirement, caller or invariant earns its place. Search callers
-before declaring code unused, and check whether an existing helper suffices.
-
-For every simplification finding, identify what to delete or shrink, evidence
-that it is unnecessary, its maintenance cost and the behavior/invariants that
-remain. Estimate removed lines only when useful. A single caller is not enough
-to reject a helper that isolates a boundary or meaningful invariant.
-
-Check scope against the backlog acceptance criteria, and tests against actual
-behavior. Flag stubs, missing requirements, mocked evidence that cannot observe
-the failure, unrun completion claims and unrelated changes.
+filler. Run a separate necessity pass under AGENTS.md rule 4, even if Check 1
+found nothing, and check scope and tests under rule 5.
 
 ## Output
 
@@ -78,7 +65,7 @@ Simplify:
 1. [High|Medium|Low] file:line: unnecessary construct. Evidence: <callers/contracts>. Cost: <impact>. Fix: <safe deletion/replacement, preserved behavior>.
 Scope / tests / docs:
 1. [High|Medium|Low] file:line: problem. Evidence: <observed gap>. Fix: <specific change>.
-Net: ≈ N lines could be removed without losing behavior.
+Net: ≈ N lines could be removed without losing behavior. (Only when Simplify has findings.)
 ```
 
 Apply AGENTS.md's severity and disposition rules to every section. Material
