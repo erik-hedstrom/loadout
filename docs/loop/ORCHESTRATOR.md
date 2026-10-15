@@ -162,9 +162,11 @@ about it. Work in this order:
      `RUST_LOG=codex_core::client=trace,codex_mcp=trace,codex_core_plugins=info`.
      The rollout JSONL alone shows neither the tools nor whether a request was
      incremental.
-   - **Assert equal inventories** (skills, plugins, MCP servers, tools) across
-     arms before the first paid request, and stop on any difference. Reuse
-     B7's checks in `bench/mcp-overhead.ts` rather than writing new ones.
+   - **Check inventories before the first paid request.** What the
+     treatment does not change (skills, plugins, other MCP servers) must be
+     equal across arms; the treatment's own servers and tools must match each
+     arm's declaration. Stop on any difference. Reuse B7's checks in
+     `bench/mcp-overhead.ts` rather than writing new ones.
 3. **Never proxy or intercept the CLI's API traffic** (AGENTS.md rule 1). Use
    only its flags, config, logs and trace files.
 
