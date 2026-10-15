@@ -12,7 +12,7 @@
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { homedir, tmpdir, userInfo } from 'node:os';
-import { basename, dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, posix, resolve, win32 } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -113,10 +113,10 @@ const COMMON_ENV = ['PATH', 'HOME', 'USERPROFILE', 'LANG', 'LC_ALL', 'LC_CTYPE',
   'SYSTEMROOT', 'SYSTEMDRIVE', 'WINDIR', 'APPDATA', 'LOCALAPPDATA', 'PROGRAMDATA', 'PROGRAMFILES', 'PROGRAMFILES(X86)', 'COMSPEC', 'PATHEXT', 'USERNAME', 'USERDOMAIN',
   // a corporate machine needs these to reach the API
   'HTTPS_PROXY', 'HTTP_PROXY', 'ALL_PROXY', 'NO_PROXY', 'SSL_CERT_FILE', 'SSL_CERT_DIR'];
-// The homes hostWrites resolves and prints; Claude's subscription login token. API keys are not passed: under `-p` they would
-// bill cash instead of the subscription (backlog, B7 decision). Names from code.claude.com/docs/en/env-vars and codex-rs at cf0ed4c.
+// Cache, certificate and Codex home overrides. Claude's home is fresh and its subscription token is injected only at launch.
+// API keys would bill cash under `-p`, so are excluded (backlog B7). Names: code.claude.com/docs/en/env-vars; codex-rs at cf0ed4c.
 const HOST_ENV: Record<Host, string[]> = {
-  claude: ['CLAUDE_CONFIG_DIR', 'XDG_CACHE_HOME', 'CLAUDE_CODE_OAUTH_TOKEN', 'NODE_EXTRA_CA_CERTS', 'CLAUDE_CODE_CERT_STORE', 'CLAUDE_CODE_CLIENT_CERT', 'CLAUDE_CODE_CLIENT_KEY'],
+  claude: ['XDG_CACHE_HOME', 'NODE_EXTRA_CA_CERTS', 'CLAUDE_CODE_CERT_STORE', 'CLAUDE_CODE_CLIENT_CERT', 'CLAUDE_CODE_CLIENT_KEY'],
   codex: ['CODEX_HOME', 'CODEX_SQLITE_HOME', 'CODEX_CA_CERTIFICATE'],
 };
 export const envAllowlist = (host: Host) => [...COMMON_ENV, ...HOST_ENV[host]];
@@ -192,7 +192,7 @@ const userMessage = (text: string) => JSON.stringify({ type: 'user', message: { 
 
 // A macOS configuration profile lands as a plist for the device or for the user in this folder (the macOS convention; the
 // domains are from the Claude docs and codex-rs, and the folder is unverified on a Mac).
-const managedPlists = (domain: string) => ['/Library/Managed Preferences', join('/Library/Managed Preferences', userInfo().username)].map((d) => join(d, `${domain}.plist`));
+const managedPlists = (domain: string) => ['/Library/Managed Preferences', posix.join('/Library/Managed Preferences', userInfo().username)].map((d) => posix.join(d, `${domain}.plist`));
 
 /**
  * What Claude Code reads that an administrator controls (code.claude.com/docs/en/managed-settings and /server-managed-settings,
@@ -204,14 +204,14 @@ const managedPlists = (domain: string) => ['/Library/Managed Preferences', join(
 const claudeManagedDir = (platform: NodeJS.Platform) => platform === 'darwin' ? '/Library/Application Support/ClaudeCode' : platform === 'win32' ? 'C:\\Program Files\\ClaudeCode' : '/etc/claude-code';
 export function managedClaudeFiles(platform: NodeJS.Platform = process.platform): string[] {
   const dir = claudeManagedDir(platform);
-  return [...['managed-settings.json', 'managed-settings.d', 'managed-mcp.json'].map((f) => join(dir, f)),
+  return [...['managed-settings.json', 'managed-settings.d', 'managed-mcp.json'].map((f) => (platform === 'win32' ? win32 : posix).join(dir, f)),
     ...(platform === 'darwin' ? managedPlists('com.anthropic.claudecode') : [])];
 }
 
 /** Host paths reach notes that are committed with the results, so a user's directories appear as variables, never as /home/<user>. */
 export function redacted(file: string, env: NodeJS.ProcessEnv = process.env): string {
-  const swaps: [string, string][] = [[env.CODEX_HOME || join(homedir(), '.codex'), '$CODEX_HOME'], [env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'), '$CLAUDE_CONFIG_DIR'],
-    [join('/Library/Managed Preferences', userInfo().username), '/Library/Managed Preferences/<user>'], [homedir(), '~']];
+  const swaps: [string, string][] = [[env.CODEX_HOME || join(homedir(), '.codex'), '$CODEX_HOME'],
+    [posix.join('/Library/Managed Preferences', userInfo().username), '/Library/Managed Preferences/<user>'], [homedir(), '~']];
   return swaps.reduce((path, [from, to]) => (path.startsWith(from) ? to + path.slice(from.length) : path), file);
 }
 
@@ -227,9 +227,6 @@ export function buildPlan(root: string, only: Only = {}, env: NodeJS.ProcessEnv 
   for (const arm of arms()) {
     if (!hosts.includes(arm.host) || (arm.config && only.configs && !only.configs.includes(arm.config))) continue;
     const clean = childEnv(env, arm.host);
-    if (arm.host === 'claude') for (const name of Object.keys(clean)) {
-      if (['CLAUDE_CONFIG_DIR', 'CLAUDE_CODE_OAUTH_TOKEN'].includes(name.toUpperCase())) delete clean[name];
-    }
     const servers: Record<string, object> = arm.kind === 'native' ? Object.fromEntries(serverSpecs(CONFIGS[arm.config!]).map((s) => [s.name, serverConfig(s)]))
       : arm.kind === 'gateway' ? { loadout: gatewayServer(root, arm.config!) } : {};
     const binary = cli(arm.host);
@@ -365,7 +362,7 @@ export async function codexMcpInventory(command: Command): Promise<Map<string, s
 }
 
 // Agents stay enabled and are listed to the model, so a changed roster changes input too; null (not reported) is its own value.
-const ambient = (inventory: { plugins: string[]; skills: string[]; slashCommands: string[]; agents: string[] | null }) => createHash('sha256').update(JSON.stringify({ plugins: [...inventory.plugins].sort(), skills: [...inventory.skills].sort(), slashCommands: [...inventory.slashCommands].sort(), agents: inventory.agents ? [...inventory.agents].sort() : null })).digest('hex');
+const ambient = (inventory: { skills: string[]; slashCommands: string[]; agents: string[] | null }) => createHash('sha256').update(JSON.stringify({ skills: [...inventory.skills].sort(), slashCommands: [...inventory.slashCommands].sort(), agents: inventory.agents ? [...inventory.agents].sort() : null })).digest('hex');
 const firstLine = (text: string) => text.trim().split(/\r?\n/)[0] ?? '';
 
 /**
@@ -380,13 +377,14 @@ const firstLine = (text: string) => text.trim().split(/\r?\n/)[0] ?? '';
  */
 export function codexSystemDirs(platform: NodeJS.Platform = process.platform, env: NodeJS.ProcessEnv = process.env): string[] {
   if (platform !== 'win32') return ['/etc/codex'];
-  return [...new Map([env.ProgramData, 'C:\\ProgramData'].filter((d): d is string => !!d).map((d) => [d.toLowerCase(), join(d, 'OpenAI', 'Codex')])).values()];
+  return [...new Map([env.ProgramData, 'C:\\ProgramData'].filter((d): d is string => !!d).map((d) => [d.toLowerCase(), win32.join(d, 'OpenAI', 'Codex')])).values()];
 }
 
 export function managedCodexFiles(platform: NodeJS.Platform = process.platform, env: NodeJS.ProcessEnv = process.env): string[] {
-  const cloudCache = join(env.CODEX_HOME || join(homedir(), '.codex'), 'cloud-config-bundle-cache.json');
+  const paths = platform === 'win32' ? win32 : posix;
+  const cloudCache = paths.join(env.CODEX_HOME || paths.join(homedir(), '.codex'), 'cloud-config-bundle-cache.json');
   const files = platform === 'win32' ? ['config.toml', 'requirements.toml'] : ['config.toml', 'requirements.toml', 'managed_config.toml'];
-  return [...codexSystemDirs(platform, env).flatMap((dir) => files.map((f) => join(dir, f))), ...(platform === 'darwin' ? managedPlists('com.openai.codex') : []), cloudCache];
+  return [...codexSystemDirs(platform, env).flatMap((dir) => files.map((f) => paths.join(dir, f))), ...(platform === 'darwin' ? managedPlists('com.openai.codex') : []), cloudCache];
 }
 
 export const CLAUDE_SCRUB_PRECONDITION = 'Claude MCP servers receive no login token only if this CLI honours CLAUDE_CODE_MCP_ALLOWLIST_ENV (introduced in a version the docs do not give) or CLAUDE_CODE_SUBPROCESS_ENV_SCRUB (2.1.83; credential names from 2.1.251); a CLI that knows neither ignores them silently. Codex starts stdio MCP servers with a small default environment plus the declared env (codex-rs/rmcp-client/src/utils.rs).';
@@ -413,6 +411,7 @@ export interface HostItem { host: Host; item: string; files: string[]; decision:
 export function hostState(env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform, workParent: string = tmpdir()): HostItem[] {
   const codex = env.CODEX_HOME || join(homedir(), '.codex');
   const managed = claudeManagedDir(platform);
+  const systemPaths = platform === 'win32' ? win32 : posix;
   const at = (dir: string, ...names: string[]) => names.map((n) => join(dir, n));
   const above = (dir: string): string[] => (dirname(dir) === dir ? [dir] : [dir, ...above(dirname(dir))]);
   // The user's own dot-folders in the home directory are the config directories listed separately.
@@ -438,7 +437,7 @@ export function hostState(env: NodeJS.ProcessEnv = process.env, platform: NodeJS
     item('claude', 'neutralised', 'auto memory (projects/<project>/memory)', 'CLAUDE_CODE_DISABLE_AUTO_MEMORY=1', 'docs/en/env-vars'),
     item('claude', 'identical across arms, recorded', 'managed-policy CLAUDE.md and managed agents, which no setting excludes, and the managed skills directory (also switched off above)',
       'skills, slash commands and agents are hashed from init and must match the baseline; the managed files cannot be excluded ("Managed policy CLAUDE.md files cannot be excluded")', 'docs/en/memory: Exclude specific CLAUDE.md files; /sub-agents: managed subagents; /claude-directory: File reference',
-      [join(managed, 'CLAUDE.md'), join(managed, '.claude', 'agents'), join(managed, '.claude', 'skills')]),
+      [systemPaths.join(managed, 'CLAUDE.md'), systemPaths.join(managed, '.claude', 'agents'), systemPaths.join(managed, '.claude', 'skills')]),
     item('claude', 'needed', 'subscription login through CLAUDE_CODE_OAUTH_TOKEN only', 'unset or empty blocks Claude; passed from the environment only at launch, never stored in the plan; Erik\'s personal subscription quota', 'docs/en/env-vars: CLAUDE_CODE_OAUTH_TOKEN'),
     item('claude', 'not checked', 'what Claude writes: transcripts, history.jsonl, stats-cache.json, caches, debug logs, sessions/, backups/, and keybindings.json and themes (interactive only)', 'listed as writable in HOST STATE; none is read into the prompt or the settings', 'docs/en/claude-directory: Application data'),
     item('claude', 'not checked', 'global config keys in ~/.claude.json', 'interface, IDE and teammate preferences only; none sets env, hooks or MCP', 'docs/en/settings-reference: Global config settings'),
@@ -451,7 +450,7 @@ export function hostState(env: NodeJS.ProcessEnv = process.env, platform: NodeJS
     item('codex', 'neutralised', 'rules/*.rules', '--ignore-rules', 'codex-rs/exec/src/cli.rs'),
     item('codex', 'neutralised', 'plugins, marketplaces and skill MCP dependencies', '--disable plugins and --disable skill_mcp_dependency_install', 'codex-rs/features/src/lib.rs'),
     item('codex', 'identical across arms, recorded', 'AGENTS.md and AGENTS.override.md', 'read at startup into every arm\'s prompt; the free prompt-input check runs on an empty home and does not see them', 'codex-rs/codex-home/src/instructions/mod.rs', at(codex, 'AGENTS.md', 'AGENTS.override.md')),
-    item('codex', 'identical across arms, recorded', 'skills (user, ~/.agents and the admin root next to the system config) and agents (custom roles in CODEX_HOME and the system config folder, which add to the spawn tool description)', '--ignore-user-config does not skip them: the user layer keeps CODEX_HOME as its folder, and the system layer\'s folder is a skills root', 'codex-rs/ext/skills/src/host_roots.rs, exec-server/src/discoverV2/capability_locations.rs, agent-roles/src/loader.rs', [...at(codex, 'skills', 'agents'), join(homedir(), '.agents', 'skills'), ...codexSystem.flatMap((d) => at(d, 'skills', 'agents'))]),
+    item('codex', 'identical across arms, recorded', 'skills (user, ~/.agents and the admin root next to the system config) and agents (custom roles in CODEX_HOME and the system config folder, which add to the spawn tool description)', '--ignore-user-config does not skip them: the user layer keeps CODEX_HOME as its folder, and the system layer\'s folder is a skills root', 'codex-rs/ext/skills/src/host_roots.rs, exec-server/src/discoverV2/capability_locations.rs, agent-roles/src/loader.rs', [...at(codex, 'skills', 'agents'), join(homedir(), '.agents', 'skills'), ...codexSystem.flatMap((d) => ['skills', 'agents'].map((f) => systemPaths.join(d, f)))]),
     item('codex', 'needed', 'auth.json', 'the study runs on subscription quota; Codex may refresh it in place', 'codex-rs/login'),
     item('codex', 'not checked', 'models_cache.json: the model catalog cache', 'a five-minute cache of what the service returns, refreshed when the service sends a new ETag; a change mid-study would be the service\'s, the same for every arm that follows it, and is not detected', 'codex-rs/models-manager/src/manager.rs'),
     item('codex', 'not checked', 'Claude Code files (CLAUDE.md, .claude/settings.json)', 'read only by an app-server import request, which neither exec nor the free commands send', 'codex-rs/app-server/src/external_agent_migration'),

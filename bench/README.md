@@ -96,7 +96,6 @@ are then routed and judged as above, with `--requests bench/data/requests-c1.jso
 `npx tsx bench/mcp-overhead.ts --offline` prints the characters each arm puts
 in front of the host from local fixture MCP servers (no CLI, no network). The
 plan, the cost estimate and the live runs are described in the backlog (B7).
-Claude runs require `CLAUDE_CODE_OAUTH_TOKEN` for Erik's personal subscription
-and a fresh empty `CLAUDE_CONFIG_DIR` under the work root per run. No ambient
-plugins: init must report `plugins: []`; missing, malformed or non-empty plugin
-inventories refuse the measurement, without scanning plugin locations.
+Claude runs require `CLAUDE_CODE_OAUTH_TOKEN` for Erik's personal subscription;
+see the [B7 method](RESULTS.md#b7-method-not-run-yet-what-configured-mcp-servers-cost-per-request)
+for isolation and runtime checks.

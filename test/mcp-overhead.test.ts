@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, posix, win32 } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -239,10 +239,10 @@ describe('plan', () => {
     expect(files('codex', 'refuse')).toContain(join(tmpdir(), 'AGENTS.override.md'));
     expect(files('codex', 'identical')).toContain('/etc/codex/skills');
     expect(files('codex', 'identical')).toContain('/etc/codex/agents');
-    expect(hostState({ ProgramData: 'D:\\PD' }, 'win32').flatMap((i) => i.files)).toContain(join('D:\\PD', 'OpenAI', 'Codex', 'skills'));
-    expect(hostState({ ProgramData: 'D:\\PD' }, 'win32').flatMap((i) => i.files)).toContain(join('D:\\PD', 'OpenAI', 'Codex', 'agents'));
+    expect(hostState({ ProgramData: 'D:\\PD' }, 'win32').flatMap((i) => i.files)).toContain(win32.join('D:\\PD', 'OpenAI', 'Codex', 'skills'));
+    expect(hostState({ ProgramData: 'D:\\PD' }, 'win32').flatMap((i) => i.files)).toContain(win32.join('D:\\PD', 'OpenAI', 'Codex', 'agents'));
     // Codex resolves the ProgramData known folder, not the variable, so the fallback root is recorded too.
-    for (const root of ['D:\\PD', 'C:\\ProgramData']) for (const f of ['skills', 'agents']) expect(hostState({ ProgramData: 'D:\\PD' }, 'win32').flatMap((i) => i.files)).toContain(join(root, 'OpenAI', 'Codex', f));
+    for (const root of ['D:\\PD', 'C:\\ProgramData']) for (const f of ['skills', 'agents']) expect(hostState({ ProgramData: 'D:\\PD' }, 'win32').flatMap((i) => i.files)).toContain(win32.join(root, 'OpenAI', 'Codex', f));
     const lines: string[] = [];
     await main(['--hosts', 'claude', '--configs', 'n1', '--repeats', '1'], { print: (s) => lines.push(s), run: never });
     for (const i of hostState()) expect(lines.some((l) => l.startsWith(`LOADS ${i.host}: ${i.item}: ${i.decision}.`))).toBe(true);
@@ -252,7 +252,7 @@ describe('plan', () => {
     const top = temp();
     const parent = join(top, 'a', 'b');
     mkdirSync(parent, { recursive: true });
-    const refused = (host: 'claude' | 'codex') => refusedFiles(host, { CLAUDE_CONFIG_DIR: temp(), CODEX_HOME: temp() }, 'linux', parent).filter((f) => f.startsWith(top)).map((f) => f.slice(top.length + 1)).sort();
+    const refused = (host: 'claude' | 'codex') => refusedFiles(host, { CLAUDE_CONFIG_DIR: temp(), CODEX_HOME: temp() }, 'linux', parent).filter((f) => f.startsWith(top)).map((f) => f.slice(top.length + 1).replaceAll('\\', '/')).sort();
     expect(refused('claude')).toEqual([]);
     expect(refused('codex')).toEqual([]);
     mkdirSync(join(top, '.claude'));
@@ -353,10 +353,21 @@ describe('plan', () => {
 
   it('matches allowed names case-insensitively', () => {
     expect(childEnv({ Path: 'C:\\x', systemroot: 'C:\\Windows', https_proxy: 'http://p', Debug: '1' }, 'claude')).toEqual({ Path: 'C:\\x', systemroot: 'C:\\Windows', https_proxy: 'http://p' });
-    expect(envAllowlist('claude')).toEqual(expect.arrayContaining(['PATH', 'HTTPS_PROXY', 'NODE_EXTRA_CA_CERTS', 'CLAUDE_CONFIG_DIR']));
+    expect(envAllowlist('claude')).toEqual(expect.arrayContaining(['PATH', 'HTTPS_PROXY', 'NODE_EXTRA_CA_CERTS']));
+    for (const name of ['CLAUDE_CONFIG_DIR', 'CLAUDE_CODE_OAUTH_TOKEN']) expect(envAllowlist('claude')).not.toContain(name);
     expect(envAllowlist('codex')).toEqual(expect.arrayContaining(['PATH', 'HTTPS_PROXY', 'CODEX_HOME', 'CODEX_SQLITE_HOME']));
     expect(envAllowlist('codex')).not.toContain('CLAUDE_CODE_OAUTH_TOKEN');
     expect(envAllowlist('claude')).not.toContain('DEBUG');
+  });
+
+  it('prints neither the replaced Claude directory nor the launch-only token as inherited environment', async () => {
+    vi.stubEnv('CLAUDE_CONFIG_DIR', temp());
+    const lines: string[] = [];
+    await main(['--hosts', 'claude', '--configs', 'n1', '--repeats', '1'], { print: (s) => lines.push(s), run: never, claudeManaged: [] });
+    const line = lines.find((s) => s.startsWith('ENV claude: '));
+    expect(line).toBeDefined();
+    expect(line).not.toContain('CLAUDE_CONFIG_DIR');
+    expect(line).not.toContain('CLAUDE_CODE_OAUTH_TOKEN');
   });
 
   it('makes the arms of a host differ only by their treatment', () => {
@@ -421,8 +432,6 @@ describe('plan', () => {
 
   it('shows the user\'s directories as variables in anything that can be committed', () => {
     expect(redacted(join(homedir(), '.codex', '.env'), {})).toBe(join('$CODEX_HOME', '.env'));
-    expect(redacted(join(homedir(), '.claude', 'policy-limits.json'), {})).toBe(join('$CLAUDE_CONFIG_DIR', 'policy-limits.json'));
-    expect(redacted(join('/cc', 'x.json'), { CLAUDE_CONFIG_DIR: '/cc' })).toBe(join('$CLAUDE_CONFIG_DIR', 'x.json'));
     expect(redacted(join(homedir(), 'notes', 'a'), {})).toBe(join('~', 'notes', 'a'));
     expect(redacted('/etc/codex/config.toml', {})).toBe('/etc/codex/config.toml');
   });
@@ -533,6 +542,7 @@ describe('host process', () => {
   it('waits for the app-server to exit before returning', async () => {
     const file = join(temp(), 'slow-exit.cjs');
     writeFileSync(file, `
+      require('fs').writeFileSync(process.env.PIDFILE, String(process.pid));
       setInterval(() => {}, 1000);
       process.on('SIGTERM', () => setTimeout(() => { require('fs').writeFileSync(process.env.MARKER, 'exited'); process.exit(0); }, 300));
       require('readline').createInterface({ input: process.stdin }).on('line', (line) => {
@@ -541,8 +551,14 @@ describe('host process', () => {
       });
     `);
     const marker = join(temp(), 'marker');
-    await withAppServer({ bin: process.execPath, args: [file], cwd: tmpdir(), env: { ...process.env, MARKER: marker } }, (request) => request('probe', {}));
-    expect(existsSync(marker)).toBe(true);
+    const pidFile = join(temp(), 'pid');
+    await withAppServer({ bin: process.execPath, args: [file], cwd: tmpdir(), env: { ...process.env, MARKER: marker, PIDFILE: pidFile } }, (request) => request('probe', {}));
+    const pid = Number(readFileSync(pidFile, 'utf8'));
+    const alive = (() => { try { process.kill(pid, 0); return true; } catch { return false; } })();
+    if (alive) process.kill(pid, 'SIGKILL');
+    expect(alive).toBe(false);
+    // Windows terminates on SIGTERM without invoking JS handlers; the delayed marker is a POSIX control.
+    if (process.platform !== 'win32') expect(existsSync(marker)).toBe(true);
   });
 
   it('starts the Codex app-server with the command\'s own environment', async () => {
@@ -875,14 +891,14 @@ describe('measurement', () => {
   });
 
   it('refuses the Codex arms, naming the file, when a system or managed Codex config exists', async () => {
-    const cache = join('/ch', 'cloud-config-bundle-cache.json');
+    const cache = posix.join('/ch', 'cloud-config-bundle-cache.json');
     expect(managedCodexFiles('linux', { CODEX_HOME: '/ch' })).toEqual(['/etc/codex/config.toml', '/etc/codex/requirements.toml', '/etc/codex/managed_config.toml', cache]);
-    expect(managedCodexFiles('linux', {})).toContain(join(homedir(), '.codex', 'cloud-config-bundle-cache.json'));
+    expect(managedCodexFiles(process.platform, {})).toContain(join(homedir(), '.codex', 'cloud-config-bundle-cache.json'));
     expect(managedCodexFiles('darwin', { CODEX_HOME: '/ch' })).toContain('/Library/Managed Preferences/com.openai.codex.plist');
     expect(managedCodexFiles('linux', { CODEX_HOME: '/ch' }).some((f) => f.includes('Managed Preferences'))).toBe(false);
     // Codex asks Windows for ProgramData and falls back to C:\ProgramData, so both are checked, once each
-    const under = (dir: string) => ['config.toml', 'requirements.toml'].map((f) => join(dir, 'OpenAI', 'Codex', f));
-    expect(managedCodexFiles('win32', { ProgramData: 'D:\\PD', CODEX_HOME: '/ch' })).toEqual([...under('D:\\PD'), ...under('C:\\ProgramData'), cache]);
+    const under = (dir: string) => ['config.toml', 'requirements.toml'].map((f) => win32.join(dir, 'OpenAI', 'Codex', f));
+    expect(managedCodexFiles('win32', { ProgramData: 'D:\\PD', CODEX_HOME: '/ch' })).toEqual([...under('D:\\PD'), ...under('C:\\ProgramData'), win32.join('/ch', 'cloud-config-bundle-cache.json')]);
     expect(managedCodexFiles('win32', { ProgramData: 'c:\\programdata' })).toHaveLength(3);
     expect(managedCodexFiles('win32', {})).toHaveLength(3);
     const p = small();
@@ -891,7 +907,8 @@ describe('measurement', () => {
     const { rows, notes } = await runStudy(p, temp(), { run: h.run, inventory: h.inventory, refused: () => [fake] });
     expect(rows.some((r) => r.host === 'codex')).toBe(false);
     expect(rows.some((r) => r.host === 'claude')).toBe(true);
-    expect(notes[0]).toContain(fake);
+    expect(notes[0]).toContain('requirements.toml');
+    expect(notes[0]).not.toContain(homedir());
     expect(h.calls.some((c) => c.args.includes('exec') || c.args.includes('features'))).toBe(false);
     const clear = fakeHost(p);
     expect((await runStudy(p, temp(), { run: clear.run, inventory: clear.inventory, refused: () => [] })).rows.some((r) => r.host === 'codex')).toBe(true);
@@ -911,7 +928,8 @@ describe('measurement', () => {
     const { rows, notes } = await runStudy(p, temp(), { run: h.run, inventory: h.inventory, refused: () => refusedFiles('codex', { CODEX_HOME: codexHome }, 'linux') });
     expect(rows.some((r) => r.host === 'codex')).toBe(false);
     expect(rows.some((r) => r.host === 'claude')).toBe(true);
-    expect(notes[0]).toContain(join(codexHome, '.env'));
+    expect(notes[0]).toContain('.env');
+    expect(notes[0]).not.toContain(homedir());
     expect(h.calls.some((c) => c.args.includes('exec') || c.args.includes('features'))).toBe(false);
     const home = fakeHost(p);
     const leaked = await runStudy(p, temp(), { run: home.run, inventory: home.inventory, refused: () => [join(homedir(), '.codex', '.env')] });
