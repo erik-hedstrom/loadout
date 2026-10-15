@@ -825,6 +825,11 @@ describe('measurement', () => {
     const manifest = (name: string, json: string) => { const dir = join(claudeHome, 'plugins', 'cache', 'market', name, '1.0.0', '.claude-plugin'); mkdirSync(dir, { recursive: true }); writeFileSync(join(dir, 'plugin.json'), json); return join(dir, 'plugin.json'); };
     const declared = manifest('manifest-agent', '{"name":"m","settings":{"agent":"reviewer"}}');
     manifest('manifest-plain', '{"name":"p","agent":"not-a-setting"}');
+    // A marketplace entry serves as the manifest when plugin.json is absent, so an agent declared there is refused too.
+    const market = (json: string) => { const dir = join(claudeHome, 'plugins', 'marketplaces', 'market', '.claude-plugin'); mkdirSync(dir, { recursive: true }); writeFileSync(join(dir, 'marketplace.json'), json); return join(dir, 'marketplace.json'); };
+    const entry = market('{"name":"market","plugins":[{"name":"plain"},{"name":"entry-agent","settings":{"agent":"reviewer"}}]}');
+    expect(refusedFiles('claude', { CLAUDE_CONFIG_DIR: claudeHome }, 'linux').filter((f) => f.includes('plugins')).sort()).toEqual([declared, agent, entry].sort());
+    market('{"name":"market","plugins":[{"name":"plain"},{"name":"other","agent":"not-a-setting"}]}');
     expect(refusedFiles('claude', { CLAUDE_CONFIG_DIR: claudeHome }, 'linux').filter((f) => f.includes('plugins')).sort()).toEqual([declared, agent].sort());
     const p = small();
     const h = fakeHost(p);

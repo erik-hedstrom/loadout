@@ -422,7 +422,7 @@ export function hostState(env: NodeJS.ProcessEnv = process.env, platform: NodeJS
     item('claude', 'neutralised', 'CLAUDE.md (user, project in the working directory and every parent, .claude/CLAUDE.md), CLAUDE.local.md, rules folders and their @path imports', '--setting-sources "" leaves out user, project and local, and CLAUDE_CODE_DISABLE_CLAUDE_MDS=1 skips any CLAUDE.md memory file', `${SDK}; docs/en/env-vars`),
     item('claude', 'neutralised', 'AGENTS.md and .claude/AGENTS.md in the working directory and above', 'pluginConfigs "agents-md@builtin" instructionFiles "managed-only" in --settings', 'docs/en/memory: AGENTS.md, Choose which instruction files load'),
     item('claude', 'neutralised', 'user and project skills, agents and commands, and skills synced from claude.ai (~/.claude/skills/synced)', '--setting-sources "" leaves out user and project, which also stops the claude.ai sync', `${SDK}; docs/en/skills: Where synced skills load`),
-    item('claude', 'refuse if present', 'installed plugins that set a default main agent (settings.json "agent" or plugin.json "settings.agent")', 'the agent replaces the main thread\'s system prompt and model and the last plugin loaded wins, which the plugin and agent names do not pin', 'docs/en/plugins/components: Default settings', pluginAgentSettings(join(claude, 'plugins'))),
+    item('claude', 'refuse if present', 'installed plugins that set a default main agent (settings.json "agent", or "settings.agent" in plugin.json or a marketplace.json entry)', 'the agent replaces the main thread\'s system prompt and model and the last plugin loaded wins, which the plugin and agent names do not pin', 'docs/en/plugins/components: Default settings', pluginAgentSettings(join(claude, 'plugins'))),
     item('claude', 'neutralised', 'managed skills directory (.claude/skills in the managed settings directory)', 'CLAUDE_CODE_DISABLE_POLICY_SKILLS=1', 'docs/en/env-vars'),
     item('claude', 'neutralised', 'background runs of plugin marketplace command sources, which could change files outside this list mid-study', 'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1', 'docs/en/env-vars'),
     item('claude', 'neutralised', 'hooks from settings, plugins, skills or agents, and the status line command', '"disableAllHooks":true in --settings', 'docs/en/settings-reference: disableAllHooks'),
@@ -450,9 +450,11 @@ export function hostState(env: NodeJS.ProcessEnv = process.env, platform: NodeJS
   ];
 }
 /**
- * Installed plugins' files that set a default main agent: a root settings.json "agent", or "settings.agent" in
- * .claude-plugin/plugin.json (plugins-reference: settings). That agent replaces the main thread's system prompt and model, and the
- * last plugin loaded wins, so neither the plugin names nor the agent names pin it. Bounded walk; links are not followed.
+ * Installed plugins' files that set a default main agent, in any of the three forms Claude reads: a root settings.json "agent",
+ * "settings.agent" in .claude-plugin/plugin.json, or in a plugin entry of .claude-plugin/marketplace.json, which serves as the
+ * manifest when plugin.json is absent (plugins-reference). A marketplace entry is refused even when a plugin.json exists. That agent
+ * replaces the main thread's system prompt and model, and the last plugin loaded wins, so neither the plugin names nor the agent
+ * names pin it. Bounded walk; links are not followed.
  */
 export function pluginAgentSettings(pluginsDir: string, depth = 6): string[] {
   let entries: string[];
@@ -461,11 +463,12 @@ export function pluginAgentSettings(pluginsDir: string, depth = 6): string[] {
     const path = join(pluginsDir, name);
     const stat = lstatSync(path, { throwIfNoEntry: false });
     if (stat?.isDirectory() && depth > 1 && name !== 'node_modules' && name !== '.git') return pluginAgentSettings(path, depth - 1);
-    const manifest = name === 'plugin.json' && basename(pluginsDir) === '.claude-plugin';
-    if (!stat?.isFile() || (name !== 'settings.json' && !manifest) || stat.size > 64 * 1024) return [];
+    const form = basename(pluginsDir) === '.claude-plugin' && (name === 'plugin.json' || name === 'marketplace.json') ? name : name === 'settings.json' ? name : null;
+    if (!stat?.isFile() || !form || stat.size > 1024 * 1024) return [];
     try {
       const json = JSON.parse(readFileSync(path, 'utf8'));
-      return typeof (manifest ? json?.settings : json)?.agent === 'string' ? [path] : [];
+      const settings = form === 'settings.json' ? [json] : form === 'plugin.json' ? [json?.settings] : (Array.isArray(json?.plugins) ? json.plugins : []).map((p: { settings?: unknown }) => p?.settings);
+      return settings.some((s: { agent?: unknown } | undefined) => typeof s?.agent === 'string') ? [path] : [];
     } catch { return []; }
   });
 }
