@@ -821,7 +821,11 @@ describe('measurement', () => {
     const agent = plugin('with-agent', '{"agent":"reviewer"}');
     plugin('no-agent', '{"other":1}');
     plugin('broken', '{"agent":');
-    expect(refusedFiles('claude', { CLAUDE_CONFIG_DIR: claudeHome }, 'linux').filter((f) => f.includes('plugins'))).toEqual([agent]);
+    // The manifest form, settings.agent in .claude-plugin/plugin.json, is refused too; a manifest without it is not.
+    const manifest = (name: string, json: string) => { const dir = join(claudeHome, 'plugins', 'cache', 'market', name, '1.0.0', '.claude-plugin'); mkdirSync(dir, { recursive: true }); writeFileSync(join(dir, 'plugin.json'), json); return join(dir, 'plugin.json'); };
+    const declared = manifest('manifest-agent', '{"name":"m","settings":{"agent":"reviewer"}}');
+    manifest('manifest-plain', '{"name":"p","agent":"not-a-setting"}');
+    expect(refusedFiles('claude', { CLAUDE_CONFIG_DIR: claudeHome }, 'linux').filter((f) => f.includes('plugins')).sort()).toEqual([declared, agent].sort());
     const p = small();
     const h = fakeHost(p);
     const { rows, notes } = await runStudy(p, temp(), { run: h.run, inventory: h.inventory, refused: () => refusedFiles('codex', { CODEX_HOME: codexHome }, 'linux') });
@@ -866,7 +870,8 @@ describe('measurement', () => {
     await expect(study({ extraServer: true })).rejects.toThrow('differ from the arm');
     await expect(study({ plugin: (n) => (n < 1 ? 'a' : 'b') })).rejects.toThrow('inventory drift');
     await expect(study({ agents: (n) => (n < 1 ? ['a'] : ['b']) })).rejects.toThrow('inventory drift');
-    await expect(study({ model: (n) => (n < 1 ? 'haiku-resolved' : 'sonnet-resolved') })).rejects.toThrow('resolved model changed');
+    await expect(study({ model: (n) => (n < 1 ? 'haiku-resolved' : 'haiku-other') })).rejects.toThrow('resolved model changed');
+    await expect(study({ model: () => 'sonnet-resolved' })).rejects.toThrow('not the requested haiku');
     await expect(study({ agents: (n) => (n < 1 ? [] : undefined) })).rejects.toThrow('inventory drift');
   });
 

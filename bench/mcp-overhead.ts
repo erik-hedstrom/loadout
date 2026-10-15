@@ -422,7 +422,7 @@ export function hostState(env: NodeJS.ProcessEnv = process.env, platform: NodeJS
     item('claude', 'neutralised', 'CLAUDE.md (user, project in the working directory and every parent, .claude/CLAUDE.md), CLAUDE.local.md, rules folders and their @path imports', '--setting-sources "" leaves out user, project and local, and CLAUDE_CODE_DISABLE_CLAUDE_MDS=1 skips any CLAUDE.md memory file', `${SDK}; docs/en/env-vars`),
     item('claude', 'neutralised', 'AGENTS.md and .claude/AGENTS.md in the working directory and above', 'pluginConfigs "agents-md@builtin" instructionFiles "managed-only" in --settings', 'docs/en/memory: AGENTS.md, Choose which instruction files load'),
     item('claude', 'neutralised', 'user and project skills, agents and commands, and skills synced from claude.ai (~/.claude/skills/synced)', '--setting-sources "" leaves out user and project, which also stops the claude.ai sync', `${SDK}; docs/en/skills: Where synced skills load`),
-    item('claude', 'refuse if present', 'installed plugins that set a default main agent (settings.json "agent")', 'the agent replaces the main thread\'s system prompt and model and the last plugin loaded wins, which the plugin and agent names do not pin', 'docs/en/plugins/components: Default settings', pluginAgentSettings(join(claude, 'plugins'))),
+    item('claude', 'refuse if present', 'installed plugins that set a default main agent (settings.json "agent" or plugin.json "settings.agent")', 'the agent replaces the main thread\'s system prompt and model and the last plugin loaded wins, which the plugin and agent names do not pin', 'docs/en/plugins/components: Default settings', pluginAgentSettings(join(claude, 'plugins'))),
     item('claude', 'neutralised', 'managed skills directory (.claude/skills in the managed settings directory)', 'CLAUDE_CODE_DISABLE_POLICY_SKILLS=1', 'docs/en/env-vars'),
     item('claude', 'neutralised', 'background runs of plugin marketplace command sources, which could change files outside this list mid-study', 'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1', 'docs/en/env-vars'),
     item('claude', 'neutralised', 'hooks from settings, plugins, skills or agents, and the status line command', '"disableAllHooks":true in --settings', 'docs/en/settings-reference: disableAllHooks'),
@@ -450,18 +450,23 @@ export function hostState(env: NodeJS.ProcessEnv = process.env, platform: NodeJS
   ];
 }
 /**
- * Installed plugins' settings.json files that set a default main agent. That agent replaces the main thread's system prompt and
- * model, and the last plugin loaded wins, so neither the plugin names nor the agent names pin it. Bounded walk; links are not followed.
+ * Installed plugins' files that set a default main agent: a root settings.json "agent", or "settings.agent" in
+ * .claude-plugin/plugin.json (plugins-reference: settings). That agent replaces the main thread's system prompt and model, and the
+ * last plugin loaded wins, so neither the plugin names nor the agent names pin it. Bounded walk; links are not followed.
  */
-export function pluginAgentSettings(pluginsDir: string, depth = 5): string[] {
+export function pluginAgentSettings(pluginsDir: string, depth = 6): string[] {
   let entries: string[];
   try { entries = readdirSync(pluginsDir); } catch { return []; }
   return entries.flatMap((name) => {
     const path = join(pluginsDir, name);
     const stat = lstatSync(path, { throwIfNoEntry: false });
     if (stat?.isDirectory() && depth > 1 && name !== 'node_modules' && name !== '.git') return pluginAgentSettings(path, depth - 1);
-    if (!stat?.isFile() || name !== 'settings.json' || stat.size > 64 * 1024) return [];
-    try { return typeof JSON.parse(readFileSync(path, 'utf8'))?.agent === 'string' ? [path] : []; } catch { return []; }
+    const manifest = name === 'plugin.json' && basename(pluginsDir) === '.claude-plugin';
+    if (!stat?.isFile() || (name !== 'settings.json' && !manifest) || stat.size > 64 * 1024) return [];
+    try {
+      const json = JSON.parse(readFileSync(path, 'utf8'));
+      return typeof (manifest ? json?.settings : json)?.agent === 'string' ? [path] : [];
+    } catch { return []; }
   });
 }
 
@@ -515,6 +520,8 @@ export async function runStudy(plan: Plan, out: string, deps: Deps = {}): Promis
     const hash = session ? ambient(session.inventory) : null;
     const first = rows.find((m) => m.host === r.arm.host && m.kind === 'baseline');
     if (first && hash && first.ambientHash !== hash) throw new Error('Claude ambient inventory drift; measurement invalid');
+    // A plugin agent or managed setting can swap the model without changing any name the drift hash sees.
+    if (session && !session.model?.toLowerCase().includes(MODELS.claude)) throw new Error(`Claude resolved model is not the requested ${MODELS.claude}; measurement invalid`);
     if (session && rows.some((m) => m.host === 'claude' && m.model !== session.model)) throw new Error('Claude resolved model changed during the study; measurement invalid');
     if (session && (session.inventory.mcp.length !== r.servers.length || !r.servers.every((n) => session.inventory.mcp.some((m) => m.name === n && m.status === 'connected')))) throw new Error('MCP servers differ from the arm or did not connect; measurement invalid');
     const found = r.canary && session ? canaryFound(r.arm, r.canary, session.calls!) : null;
