@@ -220,6 +220,15 @@ Acceptance:
 - CI and license badges.
 - A CHANGELOG.
 
+Status: drafts in `docs/launch/repo-settings.md` (description, topics,
+Settings steps), `docs/brand/social-preview.{svg,png}`, one badge line in the
+README and `CHANGELOG.md` (Unreleased only). Left for Erik: apply the settings
+and upload the preview.
+
+Learnings:
+- The CHANGELOG has no version section while A4 (npm) and E5 (release
+  automation) are open.
+
 **B6. Profile README.**
 
 Acceptance: `docs/launch/profile-README.md` for github.com/erik-hedstrom,
@@ -1126,7 +1135,8 @@ Acceptance: `test/` holds one file per module, with shared fakes in
 **E5. Releases.**
 
 Acceptance: changesets or release-please, with a CHANGELOG generated from
-PRs.
+PRs. A hand-written CHANGELOG.md exists since B4; the tool must take it over
+rather than start a second one.
 
 **E6. Architecture diagram.**
 
