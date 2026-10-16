@@ -102,7 +102,7 @@ loadout codex "<task>"           # launch Codex with one up-front decision
 
 - [The library](docs/library.md): adding skills and MCP servers, configuration.
 - [The hook plugins](docs/hook.md): Claude Code and Codex, WSL, latency, privacy.
-- [Library search over MCP](docs/mcp.md): `find_skills` and `load_skill`
+- [Library search over MCP](docs/mcp.md): `find_tools` and `load_skill`
   mid-session, and how to set it up per host.
 - [The launcher](docs/launcher.md): `loadout claude|codex`, one decision up
   front, including a model tier; used by the benchmarks.

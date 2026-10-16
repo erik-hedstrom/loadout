@@ -3,10 +3,12 @@
 `loadout mcp` serves the library as an MCP server, so an agent can look for
 know-how when the work drifts away from what the session started with:
 
-- `find_skills(goal, keywords?)`: a handful of skills, and gateway MCP
+- `find_tools(goal, keywords?)`: a handful of skills, and gateway MCP
   servers, predicted to fit, with their fit; "nothing fits" when nothing
-  does. Jev ranks them; without a key, with `--lexical` or when Jev fails,
-  keyword ranking does;
+  does. A server match says it is an MCP server (with its tool count once
+  `server_tools` has listed it) and gives the next call. Jev ranks them;
+  without a key, with `--lexical` or when Jev fails, keyword ranking does.
+  It was called `find_skills` before D15 ([DESIGN](../DESIGN.md#search-server-loadout-mcp));
 - `load_skill(skill, file?)`: the skill's instructions as attributed
   third-party reference material (past 40,000 characters, cut with a pointer
   to the file), or one of its text files up to 256 KB, not a symlink (so
@@ -16,19 +18,26 @@ know-how when the work drifts away from what the session started with:
   servers marked `"gateway": true` ([library](library.md#mcp-servers)),
   registered only when there are some. loadout leaves `call_server_tool`
   unapproved, so a call prompts with the server, tool and arguments, unless
-  the host already has a rule allowing it.
+  the host already has a rule allowing it. A gateway server is not configured
+  in the host, so its tool definitions are not in the host's context.
+  `server_tools` starts it on first use and then remembers its tool names and
+  descriptions under `~/.loadout/index/mcp-tools/`, so later searches match a
+  goal against them too. A server is never started just to be searched, and a
+  long tool list shows argument names instead of full schemas (`server_tools`
+  with `tool` returns one in full).
 
 ## Cost and privacy
 
 The tool definitions cost input tokens. Measured only in the first request of
-fresh Claude Code sessions, with generated skill names, they cost more than a
-native listing of 50 skills ([DESIGN](../DESIGN.md#search-server-loadout-mcp));
+fresh Claude Code sessions, with generated skill names and before the rename
+to `find_tools`, they cost more than a native listing of 50 skills
+([DESIGN](../DESIGN.md#search-server-loadout-mcp));
 later turns and Codex are not measured. In the headless runs, agents searched
 on their own mainly for tasks that felt unfamiliar
 ([RESULTS](../bench/RESULTS.md#do-agents-use-what-they-are-given)). So the
 [hook plugins](hook.md) are the main path and search is the supplement.
 
-Privacy: [what `find_skills` sends to TypeSafe](hook.md#privacy).
+Privacy: [what `find_tools` sends to TypeSafe](hook.md#privacy).
 
 ## Setup
 

@@ -56,20 +56,22 @@ These commands send text to TypeSafe's Jev API through loadout's router:
   ("yes", "go on") are skipped;
 - the [launcher](launcher.md) and `loadout route`: the task, once per
   command, `--dry-run` included;
-- [`find_skills`](mcp.md): the agent's goal plus any keywords it passes.
+- [`find_tools`](mcp.md): the agent's goal plus any keywords it passes.
 
 Each routing makes up to two Jev requests, and both carry:
 - that text;
 - the name, top-level file names, dependency names and language extensions
   of the folder the command runs in: the session's folder for the hook, the
   current folder for the launcher and `loadout route`, and wherever the host
-  starts `loadout mcp` for `find_skills`, which can be your home folder.
+  starts `loadout mcp` for `find_tools`, which can be your home folder.
 
 The first (wide) request adds the names and descriptions of up to 200
 candidates (by default), drawn from skills (hook), skills and library MCP
 servers (launcher, `loadout route`), or skills and gateway MCP servers
-(`find_skills`; skills only over HTTP), with descriptions cut at 300
-characters. The second (close) request sends up to 8 shortlisted candidates
+(`find_tools`; skills only over HTTP), with descriptions cut at 300
+characters. For a gateway server that `server_tools` has listed before, the
+request also carries the remembered tool names and descriptions
+([search](mcp.md)), cut to the same length. The second (close) request sends up to 8 shortlisted candidates
 (by default) with descriptions cut at 700 characters, and is the only one that
 adds the opening of their `SKILL.md`.
 
@@ -79,7 +81,7 @@ GitHub `owner/repo`, or, for a skill added from a local folder, that folder's
 absolute path, which can include your username. Without a recorded source,
 they get their kind or a number (`#2`).
 
-The launcher, `loadout route` and `find_skills` send a request again, once,
+The launcher, `loadout route` and `find_tools` send a request again, once,
 after a network error, a timeout, a 429 or a 5xx; the hook does not retry.
 
 `loadout doctor` also makes one Jev call with fixed text, to check the key,

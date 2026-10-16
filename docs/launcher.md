@@ -29,7 +29,7 @@ and any generated config to `~/.loadout/sessions/<id>/` (under
 | Relevance note | `--append-system-prompt` | in the prompt |
 | MCP | generated file via `--mcp-config` | `-c mcp_servers.<name>={…}` |
 | `autoApprove` servers | `--allowedTools mcp__<name>` | `default_tools_approval_mode = "approve"` |
-| Library search | `loadout mcp` attached, `find_skills` and `load_skill` pre-approved | same |
+| Library search | `loadout mcp` attached, `find_tools` and `load_skill` pre-approved | same |
 
 The tier mappings are presets; Jev's tier choice is an
 [open question](../DESIGN.md#open-questions). Turn off the attached

@@ -1,9 +1,14 @@
-# Handoff: loadout, 2026-10-12
+# Handoff: loadout, 2026-10-15
 
 Read this first if you are joining the project, human or agent. Then read
 [AGENTS.md](AGENTS.md) (rules), [docs/loop/ORCHESTRATOR.md](docs/loop/ORCHESTRATOR.md)
 (how the multi-agent loop runs) and [docs/loop/BACKLOG.md](docs/loop/BACKLOG.md)
 (what to do next).
+
+> **After any gap, local state is stale.** The work lives on open PR
+> branches, and `main` can look current while it is not. Before acting on
+> anything here, follow [ORCHESTRATOR, Iteration protocol, step 1](docs/loop/ORCHESTRATOR.md#iteration-protocol).
+> GitHub wins over these files.
 
 ## The one-paragraph version
 
@@ -20,6 +25,10 @@ usage and [DESIGN.md](DESIGN.md) for the architecture.
   decisions below).
 - **Owner:** Erik Hedström (GitHub `erik-hedstrom`). Commits use
   `63313283+erik-hedstrom@users.noreply.github.com`.
+- **Main** is at `fbee5cb` (D12, 2026-10-12). Nothing has merged since.
+  The open PRs are listed with their state under "In review" in
+  [BACKLOG](docs/loop/BACKLOG.md#in-review). Each PR body has a
+  **Review state** section.
 
 ### What exists
 
@@ -43,12 +52,41 @@ All numbers, caveats and negative results are in [bench/RESULTS.md](bench/RESULT
   twice. Run judges sequentially, so the catalog prompt stays cached.
 - **Codex subscription:** used for reviews, request generation and outcome
   runs.
+- **2026-10-13 to 15:** Jev $0. The cloud session ran Claude subagents and
+  GitHub Codex reviews on plan quota.
 - **Cloud-session credit:** $100, expires 2026-11-05. It pays for Claude
   cloud sessions only, not Routines, Projects or API calls.
 - **GitHub Actions:** free on standard runners since the repo went public.
   As a private repo it used up Pro's 3,000 monthly minutes on 2026-10-12:
   about 3,400 billed minutes since 2026-10-01, about 62% of them macOS
   (counted ten times).
+
+## Pick up here (2026-10-15)
+
+A cloud session ran the loop from 2026-10-12 to 2026-10-15 and opened
+#35–#40. It merged nothing. The next orchestrator is local.
+
+1. **Merge the loop files.** E13 is
+   [#41](https://github.com/erik-hedstrom/loadout/pull/41). The rest of
+   these four files is on `agent/loop-handoff-1015`, cut from #41: merge
+   #41 first. The handoff PR supersedes #35, the iteration 8 row.
+2. **Read the private handoff** at `../loadout-private/HANDOFF-2026-10-15.md`,
+   outside the repo. It has the detail behind each open finding, Erik's
+   local Codex A/B run with its analysis and $0 checks, and how to handle
+   the launch-readiness review (2026-10-13). Never commit, paste or quote
+   it ([private material](docs/loop/ORCHESTRATOR.md#local-the-default)).
+3. **Drive whatever the [In review](docs/loop/BACKLOG.md#in-review) table
+   lists as open** ([ORCHESTRATOR](docs/loop/ORCHESTRATOR.md#handling-review-findings)).
+4. **Run the merge gate** on the clean PRs, one at a time. Two order traps:
+   - **#36 before #28.**
+   - **D15 renamed the search tool `find_skills` to `find_tools`.** B7
+     follows it ([#38](https://github.com/erik-hedstrom/loadout/pull/38)).
+     C8's plugin arm and any local
+     `-c mcp_servers.loadout.tools.find_skills…` approval still name the old
+     tool; update them before they merge or run.
+5. **Then new work, MCP token cost first:** D17 (measured 2026-10-15;
+   what is left is docs and `required = true`), B8 (backlog items from the launch-readiness review),
+   then the BACKLOG order.
 
 ## How the work continues
 
@@ -97,6 +135,13 @@ branches, PRs and `docs/loop/BACKLOG.md`.
   launcher-only work is P2. Alternative hosts such as OpenCode or T3 Code get
   the generic MCP server; competing with them is out of scope. Verified for
   the Claude Code CLI only ([docs/hosts.md](docs/hosts.md)).
+- **MCP first (2026-10-13).** MCP servers take more of the context than
+  skills, so MCP token cost leads the backlog (D15, B7, D17, B8).
+- **The launch-readiness review (2026-10-13) stays private.**
+- **Open PR decisions settled on 2026-10-15.** B7: no ambient plugins (a
+  fresh Claude home per run), Erik's personal subscription, and the Codex
+  arms keep the real `CODEX_HOME` with the writes the plan prints. D15: the
+  stated race scope is accepted.
 - **Public repo (2026-10-12).** The history was checked first (168 commits,
   without textconv): no key-shaped strings and no personal email, and the
   authors are noreply addresses. The one personal detail is the Windows
@@ -121,6 +166,22 @@ branches, PRs and `docs/loop/BACKLOG.md`.
    - Jev: more credit when the $10 runs out.
 4. **Launch channels and timing.** Show HN, Reddit, X, LinkedIn, awesome
    lists. Agents draft; Erik posts.
+5. **Open PR decisions (2026-10-15).**
+   - **C2 #37:**
+     - the margin, 0.10 or 0.05;
+     - whether to run in a VM;
+     - the licence question;
+     - E14, the key redaction, which the loadout arm needs;
+     - scope: this protocol, or a smaller pilot first.
+
+     Two threads are left for you: the Jev key, and the shared prompt cache.
+   - **D13** (in #25): how the plugin opens what its hook routes to.
+   - **#27:** your questions. **#34:** the skills.sh threads. **#36:** the
+     `/proc` thread. **#26, #30, #32:** declined or partly fixed Codex
+     threads (accept the rebuttal or override; see
+     [In review](docs/loop/BACKLOG.md#in-review)).
+   - **Stale branches:** the `wip/*` branches and worktrees from cloud
+     sessions. Delete them or keep them.
 
 ## Setting up on the new Linux machine
 
@@ -181,3 +242,6 @@ native machine:
   general business requests. Generic skills such as
   `frontend-ui-engineering` load on simple UI work (C4).
 - **Tests:** `loadout.test.ts` still mixes modules (E3).
+- **MCP start-up in Codex:** from `/mnt/c` through `wsl.exe`, `loadout mcp`
+  misses Codex's grace for optional servers, so its tools join mid-session
+  ([D17](docs/loop/BACKLOG.md)).

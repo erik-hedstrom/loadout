@@ -1,4 +1,4 @@
-import type { Capability } from './types.js';
+import { toolsText, type Capability } from './types.js';
 
 const STOPWORDS = new Set(
   ('a an and are as at be by for from has have how i in is it its of on or that the this to was ' +
@@ -34,6 +34,9 @@ function analyze(capability: Capability): Doc {
     const tokens = [...Array<string[]>(NAME_WEIGHT).fill(nameTokens).flat(), ...tokenize(capability.description)];
     const tf = new Map<string, number>();
     for (const t of tokens) tf.set(t, (tf.get(t) ?? 0) + 1);
+    // A server's remembered tool words count once each and add nothing to its length: dozens of tools
+    // must not dilute a name or description match, or outweigh it.
+    for (const t of new Set(tokenize(toolsText(capability.tools ?? [])))) tf.set(t, (tf.get(t) ?? 0) + 1);
     doc = { capability, tf, length: tokens.length };
     analyzed.set(capability, doc);
   }
