@@ -66,7 +66,9 @@ describe('library metadata cache', () => {
     const st = statSync(manifest, { bigint: true });
     st.mtimeNs = st.ctimeNs = BigInt(Date.now() - 10_000) * 1_000_000n;
     st[field] = BigInt(Date.now()) * 1_000_000n;
-    const stamps = vi.spyOn(fs, 'lstatSync').mockReturnValue(st);
+    // Only the manifest gets the doctored stamps: the folder checks before cache writes need real answers.
+    const lstat = fs.lstatSync;
+    const stamps = vi.spyOn(fs, 'lstatSync').mockImplementation(((p: fs.PathLike, options?: never) => (String(p).endsWith('SKILL.md') ? st : lstat(p, options))) as typeof fs.lstatSync);
     syncBuiltinESMExports();
     try {
       scanLibrary(library, { cache: true });
