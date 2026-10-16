@@ -43,6 +43,8 @@ reviews. GitHub is the shared bus: `agent/*` branches, PRs, CI and
     is enough: `--base <the head Codex last reviewed>`. pr-reviewer reviews
     the delta too.
   - Record each reviewed SHA in the PR.
+  - The focus must request both correctness/security and a separate necessity
+    pass under AGENTS.md rule 4. A clean bug pass is not simplification coverage.
 - **Tests on both platforms.**
   - Windows: `npm test` and `npm run typecheck` in the worktree.
   - Linux: the same in WSL, in a clone that fetches the branch from the
@@ -84,10 +86,14 @@ when his local Claude usage runs out.
     annotation: on 2026-10-12 it was the spending limit, before the repo went
     public.
 - **`pr-reviewer` APPROVE.**
-- **Codex review** of the final head, with no open High or Medium finding,
-  from Sol through the companion or from Codex on GitHub. A declined finding
-  stays open until the reviewer accepts the reason on re-review, or Erik
-  overrides it.
+- **Codex review** of the final head, with no open High or Medium finding
+  (AGENTS.md, "Severity and disposition"), from Sol through the companion or
+  from Codex on GitHub.
+- **Every finding's disposition recorded** in the PR, from both reviewers and
+  every pass, as AGENTS.md's "Severity and disposition" defines it.
+- **Simplification coverage from both reviewers.** A GitHub thumbs-up or
+  absence of comments alone does not prove this pass ran; if the GitHub report
+  omits it, obtain an explicit local necessity review before merge.
 - **Acceptance criteria met**, with the backlog row updated in the PR.
 
 Squash-merge with `--delete-branch`, one PR at a time. After each merge, wait
@@ -208,8 +214,7 @@ Use these skills (Skill tool) at these points:
   dev/sandbox/loadout-wt/<item>.
 - superpowers:receiving-code-review: when pr-reviewer or Sol findings come back.
   Check each finding against the code, then fix it or decline it with a reason in
-  the PR. A declined High or Medium stays open until its reviewer accepts the reason
-  on re-review, or Erik overrides it.
+  the PR. AGENTS.md, "Severity and disposition", says when a declined finding clears.
 - superpowers:systematic-debugging: on any failing test or CI job, before a fix.
 - superpowers:verification-before-completion: before you call a PR ready, merge it,
   or write the iteration log row.
@@ -277,9 +282,10 @@ you were unsure about.
 
 ```
 @codex review. This is an adversarial pass: assume the change is wrong until the
-code proves otherwise. Apply the Code Review Rules in AGENTS.md. Look hardest at
-secrets and user configs, untrusted skill text, file access, and anything that
-should be deleted rather than kept. Report findings by severity with file:line.
+code proves otherwise. Apply the Code Review Rules in AGENTS.md, including
+"Severity and disposition", as two passes: correctness/security, then necessity.
+Report each pass, even when it is clean. Look for any other instance of each
+finding's class anywhere in the PR.
 ```
 
 ## Lanes
