@@ -26,7 +26,7 @@ Usage:
   loadout codex  [--dry-run] [--headless] [--isolate] <task> [-- <codex args>]
                                           --headless runs once and exits (claude -p / codex exec)
                                           --isolate hides your own MCP servers (codex: needs --headless)
-  loadout mcp [--lexical]                 Serve the library over MCP (stdio): find_skills, load_skill,
+  loadout mcp [--lexical]                 Serve the library over MCP (stdio): find_tools, load_skill,
                                           and a gateway to the library's MCP servers
   loadout mcp --http [--port 8787] [--host 127.0.0.1] [--token-file f] [--allowed-host h]
                                           The same over Streamable HTTP (skills only), for remote hosts
@@ -321,6 +321,7 @@ async function main(): Promise<number> {
         library,
         config,
         client,
+        toolIndex: paths.index(),
         repo: repoSignals(process.cwd()),
         // Loaded in the background: the host's startup timeout must not wait for the model.
         embeddings: client ? embeddingsFor(library, config) : undefined,
