@@ -40,7 +40,7 @@ Each PR body's **Review state** section has the round-by-round record.
 | [#37](https://github.com/erik-hedstrom/loadout/pull/37) | C2 fixtures and protocol; adds E14 and D18 | round 15 and 16 findings fixed; both reviews approve at 0a647dc; full matrix green (one Windows timeout flake, rerun once); waits for Erik's C2 decisions (margin, VM, licence, scope) and two open Codex threads (P1 Jev key, P2 shared prompt cache) |
 | [#36](https://github.com/erik-hedstrom/loadout/pull/36) | D14 Codex plugin forwards `LOADOUT_HOME` (P1) | one open Codex P1 (`/proc`) waits for Erik: accept or override; merge before #28 |
 | [#35](https://github.com/erik-hedstrom/loadout/pull/35) | iteration 8 log row | superseded by the row below; close it once this file lands |
-| [#34](https://github.com/erik-hedstrom/loadout/pull/34) | B3 comparison | two open Codex P2 threads (skills.sh) wait for Erik: accept or override |
+| [#34](https://github.com/erik-hedstrom/loadout/pull/34) | B3 comparison | Codex threads resolved after the 2026-10-16 skills.sh read; merge gate |
 | [#33](https://github.com/erik-hedstrom/loadout/pull/33) | B4 repo polish drafts | clean; merge gate |
 | [#32](https://github.com/erik-hedstrom/loadout/pull/32) | D5 `--isolate` | open Codex P1 (resume into a live session, declined from the docs) and two P2s (one documented as a gap, one disclosed): Erik accepts or overrides |
 | [#31](https://github.com/erik-hedstrom/loadout/pull/31) | B6 profile README draft | clean; merge gate |
@@ -139,7 +139,7 @@ Acceptance:
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
 | B1 | P0 | Token-waste study: measured per-request overhead of popular skill packs | Claude | local (measure) + cloud (analysis) | done ([PR #6](https://github.com/erik-hedstrom/loadout/pull/6); follow-ups under "Left" in its learnings) |
-| B3 | P1 | Fact-checked comparison with alternatives | Codex | cloud | review ([#34](https://github.com/erik-hedstrom/loadout/pull/34)) |
+| B3 | P1 | Fact-checked comparison with alternatives | Claude | cloud | review ([#34](https://github.com/erik-hedstrom/loadout/pull/34); [docs/comparison.md](../comparison.md)) |
 | B2 | P1 | Launch kit drafts | Claude | cloud | todo (after A1, B1) |
 | B4 | P1 | Repo polish: description, topics, social preview, badges | Claude | cloud + erik | review ([#33](https://github.com/erik-hedstrom/loadout/pull/33); Erik applies settings and uploads the preview) |
 | B6 | P2 | GitHub profile README draft | Claude | cloud | review ([#31](https://github.com/erik-hedstrom/loadout/pull/31); Erik publishes) |
@@ -211,6 +211,25 @@ Acceptance: a table with sources and access dates covering:
 - skills directories.
 
 State what each solves and what loadout adds.
+
+Learnings:
+- 8 rows in `docs/comparison.md`, read 2026-10-12 and read in full again on
+  2026-10-13; GitHub sources are pinned to a commit, live docs to the access
+  date. The only head-to-head numbers are B1's
+  (native listings against adding loadout's MCP server); the other loadout
+  figures are quoted from RESULTS. toolsift's recall and token figures are
+  its own, from its BENCHMARKS.md (not in RESULTS); the Wilson intervals on
+  them, and on the agent-use and pilot counts, were computed for the page.
+- `developers.openai.com` and `skills.sh` (including its audits page and API
+  docs) were blocked from the cloud session. They were read locally on
+  2026-10-16: the Codex docs confirm the budget figures only, and the skills.sh
+  audits page and API docs are summarized in the directory row (the two
+  skills.sh Codex threads).
+- "toolsift" is `abdulmunimjemal/toolsift`; other searches return
+  unrelated review sites.
+- Left: a measured comparison against Claude Code tool search and toolsift
+  on the same MCP set; the Codex docs do not state the 1,024-character cap,
+  the ordering or the curation flags.
 
 **B4. Repo polish.**
 
