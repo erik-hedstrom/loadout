@@ -354,7 +354,7 @@ describe('doctor', () => {
     const checks = byName(await doctor(config, () => okClient));
     expect(Date.now() - started).toBeLessThan(15_000);
     expect(checks['Claude Code']!.detail).toMatch(/^version unknown;/);
-  }, 30_000);
+  });
 
   it('reads a Codex server entry that is not a table as not set up', async () => {
     mkdirSync(join(home, 'codex'));
