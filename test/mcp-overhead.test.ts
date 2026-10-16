@@ -642,7 +642,7 @@ describe('positive controls', () => {
   const native = (toolSearch: Arm['toolSearch']): Arm => ({ host: 'claude', kind: 'native', config: 'n1', toolSearch });
   const names = (n: number) => serverTools(serverSpecs(1)[0]!).slice(0, n).map((t) => `mcp__tracker__${t.name}`);
   const gateway: Arm = { host: 'claude', kind: 'gateway', config: 'n1', toolSearch: 'default' };
-  const four = ['find_skills', 'load_skill', 'server_tools', 'call_server_tool'].map((t) => `mcp__loadout__${t}`);
+  const four = ['find_tools', 'load_skill', 'server_tools', 'call_server_tool'].map((t) => `mcp__loadout__${t}`);
 
   it('requires every tool when tool search is off', () => {
     expect(() => positiveControl(native('false'), ['Bash', ...names(10)], 50, null)).not.toThrow();
@@ -740,7 +740,7 @@ describe('positive controls', () => {
 describe('measurement', () => {
   const SECRET_PLUGIN = 'ambient-private-plugin';
   type Lookup = 'found' | 'missing' | 'error' | 'echo';
-  interface Opts { canary?: (run: Run) => Lookup; version?: (call: number) => string | undefined; plugins?: (call: number) => unknown; model?: (call: number) => string; agents?: (call: number) => string[] | undefined; status?: string; extraServer?: boolean; toolUse2?: boolean; numTurns1?: number; tools?: (run: Run, base: string[]) => string[]; flat?: boolean; features?: boolean; codexVersion?: (call: number) => string; inventory?: (run: Run) => Map<string, string[]>; byOrder?: boolean; findSkills?: boolean }
+  interface Opts { canary?: (run: Run) => Lookup; version?: (call: number) => string | undefined; plugins?: (call: number) => unknown; model?: (call: number) => string; agents?: (call: number) => string[] | undefined; status?: string; extraServer?: boolean; toolUse2?: boolean; numTurns1?: number; tools?: (run: Run, base: string[]) => string[]; flat?: boolean; features?: boolean; codexVersion?: (call: number) => string; inventory?: (run: Run) => Map<string, string[]>; byOrder?: boolean; findTools?: boolean }
   /**
    * A fake Claude and Codex that report what the plan declared: tools follow the tool search setting (under it loadout's own
    * four are deferred as well), counters grow with the servers. Each command finds the work directory empty or the test fails.
@@ -763,7 +763,7 @@ describe('measurement', () => {
       if (r.arm.host === 'codex') return jsonl({ type: 'thread.started', thread_id: 'thread-1' }, { type: 'turn.completed', usage: { input_tokens: 1000 + delta, cached_input_tokens: 0, output_tokens: 1 } });
       const call = claudeCalls++;
       const all = r.arm.kind === 'native' ? serverSpecs(r.servers.length).flatMap((s) => serverTools(s).map((t) => `mcp__${s.name}__${t.name}`))
-        : r.arm.kind === 'gateway' ? ['find_skills', 'load_skill', 'server_tools', 'call_server_tool'].map((t) => `mcp__loadout__${t}`) : [];
+        : r.arm.kind === 'gateway' ? ['find_tools', 'load_skill', 'server_tools', 'call_server_tool'].map((t) => `mcp__loadout__${t}`) : [];
       const deferred = r.arm.kind !== 'baseline' && r.command.env?.ENABLE_TOOL_SEARCH !== 'false';
       const base = ['Bash', ...(deferred ? ['ToolSearch'] : all)];
       const listed = [...r.servers, ...(o.extraServer ? ['ambient-extra'] : [])];
@@ -775,7 +775,7 @@ describe('measurement', () => {
         const how = o.canary?.(r) ?? 'found';
         const tool = r.canary.tool;
         // The gateway's server_tools is itself deferred under tool search, so the host first returns it from ToolSearch.
-        const reach = [...(o.findSkills ? [use('fs', 'mcp__loadout__find_skills', { query: tool }), result('fs', [{ type: 'text', text: 'no skills' }])] : []),
+        const reach = [...(o.findTools ? [use('fs', 'mcp__loadout__find_tools', { query: tool }), result('fs', [{ type: 'text', text: 'no skills' }])] : []),
           ...(r.arm.kind === 'gateway' && deferred ? [use('ts', 'ToolSearch', { query: 'server_tools' }), result('ts', [{ type: 'tool_reference', tool_name: 'mcp__loadout__server_tools' }])] : [])];
         if (r.arm.kind === 'gateway') {
           const text = { found: `- other: x\n- ${tool}: desc\n  input schema: {}`, missing: '- other: x', error: `- ${tool}: desc`, echo: `- other: you asked for ${tool}` }[how];
@@ -797,7 +797,7 @@ describe('measurement', () => {
       const r = p.runs.find((x) => x.free?.inventory === command)!;
       if (o.inventory) return o.inventory(r);
       return new Map<string, string[]>(r.arm.kind === 'native' ? serverSpecs(r.servers.length).map((s) => [s.name, serverTools(s).map((t) => t.name)])
-        : r.arm.kind === 'gateway' ? [['loadout', ['find_skills', 'load_skill', 'server_tools', 'call_server_tool']]] : []);
+        : r.arm.kind === 'gateway' ? [['loadout', ['find_tools', 'load_skill', 'server_tools', 'call_server_tool']]] : []);
     };
     return { run, inventory, calls, listings };
   }
@@ -977,8 +977,8 @@ describe('measurement', () => {
     await expect(study({ numTurns1: 2 })).rejects.toThrow('turn 1');
   });
 
-  it('lets the model try find_skills before the gateway lookup in the canary turn', async () => {
-    const { rows } = await study({ findSkills: true });
+  it('lets the model try find_tools before the gateway lookup in the canary turn', async () => {
+    const { rows } = await study({ findTools: true });
     expect(rows.filter((r) => r.kind === 'gateway' && r.canaryFound).length).toBe(4);
   });
 

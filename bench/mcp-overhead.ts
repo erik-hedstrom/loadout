@@ -23,7 +23,7 @@ import type { Capability } from '../src/types.js';
 import { assertTemporary, claudeIsolation, cli, codexSettings, execute, MODELS, parseClaudeTurns, parseCodex, parsePromptInput, validateFeatures, withAppServer, type Command, type Host, type ToolCall } from './overhead.js';
 import { catalogFacts, serverSpecs, serverTools, type Facts, type ServerSpec } from './mcp-fixtures.js';
 
-const LOADOUT_TOOLS = ['find_skills', 'load_skill', 'server_tools', 'call_server_tool'];
+const LOADOUT_TOOLS = ['find_tools', 'load_skill', 'server_tools', 'call_server_tool'];
 const PROMPTS = ['Reply with exactly OK. Do not use tools, skills, commands, agents, or external services.', 'Reply with exactly OK again. Do not use tools, skills, commands, agents, or external services.'] as const;
 const CONFIGS = { n1: 1, n5: 5, n20: 20 } as const;
 const TOOL_SEARCH = ['default', 'false', 'auto'] as const;
@@ -32,7 +32,7 @@ const B1_INPUT_PER_CALL = 8_500;
 // Assumptions, not measurements: characters per token, and seconds per request (the hard cap is execute()'s 120 s).
 const CHARS_PER_TOKEN = 3;
 const SECONDS_PER_REQUEST = 30;
-// `--max-turns` bounds the canary lookup: a ToolSearch for loadout's tool, find_skills, server_tools and the answer. The
+// `--max-turns` bounds the canary lookup: a ToolSearch for loadout's tool, find_tools, server_tools and the answer. The
 // cli-reference says "With `--input-format stream-json`, a message still queued when the limit ends a turn stays queued
 // and starts a new turn with its own limit" (code.claude.com/docs/en/cli-reference); each message here is sent after the
 // previous result. A run has not confirmed it is per message; a cumulative limit would fail the canary turn loudly.
@@ -96,7 +96,7 @@ export function formatOffline(rows: OfflineRow[]): string {
     '| Config | Kind | Servers | Tools | Definition chars | Name chars | Instruction chars | All loaded | Search on | Behind gateway |',
     '| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |'];
   for (const r of rows) lines.push(`| ${r.config} | ${r.kind} | ${r.servers} | ${r.tools} | ${r.definitionChars} | ${r.nameChars} | ${r.instructionChars} | ${r.definitionChars + r.instructionChars} | ${r.nameChars + r.instructionChars} | ${r.libraryDefinitionChars ?? ''} |`);
-  lines.push('Gateway rows are loadout\'s own tools (find_skills, load_skill, server_tools, call_server_tool) and instructions; the library servers\' definitions stay behind the gateway and enter the context only when the agent asks for them.');
+  lines.push('Gateway rows are loadout\'s own tools (find_tools, load_skill, server_tools, call_server_tool) and instructions; the library servers\' definitions stay behind the gateway and enter the context only when the agent asks for them.');
   return lines.join('\n');
 }
 
@@ -155,7 +155,7 @@ export function canaryOf(config: ConfigName): Canary {
   return { server: spec.name, tool, qualified: `mcp__${spec.name}__${tool}` };
 }
 const canaryPrompt = (c: Canary) => `Find the tool "${c.tool}" of the MCP server "${c.server}" with the tool lookup available to you, and reply with exactly its name. Do not use any other tool.`;
-const CANARY_TOOLS = ['ToolSearch', 'mcp__loadout__find_skills', 'mcp__loadout__server_tools'];
+const CANARY_TOOLS = ['ToolSearch', 'mcp__loadout__find_tools', 'mcp__loadout__server_tools'];
 /**
  * The lookup must have answered in the host's own structure, not in text that mentions the tool (a reply, an error or an
  * echoed query could): tool search, a tool_reference block naming exactly the qualified tool; the gateway, a server_tools

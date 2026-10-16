@@ -83,7 +83,7 @@ backlog, B7).
     not count;
   - the gateway lists loadout's four tools, or lists ToolSearch (tool search
     defers loadout's own tools too), and a non-error `server_tools` result for
-    the canary's server has the tool's own line; `find_skills` may be tried
+    the canary's server has the tool's own line; `find_tools` may be tried
     first;
   - Codex's `app-server`, on an empty temporary `CODEX_HOME` like every free
     command, lists exactly the declared servers and tools. That checks the
@@ -112,6 +112,8 @@ backlog, B7).
   alternative remain Erik's decision (backlog, B7).
 
 ## B1 results (2026-10-07): what installed skills cost per request
+
+Note (2026-10-14): B1 measured the earlier `find_skills` tool text. The tool is now `find_tools` with a changed description (skills-only: 336 and 492 characters for the server instructions and the tool description, instead of 337 and 473), so the figures below describe the earlier text and are not remeasured.
 
 Raw rows: [bench/results/2026-10-07T21-04-16-645Z-overhead/](results/2026-10-07T21-04-16-645Z-overhead/).
 Claude Code CLI, haiku, two fresh sessions per arm, deltas over the
