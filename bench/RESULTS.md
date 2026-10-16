@@ -507,6 +507,32 @@ Raw (n = 20): [main](results/2026-10-12T17-12-14-107Z-hook-latency-main/),
 [cache](results/2026-10-12T17-11-32-851Z-hook-latency-d11/).
 Cost: about $0.13 of Jev in total.
 
+### MCP start-up under WSL (D17, 2026-10-15)
+
+**From a checkout on `/mnt/c`, `loadout mcp` took 5.9–7.0 s to answer
+`initialize`; from the Linux filesystem, 0.4–0.8 s.** Codex gives an
+optional MCP server about 1 s before it leaves the server's tools out of the
+first request. Main at `fbee5cb`, the 1,262-skill library on ext4, Node
+24.15, WSL2 on Windows 11. Time from process start to the `initialize`
+reply, three or four warm runs each:
+
+| How it runs | Reply |
+|---|---|
+| inside WSL, checkout on ext4 | 0.41 s |
+| inside WSL, checkout on `/mnt/c` | 5.9 s |
+| `wsl.exe --exec node` from Windows, ext4 | 0.54–0.79 s |
+| `wsl.exe --exec node` from Windows, `/mnt/c` | 6.0–7.0 s |
+
+- Split on `/mnt/c`: importing `dist/mcp.js` and the MCP SDK took 3.9 s,
+  the other CLI modules 0.75 s, and the cached library scan 0.04 s (0.75 s
+  cold). On ext4 the same three took 0.11, 0.03 and 0.04 s. Module loading
+  over 9P is the cost, not the scan.
+- A cold run on ext4: not shown.
+- One machine, one session. Raw results were not kept, so these numbers
+  cannot be recomputed.
+
+Cost: $0.
+
 ### Is the work better? (outcome pilot, 2026-10-07)
 
 [outcome.ts](outcome.ts) runs each request twice with Codex (gpt-6.1-sol) in

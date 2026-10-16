@@ -409,21 +409,9 @@ Acceptance:
 - Document `required = true` for Codex users, after checking whether the
   Codex plugin's `.mcp.json` accepts it.
 
-Measured (2026-10-15, $0; `main` at `fbee5cb`, 1,262-skill library on
-ext4, Node 24.15, WSL2 on Windows 11). This is the time from process start
-to the `initialize` reply, over three or four warm runs:
-
-| How it runs | Reply |
-|---|---|
-| inside WSL, checkout on ext4 | 0.41 s |
-| inside WSL, checkout on `/mnt/c` | 5.9 s |
-| `wsl.exe --exec node` from Windows, ext4 | 0.54–0.79 s |
-| `wsl.exe --exec node` from Windows, `/mnt/c` | 6.0–7.0 s |
-
-Split on `/mnt/c`: importing `dist/mcp.js` and the MCP SDK took 3.9 s, the
-other CLI modules 0.75 s, and the cached library scan 0.04 s (0.75 s
-cold). On ext4 the same three took 0.11, 0.03 and 0.04 s. **The scan is not
-the cost: loading many small module files over 9P is.** So the second
+Measured on 2026-10-15 ($0; [RESULTS](../../bench/RESULTS.md#mcp-start-up-under-wsl-d17-2026-10-15)):
+`initialize` answers in 0.4–0.8 s from ext4 and 5.9–7.0 s from `/mnt/c`.
+The scan is not the cost: loading many small module files over 9P is. So the second
 acceptance bullet would save 0.04 s warm, or up to 0.75 s on a cold first
 run (measured on `/mnt/c`; a cold run on ext4 was not measured), against
 3.9 s of module loading. It is not worth doing as written.
