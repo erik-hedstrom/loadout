@@ -18,6 +18,7 @@ import { parseArgs } from 'node:util';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { DEFAULT_CONFIG } from '../src/config.js';
+import { asJson } from '../src/launch.js';
 import { createServer } from '../src/mcp.js';
 import type { Capability } from '../src/types.js';
 import { assertTemporary, claudeIsolation, cli, codexSettings, execute, MODELS, parseClaudeTurns, parseCodex, parsePromptInput, validateFeatures, withAppServer, type Command, type Host, type ToolCall } from './overhead.js';
@@ -159,7 +160,8 @@ const CANARY_TOOLS = ['ToolSearch', 'mcp__loadout__find_tools', 'mcp__loadout__s
 /**
  * The lookup must have answered in the host's own structure, not in text that mentions the tool (a reply, an error or an
  * echoed query could): tool search, a tool_reference block naming exactly the qualified tool; the gateway, a server_tools
- * result for the canary's server with the tool's own line (`- <tool>: ` in a listing, `<tool>: ` for one tool). Errors never count.
+ * result for the canary's server with the tool's own line (`- "<tool>": ` in a listing, `"<tool>": ` for one tool). Errors
+ * never count. The name is quoted with the gateway's own asJson, so a change to its format fails the real-gateway test.
  */
 export function canaryFound(arm: Arm, canary: Canary, calls: ToolCall[]): boolean {
   return calls.some((c) => {
@@ -167,7 +169,7 @@ export function canaryFound(arm: Arm, canary: Canary, calls: ToolCall[]): boolea
     if (arm.kind !== 'gateway') return c.name === 'ToolSearch' && c.content.some((b) => b.type === 'tool_reference' && b.tool_name === canary.qualified);
     const server = String((c.input as { server?: unknown } | null)?.server ?? '').replace(/^mcp:/, '');
     return c.name === 'mcp__loadout__server_tools' && server === canary.server
-      && c.content.some((b) => b.type === 'text' && (b.text ?? '').split('\n').some((line) => line.startsWith(`- ${canary.tool}: `) || line.startsWith(`${canary.tool}: `)));
+      && c.content.some((b) => b.type === 'text' && (b.text ?? '').split('\n').some((line) => line.startsWith(`- ${asJson(canary.tool)}: `) || line.startsWith(`${asJson(canary.tool)}: `)));
   });
 }
 

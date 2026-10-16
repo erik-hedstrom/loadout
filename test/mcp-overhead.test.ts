@@ -5,6 +5,10 @@ import { spawnSync } from 'node:child_process';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { DEFAULT_CONFIG } from '../src/config.js';
+import { createServer } from '../src/mcp.js';
+import type { Capability } from '../src/types.js';
 import { DISABLED_FEATURES, claudeIsolation, execute, parseClaudeTurns, stopChild, withAppServer, type Command, type ToolCall } from '../bench/overhead.js';
 import { EventEmitter } from 'node:events';
 import { catalogFacts, serverInstructions, serverSpecs, serverTools } from '../bench/mcp-fixtures.js';
@@ -694,14 +698,33 @@ describe('positive controls', () => {
     expect(canaryFound(native('default'), c, [call('ToolSearch', [{ type: 'text', text: c.qualified }])])).toBe(false);
     expect(canaryFound(native('default'), c, [call('ToolSearch', [{ type: 'text', tool_name: c.qualified }])])).toBe(false);
     const list = (server: string, text: string, o: Partial<ToolCall> = {}) => [call('mcp__loadout__server_tools', [{ type: 'text', text }], { input: { server }, ...o })];
-    expect(canaryFound(gateway, c, list(c.server, `- other: x\n- ${c.tool}: desc\n  input schema: {}`))).toBe(true);
-    expect(canaryFound(gateway, c, list(`mcp:${c.server}`, `${c.tool}: desc\ninput schema: {}`))).toBe(true);
-    expect(canaryFound(gateway, c, list(c.server, `- other: mentions ${c.tool}`))).toBe(false);
-    expect(canaryFound(gateway, c, list(c.server, `- ${c.tool}_x: desc`))).toBe(false);
-    expect(canaryFound(gateway, c, list(c.server, `- ${c.tool}: desc`, { isError: true }))).toBe(false);
-    expect(canaryFound(gateway, c, list('tracker', `- ${c.tool}: desc`))).toBe(c.server === 'tracker');
+    const q = JSON.stringify(c.tool);
+    expect(canaryFound(gateway, c, list(c.server, `- "other": x\n- ${q}: desc\n  input schema: {}`))).toBe(true);
+    expect(canaryFound(gateway, c, list(`mcp:${c.server}`, `${q}: desc\ninput schema: {}`))).toBe(true);
+    expect(canaryFound(gateway, c, list(c.server, `- "other": mentions ${q}`))).toBe(false);
+    expect(canaryFound(gateway, c, list(c.server, `- ${JSON.stringify(`${c.tool}_x`)}: desc`))).toBe(false);
+    expect(canaryFound(gateway, c, list(c.server, `- ${q}: desc`, { isError: true }))).toBe(false);
+    expect(canaryFound(gateway, c, list('tracker', `- ${q}: desc`))).toBe(c.server === 'tracker');
     expect(canaryFound(gateway, c, [call('ToolSearch', [ref(c.qualified)])])).toBe(false);
   });
+
+  // The fake host writes the gateway's format by hand; this pins canaryFound to what loadout's server_tools returns.
+  it.each(['n1', 'n5', 'n20'] as const)('finds the %s canary in real server_tools results, listed and looked up', async (config) => {
+    const c = canaryOf(config);
+    const library: Capability[] = [{ id: `mcp:${c.server}`, kind: 'mcp', name: c.server, description: 'fixture', source: '', gateway: true, autoApprove: false,
+      server: { command: process.execPath, args: ['--import', import.meta.resolve('tsx'), serverPath, c.server] } }];
+    const { server, gateway: gw } = createServer({ library, config: DEFAULT_CONFIG });
+    const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: 'b7-canary-test', version: '0.0.1' });
+    await Promise.all([server.connect(serverSide), client.connect(clientSide)]);
+    try {
+      for (const input of [{ server: c.server }, { server: c.server, tool: c.tool }]) {
+        const res = await client.callTool({ name: 'server_tools', arguments: input });
+        const content = res.content as ToolCall['content'];
+        expect(canaryFound(gateway, c, [{ name: 'mcp__loadout__server_tools', input, isError: Boolean(res.isError), content }]), JSON.stringify(content).slice(0, 300)).toBe(true);
+      }
+    } finally { await client.close(); await gw.close(); }
+  }, 30_000);
 
   it('picks a different canary per configuration: the last tool of the last server', () => {
     const picks = (['n1', 'n5', 'n20'] as const).map(canaryOf);
@@ -778,7 +801,8 @@ describe('measurement', () => {
         const reach = [...(o.findTools ? [use('fs', 'mcp__loadout__find_tools', { query: tool }), result('fs', [{ type: 'text', text: 'no skills' }])] : []),
           ...(r.arm.kind === 'gateway' && deferred ? [use('ts', 'ToolSearch', { query: 'server_tools' }), result('ts', [{ type: 'tool_reference', tool_name: 'mcp__loadout__server_tools' }])] : [])];
         if (r.arm.kind === 'gateway') {
-          const text = { found: `- other: x\n- ${tool}: desc\n  input schema: {}`, missing: '- other: x', error: `- ${tool}: desc`, echo: `- other: you asked for ${tool}` }[how];
+          const q = JSON.stringify(tool);
+          const text = { found: `- "other": x\n- ${q}: desc\n  input schema: {}`, missing: '- "other": x', error: `- ${q}: desc`, echo: `- "other": you asked for ${q}` }[how];
           return [...reach, use('tu', 'mcp__loadout__server_tools', { server: r.canary.server }), result('tu', [{ type: 'text', text }], how === 'error')];
         }
         const content = { found: [{ type: 'tool_reference', tool_name: r.canary.qualified }], missing: [{ type: 'tool_reference', tool_name: 'mcp__x__y' }],
