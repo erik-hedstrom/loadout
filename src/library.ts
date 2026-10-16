@@ -23,7 +23,7 @@ import {
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { parse as parseYaml } from 'yaml';
-import { loadoutHome } from './config.js';
+import { loadoutHome, withoutKey } from './config.js';
 import type { Capability, McpServerConfig } from './types.js';
 
 const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---/;
@@ -489,11 +489,12 @@ export function addFromGitHub(spec: string, libraryDir: string): AddResult {
   const gh = parseGitHub(spec);
   if (!gh) throw new Error(`not a GitHub URL: ${spec}`);
   const tmp = mkdtempSync(join(tmpdir(), 'loadout-src-'));
+  const env = { ...withoutKey(), GIT_TERMINAL_PROMPT: '0' };
   try {
     const repoDir = join(tmp, 'repo');
     const args = ['-c', 'core.symlinks=false', 'clone', '--depth', '1', '--quiet', ...(gh.ref ? ['--branch', gh.ref] : []), `https://github.com/${gh.owner}/${gh.repo}.git`, repoDir];
-    execFileSync('git', args, { stdio: ['ignore', 'ignore', 'pipe'], timeout: LIMITS.cloneMs, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } });
-    const revision = execFileSync('git', ['-C', repoDir, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+    execFileSync('git', args, { stdio: ['ignore', 'ignore', 'pipe'], timeout: LIMITS.cloneMs, env });
+    const revision = execFileSync('git', ['-C', repoDir, 'rev-parse', 'HEAD'], { encoding: 'utf8', env }).trim();
     const scanDir = gh.subpath ? resolve(repoDir, gh.subpath) : repoDir;
     if (gh.subpath && (!existsSync(scanDir) || !isInside(realpathSync(repoDir), realpathSync(scanDir)))) {
       throw new Error(`path not inside the repository: ${gh.subpath}`);

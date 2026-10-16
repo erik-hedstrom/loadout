@@ -28,7 +28,7 @@ launcher-only work is P2.
 |---|---|---|---|---|---|
 | A2 | P0 | `loadout audit`: what your installed skills cost you | Claude | cloud | done ([PR #3](https://github.com/erik-hedstrom/loadout/pull/3)) |
 | A1 | P0 | README rewrite around the problem, 3-command quickstart, GIF | Claude | cloud | todo (leads with the plugin and the Codex hook; the launcher moves down) |
-| A3 | P1 | `loadout init` wizard + starter packs | Codex | cloud | todo |
+| A3 | P1 | `loadout init` wizard + starter packs | Codex | cloud | in progress ([#30](https://github.com/erik-hedstrom/loadout/pull/30)) |
 | A4 | P1 | npm package under an available name + release workflow | Codex | cloud + erik | blocked: npm name decision |
 | A5 | P1 | Demo recording (route, launch, hook) | Claude | local | todo (after A1) |
 
@@ -87,6 +87,13 @@ Acceptance:
   builds the index, and prints the `setup` snippet for the detected hosts.
 - Never edits host configs.
 - Completes in under 2 minutes, excluding downloads.
+
+Learnings (2026-10-12):
+- node:readline has no hidden input, and a terminal echoes what is typed, so
+  the wizard never prompts for the key or its file; it points to
+  TYPESAFE_API_KEY or `init --key-file`.
+- No "popular" pack: the skills.sh top list (`bench/data/popular.jsonl`) is
+  not committed, so nothing in the repo backs one.
 
 **A4. npm release.**
 

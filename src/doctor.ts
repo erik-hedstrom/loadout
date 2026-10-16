@@ -36,7 +36,7 @@ function version(bin: string): string | undefined {
 }
 
 /** `which()` over absolute PATH entries only, so a match in the current folder neither runs nor hides a later one. */
-const onPath = (bin: string) => which(bin, absolutePath());
+export const onPath = (bin: string) => which(bin, absolutePath());
 
 /** A parsed config file, {} when it is missing, or undefined when it exists but cannot be read or parsed. */
 function readConfig(file: string, parse: (text: string) => unknown): Record<string, unknown> | undefined {
