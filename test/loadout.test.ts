@@ -6,6 +6,7 @@ import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { basename, join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterAll, describe, expect, it, vi } from 'vitest';
+import { parse as parseToml } from 'smol-toml';
 import { DEFAULT_CONFIG, type Config } from '../src/config.js';
 import { jevClient, JevError, validateResponse, type Question, type SystemOneClient } from '../src/jev.js';
 import { claudeArgs, claudeHookSettings, codexArgs, escapeSkillTags, hookCommand, hostSetup, launch, loaderArgs, materialize, searchServer, toToml } from '../src/launch.js';
@@ -929,6 +930,8 @@ describe('launch', () => {
     expect(codex).not.toContain('codex plugin add');
     expect(codex).toMatch(/\[mcp_servers\.loadout\]\ncommand = "wsl\.exe"\nargs = \[.*"mcp", "--windows-paths"\]/);
     expect(codex).toContain('env_vars = ["TYPESAFE_API_KEY"]');
+    // Codex waits for a required server before the first request (D17).
+    expect(parseToml(codex)).toMatchObject({ mcp_servers: { loadout: { command: 'wsl.exe', required: true } } });
     expect(codex).toContain('[mcp_servers.loadout.tools.find_tools]\napproval_mode = "approve"');
     expect(codex).not.toContain('call_server_tool');
     expect(codex).toMatch(/\[\[hooks\.UserPromptSubmit\]\]\n\[\[hooks\.UserPromptSubmit\.hooks\]\]\ntype = "command"\ncommand = "wsl\.exe .* hook codex --windows-paths"\ntimeout = 30$/);

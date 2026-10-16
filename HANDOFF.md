@@ -243,4 +243,6 @@ native machine:
 - **Tests:** `loadout.test.ts` still mixes modules (E3).
 - **MCP start-up in Codex:** from `/mnt/c` through `wsl.exe`, `loadout mcp`
   misses Codex's grace for optional servers, so its tools join mid-session
-  ([D17](docs/loop/BACKLOG.md)).
+  ([D17](docs/loop/BACKLOG.md)). The `--windows` TOML now sets
+  `required = true`; plugin users have `mcp_optional_startup_grace_ms`
+  ([README](README.md#search-mid-session-from-any-mcp-host)).
