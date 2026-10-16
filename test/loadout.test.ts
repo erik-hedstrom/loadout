@@ -1148,7 +1148,7 @@ describe('mcp server', () => {
     expect((await s.call('server_tools', { server: 'missing' })).isError).toBe(true);
     expect((await s.call('server_tools', { server: 'canary', tool: 'ledger_memo' })).text).toMatch(/^"ledger_memo": .*\ninput schema: \{/);
     await s.close();
-  }, 20_000);
+  });
 
   describe('MCP discovery', () => {
     const goal = 'Read the memo of a ZX Ledger entry';
@@ -1227,7 +1227,7 @@ describe('mcp server', () => {
         await s2.call('server_tools', { server: 'canary' });
         expect((await s2.call('find_tools', { goal: ledgerGoal })).text).toMatch(/^No skill or MCP server/);
         await s2.close();
-      }, 20_000);
+      });
 
       it('never starts a server to index it', async () => {
         const dir = tempDir('loadout-toolindex-');
@@ -1282,7 +1282,7 @@ describe('mcp server', () => {
           );
         expect(await Promise.all([run('a'), run('b')])).toEqual([0, 0]);
         expect(withTools([named('a'), named('b')], dir).map((c) => c.tools)).toEqual([[{ name: 'tool_299', description: 'a' }], [{ name: 'tool_299', description: 'b' }]]);
-      }, 30_000);
+      });
 
       it('does not reuse tools after the server config, env or headers change', () => {
         const dir = tempDir('loadout-toolindex-');

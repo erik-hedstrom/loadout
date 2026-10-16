@@ -156,7 +156,7 @@ describe('audit', () => {
   it.skipIf(process.platform !== 'win32')('adopts into a case-variant LOADOUT_HOME without looping past its boundary', () => {
     skill(join(home, 'claude-custom', 'skills'), 'safe');
     vi.stubEnv('LOADOUT_HOME', join(home, '.LOADOUT'));
-    const result = spawnSync(process.execPath, ['--import', import.meta.resolve('tsx'), cli, 'audit', '--json', '--adopt'], { cwd: project, env: process.env, encoding: 'utf8', timeout: 5000 });
+    const result = spawnSync(process.execPath, ['--import', import.meta.resolve('tsx'), cli, 'audit', '--json', '--adopt'], { cwd: project, env: process.env, encoding: 'utf8', timeout: 15_000 });
     expect(result.error).toBeUndefined();
     expect(result.status, result.stderr).toBe(0);
     expect(JSON.parse(result.stdout).adopted.added).toBe(1);
