@@ -307,6 +307,11 @@ export function hostSetup(host: Host, windows: boolean): { where: string; snippe
           `args = ${toToml(s.args ?? [])}`,
           ...(s.env ? [`env = ${toToml(s.env)}`] : []),
           `env_vars = ["TYPESAFE_API_KEY"]`,
+          // Through wsl.exe the server can miss Codex's 1 s grace for optional servers; Codex then adds its
+          // tools mid-session, which changes the request prefix (D17). The plugin leaves this out on purpose:
+          // users cannot override a plugin server's `required`, and a failed start would block every session.
+          '# Codex waits for search before the first request. If loadout cannot start, Codex will not start a session; delete this line to make search optional.',
+          'required = true',
           ...SEARCH_TOOLS.flatMap((t) => ['', `[mcp_servers.loadout.tools.${t}]`, `approval_mode = "approve"`]),
           '',
           '# Route every prompt (optional). Codex runs a new or changed hook only after you trust it with /hooks.',

@@ -265,6 +265,20 @@ Under WSL, Windows apps reach the server through `wsl.exe` and get Windows
 paths. Keep the TypeSafe key in the config's `apiKeyFile` (environment
 variables do not cross from a Windows app into WSL).
 
+Under WSL, install loadout on the Linux filesystem (under `~`), not in a
+checkout on `/mnt/c`. From `/mnt/c`, Node loads loadout's many module files
+over the slow Windows file share, and `loadout mcp` took 5.9–7.0 s to answer
+instead of 0.4–0.8 s (one machine, backlog D17 under
+[D](docs/loop/BACKLOG.md#d-integrations-and-robustness)). Codex leaves out an
+optional MCP server that is not ready about 1 s after start, and adds its tools
+mid-session. The TOML from `loadout setup codex --windows` sets
+`required = true`, so Codex waits for search before the first request, and
+will not start a session if loadout fails to start. The plugin does not set
+it, because users cannot turn it off for a plugin's server. To make Codex
+wait for the plugin's server too, set `mcp_optional_startup_grace_ms = 0` at
+the top of `~/.codex/config.toml`; Codex then waits for every optional MCP
+server, up to its start-up timeout.
+
 Tier-to-model mapping, thresholds and caps live in `~/.loadout/config.json`
 (only your overrides are stored; everything else follows the defaults).
 

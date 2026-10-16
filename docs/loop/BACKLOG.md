@@ -390,7 +390,7 @@ Acceptance: a third row in that RESULTS table, with raw results. The README's
 | D8 | P1 | Host capability matrix (verified vs generated) | Claude | cloud | done ([#18](https://github.com/erik-hedstrom/loadout/pull/18)) |
 | D9 | P1 | Codex parity: neutral session skill dir, tier presets | Claude | cloud | done ([#21](https://github.com/erik-hedstrom/loadout/pull/21)); Codex launch not re-run live |
 | D15 | P0 | MCP discovery: make library MCP servers findable and usable through the search server | Claude | cloud + local | in progress: code and tests merged in [#39](https://github.com/erik-hedstrom/loadout/pull/39); the live check is left |
-| D17 | P1 | `loadout mcp` ready within Codex's MCP start-up grace | Claude | local (measure) + cloud (fix) | measured 2026-10-15: under 1 s from ext4, 6–7 s from `/mnt/c`; module loading, not the scan (see below) |
+| D17 | P1 | `loadout mcp` ready within Codex's MCP start-up grace | Claude | local (measure) + cloud (fix) | review (PR pending): WSL install advice in the README; `required = true` in the `--windows` TOML, not in the plugin (see below); measured 2026-10-15: under 1 s from ext4, 6–7 s from `/mnt/c` |
 | D12 | P0 | Codex: install the hook and search as one step, if Codex allows it | Codex | local | done ([#23](https://github.com/erik-hedstrom/loadout/pull/23)): `plugins/loadout-codex` through `.agents/plugins/marketplace.json`; install checked offline; the hook still needs `/hooks` trust; the live run is D2 |
 
 **D17. MCP start-up inside Codex's grace period.** Codex leaves an optional
@@ -426,13 +426,43 @@ cold). On ext4 the same three took 0.11, 0.03 and 0.04 s. **The scan is not
 the cost: loading many small module files over 9P is.** So the second
 acceptance bullet would save 0.04 s warm, or up to 0.75 s on a cold first
 run (measured on `/mnt/c`; a cold run on ext4 was not measured), against
-3.9 s of module loading. It is not worth doing as written. What is left:
-- Tell WSL users to run `loadout mcp` from a Linux-filesystem install
-  (ORCHESTRATOR.md already says so for this machine), and say why.
-- `required = true`, as above. Through `wsl.exe` from ext4 the first run
-  took 0.79 s, close to the grace.
-- Bundling `dist` would cut the file count. Only if the steps above are
-  not enough: it adds a build step.
+3.9 s of module loading. It is not worth doing as written.
+
+Done (2026-10-16, $0):
+- The README's WSL paragraph tells users to install on the Linux filesystem,
+  with the numbers above.
+- What Codex 0.160.1 accepts (source at tag `rust-v0.160.1`, links below):
+  - `required` is a per-server boolean, parsed for `config.toml` and for a
+    plugin's `.mcp.json` alike: plugin servers go through the same
+    `McpServerConfig` deserializer
+    ([mcp_types.rs#L248-L252](https://github.com/openai/codex/blob/rust-v0.160.1/codex-rs/config/src/mcp_types.rs#L248-L252),
+    [#L607-L616](https://github.com/openai/codex/blob/rust-v0.160.1/codex-rs/config/src/mcp_types.rs#L607-L616),
+    [plugin_config.rs#L157](https://github.com/openai/codex/blob/rust-v0.160.1/codex-rs/codex-mcp/src/plugin_config.rs#L157)).
+    Codex 0.160.1 rejects `required = "yes"` in `config.toml` with
+    "expected a boolean", so the key is known.
+  - Codex waits for a required server before building the tool list
+    ([tool_catalog.rs#L282-L329](https://github.com/openai/codex/blob/rust-v0.160.1/codex-rs/codex-mcp/src/connection_manager/tool_catalog.rs#L282-L329)),
+    and a required server that fails to start fails the session start
+    ("required MCP servers failed to initialize",
+    [required.rs#L17-L63](https://github.com/openai/codex/blob/rust-v0.160.1/codex-rs/codex-mcp/src/connection_manager/required.rs#L17-L63)).
+  - A user's plugin policy can set `enabled`, approvals and tool lists for a
+    plugin's server, but not `required`
+    ([types.rs#L1019](https://github.com/openai/codex/blob/rust-v0.160.1/codex-rs/config/src/types.rs#L1019),
+    [loader.rs#L968-L989](https://github.com/openai/codex/blob/rust-v0.160.1/codex-rs/core-plugins/src/loader.rs#L968-L989)).
+  - `mcp_optional_startup_grace_ms` (default 1000) is top-level only; 0
+    waits for each optional server up to its `startup_timeout_sec`
+    (default 30 s)
+    ([config_toml.rs#L318-L322](https://github.com/openai/codex/blob/rust-v0.160.1/codex-rs/config/src/config_toml.rs#L318-L322),
+    [rmcp_client.rs#L105](https://github.com/openai/codex/blob/rust-v0.160.1/codex-rs/codex-mcp/src/rmcp_client.rs#L105)).
+- So `loadout setup codex --windows`, the `wsl.exe` path measured above,
+  prints `required = true` (test: `prints host configs that attach the
+  search server`). The plugin's `.mcp.json` leaves it out: with it, a
+  missing or broken `loadout` would fail every Codex session, and users
+  could not turn that off short of disabling search. The README gives plugin
+  users `mcp_optional_startup_grace_ms = 0` instead. Erik can reverse this.
+- Not done: bundling `dist`. Only if the steps above are not enough: it adds
+  a build step. A live Codex session with `required = true` has not been
+  run.
 
 **D10. In-host first: loadout as a Claude Code plugin.**
 
