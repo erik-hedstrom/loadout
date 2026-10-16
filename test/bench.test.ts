@@ -1,6 +1,6 @@
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { delimiter, join } from 'node:path';
 import { execFileSync, spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
@@ -33,6 +33,168 @@ function disputedFixture() {
 }
 
 describe('benchmark backends', () => {
+  it.each([
+    { mode: 'plugin', windowsAgent: false },
+    { mode: 'plugin', windowsAgent: true },
+    { mode: 'plugin', windowsAgent: false, problem: 'silent hook' },
+    { mode: 'plugin', windowsAgent: true, problem: 'silent hook' },
+    { mode: 'hook', windowsAgent: false },
+    { mode: 'search', windowsAgent: false },
+    { mode: 'routed', windowsAgent: false },
+    { mode: 'plugin', windowsAgent: false, ambient: 'plugin' },
+    { mode: 'plugin', windowsAgent: false, ambient: 'hook' },
+    { mode: 'hook', windowsAgent: false, ambient: 'hook' },
+    { mode: 'search', windowsAgent: false, ambient: 'plugin' },
+    { mode: 'search', windowsAgent: false, ambient: 'hook' },
+    { mode: 'routed', windowsAgent: false, ambient: 'hook' },
+    { mode: 'search', windowsAgent: false, ambient: 'absolute' },
+    { mode: 'plugin', windowsAgent: false, ambient: 'absolute' },
+    { mode: 'plugin', windowsAgent: false, ambient: 'absolute', problem: 'silent hook' },
+    { mode: 'plugin', windowsAgent: true, ambient: 'absolute', problem: 'silent hook' },
+    { mode: 'plugin', windowsAgent: false, problem: 'missing plugin' },
+    { mode: 'plugin', windowsAgent: false, problem: 'missing hook' },
+    { mode: 'hook', windowsAgent: false, problem: 'missing hook' },
+    { mode: 'plugin', windowsAgent: false, problem: 'no init' },
+    { mode: 'plugin', windowsAgent: false, problem: 'bad init' },
+    { mode: 'plugin', windowsAgent: false, problem: 'plugins not a list' },
+    { mode: 'plugin', windowsAgent: false, problem: 'auth failure' },
+  ])('records hook evidence and paid rows in $mode (WSL: $windowsAgent, ambient: $ambient, problem: $problem)', async ({ mode, windowsAgent, ambient, problem }) => {
+    const dir = join(temp(), "sweep ' $value"), binDir = temp();
+    mkdirSync(dir);
+    const repo = join(import.meta.dirname, '..');
+    const probe = JSON.parse(readFileSync(join(repo, 'bench', 'results', '2026-10-08-hook-plugin-probe', 'probe.json'), 'utf8'));
+    const parentPath = process.env.PATH;
+    const fakePath = [binDir, 'installed-loadout'].join(delimiter);
+    writeFileSync(join(binDir, 'claude'), '', { mode: 0o755 });
+    const skill = join(dir, 'library', 'skills', 'skill-a');
+    mkdirSync(skill, { recursive: true });
+    writeFileSync(join(skill, 'SKILL.md'), '---\nname: skill-a\ndescription: Fits\n---\n');
+    writeFileSync(join(dir, 'decisions.jsonl'), ['a', 'b'].map((id) => JSON.stringify({ id, request: `Request ${id}`, tier: 'medium', loaded: [{ key: 'skill-a', fit: 1, inject: 'clear' }], offered: [], shortlist: [] })).join('\n') + '\n');
+    vi.stubEnv('LOADOUT_HOME', dir);
+    vi.stubEnv('PATH', fakePath);
+    vi.stubEnv('WSL_DISTRO_NAME', 'bench-distro');
+    vi.stubEnv('WSLENV', 'KEEP/p:PATH/up');
+    const translate = (p: string) => windowsAgent ? `C:\\translated${p.replace(/\\/g, '/')}` : p;
+    vi.doMock('../src/launch.js', async (original) => ({ ...await original<typeof import('../src/launch.js')>(), pathTranslator: () => translate, hookCommand: () => 'printf "%s" "$HOOK_OUT"; printf hook-err >&2; exit 7' }));
+    vi.mocked(execFileSync).mockImplementation((command, args) => {
+      if (command === 'cmd.exe') return 'C:\\Temp\n';
+      if (command === 'wslpath') return args?.includes('-w') ? translate(args[1]!) + '\n' : tmpdir() + '\n';
+      throw new Error(`unexpected command ${command}`);
+    });
+    const calls: { args: string[]; env?: NodeJS.ProcessEnv }[] = [];
+    const inventories: { plugins: { name: string; path: string }[] }[] = [];
+    const reduced = (inv: { plugins: { name: string }[] }) => ({ loadoutPlugins: inv.plugins.filter((p) => /^loadout(?:@|$)/i.test(p.name)).map((p) => p.name), otherPlugins: inv.plugins.filter((p) => !/^loadout(?:@|$)/i.test(p.name)).length });
+    const hookCounts: number[] = [];
+    vi.mocked(spawn).mockImplementation((_command, argv, options) => {
+      const args = argv as string[];
+      calls.push({ args, env: options!.env });
+      const inventory: typeof inventories[number] = { plugins: [{ name: 'other-plugin', path: '/ambient/other' }] };
+      if (args.includes('--plugin-dir')) inventory.plugins.push({ name: 'loadout', path: args[args.indexOf('--plugin-dir') + 1]! });
+      if (problem === 'missing plugin') inventory.plugins = [];
+      if (ambient === 'plugin') inventory.plugins.push({ name: 'loadout', path: '/ambient/loadout' });
+      inventories.push(inventory);
+      const count = (mode === 'plugin' || mode === 'hook' ? 1 : 0) + (ambient === 'hook' ? 1 : 0);
+      hookCounts.push(problem === 'missing hook' ? 0 : count);
+      // The agent is told its folder is empty, and the hook routes on its file names.
+      expect(readdirSync(options!.cwd as string)).toEqual([]);
+      const shimDir = options!.env!.PATH!.split(delimiter)[0]!;
+      const shim = join(shimDir, 'loadout');
+      const marker = join(shimDir, readdirSync(shimDir).find((f) => f.endsWith('.invocations'))!);
+      if (mode === 'hook') expect(JSON.parse(args[args.indexOf('--settings') + 1]!).hooks.UserPromptSubmit[0].hooks[0].command).toBe('loadout hook claude');
+      // An 'absolute' ambient hook (index hookCounts) bypasses the shim and always adds context.
+      const hasContext = (i: number) => i === hookCounts.at(-1)! || !(problem === 'silent hook' || ambient === 'hook' && i === count - 1);
+      for (let i = 0; i < hookCounts.at(-1)!; i++) {
+        if (!windowsAgent && process.platform !== 'win32') {
+          const out = hasContext(i) ? '<skill_relevance>hook-out' : 'hook-out';
+          const result = spawnSync('/bin/sh', [shim, 'hook', 'claude'], { encoding: 'utf8', env: { ...process.env, HOOK_OUT: out } });
+          expect(result).toMatchObject({ status: 7, stdout: out, stderr: 'hook-err' });
+        } else {
+          const markerPath = translate(marker).replace(/\\/g, '/');
+          expect(readFileSync(shim, 'utf8')).toContain(`>> '${markerPath}'`);
+          appendFileSync(marker, hasContext(i) ? 'invoked\ncontext\n' : 'invoked\n');
+        }
+      }
+      const hooks = Array.from({ length: hookCounts.at(-1)! + (ambient === 'absolute' ? 1 : 0) }, (_, i) => {
+        const fields = { hook_id: `hook-${i}`, hook_name: 'UserPromptSubmit', hook_event: probe.hook.event };
+        const stdout = !hasContext(i) ? '' : JSON.stringify({ hookSpecificOutput: { hookEventName: probe.hook.event, additionalContext: `${probe.hook.additionalContext}
+<skill name="skill-a" trust="third-party">
+body
+</skill>` } });
+        return [
+          { type: 'system', subtype: 'hook_started', ...fields },
+          { type: 'system', subtype: 'hook_response', ...fields, stdout, output: stdout, stderr: probe.hook.stderr, exit_code: probe.hook.exit_code, outcome: probe.hook.outcome },
+        ];
+      }).flat();
+      const child = new EventEmitter() as ChildProcess;
+      child.stdout = new PassThrough(); child.stderr = new PassThrough();
+      queueMicrotask(() => {
+        child.stdout!.emit('data', Buffer.from([
+          ...(problem === 'no init' ? [] : [problem === 'bad init' ? '{"type":"system","subtype":"init","plugins":' : problem === 'plugins not a list' ? { type: 'system', subtype: 'init', plugins: null } : { type: 'system', subtype: 'init', ...inventory }]),
+          ...hooks,
+          { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Read', id: 'read-a', input: { file_path: '/library/skills/skill-a/SKILL.md' } }] } },
+          { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'read-a' }] } },
+          problem === 'auth failure' ? { type: 'result', subtype: 'success', is_error: true, total_cost_usd: 0 } : { type: 'result', total_cost_usd: 0.05 },
+        ].map((e) => typeof e === 'string' ? e : JSON.stringify(e)).join('\n')));
+        child.emit('close', problem === 'no init' ? 1 : 0);
+      });
+      return child;
+    });
+    const argv = process.argv;
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      process.argv = [process.execPath, 'bench/invoke.ts', dir, '--agent', 'claude', '--mode', mode, '--ids', 'a,b'];
+      vi.resetModules();
+      if (ambient || problem && problem !== 'silent hook') {
+        const reason = problem === 'auth failure' ? 'agent failed before the model ran' : problem === 'no init' || problem === 'bad init' || problem === 'plugins not a list' ? 'no startup inventory' : ambient === 'plugin' ? 'ambient loadout plugin; measurement invalid' : ambient === 'absolute' ? 'uncounted loadout hook context; measurement invalid' : problem === 'missing plugin' ? 'missing loadout plugin; measurement invalid' : mode === 'routed' || mode === 'search' ? 'unexpected loadout UserPromptSubmit hook; measurement invalid' : 'expected exactly one loadout UserPromptSubmit hook; measurement invalid';
+        await expect(import('../bench/invoke.js')).rejects.toThrow(reason);
+        const rows = readFileSync(join(dir, `invoke-claude-${mode}.jsonl`), 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+        expect(rows).toHaveLength(1);
+        expect(calls).toHaveLength(1);
+        expect(rows[0]).toMatchObject({ id: 'a', invalid: reason, costUsd: problem === 'auth failure' ? 0 : 0.05, exit: problem === 'no init' ? 1 : 0, timedOut: false, invoked: ['skill-a'], tools: ['Read'], inventory: problem === 'no init' || problem === 'bad init' || problem === 'plugins not a list' ? null : reduced(inventories[0]!), hookInvocations: hookCounts[0]!, hookEventCount: hookCounts[0]! + (ambient === 'absolute' ? 1 : 0) });
+        if (problem === 'auth failure') expect(rows[0].outcome).toEqual({ isError: true, subtype: 'success' });
+        expect(rows[0].hooks).toHaveLength(hookCounts[0]! + (ambient === 'absolute' ? 1 : 0));
+        return;
+      }
+      await import('../bench/invoke.js');
+      expect(calls).toHaveLength(2);
+      for (const [i, call] of calls.entries()) {
+        expect(call.args).toContain('--no-session-persistence');
+        expect(call.args).toContain('--include-hook-events');
+        if (mode === 'plugin') {
+          expect(call.args).toEqual(['-p', `Request ${i ? 'b' : 'a'}\n\n(Test run: nothing is attached and the folder is empty. Where the request refers to files or data you do not have, create small realistic sample inputs and carry on.)`, '--model', 'sonnet', '--plugin-dir', translate(join(repo, 'plugins', 'loadout')), '--output-format', 'stream-json', '--verbose', '--include-hook-events', '--no-session-persistence', '--max-turns', '6', '--strict-mcp-config', '--permission-mode', 'acceptEdits']);
+        }
+        // Under WSL the launcher script needs a Linux PATH; WSLENV's PATH/l translates it for claude.exe.
+        expect(call.env!.PATH!.slice(call.env!.PATH!.indexOf(delimiter))).toBe(delimiter + fakePath);
+        expect(call.env!.PATH!.split(delimiter)[0]).toContain('loadout-bin-');
+        expect(call.env!.LOADOUT_HOME).toBe(dir);
+        expect(call.env!.WSLENV).toBe(windowsAgent ? 'KEEP/p:PATH/l' : 'KEEP/p:PATH/up');
+      }
+      const rows = readFileSync(join(dir, `invoke-claude-${mode}.jsonl`), 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+      expect(rows.map((row) => row.id)).toEqual(['a', 'b']);
+      for (const [i, row] of rows.entries()) {
+        expect(row).toMatchObject({ agent: 'claude', mode, model: 'sonnet', invoked: ['skill-a'], searches: [], tools: ['Read'], exit: 0, timedOut: false, costUsd: 0.05, hookInvocations: hookCounts[i]!, hookEventCount: hookCounts[i]!, hookContext: problem !== 'silent hook' && hookCounts[i]! > 0 });
+        if (mode !== 'routed') expect(row).toMatchObject({ loaded: [], injected: [], offered: [] });
+        expect(row.inventory).toEqual(reduced(inventories[i]!));
+        // Rows are public: no ambient plugin names or paths, and no hook skill text.
+        expect(JSON.stringify(row)).not.toMatch(/ambient|other-plugin|skill_relevance/);
+        expect(row).not.toHaveProperty('invalid');
+        expect(row.hooks).toHaveLength(hookCounts[i]!);
+        expect(row.hooks.map((h: { injected: string[] }) => h.injected)).toEqual(row.hooks.map((h: { context: boolean }) => h.context ? ['skill-a'] : []));
+        expect(row.ms).toBeGreaterThanOrEqual(0);
+      }
+      expect(process.env.PATH).toBe(fakePath);
+    } finally {
+      process.argv = argv;
+      log.mockRestore();
+      vi.doUnmock('../src/launch.js');
+      vi.unstubAllEnvs();
+      vi.mocked(spawn).mockReset();
+      vi.mocked(execFileSync).mockReset();
+      vi.resetModules();
+    }
+    expect(process.env.PATH).toBe(parentPath);
+  });
+
   it('generates 300 seeds through pending files and resumes with IDs and provenance', () => {
     const dir = temp(), out = join(dir, 'seeds-c1.jsonl');
     const pending = runSeeds(dir, ['--effort', 'high']);
