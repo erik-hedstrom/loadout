@@ -158,19 +158,30 @@ loadout library (`loadout add <dir>`).
 ## Search mid-session, from any MCP host
 
 `loadout mcp` serves the library as an MCP server (**546 input tokens** of
-tool definitions in Claude Code, [B1](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request)),
+tool definitions in Claude Code for a skills-only library,
+[B1](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request),
+measured before the rename to `find_tools`),
 so an agent can look for know-how when the work drifts away from what the
 session started with, in its own words:
 
-- `find_skills(goal, keywords?)`: a Jev-ranked handful of matches with their
-  fit, about a second and $0.001 per search; "nothing fits" when nothing does;
+- `find_tools(goal, keywords?)`: a Jev-ranked handful of matches with their
+  fit, about a second and $0.001 per search; "nothing fits" when nothing does.
+  It searches the library's `"gateway": true` MCP servers and its skills
+  together. A server match says it is an MCP server (with its tool count once
+  `server_tools` has listed it) and gives the next call;
 - `load_skill(skill, file?)`: the skill's instructions as attributed
   third-party reference material, or one of its files (so hosts without file
   access, like Claude Desktop, can still use scripts and references);
 - `server_tools` / `call_server_tool`: a gateway to the library's MCP
   servers marked `"gateway": true`, registered only when there are some. Each
   call goes through the host's approval prompt, which shows the server, tool
-  and arguments.
+  and arguments. A server is not configured in the host, so its tool
+  definitions are not in the host's context; `server_tools` starts it on
+  first use. After that call, loadout remembers the server's tool names and
+  descriptions under `~/.loadout/index/mcp-tools/`, and later searches match a
+  goal against them as well. A server is never started just to be searched,
+  and a long tool list shows argument names instead of full schemas
+  (`server_tools` with `tool` returns one in full).
 
 `loadout claude` / `loadout codex` attach it automatically (turn off with
 `"search": false`), with only the two read-only tools pre-approved. For

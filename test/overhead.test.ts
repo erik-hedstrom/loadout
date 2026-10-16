@@ -67,7 +67,7 @@ function fakeStudy(plan: Plan) {
   };
   const inspect = async (command: Command) => {
     const call = plan.calls.find((c) => c.command.cwd === command.cwd)!;
-    return { discoveredSkills: call.copiedSkills + 1, discoveredPackSkills: call.copiedSkills, tools: call.configuration === 'loadout' ? ['find_skills', 'load_skill'] : [] };
+    return { discoveredSkills: call.copiedSkills + 1, discoveredPackSkills: call.copiedSkills, tools: call.configuration === 'loadout' ? ['find_tools', 'load_skill'] : [] };
   };
   return { run, inspect };
 }
@@ -281,8 +281,8 @@ describe('round 2 validity', () => {
   it('queries Codex discovery and MCP inventory through the model-free app-server protocol', async () => {
     const cwd = temp();
     const file = join(cwd, 'codex.cjs');
-    writeFileSync(file, `const rl=require('readline').createInterface({input:process.stdin});rl.on('line',line=>{const r=JSON.parse(line);if(r.id===undefined)return;const result=r.method==='initialize'?{}:r.method==='skills/list'?{data:[{cwd:${JSON.stringify(cwd)},skills:[{path:${JSON.stringify(join(cwd, '.agents', 'skills', 'b1-0000', 'SKILL.md'))},enabled:true}],errors:[]}]}:r.method==='mcpServerStatus/list'?{data:[{name:'loadout',tools:{a:{name:'find_skills'},b:{name:'load_skill'}}}],nextCursor:null}:null;if(result===null)throw Error('Unexpected request');console.log(JSON.stringify({id:r.id,result}));});`);
-    expect(await inspectCodex({ bin: process.execPath, args: [file], cwd })).toMatchObject({ discoveredPackSkills: 1, tools: ['find_skills', 'load_skill'] });
+    writeFileSync(file, `const rl=require('readline').createInterface({input:process.stdin});rl.on('line',line=>{const r=JSON.parse(line);if(r.id===undefined)return;const result=r.method==='initialize'?{}:r.method==='skills/list'?{data:[{cwd:${JSON.stringify(cwd)},skills:[{path:${JSON.stringify(join(cwd, '.agents', 'skills', 'b1-0000', 'SKILL.md'))},enabled:true}],errors:[]}]}:r.method==='mcpServerStatus/list'?{data:[{name:'loadout',tools:{a:{name:'find_tools'},b:{name:'load_skill'}}}],nextCursor:null}:null;if(result===null)throw Error('Unexpected request');console.log(JSON.stringify({id:r.id,result}));});`);
+    expect(await inspectCodex({ bin: process.execPath, args: [file], cwd })).toMatchObject({ discoveredPackSkills: 1, tools: ['find_tools', 'load_skill'] });
   });
 });
 
@@ -384,7 +384,7 @@ describe('text-only configurations', () => {
     const client = new Client({ name: 'overhead-test', version: '1' });
     try {
       await client.connect(transport);
-      expect((await client.listTools()).tools.map((t) => t.name)).toEqual(['find_skills', 'load_skill']);
+      expect((await client.listTools()).tools.map((t) => t.name)).toEqual(['find_tools', 'load_skill']);
     } finally {
       await client.close();
     }
