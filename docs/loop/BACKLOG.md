@@ -37,7 +37,6 @@ Each PR body's **Review state** section has the round-by-round record.
 |---|---|---|
 | [#41](https://github.com/erik-hedstrom/loadout/pull/41) | E13 stricter reviews with a blocking necessity pass (P1) | both reviews approve at ac6d69d; full matrix green; merge before this file's PR (needs Erik: the orchestrator's merge was blocked) |
 | [#40](https://github.com/erik-hedstrom/loadout/pull/40) | C10 bench quick fixes (P2) | both reviews clean; merge gate |
-| [#38](https://github.com/erik-hedstrom/loadout/pull/38) | B7 MCP overhead study harness (P1) | root fix (no ambient plugins) in 9d9a9bf and 54bc488; both reviews approve at 54bc488; full matrix green; rename to `find_tools` after D15; ready to merge (needs Erik) |
 | [#37](https://github.com/erik-hedstrom/loadout/pull/37) | C2 fixtures and protocol; adds E14 and D18 | round 15 and 16 findings fixed; both reviews approve at 0a647dc; full matrix green (one Windows timeout flake, rerun once); waits for Erik's C2 decisions (margin, VM, licence, scope) and two open Codex threads (P1 Jev key, P2 shared prompt cache) |
 | [#36](https://github.com/erik-hedstrom/loadout/pull/36) | D14 Codex plugin forwards `LOADOUT_HOME` (P1) | one open Codex P1 (`/proc`) waits for Erik: accept or override; merge before #28 |
 | [#35](https://github.com/erik-hedstrom/loadout/pull/35) | iteration 8 log row | superseded by the row below; close it once this file lands |
@@ -145,6 +144,7 @@ Acceptance:
 | B4 | P1 | Repo polish: description, topics, social preview, badges | Claude | cloud + erik | review ([#33](https://github.com/erik-hedstrom/loadout/pull/33); Erik applies settings and uploads the preview) |
 | B6 | P2 | GitHub profile README draft | Claude | cloud | review ([#31](https://github.com/erik-hedstrom/loadout/pull/31); Erik publishes) |
 | B5 | P2 | Awesome-list and directory submissions (drafts) | Codex | erik | todo (repo public since 2026-10-12; agents draft, Erik submits) |
+| B7 | P1 | MCP overhead study: what configured MCP servers cost per request, natively and through loadout | Claude | cloud (harness, done) + local (runs) | in progress: harness merged in [#38](https://github.com/erik-hedstrom/loadout/pull/38), with no ambient Claude plugins (2026-10-15 decision); live runs wait for Erik's approval of the estimate |
 | B8 | P0 | Backlog items from the launch-readiness review, 2026-10-13, MCP token cost first | Claude | local + erik | todo (the review is private, on Erik's machine) |
 | B9 | P1 | Savings from an adopted library: what a user saves after moving skills and MCP servers into loadout | Claude | local | todo (after B7) |
 
@@ -225,6 +225,152 @@ Acceptance:
 Acceptance: `docs/launch/profile-README.md` for github.com/erik-hedstrom,
 presenting loadout and the engineering behind it (benchmarks, reviews,
 cross-vendor agents). Erik publishes.
+
+**B7. MCP overhead study.**
+
+Why: Erik reports that MCP servers take more of his context than skills, and
+nothing in RESULTS measures MCP overhead. B1 measured skill listings and
++546 tokens for loadout's own tools, but did not record whether tool search
+deferred them. A user's cost depends on the host and its settings:
+- Claude Code defers MCP tool definitions by default (names and server
+  instructions load). It does not with a non-first-party `ANTHROPIC_BASE_URL`,
+  on Microsoft Foundry, with older Google Cloud models, or with
+  `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS`. `ENABLE_TOOL_SEARCH` can be true,
+  false, auto or auto:N (code.claude.com/docs/en/mcp, "Configure tool search").
+- Codex defers MCP tools when the model's `supports_search_tool` is set. Source:
+  openai/codex `codex-rs/core/src/tools/spec_plan.rs` (deferred exposure only
+  when `model_info.supports_search_tool`) and `codex-rs/features/src/lib.rs`
+  ("MCP tools are always deferred when tool_search is available"), at commit
+  cf0ed4c (main, 2026-10-13). That is not the installed 0.160.1, so the pilot
+  has to confirm it.
+
+Two baselines per configuration, because both exist in practice: every schema
+loaded (hosts or models without tool search; `ENABLE_TOOL_SEARCH=false`), and
+the host's tool search on (the cost is the loaded share, the deferred-name list
+and the server instructions).
+
+One user's observations, not a benchmark result: `/context` in two of Erik's
+Claude Code sessions showed 292 MCP tools totalling 230.8k tokens with 12.4k
+loaded and 218.1k deferred, and 180 tools totalling 163k with 20.4k loaded and
+142.6k deferred. What `/context` counts as loaded was not verified. The host
+already defers most schemas here, so a saving from loadout's gateway has to be
+shown against the deferred baseline, not the all-loaded one.
+
+Built: `bench/mcp-fixtures.ts` and `bench/mcp-fixture-server.ts` (deterministic
+stdio servers shaped like an issue tracker, a database, a browser and a docs
+server, written for this repo), `bench/mcp-overhead.ts` (harness, on B1's
+isolation and parsers in `bench/overhead.ts`), `test/mcp-overhead.test.ts`.
+Arms, configurations, controls and what each flag does:
+[RESULTS, "B7 method"](../../bench/RESULTS.md#b7-method-not-run-yet-what-configured-mcp-servers-cost-per-request).
+The files a `--run` writes in the host homes are printed by the plan
+(`hostWrites()` in the harness), resolved for the environment it runs in.
+
+loadout's own fixed cost counts in the gateway arms: its tool definitions plus
+server instructions. Fixture facts from `--offline`: with library servers it
+registers 4 tools (2,827 to 3,096 characters of definitions with 1 to 20
+servers, since `server_tools` lists the server names) and 424 characters of
+instructions; the servers' own definitions (8,012 / 81,434 / 355,934
+characters for n1 / n5 / n20) stay behind the gateway. These are characters,
+not tokens and not results.
+
+Acceptance:
+- Raw rows under `bench/results/<timestamp>-b7-mcp-overhead/` and a RESULTS
+  entry ("B7 results") with ranges where the sample allows (two sessions per
+  arm: ranges, not intervals) and "not shown" where it does not. A folder with
+  an `INCOMPLETE` file is a run that stopped: delete it.
+- Both baselines reported for every configuration, and for each Claude arm
+  whether tools looked deferred, from the init tool list and a canary lookup.
+  Neither host reports deferral directly; for Codex it is "not shown".
+- Not claimed without a measurement: any MCP saving, any Codex second-turn
+  number, and the cost of using the gateway (find, list, call turns).
+- The pilot confirms what the harness could not check here: Claude
+  `--input-format stream-json` with the isolated flags, `--max-turns` per
+  stdin message, token login on an empty config directory and the listing in
+  `init.tools`; Codex `-c mcp_servers`
+  surviving `--ignore-user-config` (the n1 delta over the baseline), and the
+  `app-server` inventory listing without a login on an empty `CODEX_HOME`.
+
+How to run locally (Claude needs `CLAUDE_CODE_OAUTH_TOKEN` for Erik's personal
+subscription; Codex needs its subscription login; the children get an allowlisted
+environment, so base-URL, provider
+and API-key variables do not reach them):
+
+```bash
+npx tsx bench/mcp-overhead.ts --offline          # characters per arm, $0, no CLI
+npx tsx bench/mcp-overhead.ts                    # plan, argv, env, host-state writes, estimate; $0
+npx tsx bench/mcp-overhead.ts --run --hosts claude --configs n1 --repeats 1    # Claude pilot 1: argv and formats
+npx tsx bench/mcp-overhead.ts --run --hosts claude --configs n20 --repeats 1   # Claude pilot 2: is ToolSearch listed?
+npx tsx bench/mcp-overhead.ts --run --hosts codex --configs n1 --repeats 1     # Codex pilot
+npx tsx bench/mcp-overhead.ts --run              # all arms, after approval
+```
+
+Estimate (not observed; Erik approves before `--run`, ORCHESTRATOR budgets
+apply): 46 runs, 174 paid requests. Claude: 32 runs of 2 measured requests, and
+24 of them also a canary lookup bounded by `--max-turns 4` (160 in all); Codex:
+14 runs of 1 (only if the free preflight passes). B1 used about 8.5k input
+tokens a call (136k over 16), measured with `--tools Skill`; B7 keeps every
+built-in tool, so the low figure probably undercounts and the pilots calibrate
+it. Low 1.5M input tokens if tool search defers everything, high 6.1M if every
+arm loads all definitions on every request (an assumed 3 characters a token);
+the high figure is built on the same base, so it is not an upper bound, and
+Claude pilot 1 is the calibration.
+Subscription quota, no Jev. Time about 87 minutes at an assumed 30 s a request,
+at most 204 (102 stdin messages at the 120 s cap each). Claude pilot 1: 28
+requests, 0.24 to 0.29M tokens, 14 to 32 minutes. Claude pilot 2 (n20): 28
+requests, 0.24 to 1.93M tokens, 14 to 32 minutes. Codex pilot: 3 requests,
+0.03M tokens, 2 to 6 minutes.
+
+Isolation, and where it stops. The plan prints `LOADS`, `HOST STATE`, `ENV` and
+`PRECONDITION` lines; sources are in the code docblocks.
+- Env: every CLI child (paid and free, app-server included) gets a per-host
+  allowlist, not the parent's environment (`envAllowlist()`); API keys, base
+  URLs and `DEBUG` never reach a child. Claude also runs with updates off, auto
+  memory, CLAUDE.md files and managed skills off, and MCP servers scrubbed of
+  credentials, per the `claudeEnv()` docblock; Codex has no update check in
+  `exec` or `app-server`. B1 is unchanged and still inherits the environment.
+- Decided by Erik, 2026-10-15: no ambient Claude plugins; every run gets a fresh
+  empty `CLAUDE_CONFIG_DIR` under the work root and requires `CLAUDE_CODE_OAUTH_TOKEN`
+  from the environment, passed only at launch. Init must report `plugins: []`;
+  missing, malformed or non-empty plugin inventories refuse the measurement,
+  without enumerating plugin locations.
+- Managed configuration overrides `--settings` and `--ignore-user-config`, and
+  its system files are refused (`hostState()`). Claude's unused user caches are
+  excluded by the fresh home; live server-managed settings and policy limits
+  remain an unchecked precondition. Any instruction, rule, skill or config file
+  in a folder above the temp working directory is also refused: the run's own directory is
+  fresh, but its ancestors (`/tmp` and up) are not ours, so they are checked
+  instead, and `assertTemporary` cannot enforce that.
+- Claude settings, history and plugins move under `CLAUDE_CONFIG_DIR`
+  ([env-vars](https://code.claude.com/docs/en/env-vars), variable row).
+  Relocation of `~/.claude.json` bookkeeping and the MCP log cache is unverified;
+  both remain listed as possible host writes.
+
+Host state the runs load: `hostState()` is the one list, with a decision and a
+source per item (refuse, neutralise with a flag, identical across arms and
+recorded, needed, or not checked); neutralised items have argv or env tests.
+"Identical across arms" means the baseline delta cancels it, not that absolute
+input tokens are free of it; the rows are for the delta. Nothing checks the
+paid Codex exec's MCP set at run time. B1's Codex commands lack
+`--ignore-user-config`; revisit before running them.
+
+Decisions for Erik:
+- Approve the pilots, then the full run, with the host-state writes and the
+  preconditions the plan prints. `--run` is the approval; there is no
+  confirmation flag.
+- Whether to move Codex host state out of the real home. This option is
+  verified only in source or docs, not implemented, and **switches the cost
+  from subscription quota to API cash**: Codex with a temporary `CODEX_HOME`
+  (it must be an existing directory, `codex-rs/utils/home-dir/src/lib.rs`) and
+  `CODEX_API_KEY`, which `codex exec` honors for model requests
+  (`codex-rs/exec/src/lib.rs`, `enable_codex_api_key_env: true`, cf0ed4c), so no
+  credential file is written, config.toml is absent and logs stay in the temp
+  directory. This was not run here.
+- The free Codex commands run on empty temporary `CODEX_HOME`s, so `debug
+  prompt-input` no longer sees the user's global `AGENTS.md` (read from that
+  home, `codex-rs/cli/src/main.rs`). The paid exec still does, in every arm; the
+  preflight records the built-in context only, and nothing re-checks it at the
+  end. Accept, or supply the Codex key option above.
+- Whether the Codex arms wait for `unified_exec` as in B1.
 
 ## C. Skill decision-making (router quality)
 

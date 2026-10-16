@@ -79,10 +79,11 @@ A cloud session ran the loop from 2026-10-12 to 2026-10-15 and opened
    lists as open** ([ORCHESTRATOR](docs/loop/ORCHESTRATOR.md#handling-review-findings)).
 4. **Run the merge gate** on the clean PRs, one at a time. Two order traps:
    - **#36 before #28.**
-   - **D15 renames the search tool `find_skills` to `find_tools`.** B7's
-     fake host (`test/mcp-overhead.test.ts`), C8's plugin arm and any local
-     `-c mcp_servers.loadout.tools.find_skills…` approval name the old
-     tool. Merge D15 first, then update them.
+   - **D15 renamed the search tool `find_skills` to `find_tools`.** B7
+     follows it ([#38](https://github.com/erik-hedstrom/loadout/pull/38)).
+     C8's plugin arm and any local
+     `-c mcp_servers.loadout.tools.find_skills…` approval still name the old
+     tool; update them before they merge or run.
 5. **Then new work, MCP token cost first:** D17 (measured 2026-10-15;
    what is left is docs and `required = true`), B8 (backlog items from the launch-readiness review),
    then the BACKLOG order.
