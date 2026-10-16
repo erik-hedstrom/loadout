@@ -386,6 +386,7 @@ Decisions for Erik:
 | C11 | P1 | `bench/outcome.ts` keeps per-request usage | Claude | cloud | todo |
 | C12 | P1 | Audit the need gate on held-out prompts | Claude | cloud (design) + local (runs) | todo |
 | C8 | P0 | Skill use with the hook-only plugin | Claude | local | review ([#25](https://github.com/erik-hedstrom/loadout/pull/25)) |
+| C9 | P1 | Host-model fallback router when there is no TypeSafe key | Claude (design) | cloud (code) + local (bench) | todo |
 
 **C1. New held-out requests.**
 
@@ -520,6 +521,32 @@ users install has the hook only. Add a plugin arm (`--plugin-dir`) to
 Acceptance: a third row in that RESULTS table, with raw results. The README's
 "has not been measured" is then replaced by the number.
 
+**C9. Host-model fallback router when there is no TypeSafe key.**
+
+Why: Erik (2026-10-12) wants routing to keep working without a TypeSafe key,
+using a small host model (Claude Haiku 5.5, or Codex's small Luna model), with
+a warning that loadout is not fully set up (D16).
+
+Constraints:
+- Official CLIs only (`claude -p`, `codex exec`), never proxying (hard rule 1).
+- It costs the user's subscription quota and adds a CLI start to every prompt,
+  so it is off by default.
+- The nested `claude -p` must not trigger loadout's own hook again: strip
+  settings and plugins as `claudeJson()` in `bench/lib.ts` does. It gets no
+  tools.
+- Skill names and descriptions sent to it go through `escapeSkillTags`, with
+  third-party framing.
+
+Design note: Jev returns probability distributions, and the thresholds were
+tuned on those. A host model returns picks, so it needs its own selection
+rule, not Jev's thresholds.
+
+Acceptance:
+- A `router: "host"` (or similar) backend behind an explicit config switch.
+- Measured against the lexical router on the dev split (choose by quota cost,
+  report on test), with Wilson intervals, and the hook's latency measured.
+- README and docs claim nothing until RESULTS has the numbers.
+
 ## D. Integrations and robustness
 
 | ID | P | Task | Agent | Lane | Status |
@@ -538,6 +565,7 @@ Acceptance: a third row in that RESULTS table, with raw results. The README's
 | D15 | P0 | MCP discovery: make library MCP servers findable and usable through the search server | Claude | cloud + local | in progress: code and tests merged in [#39](https://github.com/erik-hedstrom/loadout/pull/39); the live check is left |
 | D17 | P1 | `loadout mcp` ready within Codex's MCP start-up grace | Claude | local (measure) + cloud (fix) | measured 2026-10-15: under 1 s from ext4, 6–7 s from `/mnt/c`; module loading, not the scan (see below) |
 | D12 | P0 | Codex: install the hook and search as one step, if Codex allows it | Codex | local | done ([#23](https://github.com/erik-hedstrom/loadout/pull/23)): `plugins/loadout-codex` through `.agents/plugins/marketplace.json`; install checked offline; the hook still needs `/hooks` trust; the live run is D2 |
+| D16 | P1 | Warn when the hook runs without a TypeSafe key | Claude | cloud | in progress ([#27](https://github.com/erik-hedstrom/loadout/pull/27)): once per session, as a `systemMessage`, which Claude Code and Codex both show |
 
 **D17. MCP start-up inside Codex's grace period.** Codex leaves an optional
 MCP server out of the tool list if it is not ready about 1 s after start-up,
@@ -764,6 +792,46 @@ Learnings (2026-10-09): Claude sessions keep `<session>/plugin/skills/`,
 because `--plugin-dir` needs that layout. The Codex launch path was not re-run
 live (no `codex` in the cloud session); run `loadout codex --dry-run` before
 relying on it.
+
+**D16. Warn when the hook runs without a TypeSafe key.**
+
+Why: with `router: "jev"` and no key, the hook falls back to keyword routing
+and adds nothing unless a skill is named. The user, in a host CLI or app,
+never learned why. `loadout route`, the launcher and `loadout doctor` already
+say so.
+
+Acceptance:
+- One fixed-text warning per agent session, in the channel each host shows;
+  never the key, the key file's path or config contents (hard rule 2).
+- No warning with `router: "lexical"`, set on purpose, or with a key.
+
+Learnings:
+- Claude Code: `loadout hook claude` prints `{"systemMessage": ...}`, which
+  Claude Code shows to the user (its hook JSON output contract; not run
+  against a live session here). Plain stderr on exit 0 is not shown outside
+  verbose mode.
+- Codex: the same JSON. Codex's UserPromptSubmit handler reads only stdout
+  on exit 0 and shows `systemMessage` as a warning
+  (`codex-rs/hooks/src/events/user_prompt_submit.rs`, found by Codex's review
+  on #27); the first draft's stderr line was dropped. Not run live here (D2).
+- "Once" is an exclusive-create marker file per session next to the hook's
+  state, so two hooks racing in one session cannot both warn. A test that
+  starts concurrent hook processes passed against a non-atomic version too
+  (process start jitter hides the race), so it was not kept. Without a
+  `session_id`, or when the marker cannot be written, it warns on every
+  non-follow-up prompt rather than never. After the merge with D15's link
+  rules, a linked hook state folder counts as "cannot be written": the marker
+  is not created and the warning repeats.
+- Markers are empty files; `STATE_FILE` in `src/hook.ts` now matches
+  `<hash>.warned`, so the hook state's 7-day TTL sweep removes them (before the
+  merge it did not). The sweep runs only when routing writes state. Without a
+  key that is rare, so markers pile up (one per session), and a session longer
+  than 7 days can be warned twice. Both accepted.
+- An unreadable `jev.apiKeyFile` (for example a directory) makes
+  `resolveApiKey` throw, so the hook ends with the existing fixed failure note
+  and no warning. Not changed here; Erik decides whether that should read as
+  "no key".
+- Cost: $0 (no Jev or agent CLI calls).
 
 **D12. A one-step Codex install.**
 

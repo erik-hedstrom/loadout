@@ -256,7 +256,10 @@ library itself, in its own words, through MCP:
   state are written through `src/safefs.ts`; the embedding model folder and
   the session folder get its folder check. Session files (`decision.json`,
   the plugin files, `mcp.json`) are written with plain `writeFileSync`, and
-  only `mcp.json` is owner-only (0600).
+  only `mcp.json` is owner-only (0600). The hook's once-per-session no-key
+  warning leaves an empty `<hash>.warned` file in the hook state folder, created
+  exclusively after the same folder check (it needs the `EEXIST` result, which
+  `writeCacheFile` swallows).
   - Scope: the checks refuse links that were there before loadout ran (synced
     dotfiles, extracted archives, mistakes). They are not a defence against a
     process of the same user racing them: it already has the user's
