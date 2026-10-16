@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CONFIG, type Config } from '../src/config.js';
 import { jevClient, JevError, validateResponse, type Question, type SystemOneClient } from '../src/jev.js';
-import { claudeArgs, claudeHookSettings, codexArgs, hookCommand, hostSetup, launch, loaderArgs, materialize, searchServer, toToml } from '../src/launch.js';
+import { claudeArgs, claudeHookSettings, codexArgs, hookCommand, hostSetup, isolateConflict, launch, loaderArgs, materialize, searchServer, toToml } from '../src/launch.js';
 import { hookOutput, isFollowUp, HOOK_FAILURE_NOTE, JEV_FALLBACK_NOTE, promptContext } from '../src/hook.js';
 import { createServer, readSkillFile, serveHttp } from '../src/mcp.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
@@ -877,6 +877,80 @@ describe('launch', () => {
     expect(toToml('😀')).toBe('"😀"');
     expect(() => toToml('\uD800x')).toThrow(/surrogate/);
     expect(() => toToml(Number.NaN)).toThrow();
+  });
+
+  it('adds the isolation flags only with --isolate, and only the ones each host documents', () => {
+    const plain = materialize(decision, 'claude', DEFAULT_CONFIG, tempDir('loadout-s-'));
+    expect(plain.settings).toBeUndefined();
+    expect(claudeArgs(plain, TASK, [])).not.toContain('--strict-mcp-config');
+
+    const claude = materialize(decision, 'claude', DEFAULT_CONFIG, tempDir('loadout-s-'), (p) => p, true);
+    const isolated = claudeArgs(claude, TASK, ['--permission-mode', 'plan']);
+    // Ahead of the passthrough, so a trailing value-taking flag or `--` there cannot swallow them.
+    const at = isolated.indexOf('--strict-mcp-config');
+    expect(isolated.slice(at, at + 4)).toEqual(['--strict-mcp-config', '--no-chrome', '--settings', claude.settings]);
+    expect(at).toBeLessThan(isolated.indexOf('--permission-mode'));
+    if (process.platform !== 'win32') expect(statSync(claude.settings!).mode & 0o777).toBe(0o600);
+    // In the session's --settings file, the IDE opt-out outranks a user, project or local settings `env` that turns it on.
+    expect(JSON.parse(readFileSync(claude.settings!, 'utf8'))).toEqual({
+      disableClaudeAiConnectors: true,
+      disableRemoteControl: true,
+      crossSessionInbound: 'refuse',
+      permissions: { deny: ['mcp__computer-use'] },
+      env: { CLAUDE_CODE_AUTO_CONNECT_IDE: 'false', CLAUDE_CODE_ENABLE_CFC: '0', CLAUDE_CODE_ARTIFACT_COMMENTS: '0' },
+    });
+    // loadout's own servers still load; the flag only drops the others.
+    expect(isolated).toContain('--mcp-config');
+    expect(isolated).toContain('--plugin-dir');
+    expect(isolated).toContain('--permission-mode');
+    // The settings path goes through the WSL translation like the other paths.
+    const translated = claudeArgs(claude, TASK, [], { toPath: (p) => `W:${p}` });
+    expect(translated[translated.indexOf('--settings') + 1]).toBe(`W:${claude.settings}`);
+
+    const codex = materialize(decision, 'codex', NO_SEARCH, tempDir('loadout-s-'), (p) => p, true);
+    expect(codex.settings).toBeUndefined();
+    expect(codexArgs(codex, TASK, [], { headless: true })).not.toContain('--ignore-user-config');
+    expect(codexArgs(codex, TASK, [], { headless: true, isolate: true }).slice(0, 10)).toEqual([
+      'exec', '--ignore-user-config', '--disable', 'apps', '--disable', 'plugins', '--disable', 'skill_mcp_dependency_install', '-m', 'gpt-6.1-sol',
+    ]);
+    expect(codexArgs(codex, TASK, [], { headless: true, isolate: true }).some((a) => a.startsWith('mcp_servers.postgres='))).toBe(true);
+  });
+
+  it('refuses unsupported --isolate launches before routing or writing a session', () => {
+    const cli = join(import.meta.dirname, '..', 'src', 'cli.ts');
+    const run = (...args: string[]) => {
+      const home = tempDir('loadout-iso-');
+      const result = spawnSync(process.execPath, ['--import', import.meta.resolve('tsx'), cli, ...args], { env: { ...process.env, LOADOUT_HOME: home }, encoding: 'utf8', timeout: 20_000 });
+      return { result, sessions: existsSync(join(home, 'sessions')) };
+    };
+    const codex = run('codex', '--isolate', '--dry-run', '--lexical', TASK);
+    expect(codex.result.status).not.toBe(0);
+    expect(codex.result.stderr).toBe('loadout: --isolate for codex needs --headless: interactive Codex has no flag to skip the user config\n');
+    expect(codex.sessions).toBe(false);
+
+    const cases: [string, ...string[]][] = [['claude', '--mcp-config', 'user.json'], ['claude', '--settings={}'], ['codex', '--headless', '--', '-c', 'mcp_servers.x.command="x"'], ['codex', '--headless', '--', '-cmcp_servers.private.url="u"']];
+    for (const [agent, ...own] of cases) {
+      const refused = run(agent, '--isolate', '--dry-run', '--lexical', TASK, ...(agent === 'claude' ? ['--'] : []), ...own);
+      expect(refused.result.status).not.toBe(0);
+      expect(refused.result.stderr).toMatch(/^loadout: --isolate refuses (--mcp-config|--settings|-c) after --: it would undo the isolation\n$/);
+      expect(refused.sessions).toBe(false);
+      expect(refused.result.stderr).not.toContain('private');
+    }
+  });
+
+  it('finds passthrough arguments that would undo --isolate, in every spelling', () => {
+    for (const args of [['--settings', '{}'], ['--settings={}'], ['--mcp-config', 'a.json'], ['--mcp-config=a.json'], ['--agents', '{}'], ['--agents={}'], ['--plugin-dir', 'p'], ['--plugin-dir=p'], ['--plugin-url', 'u'], ['--plugin-url=u'], ['--chrome'], ['--ide'],
+      ['--channels', 'plugin:p@m'], ['--channels=plugin:p@m'], ['--dangerously-load-development-channels', 'server:s'], ['--cloud'], ['--remote', 't'], ['--environment=e'], ['--teleport'],
+      ['--remote-control'], ['--remote-control=name'], ['--rc'], ['--desktop'], ['--']]) {
+      // The flag's name only, never the caller's value.
+      expect(isolateConflict('claude', ['--permission-mode', 'plan', ...args])).toBe(args[0]!.split('=')[0]);
+    }
+    expect(isolateConflict('claude', ['--permission-mode', 'plan', '--model', 'opus', '--remote-control-session-name-prefix', 'p'])).toBeUndefined();
+    // Any config override: a `projects` trust entry re-enables config layers that can carry servers.
+    for (const args of [['-c', 'model_reasoning_effort="high"'], ['-c', 'projects."/r".trust_level="trusted"'], ['-c', 'mcp_servers.x.command="x"'], ['-cmcp_servers.x.url="u"'], ['-c=mcp_servers.x.url="u"'], ['-c=features.apps=true'], ['--config', 'features.apps=true'], ['--config=mcp_servers.x.url="u"'], ['--enable', 'apps'], ['--enable=apps']]) {
+      expect(isolateConflict('codex', ['--skip-git-repo-check', ...args])).toBe(args[0]!.startsWith('-c') ? '-c' : args[0]!.split('=')[0]);
+    }
+    expect(isolateConflict('codex', ['--skip-git-repo-check', '-C', 'dir', '--disable', 'apps'])).toBeUndefined();
   });
 
   it('keeps Codex MCP keys unique and connects HTTP servers through library keys', () => {
