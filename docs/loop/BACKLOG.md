@@ -923,7 +923,7 @@ Learnings (2026-10-09):
 | E11 | P1 | Fixed-text diagnostics in the gateway and relay | Codex | cloud | done ([PR #10](https://github.com/erik-hedstrom/loadout/pull/10)) |
 | E12 | P1 | A tool-less Codex bench backend (codex-cli 0.160.1 keeps unified_exec on) | Codex | local | todo |
 | E13 | P1 | Apply Engineer standards to both review paths, with a blocking necessity pass | Codex + Claude review | cloud | review ([#41](https://github.com/erik-hedstrom/loadout/pull/41)) |
-| E15 | P1 | Test flakes: WSL-only `bench.test.ts` failure, Windows spawn timeouts | Claude | local | review |
+| E15 | P1 | Test flakes: WSL-only `bench.test.ts` failure, Windows spawn timeouts | Claude | local | review ([#44](https://github.com/erik-hedstrom/loadout/pull/44)) |
 
 **E10. Build without optional dependencies.** src/embed.ts:24 types
 `@huggingface/transformers` with `typeof import(...)`. So `tsc` fails when npm
