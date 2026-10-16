@@ -267,8 +267,8 @@ The files a `--run` writes in the host homes are printed by the plan
 
 loadout's own fixed cost counts in the gateway arms: its tool definitions plus
 server instructions. Fixture facts from `--offline`: with library servers it
-registers 4 tools (2,673 to 2,866 characters of definitions with 1 to 20
-servers, since `server_tools` lists the server names) and 337 characters of
+registers 4 tools (2,827 to 3,096 characters of definitions with 1 to 20
+servers, since `server_tools` lists the server names) and 424 characters of
 instructions; the servers' own definitions (8,012 / 81,434 / 355,934
 characters for n1 / n5 / n20) stay behind the gateway. These are characters,
 not tokens and not results.
