@@ -60,7 +60,7 @@ Isolation needs per-CLI support that is not uniform yet (Claude Code has
 | Layer | When | Claude Code | Codex |
 |---|---|---|---|
 | **Launcher** (v0.1) | once per session | `--model`, `--plugin-dir`, `--mcp-config` | `-m`, `-c` overrides |
-| **Search server** (`loadout mcp`) | mid-session, on demand | `find_skills`, `load_skill`, gateway to library MCP servers; attached by the launcher | same — Codex speaks MCP |
+| **Search server** (`loadout mcp`) | mid-session, on demand | `find_tools`, `load_skill`, gateway to library MCP servers; attached by the launcher | same — Codex speaks MCP |
 | **Prompt hook** (`loadout hook claude\|codex`) | every prompt | D10 plugin (`plugins/loadout`): `UserPromptSubmit` adds the skills that fit as context (cache-safe: appended to the user turn), once per skill per session | same contract, once trusted with `/hooks`; untested ([hosts](docs/hosts.md)) |
 | **HTTP** (`loadout mcp --http`) | remote hosts | — | ChatGPT chat, behind an HTTPS tunnel; skills only, optional bearer token |
 
@@ -194,13 +194,20 @@ The launcher decides once, up front. When the work drifts (a debugging
 session turns into "now write the release notes"), the agent can search the
 library itself, in its own words, through MCP:
 
-- **`find_skills(goal, keywords?)`** runs the same two Jev requests on the
-  agent's goal. It returns at most 5 matches with fit ≥ 0.5, one line each
-  (key, fit, a 180-character description), with the exact next call. The need
-  gate is softened, since the agent asked: when Jev judges the goal to be
-  general work, only near-certain exact fits (P ≥ 0.8) are shown. Otherwise
-  the answer says nothing fits and names the closest skill, so the agent does
-  not load a near miss. About 1 s and $0.001 per search.
+- **`find_tools(goal, keywords?)`** runs the same two Jev requests on the
+  agent's goal, over the library's skills and its gateway MCP servers. It
+  returns at most 5 matches with fit ≥ 0.5, one line each (key, fit, a
+  180-character description; "MCP server" and its tool count for a server),
+  with the exact next call: `load_skill` for a skill, `server_tools` then
+  `call_server_tool` for a server. It was renamed from `find_skills` at Erik's
+  request (D15), since it also finds gateway servers and their tools. There is
+  no alias, since the package is unpublished and two near-identical tools would
+  cost context; benchmarks run before
+  2026-10-14 used the earlier name (bench/RESULTS.md). The need gate is softened, since the agent
+  asked: when Jev judges the goal to be general work, only near-certain exact
+  fits (P ≥ 0.8) are shown. Otherwise the answer says nothing fits and names
+  the closest skill, so the agent does not load a near miss. About 1 s and
+  $0.001 per search.
 - The tool description and the server's `instructions` ask for a search
   before the first specialised step, even in a familiar domain, and again when
   the domain changes. Measured uptake is still partial (bench/RESULTS.md, v4),
@@ -211,14 +218,77 @@ library itself, in its own words, through MCP:
   absolute paths, no links, no binaries, 256 KB at most.
 - **Gateway**: `server_tools` / `call_server_tool` reach the library's MCP
   servers, started on first use and kept for the session. Registered only when
-  the library has servers, so a skills-only library costs two tool definitions.
+  the library has servers, so a skills-only library costs two tool definitions
+  and its tool text is unchanged; only a library with gateway servers adds MCP
+  wording to the instructions and descriptions (sizes: D15 learnings in the
+  [backlog](docs/loop/BACKLOG.md)).
+- **Tool index.** A server's tools are known only once it has run. After a
+  successful `server_tools`, the names and clipped descriptions are written to
+  one file per server under `~/.loadout/index/mcp-tools/`, so sessions that
+  list different servers at once cannot overwrite each other. Each file also
+  carries a hash of the server's command or URL, env and headers; only the
+  hash is stored. The hash marks an entry stale when the config changes. It is
+  not an integrity check, since anyone can compute it. A listing that
+  succeeds with no tools deletes the file; one that fails leaves it.
+  - Search reads the files as untrusted: it checks the shape and the sizes
+    (128 KB file, 100 tools, 100/200 characters), ignores what fails, and
+    escapes the text before it reaches Jev. A planted entry can change how a
+    server ranks and the tool count shown for it, nothing else.
+  - In BM25 each remembered tool word counts once and does not lengthen the
+    server's entry, so tool text cannot outweigh the server's own name and
+    description. The Jev question gets the text too; the embedding index does
+    not.
+  - Search never starts a server to fill the index.
+  - Everything the agent may send back (a skill or server key, a tool or
+    argument name, a schema) is shown as JSON with each `<` written
+    `\u003c`, so quotes keep commas and `?` inside a name and tag escaping
+    changes nothing.
+  - A key is never offered when the agent could not send it back: a skill
+    folder or server name holding `<skill` or `</skill`, a key over 200
+    characters (what the tools accept), or a server name that is empty or starts `mcp:`,
+    which would share another server's key. The library scan leaves these
+    out (so search, the hook and the launcher all agree) and `loadout doctor`
+    lists them, escaped. `server_tools` leaves out tool names that are
+    empty, tag-like, over 128 characters or not on one line, and says how many. A
+    compact entry whose argument names cannot be shown whole, or whose schema
+    requires an argument it does not list, sends the agent to the full schema.
+- **Cache and state files.** The scan cache, tool index, embeddings and hook
+  state are written through `src/safefs.ts`; the embedding model folder and
+  the session folder get its folder check. Session files (`decision.json`,
+  the plugin files, `mcp.json`) are written with plain `writeFileSync`, and
+  only `mcp.json` is owner-only (0600).
+  - Scope: the checks refuse links that were there before loadout ran (synced
+    dotfiles, extracted archives, mistakes). They are not a defence against a
+    process of the same user racing them: it already has the user's
+    privileges, including write access to `library/mcp.json`, which names the
+    commands the gateway runs. Node has no `openat` to bind a folder, so the
+    gap between a check and its use is not closed.
+  - Before each read and write, every folder below the loadout home on the
+    way must be a real folder. For the model, that is every level down to
+    `models/<org>/<model>`, since transformers.js reads and writes there; the
+    files inside that folder are transformers.js's own and are not checked. The
+    home itself may be a link: where loadout keeps its data is the user's
+    choice, and a link below it is not something loadout made. Session files
+    hold server credentials, so a linked `sessions/` is refused with an error
+    that names it.
+  - Temp files are created exclusively (a link already at the name is
+    refused) with mode 0600 and then renamed. Final files are read through
+    `readConfined`, which refuses a link as the last component and caps the
+    size. Deletions match only the names loadout writes.
+- **Listing size.** `server_tools` prints each tool's input schema until the
+  schemas reach 12,000 characters. Further tools show their description and
+  argument names (up to 8,000 characters), then their bare names (up to
+  4,000), then a count of what is left out. A schema that references or
+  composes others (`$ref`, `oneOf`…) is never summarised as "no arguments".
+  `server_tools` with `tool` returns any one tool's full schema. The tool text
+  is escaped like other third-party text.
 
 The search tools add **546 input tokens** per request in Claude Code. A
 native listing of 50 skills with generated names adds about 477; B1
 interpolates the crossover near 57 such skills. Real-name costs, router calls
 and returned skills are not included ([B1](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request)).
 
-Approvals: the launcher pre-approves only `find_skills` and `load_skill`
+Approvals: the launcher pre-approves only `find_tools` and `load_skill`
 (Claude `--allowedTools`, Codex `tools.<tool>.approval_mode = "approve"`).
 They only read the user's own library. `call_server_tool` keeps the host's
 prompt, which shows the server, tool and arguments.
@@ -260,6 +330,8 @@ Measurements and caveats: [bench/RESULTS.md](bench/RESULTS.md).
 - **Dynamic tool exposure.** The gateway exposes library MCP servers through
   one generic `call_server_tool`. MCP's `tools/list_changed` could add a
   server's real tools to the session instead (native schemas, per-tool
-  approvals) on hosts that honour it.
+  approvals) on hosts that honour it ([D4](docs/loop/BACKLOG.md)). Whether it
+  is worth doing depends on how agents use the current path (D15's local
+  check).
 - **Independent evaluation.** New held-out requests: [backlog C1](docs/loop/BACKLOG.md#c-skill-decision-making-router-quality).
 - **The model tier.** Jev's tier choice is not evaluated yet.

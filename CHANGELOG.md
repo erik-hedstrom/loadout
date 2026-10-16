@@ -8,9 +8,9 @@
   `loadout claude` or `loadout codex` launches (`loadout route` prints the same
   decision without launching), skills per prompt except short follow-ups (a
   prompt hook for Claude Code; the Codex hook has not run live, backlog D2),
-  skill search and loading (`loadout mcp`; over HTTP too, skills only, with a
-  token required beyond localhost) plus an opt-in gateway to library MCP
-  servers over stdio, `loadout setup <host>` config printing, and
+  `find_tools` search over skills and gateway MCP servers, and skill loading
+  (`loadout mcp`; over HTTP too, skills only, with a token required beyond
+  localhost), plus an opt-in gateway to library MCP servers over stdio, `loadout setup <host>` config printing, and
   `loadout list --sources`. These came in direct commits before PRs were used.
 - `loadout audit`: an inventory estimate of your installed skill listings, before host caps; `--adopt` copies the skills it finds into the library ([#3](https://github.com/erik-hedstrom/loadout/pull/3)).
 - `loadout doctor`, a read-only setup check ([#20](https://github.com/erik-hedstrom/loadout/pull/20)).

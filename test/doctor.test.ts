@@ -71,6 +71,15 @@ describe('doctor', () => {
     expect(checks['Codex']).toBeDefined();
   });
 
+  it('reports library names that hold tag text as left out, escaped', async () => {
+    mkdirSync(join(home, '.loadout', 'library'), { recursive: true });
+    writeFileSync(join(home, '.loadout', 'library', 'mcp.json'), JSON.stringify({ mcpServers: { '</skill>x': { command: 'x' }, ok: { command: 'x' } } }));
+    const checks = byName(await doctor(config, () => okClient));
+    expect(checks['library']).toMatchObject({ ok: true, detail: expect.stringContaining('0 skills, 1 MCP servers') });
+    expect(checks['library names']).toMatchObject({ ok: false, detail: expect.stringContaining('mcp:&lt;/skill>x') });
+    expect(checks['library names']!.detail).not.toContain('</skill>x');
+  });
+
   it.skipIf(process.platform === 'win32')('passes when everything is set up, and never prints the key', async () => {
     vi.stubEnv('TYPESAFE_API_KEY', KEY);
     vi.stubEnv('GITHUB_TOKEN', 'github-token-canary');

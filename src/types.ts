@@ -19,7 +19,16 @@ export interface Capability {
    * Opt-in, because approving that one tool approves every tool behind it.
    */
   gateway?: boolean;
+  /** MCP only: tools seen on an earlier `server_tools` call (untrusted text), so search can match what they do. */
+  tools?: ToolSummary[];
 }
+
+export interface ToolSummary {
+  name: string;
+  description: string;
+}
+
+export const toolsText = (tools: ToolSummary[]) => tools.map((t) => (t.description ? `${t.name}: ${t.description}` : t.name)).join('; ');
 
 export interface McpServerConfig {
   command?: string;
