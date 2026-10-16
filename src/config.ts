@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 import type { FitMeasure } from './route.js';
 import type { Tier } from './types.js';
 
@@ -91,7 +91,14 @@ export const DEFAULT_CONFIG: Config = {
 };
 
 export function loadoutHome(): string {
-  return process.env.LOADOUT_HOME ?? join(homedir(), '.loadout');
+  // The fallback is checked too: homedir() returns an inherited HOME (or USERPROFILE) as is, so `HOME=.` or `HOME=` is relative.
+  const home = process.env.LOADOUT_HOME || join(homedir(), '.loadout');
+  // A relative value resolves against the working directory, which for a host-started server can be the open repo:
+  // the repo would then supply the config (including the Jev URL the key is sent to) and the skills.
+  // On Windows, isAbsolute() also accepts `\x` (relative to the current drive) and UNC or device paths (a remote share).
+  const absolute = process.platform === 'win32' ? /^[A-Za-z]:[\\/]/.test(home) : isAbsolute(home);
+  if (!absolute) throw new Error('LOADOUT_HOME, or the home directory when it is unset, must be an absolute path (on Windows, starting with a drive letter)');
+  return home;
 }
 
 export const paths = {

@@ -32,8 +32,8 @@ usage and [DESIGN.md](DESIGN.md) for the architecture.
 
 ### What exists
 
-Commands and integration: [README.md](README.md#use) and
-[search and hook setup](README.md#search-mid-session-from-any-mcp-host).
+Commands and integration: [README.md](README.md#use),
+[hook setup](docs/hook.md) and [search setup](docs/mcp.md).
 Router steps: [DESIGN.md](DESIGN.md#router).
 
 ### Evidence so far
@@ -102,8 +102,8 @@ branches, PRs and `docs/loop/BACKLOG.md`.
 1. **Wide adoption.** The audience is people who install hyped skill packs
    and plugins. Pitch only with
    [B1](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request)
-   numbers, in their scope. Its crossover near 57 skills is interpolated from
-   Claude Code runs with generated names; for real libraries it is not
+   numbers, in their scope: Claude Code's first request, generated names. The
+   scoped summary is in the [README](README.md); real libraries are not
    measured.
 2. **Ease of use, in the user's own CLI.** Get from zero to loadout running
    inside `claude` or `codex` in three commands, with no new command to
@@ -230,16 +230,16 @@ native machine:
 
 - **Gateway approvals:** the gateway exposes library servers through one
   generic `call_server_tool`. Native per-tool approvals need `tools/list_changed`.
-- **Untested in a real session:** the Codex hook (D2) and the desktop app
-  (D10); see [docs/hosts.md](docs/hosts.md).
+- **Host verification:** [docs/hosts.md](docs/hosts.md) tracks what is not yet
+  verified per host.
 - **Native Windows:** `which()` ignores PATHEXT, so `claude.exe` and `.cmd`
   shims read as not on PATH, in `loadout run` and `doctor` (D7).
 - **Outcome evaluation:** the arms invent their own inputs, the runs inherit
   the user's Codex config, and the sample is tiny.
-- **Router precision on new requests:** 64% (55–72) of loads were useful on
-  C1's held-out requests, against 82% (75–87) on v4's
-  ([RESULTS](bench/RESULTS.md#c1-2026-10-08-new-held-out-requests)), mostly
-  on general business requests. Generic skills such as
+- **Router precision on new requests:** lower on C1's held-out requests than
+  on v4's, with the numbers in the [README](README.md#what-is-measured) and
+  [RESULTS](bench/RESULTS.md#c1-2026-10-08-new-held-out-requests), mostly on
+  general business requests. Generic skills such as
   `frontend-ui-engineering` load on simple UI work (C4).
 - **Tests:** `loadout.test.ts` still mixes modules (E3).
 - **MCP start-up in Codex:** from `/mnt/c` through `wsl.exe`, `loadout mcp`

@@ -1,12 +1,12 @@
 import fs, { existsSync, lutimesSync, utimesSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import crypto, { createHash } from 'node:crypto';
 import { syncBuiltinESMExports } from 'node:module';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { basename, join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterAll, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_CONFIG, type Config } from '../src/config.js';
+import { DEFAULT_CONFIG, loadoutHome, type Config } from '../src/config.js';
 import { jevClient, JevError, validateResponse, type Question, type SystemOneClient } from '../src/jev.js';
 import { claudeArgs, claudeHookSettings, codexArgs, escapeSkillTags, hookCommand, hostSetup, launch, loaderArgs, materialize, searchServer, toToml } from '../src/launch.js';
 import { hookOutput, isFollowUp, HOOK_FAILURE_NOTE, JEV_FALLBACK_NOTE, promptContext } from '../src/hook.js';
@@ -74,10 +74,53 @@ function fakeClient(relevance: Record<string, number>, opts: { tier?: string; ne
 
 describe('E9 security', () => {
   const config = { ...DEFAULT_CONFIG, search: false, embeddings: false };
+
   const runRoute = async (library: ReturnType<typeof scanLibrary>) => {
     const { client } = fakeClient(Object.fromEntries(library.map((c) => [c.name, 0.99])));
     return route({ task: TASK, repo: REPO, library, config, client });
   };
+
+  it('ignores an empty LOADOUT_HOME and refuses a relative one or a relative home fallback, so the working directory cannot supply the config', () => {
+    try {
+      vi.stubEnv('LOADOUT_HOME', '');
+      expect(loadoutHome()).toBe(join(homedir(), '.loadout'));
+      for (const relative of ['.loadout', './x', 'x/../y']) {
+        vi.stubEnv('LOADOUT_HOME', relative);
+        expect(() => loadoutHome()).toThrow('absolute');
+      }
+      vi.stubEnv('LOADOUT_HOME', '');
+      for (const relative of ['.', '', 'repo']) {
+        vi.stubEnv('HOME', relative);
+        vi.stubEnv('USERPROFILE', relative);
+        // Windows' homedir() throws its own system error for an empty or relative USERPROFILE before loadout can.
+        expect(() => loadoutHome(), relative).toThrow(process.platform === 'win32' ? /absolute|homedir/ : 'absolute');
+      }
+      vi.unstubAllEnvs();
+      const absolute = join(tmpdir(), 'loadout-home');
+      vi.stubEnv('LOADOUT_HOME', absolute);
+      expect(loadoutHome()).toBe(absolute);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('accepts only a drive-qualified LOADOUT_HOME on Windows, not a drive-relative, UNC or device path', () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')!;
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+    try {
+      for (const unsafe of ['\\loadout', '/loadout', '\\\\attacker\\share\\loadout', '//attacker/share/loadout', '\\\\?\\UNC\\attacker\\share', '\\\\.\\C:\\loadout', 'C:loadout']) {
+        vi.stubEnv('LOADOUT_HOME', unsafe);
+        expect(() => loadoutHome(), unsafe).toThrow('drive letter');
+      }
+      for (const local of ['C:\\Users\\me\\.loadout', 'd:/loadout']) {
+        vi.stubEnv('LOADOUT_HOME', local);
+        expect(loadoutHome()).toBe(local);
+      }
+    } finally {
+      Object.defineProperty(process, 'platform', platform);
+      vi.unstubAllEnvs();
+    }
+  });
 
   it('redacts MCP values in list JSON, route JSON and saved decisions', async () => {
     const home = tempDir('loadout-e9-');
@@ -1430,10 +1473,7 @@ describe('cache and state folders under the loadout home', () => {
     // Not under the home: not ours to police, however it is spelled.
     expect(isPlainFolder(outside)).toBe(true);
     expect(isPlainFolder(join(dir, '..', 'elsewhere'))).toBe(true);
-    // A relative home, and a home that is itself a link, are fine.
-    vi.stubEnv('LOADOUT_HOME', relative(process.cwd(), dir));
-    expect(isPlainFolder(join(dir, 'index'))).toBe(true);
-    expect(isPlainFolder(join(dir, 'linked'))).toBe(false);
+    // A home that is itself a link is fine (a relative home is refused by loadoutHome, tested under E9).
     const homeLink = join(tempDir('loadout-link-'), 'home');
     symlinkSync(dir, homeLink);
     vi.stubEnv('LOADOUT_HOME', homeLink);

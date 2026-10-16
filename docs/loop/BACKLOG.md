@@ -56,7 +56,7 @@ Each PR body's **Review state** section has the round-by-round record.
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
 | A2 | P0 | `loadout audit`: what your installed skills cost you | Claude | cloud | done ([PR #3](https://github.com/erik-hedstrom/loadout/pull/3)) |
-| A1 | P0 | README rewrite around the problem, 3-command quickstart, GIF | Claude | cloud | review ([#28](https://github.com/erik-hedstrom/loadout/pull/28); GIF waits on A5) |
+| A1 | P0 | README rewrite around the problem, 3-command quickstart, GIF | Claude | cloud | in progress ([PR #28](https://github.com/erik-hedstrom/loadout/pull/28); GIF waits on A5; clean-machine check done in a container, the plugin install itself untested here) |
 | A3 | P1 | `loadout init` wizard + starter packs | Codex | cloud | review ([#30](https://github.com/erik-hedstrom/loadout/pull/30)) |
 | A4 | P1 | npm package under an available name + release workflow | Codex | cloud + erik | blocked: npm name decision |
 | A5 | P1 | Demo recording (route, launch, hook) | Claude | local | todo (after A1) |
@@ -104,8 +104,17 @@ Acceptance:
 - Reviewed for honesty: the outcome pilot is mixed, so the README must not
   claim better results.
 
-Note (E8 find pass, 2026-10-08): README still leads with the launcher; the
-plugin appears only under "Search mid-session".
+A1 learnings (2026-10-12): the README now leads with B1's number, the
+plugins and a from-source install (no npm name yet, A4); launcher, library,
+hook and MCP details moved to `docs/launcher.md`, `docs/library.md`,
+`docs/hook.md` and `docs/mcp.md`, and the security model and router stay in
+SECURITY.md and DESIGN.md. The quickstart ran in a container from a fresh
+clone through `npm link` into a temp prefix, `init`, `add`, `route
+--lexical`, `setup` and `doctor`, with `LOADOUT_HOME`, `CLAUDE_CONFIG_DIR`
+and `CODEX_HOME` in temp dirs. `loadout audit` was not run there; its fake-home
+tests cover it. Left: the
+GIF (A5), the plugin installs on a machine with the CLIs, and the npm
+install line once A4 picks a name.
 
 **A3. `loadout init` wizard and starter packs.**
 
@@ -538,6 +547,7 @@ Acceptance: a third row in that RESULTS table, with raw results. The README's
 | D15 | P0 | MCP discovery: make library MCP servers findable and usable through the search server | Claude | cloud + local | in progress: code and tests merged in [#39](https://github.com/erik-hedstrom/loadout/pull/39); the live check is left |
 | D17 | P1 | `loadout mcp` ready within Codex's MCP start-up grace | Claude | local (measure) + cloud (fix) | measured 2026-10-15: under 1 s from ext4, 6–7 s from `/mnt/c`; module loading, not the scan (see below) |
 | D12 | P0 | Codex: install the hook and search as one step, if Codex allows it | Codex | local | done ([#23](https://github.com/erik-hedstrom/loadout/pull/23)): `plugins/loadout-codex` through `.agents/plugins/marketplace.json`; install checked offline; the hook still needs `/hooks` trust; the live run is D2 |
+| D14 | P1 | Codex plugin forwards LOADOUT_HOME | Claude | cloud | done ([#36](https://github.com/erik-hedstrom/loadout/pull/36)): Codex gives a stdio MCP server only its default variables plus `env_vars`, so the plugin's `loadout mcp` ignored a custom `LOADOUT_HOME` (and a `"router": "lexical"` profile in it); now forwarded. A relative `LOADOUT_HOME` is now refused (on Windows, anything but a drive-qualified path, so no drive-relative, UNC or device path) and an empty one ignored; the `HOME` (or `USERPROFILE`) fallback must pass the same check. So the working directory or a remote share cannot become the config. An absolute value, including a mapped network drive, is trusted: a project settings `env` that sets one comes from settings that can already run their own hooks. Checked against the Codex source only, not a live run |
 
 **D17. MCP start-up inside Codex's grace period.** Codex leaves an optional
 MCP server out of the tool list if it is not ready about 1 s after start-up,

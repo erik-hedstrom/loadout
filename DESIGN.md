@@ -3,12 +3,10 @@
 ## Problem
 
 Installed skill listings add context even when the skills are irrelevant.
-[B1](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request)
-measured about **10 tokens per added skill** in Claude Code, using generated
-names. Codex caps its rendered listing: only **424** of **1,262** skills were
-visible in the offline measurement; its token cost is not shown.
+What that cost in Claude Code and Codex, as measured by B1, is summarised in
+the [README](README.md).
 
-**loadout decouples library size from per-request cost.** A very cheap
+**loadout aims to decouple library size from per-request cost.** A very cheap
 System One model ([Jev](https://typesafe.ai/blog/introducing-system-one-models-and-jev))
 looks at the task and the repo, then picks the model and a deliberately
 over-inclusive shortlist of skills and MCP servers from a library that can be
@@ -61,7 +59,7 @@ Isolation needs per-CLI support that is not uniform yet (Claude Code has
 |---|---|---|---|
 | **Launcher** (v0.1) | once per session | `--model`, `--plugin-dir`, `--mcp-config` | `-m`, `-c` overrides |
 | **Search server** (`loadout mcp`) | mid-session, on demand | `find_tools`, `load_skill`, gateway to library MCP servers; attached by the launcher | same — Codex speaks MCP |
-| **Prompt hook** (`loadout hook claude\|codex`) | every prompt | D10 plugin (`plugins/loadout`): `UserPromptSubmit` adds the skills that fit as context (cache-safe: appended to the user turn), once per skill per session | same contract, once trusted with `/hooks`; untested ([hosts](docs/hosts.md)) |
+| **Prompt hook** (`loadout hook claude\|codex`) | each substantive prompt | D10 plugin (`plugins/loadout`): `UserPromptSubmit` adds the skills that fit as context (cache-safe: appended to the user turn), once per skill per session | same contract, once trusted with `/hooks` (status: [hosts](docs/hosts.md)) |
 | **HTTP** (`loadout mcp --http`) | remote hosts | — | ChatGPT chat, behind an HTTPS tunnel; skills only, optional bearer token |
 
 The launcher fixes the session's tool set up front, which also keeps the prompt
@@ -92,8 +90,8 @@ literal, atomic questions; every decision rule is code (`decide()` in
    `bge-small-en` embeddings when the optional `@huggingface/transformers` is
    installed; the query is the task text plus repo signals (name, top-level
    files, dependencies, languages). Keeps the top `maxCandidates` (200). Local
-   and free: the library is embedded once (about a minute for 1,000 skills; new
-   skills at `loadout add`). On the synthetic benchmark the embeddings added
+   and free: the library is embedded once (new skills at `loadout add`); how long
+   that takes is not shown. On the synthetic benchmark the embeddings added
    nothing; on realistic, detailed requests they kept the judge's best skill in
    the candidates 87% of the time vs 80% for BM25 alone, because long prompts
    dilute keyword scores (see [bench/RESULTS.md](bench/RESULTS.md), v4).
@@ -171,8 +169,9 @@ literal, atomic questions; every decision rule is code (`decide()` in
    falls back to keyword ranking with a visible warning.
 
 Cost per decision: **$0.00082**, 0.95 s on the
-[v3 synthetic 20,000-skill test](bench/RESULTS.md#test-split);
-**$0.0011** on [v4 realistic requests](bench/RESULTS.md#v4-2026-10-06-realistic-requests-on-the-real-library-judged).
+[v3 synthetic 20,000-skill test](bench/RESULTS.md#test-split); the cost on
+realistic requests is in the
+[v4 results](bench/RESULTS.md#v4-2026-10-06-realistic-requests-on-the-real-library-judged).
 Measured limits (2026-10-05): no per-request question cap below 200, state
 billed once, Choice capped at 255 options, 64k-token context.
 
@@ -206,11 +205,10 @@ library itself, in its own words, through MCP:
   2026-10-14 used the earlier name (bench/RESULTS.md). The need gate is softened, since the agent
   asked: when Jev judges the goal to be general work, only near-certain exact
   fits (P ≥ 0.8) are shown. Otherwise the answer says nothing fits and names
-  the closest skill, so the agent does not load a near miss. About 1 s and
-  $0.001 per search.
+  the closest skill, so the agent does not load a near miss. Cost and latency per search are not measured.
 - The tool description and the server's `instructions` ask for a search
   before the first specialised step, even in a familiar domain, and again when
-  the domain changes. Measured uptake is still partial (bench/RESULTS.md, v4),
+  the domain changes. Measured uptake is still partial ([RESULTS](bench/RESULTS.md#do-agents-use-what-they-are-given)),
   which is why the launcher's upfront pick stays the main path.
 - **`load_skill(skill, file?)`** returns the SKILL.md as attributed
   third-party reference material (the same framing as injection) plus a list of
@@ -283,10 +281,10 @@ library itself, in its own words, through MCP:
   `server_tools` with `tool` returns any one tool's full schema. The tool text
   is escaped like other third-party text.
 
-The search tools add **546 input tokens** per request in Claude Code. A
-native listing of 50 skills with generated names adds about 477; B1
-interpolates the crossover near 57 such skills. Real-name costs, router calls
-and returned skills are not included ([B1](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request)).
+The search tools added **546 input tokens** to a fresh Claude Code session's
+first request. A native listing of 50 skills with generated names adds about
+477; B1 interpolates the crossover near 57 such skills. Real-name costs, later
+turns, other hosts, router calls and returned skills are not included ([B1](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request)).
 
 Approvals: the launcher pre-approves only `find_tools` and `load_skill`
 (Claude `--allowedTools`, Codex `tools.<tool>.approval_mode = "approve"`).
@@ -295,9 +293,9 @@ prompt, which shows the server, tool and arguments.
 
 ### Prompt hook
 
-[Search plus hook](bench/RESULTS.md#do-agents-use-what-they-are-given) raised
-Claude Code's useful-skill use from **2 of 10** to **6 of 10** sessions. The
-hook alone is not measured:
+The hook was measured only together with search
+([RESULTS](bench/RESULTS.md#do-agents-use-what-they-are-given)); the hook
+alone is not measured:
 - each substantive prompt (not "yes" or "go on") is routed with the same two
   Jev requests;
 - the skills that fit are listed once per session, as third-party metadata,
@@ -325,8 +323,8 @@ Measurements and caveats: [bench/RESULTS.md](bench/RESULTS.md).
 - **Native Codex skills per session.** Codex 0.160 discovers skills in
   `~/.codex/skills`, plugins and project `.agents/skills`, but has no
   per-session extra skill root. Today selected skills are listed in the prompt
-  with their paths (verified: Codex reads and follows them) and clear winners
-  are injected.
+  with their paths and clear winners are
+  injected.
 - **Dynamic tool exposure.** The gateway exposes library MCP servers through
   one generic `call_server_tool`. MCP's `tools/list_changed` could add a
   server's real tools to the session instead (native schemas, per-tool
