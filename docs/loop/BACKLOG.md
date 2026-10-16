@@ -37,7 +37,6 @@ Each PR body's **Review state** section has the round-by-round record.
 |---|---|---|
 | [#41](https://github.com/erik-hedstrom/loadout/pull/41) | E13 stricter reviews with a blocking necessity pass (P1) | both reviews approve at ac6d69d; full matrix green; merge before this file's PR (needs Erik: the orchestrator's merge was blocked) |
 | [#40](https://github.com/erik-hedstrom/loadout/pull/40) | C10 bench quick fixes (P2) | both reviews clean; merge gate |
-| [#39](https://github.com/erik-hedstrom/loadout/pull/39) | D15 MCP discovery; renames `find_skills` to `find_tools` (P0) | both reviews approve at aa092ec; full matrix green; race scope accepted by Erik; ready to merge (needs Erik) |
 | [#38](https://github.com/erik-hedstrom/loadout/pull/38) | B7 MCP overhead study harness (P1) | root fix (no ambient plugins) in 9d9a9bf and 54bc488; both reviews approve at 54bc488; full matrix green; rename to `find_tools` after D15; ready to merge (needs Erik) |
 | [#37](https://github.com/erik-hedstrom/loadout/pull/37) | C2 fixtures and protocol; adds E14 and D18 | round 15 and 16 findings fixed; both reviews approve at 0a647dc; full matrix green (one Windows timeout flake, rerun once); waits for Erik's C2 decisions (margin, VM, licence, scope) and two open Codex threads (P1 Jev key, P2 shared prompt cache) |
 | [#36](https://github.com/erik-hedstrom/loadout/pull/36) | D14 Codex plugin forwards `LOADOUT_HOME` (P1) | one open Codex P1 (`/proc`) waits for Erik: accept or override; merge before #28 |
@@ -390,6 +389,7 @@ Acceptance: a third row in that RESULTS table, with raw results. The README's
 | D6 | P2 | HTTP: cancellation reaches Jev | Claude | cloud | done ([#19](https://github.com/erik-hedstrom/loadout/pull/19)) |
 | D8 | P1 | Host capability matrix (verified vs generated) | Claude | cloud | done ([#18](https://github.com/erik-hedstrom/loadout/pull/18)) |
 | D9 | P1 | Codex parity: neutral session skill dir, tier presets | Claude | cloud | done ([#21](https://github.com/erik-hedstrom/loadout/pull/21)); Codex launch not re-run live |
+| D15 | P0 | MCP discovery: make library MCP servers findable and usable through the search server | Claude | cloud + local | in progress: code and tests merged in [#39](https://github.com/erik-hedstrom/loadout/pull/39); the live check is left |
 | D17 | P1 | `loadout mcp` ready within Codex's MCP start-up grace | Claude | local (measure) + cloud (fix) | measured 2026-10-15: under 1 s from ext4, 6–7 s from `/mnt/c`; module loading, not the scan (see below) |
 | D12 | P0 | Codex: install the hook and search as one step, if Codex allows it | Codex | local | done ([#23](https://github.com/erik-hedstrom/loadout/pull/23)): `plugins/loadout-codex` through `.agents/plugins/marketplace.json`; install checked offline; the hook still needs `/hooks` trust; the live run is D2 |
 
@@ -654,6 +654,84 @@ throwaway `CODEX_HOME`):
   cannot carry the `wsl.exe` wrapper.
 - Left: `marketplace add erik-hedstrom/loadout` from GitHub (after merge); the
   live hook (D2); desktop and T3 Code.
+
+**D15. MCP discovery.**
+
+Why (Erik, 2026-10-13): MCP servers are a bigger part of his context than
+skills, and MCP is a launch priority. The search tool already ranked gateway
+servers, but everything the agent read talked about skills, so nothing cued a
+search for a tool and a match gave no clear next step. Library servers are not
+configured in the host, so they cost nothing until needed, and one search
+covers skills and servers. For scale, one user's `/context` readings
+(not a benchmark, two Claude Code sessions): 292 MCP tools at 230.8k tokens,
+12.4k loaded and 218.1k deferred; 180 tools at 163k tokens, 20.4k loaded and
+142.6k deferred. Claude Code's own tool search already defers most schemas;
+what remains is the loaded share, the deferred name list and server
+instructions. Codex has `tool_search` where the model supports it. Nothing
+here is measured against them yet (B7).
+
+Acceptance:
+- The search text, result lines and `server_tools` output cover MCP servers
+  (src/mcp.ts), the tool names and descriptions of a server are searchable
+  without starting it, and tests cover the cases in the PR.
+- Local check, not done in the PR: in a stock Claude Code CLI, an unprompted
+  task that needs a fixture server reaches the right tool, respects
+  approvals, and returns a checked result, compared with native deferred tool
+  search.
+
+Learnings (2026-10-13):
+- The search tool is now `find_tools` (Erik, 2026-10-14; reason in DESIGN,
+  search server), with a description that leads with tools and MCP servers.
+  No alias. `load_skill`, `server_tools` and `call_server_tool` keep their
+  names.
+- Sizes in characters. Skills-only library: see the
+  [note under B1 results](../../bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request).
+  With one gateway server: instructions 424, `find_tools` 582, `server_tools`
+  120 (76 before D15), plus each server name quoted. Neither case is remeasured in
+  tokens.
+- A declared tool list in `mcp.json` was not added: nothing in the standard
+  format carries one, and a second field would drift from the server. The
+  index is filled by `server_tools` instead; before that call, search sees only
+  the library description.
+- The index is untrusted on read and tool text is escaped before it reaches
+  Jev; the design is in DESIGN (search server). `SEARCH_HINT` (hook and
+  launcher text) still says "skill library"; changing it alters measured
+  behaviour, so it waits for B7.
+- Codex's review (PR #39) found four things in the first design:
+  - one shared index file lost entries under concurrent writers (now one
+    file per server);
+  - a linked index folder redirected reads and writes (now every cache and
+    state folder under the loadout home is checked; links planted before
+    loadout runs are refused, a same-user process racing the check is out of
+    scope, see DESIGN);
+  - the compact listing showed "arguments: none" for `$ref` and `oneOf`
+    schemas;
+  - the fingerprint ignored env and headers.
+- Codex's later rounds found two more: a key printed escaped (a name with
+  `<skill` in it) did not resolve when the agent sent it back, and a
+  successful empty listing left the old entry in the index. The first is
+  fixed by not offering such names at all (library scan, `server_tools`;
+  `loadout doctor` reports them) rather than by resolving the escaped form,
+  which cost about 50 lines for names that are injection attempts in
+  practice. The second is fixed and tested; a failed listing still leaves the
+  entry.
+- Later rounds found more values the agent could not send back exactly:
+  tool names cut at 128 characters, escaped schema keys, comma-joined names,
+  a server named `mcp:x` resolving to the server `x`, keys longer than the
+  tools accept, and required arguments missing from `properties`. One rule
+  now covers the class: everything the agent may send back is shown as a JSON
+  string, and a key the tools could not take back is never offered.
+- Behaviour change: `loadout claude|codex` now refuses to write session files
+  when `~/.loadout/sessions` is a link, with an error naming the folder. Before,
+  a user who linked it (for example to another disk) was followed. Session
+  files hold server credentials; replace the link with a real folder, or link
+  the whole loadout home instead, which is still allowed.
+- `server_tools` was unbounded (up to 3,000 characters of schema per tool).
+  It is now capped in tiers (caps in DESIGN, search server), and one tool's
+  full schema is one call away. Whether agents call correctly from the compact
+  form is not measured; it is part of the local check.
+- Possible follow-up, only if the local check shows agents struggling with
+  the generic `call_server_tool`: D4 (`tools/list_changed`).
 
 **D7. `loadout doctor`.**
 

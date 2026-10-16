@@ -47,6 +47,8 @@ Revised 2026-10-07 after PR #6 round 4, before any paid call. Results: [B1 resul
 
 ## B1 results (2026-10-07): what installed skills cost per request
 
+Note (2026-10-14): B1 measured the earlier `find_skills` tool text. The tool is now `find_tools` with a changed description (skills-only: 336 and 492 characters for the server instructions and the tool description, instead of 337 and 473), so the figures below describe the earlier text and are not remeasured.
+
 Raw rows: [bench/results/2026-10-07T21-04-16-645Z-overhead/](results/2026-10-07T21-04-16-645Z-overhead/).
 Claude Code CLI, haiku, two fresh sessions per arm, deltas over the
 baseline's 6,728 input tokens (call 1 / call 2). The baseline is not bare:

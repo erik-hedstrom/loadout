@@ -365,7 +365,7 @@ export async function preflight(plan: Plan, deps: StudyDeps = {}, save?: (config
       const discovery = await (deps.inspect ?? inspectCodex)(call.free!.inventory);
       Object.assign(result, discovery);
       if (discovery.discoveredPackSkills !== call.copiedSkills) result.refusals.push('discovery differs from copied count');
-      if (call.configuration === 'loadout' && !['find_skills', 'load_skill'].every((t) => discovery.tools.includes(t))) result.refusals.push('loadout MCP expected tools absent');
+      if (call.configuration === 'loadout' && !['find_tools', 'load_skill'].every((t) => discovery.tools.includes(t))) result.refusals.push('loadout MCP expected tools absent');
     } catch { result.refusals.push('inventory collection failed (details suppressed)'); }
     let featureOutput: string | undefined;
     try { featureOutput = await run(call.free!.features, 'codex'); }
