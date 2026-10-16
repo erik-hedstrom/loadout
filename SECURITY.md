@@ -45,7 +45,7 @@ Hook state stores offered/injected skill IDs, not prompt text (`writeState`).
 token; a non-loopback `--host` or any `--allowed-host` requires `--token-file`.
 When configured, `serveHttp` checks `Authorization: Bearer <token>` with
 `timingSafeEqual`. The SDK's Host check is always enabled. It filters the
-library to skills, exposing only `find_skills` and `load_skill`, with no MCP gateway
+library to skills, exposing only `find_tools` and `load_skill`, with no MCP gateway
 ([cli.ts](src/cli.ts), [mcp.ts](src/mcp.ts)). Authorized clients can read
 library skills and spend Jev credit through searches. The server uses plain
 HTTP; remote access needs a trusted HTTPS tunnel or TLS terminator.
