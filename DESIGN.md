@@ -26,28 +26,84 @@ arbitrarily large. The agent still makes the final call from the shortlist.
 
 ## Architecture
 
+```mermaid
+flowchart TB
+    subgraph host["Host integration"]
+        CH["Claude Code plugin<br/>loadout hook claude"]
+        XH["Codex plugin<br/>loadout hook codex + loadout mcp"]
+        LA["Launcher<br/>loadout claude / codex"]
+        RT["loadout route<br/>prints the decision, launches nothing"]
+    end
+
+    MS["Search server: loadout mcp<br/>find_skills, load_skill, gateway"]
+
+    LIB[("Library<br/>scanLibrary")]
+
+    subgraph routing["Routing: route() in src/route.ts"]
+        GATE{"Jev client?"}
+        RET["Retrieve: BM25, plus embeddings when available<br/>top maxCandidates (200 by default);<br/>a library that size or smaller passes whole"]
+        JEV["Jev SystemOneClient<br/>wide request: pick, need, model tier<br/>close request: top shortlist (8 by default)"]
+        DEC["decide()<br/>load, offer, inject or stay quiet<br/>up to 3 skills, 2 MCP servers, 4 offers (defaults)"]
+        LEX["Lexical router<br/>loads matches at least half the top BM25 score,<br/>up to 3 skills and 2 MCP servers (defaults)<br/>no offers; tier = defaultTier"]
+        MEN["withMentions()<br/>skills the task names, found in the whole library:<br/>first, up to 3, marked for injection<br/>a named skill also lifts quiet (the need gate)<br/>every route result passes through; unchanged when none is named"]
+        GATE -->|"yes"| RET
+        GATE -->|"no: no key, router: lexical, or --lexical"| LEX
+        RET --> JEV
+        JEV -->|"Jev fails, not cancelled"| LEX
+        JEV --> DEC
+        JEV -->|"model tier, picked in route(), not decide()"| MEN
+        DEC --> MEN
+        LEX --> MEN
+    end
+
+    subgraph out["Output"]
+        HC["Hook context<br/>skill_relevance list: Jev fit, or a keyword score relative to the top match<br/>(1.00 for a named skill the router did not rate)<br/>once per skill per session id; with lexical routing, only when a skill is named"]
+        LC["Launcher prompt<br/>Claude: skill_relevance note in the system prompt<br/>Codex: skills listed in the prompt; the note only when no skill is loaded or offered<br/>with Jev the note names the skills and servers, or says none fit; with lexical routing it is the search hint, when search is on"]
+        INJ["Injected SKILL.md text, hook and launcher<br/>named skills, and clear winners with Jev, if inject.enabled (default)<br/>past 12,000 characters, cut with a pointer to the file; hook: once per skill per session id"]
+        LSN["Launcher session only<br/>skills, loaded and offered: Claude generated plugin, Codex paths in the prompt<br/>MCP servers: Claude mcp.json, Codex -c mcp_servers (the stdio and credentialed ones relayed by loadout mcp-launch)<br/>tier: Claude --model, Codex -m; each adds an effort setting when the tier has one"]
+        DR["Decision report<br/>route: stdout, text or --json; launchers: the text summary on stderr<br/>includes the decision warning, if any:<br/>Jev fell back to keywords, or more than 3 skills named<br/>launchers also write decision.json to the session directory"]
+        NOTE["Notes on stderr<br/>CLI, before routing: library is empty (route, launcher);<br/>no key found, using lexical routing (not when lexical was chosen)<br/>hook, fixed text: Jev fell back to keyword ranking (after routing);<br/>hook failed or hit its 20 s deadline"]
+        FSR["find_skills result<br/>returned to the agent, after any decision warning:<br/>Jev-ranked matches with a fit score,<br/>or keyword matches when lexical (skills, then servers),<br/>or a note that nothing fits"]
+        LS["load_skill result<br/>one library skill's SKILL.md (past 40,000 characters, cut with a pointer to the file)<br/>and up to 60 file names, or one text file up to 256 KB; no routing"]
+        GW["Gateway: server_tools, call_server_tool<br/>library servers marked gateway: true; not over --http"]
+    end
+
+    host -->|"prompt or task + repo signals<br/>(hooks skip short follow-ups)"| routing
+    LA -->|"attaches it when search is on (default)"| MS
+    XH -->|"bundled .mcp.json"| MS
+    CH -.->|"optional, added by the user"| MS
+    MS -->|"find_skills: goal and keywords + repo signals"| routing
+    MS -->|"load_skill"| LS
+    MS -->|"server_tools, call_server_tool; stdio only"| GW
+    LIB --> RET
+    LIB --> LEX
+    LIB -->|"named skills"| MEN
+    LIB -->|"SKILL.md openings"| JEV
+    LIB -.-> INJ
+    LIB -.-> LSN
+    LIB -.-> LS
+    LIB -.-> GW
+    host --> NOTE
+    MS --> NOTE
+    MEN --> HC
+    MEN --> LC
+    MEN --> INJ
+    MEN --> LSN
+    MEN --> DR
+    MEN -->|"hook only: Jev failed"| NOTE
+    MEN -->|"Jev: rated candidates, fit at least 0.5, at most 5<br/>also exact fit at least 0.8 when Jev judges the goal general<br/>and it names no installed skill<br/>lexical: the final selection, at most 5"| FSR
 ```
-            ┌──────────────── library (~/.loadout/library) ────────────────┐
-            │ skills/<name>/SKILL.md      mcp.json (+ description per server) │
-            └───────────────────────────────┬───────────────────────────────┘
-                                            │ scan
- task + repo signals ──► [1] retrieve (BM25 + embeddings, local) ──► 200 candidates
-                                            │
-                         [2] Jev wide:  choice over 200 + "no skill needed"
-                                        2 nouls → need score · model tier
-                                            │ top 8
-                         [3] Jev close: graded fit score per candidate
-                                        choice among the 8 + "no skill needed"
-                                            │
-                         [4] decide (code): load ≤ 3 · offer fit ≥ 0.7 · or stay quiet
-                                            │
-            ┌───────────────────────────────┴────────────────────────────┐
-     Claude Code launcher                                     Codex launcher
-     --model <alias>                                          -m <model>
-     --plugin-dir <generated plugin with chosen skills>       -c mcp_servers.<n>.…
-     --mcp-config <generated mcp.json>                        skills + relevance note in the prompt
-     --append-system-prompt <relevance note>
-```
+
+Library edges: solid ones are read while routing, dotted ones when the output is
+built. Each entry point filters the library before `route()` sees it (so before
+retrieval, the lexical router and the named-skill scan): the launcher and
+`loadout route` pass skills and MCP servers; the hook and `find_skills` over
+`--http` pass skills; `find_skills` over stdio passes skills and servers marked
+`"gateway": true`. `load_skill` and the gateway read the server's own library
+without routing. Not drawn: the embedding index (it only feeds retrieval), the
+hook's per-session state file (it makes the "once per session id" rules),
+`loadout mcp-launch` (the relay Codex runs for library MCP servers) and
+`loadout doctor` (read-only checks).
 
 ### Integration layers
 
@@ -91,7 +147,7 @@ literal, atomic questions; every decision rule is code (`decide()` in
 1. **Retrieve.** BM25 over name + description, fused (RRF) with local
    `bge-small-en` embeddings when the optional `@huggingface/transformers` is
    installed; the query is the task text plus repo signals (name, top-level
-   files, dependencies, languages). Keeps the top `maxCandidates` (200). Local
+   files, dependencies, languages). Keeps the top `maxCandidates` (200); a library no larger than that goes whole. Local
    and free: the library is embedded once (about a minute for 1,000 skills; new
    skills at `loadout add`). On the synthetic benchmark the embeddings added
    nothing; on realistic, detailed requests they kept the judge's best skill in
@@ -133,9 +189,10 @@ literal, atomic questions; every decision rule is code (`decide()` in
      with a gold skill; 99.0% of all injections are gold (99.5% on rows with
      one). On [v4 realistic requests](bench/RESULTS.md#v4-2026-10-06-realistic-requests-on-the-real-library-judged),
      84% (67–93, 95% Wilson interval) of injected skills are useful on test.
-5. **Mentions override.** A library skill the user explicitly names is loaded
-   and injected whatever the router or gate said, in request order, at most 3
-   (more gives a warning).
+5. **Mentions override.** A skill in the whole library, not only the
+   candidates, that the user explicitly names is loaded and injected (unless
+   injection is off) whatever the router or gate said, in request order, at
+   most 3 (more gives a warning).
    - Counted: `/tdd`, `@pdf`, `$pdf`, `/loadout:pdf`, a multi-part name as
      written (`zx-ledger-reconcile`), or the name next to "skill" ("the pdf skill").
    - Not counted: path segments (`/pdf/report.py`), negations ("do not use
@@ -143,8 +200,12 @@ literal, atomic questions; every decision rule is code (`decide()` in
    - If several installed skills share the name, the one the router rated best
      is used, and it replaces the other copies.
 6. **Tell the agent where to look**, without forcing it (TypeSafe's measured
-   wording), via `--append-system-prompt` for Claude Code and the prompt for
-   Codex:
+   wording), via `--append-system-prompt` for Claude Code. Codex gets it in the
+   prompt only when no skill is loaded or offered; otherwise the prompt lists
+   the loaded skills, then the offered ones under "Also available if needed".
+   Without Jev (no key, `--lexical`, `"router": "lexical"`, or Jev down) the
+   note names no skills: it is only the search hint, and only when search is
+   on, so a Codex prompt with no skills and search off is the bare task:
 
    ```
    <skill_relevance>
@@ -161,8 +222,9 @@ literal, atomic questions; every decision rule is code (`decide()` in
    - the framing says the text is guidance that cannot override the user, the
      agent's instructions or approval settings.
 
-   The system prompt only gains one line saying such blocks are reference
-   material. Delimiters do not make prompt injection impossible: injection
+   The only addition outside the user turn is one line saying such blocks are
+   reference material: in the system prompt for Claude Code, in the prompt for
+   Codex. Delimiters do not make prompt injection impossible: injection
    raises the authority of third-party text compared with listing the skill, so
    it is limited to clear winners and explicit mentions, and can be turned off
    (`"inject": {"enabled": false}`).
@@ -198,7 +260,8 @@ library itself, in its own words, through MCP:
   agent's goal. It returns at most 5 matches with fit ≥ 0.5, one line each
   (key, fit, a 180-character description), with the exact next call. The need
   gate is softened, since the agent asked: when Jev judges the goal to be
-  general work, only near-certain exact fits (P ≥ 0.8) are shown. Otherwise
+  general work and the goal names no installed skill, only near-certain exact
+  fits (P ≥ 0.8) are shown. Without Jev it returns keyword matches instead. Otherwise
   the answer says nothing fits and names the closest skill, so the agent does
   not load a near miss. About 1 s and $0.001 per search.
 - The tool description and the server's `instructions` ask for a search
@@ -211,16 +274,18 @@ library itself, in its own words, through MCP:
   absolute paths, no links, no binaries, 256 KB at most.
 - **Gateway**: `server_tools` / `call_server_tool` reach the library's MCP
   servers, started on first use and kept for the session. Registered only when
-  the library has servers, so a skills-only library costs two tool definitions.
+  the library has servers marked `"gateway": true`, so otherwise the search
+  server costs two tool definitions.
 
 The search tools add **546 input tokens** per request in Claude Code. A
 native listing of 50 skills with generated names adds about 477; B1
 interpolates the crossover near 57 such skills. Real-name costs, router calls
 and returned skills are not included ([B1](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request)).
 
-Approvals: the launcher pre-approves only `find_skills` and `load_skill`
-(Claude `--allowedTools`, Codex `tools.<tool>.approval_mode = "approve"`).
-They only read the user's own library. `call_server_tool` keeps the host's
+Approvals: the launcher pre-approves `find_skills` and `load_skill`
+(Claude `--allowedTools`, Codex `tools.<tool>.approval_mode = "approve"`), and
+the library MCP servers marked `autoApprove`. The two search tools only read the
+user's own library. `call_server_tool` keeps the host's
 prompt, which shows the server, tool and arguments.
 
 ### Prompt hook
@@ -233,6 +298,9 @@ hook alone is not measured:
 - the skills that fit are listed once per session, as third-party metadata,
   with how to load them;
 - a clear winner or a named skill is injected once.
+
+Without Jev (no key, or Jev down) the hook adds nothing unless the prompt names
+a skill.
 
 It runs before the host sends the prompt, so it has a hard budget. It gives
 up after 20 s with no output, never retries Jev, and only uses the cached
