@@ -1119,7 +1119,7 @@ Starting points from Sol's review (2026-10-07):
 - `test/`: bench.test.ts "keeps the escaped Claude catalog…" fails on a
   machine where `which('claude')` finds a Windows `claude` under `/mnt/c`.
   `pathTranslator` then calls the mocked `execFileSync`. Seen in WSL during
-  D10; CI does not have that PATH.
+  D10; CI does not have that PATH. Fixed in E15.
 
 Markdown area ([#15](https://github.com/erik-hedstrom/loadout/pull/15)):
 `pr-reviewer` found 28 items in DESIGN, HANDOFF, README and bench/README; Sol
