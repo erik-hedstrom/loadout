@@ -5,7 +5,7 @@
  *
  *   routed  the sweep's decision as loadout would launch it: did the agent
  *           invoke a loaded skill (Claude's Skill tool / reading SKILL.md)?
- *   search  nothing preloaded, only the find_skills server attached: does the
+ *   search  nothing preloaded, only the find_tools server attached: does the
  *           agent search on its own, and load something useful?
  *   hook    (Claude) nothing preloaded; `loadout hook claude` routes the prompt
  *           and the loadout MCP server is attached, as after `loadout setup
@@ -130,7 +130,7 @@ for (const id of values.ids.split(',')) {
     const loadedKey = e.tool.endsWith('__load_skill') ? JSON.parse(e.detail).skill : undefined;
     if (typeof loadedKey === 'string' && byKey.has(loadedKey)) invoked.add(loadedKey);
   }
-  const searches = events.filter((e) => e.ok && e.tool.endsWith('__find_skills')).map((e) => JSON.parse(e.detail));
+  const searches = events.filter((e) => e.ok && e.tool.endsWith('__find_tools')).map((e) => JSON.parse(e.detail));
   const result = {
     id,
     agent,
