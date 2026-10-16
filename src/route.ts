@@ -7,6 +7,7 @@ import { hybridRank } from './retrieve.js';
 import { escapeSkillTags } from './launch.js';
 import {
   TIERS,
+  toolsText,
   type Capability,
   type RawRouting,
   type RepoSignals,
@@ -152,6 +153,7 @@ export function optionKeys(capabilities: Capability[]): Map<string, Capability> 
 const describe = (c: Capability, n: number, excerpt?: string): Text => {
   const fields: Record<string, string> = { trust: 'third-party', does: escapeSkillTags(clip(c.description, n)) };
   if (c.kind === 'mcp') fields.kind = 'MCP server (tools the agent can call)';
+  if (c.tools?.length) fields.tools = escapeSkillTags(clip(toolsText(c.tools), n));
   if (excerpt) fields.instructions_begin = escapeSkillTags(clip(excerpt, n));
   return fields;
 };

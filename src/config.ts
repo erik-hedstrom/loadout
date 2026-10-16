@@ -105,6 +105,7 @@ export const paths = {
   config: () => join(loadoutHome(), 'config.json'),
   library: () => join(loadoutHome(), 'library'),
   sessions: () => join(loadoutHome(), 'sessions'),
+  index: () => join(loadoutHome(), 'index'),
   embeddings: () => join(loadoutHome(), 'index', 'embeddings'),
 };
 
