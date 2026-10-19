@@ -14,6 +14,9 @@ looks at the task and the repo, then picks the model and a deliberately
 over-inclusive shortlist of skills and MCP servers from a library that can be
 arbitrarily large. The agent still makes the final call from the shortlist.
 
+How this differs from native skill loading, tool search, MCP gateways, model
+routers and skills directories: [docs/comparison.md](docs/comparison.md).
+
 ## Non-goals
 
 - **No traffic interception.** loadout never sits between a CLI and its model
