@@ -1,4 +1,4 @@
-import fs, { existsSync, lutimesSync, utimesSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import fs, { chmodSync, existsSync, lutimesSync, utimesSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import crypto, { createHash } from 'node:crypto';
 import { syncBuiltinESMExports } from 'node:module';
@@ -9,8 +9,8 @@ import { afterAll, describe, expect, it, vi } from 'vitest';
 import { parse as parseToml } from 'smol-toml';
 import { DEFAULT_CONFIG, type Config } from '../src/config.js';
 import { jevClient, JevError, validateResponse, type Question, type SystemOneClient } from '../src/jev.js';
-import { claudeArgs, claudeHookSettings, codexArgs, escapeSkillTags, hookCommand, hostSetup, launch, loaderArgs, materialize, searchServer, toToml } from '../src/launch.js';
-import { hookOutput, isFollowUp, HOOK_FAILURE_NOTE, JEV_FALLBACK_NOTE, promptContext } from '../src/hook.js';
+import { claudeArgs, claudeHookSettings, codexArgs, escapeSkillTags, hookCommand, hostSetup, isolateConflict, launch, loaderArgs, materialize, searchServer, toToml } from '../src/launch.js';
+import { hookOutput, isFollowUp, HOOK_FAILURE_NOTE, JEV_FALLBACK_NOTE, noKeyWarning, NO_KEY_WARNING, promptContext } from '../src/hook.js';
 import { createServer, readSkillFile, serveHttp } from '../src/mcp.js';
 import { rememberTools, withTools } from '../src/toolindex.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
@@ -885,6 +885,80 @@ describe('launch', () => {
     expect(() => toToml(Number.NaN)).toThrow();
   });
 
+  it('adds the isolation flags only with --isolate, and only the ones each host documents', () => {
+    const plain = materialize(decision, 'claude', DEFAULT_CONFIG, tempDir('loadout-s-'));
+    expect(plain.settings).toBeUndefined();
+    expect(claudeArgs(plain, TASK, [])).not.toContain('--strict-mcp-config');
+
+    const claude = materialize(decision, 'claude', DEFAULT_CONFIG, tempDir('loadout-s-'), (p) => p, true);
+    const isolated = claudeArgs(claude, TASK, ['--permission-mode', 'plan']);
+    // Ahead of the passthrough, so a trailing value-taking flag or `--` there cannot swallow them.
+    const at = isolated.indexOf('--strict-mcp-config');
+    expect(isolated.slice(at, at + 4)).toEqual(['--strict-mcp-config', '--no-chrome', '--settings', claude.settings]);
+    expect(at).toBeLessThan(isolated.indexOf('--permission-mode'));
+    if (process.platform !== 'win32') expect(statSync(claude.settings!).mode & 0o777).toBe(0o600);
+    // In the session's --settings file, the IDE opt-out outranks a user, project or local settings `env` that turns it on.
+    expect(JSON.parse(readFileSync(claude.settings!, 'utf8'))).toEqual({
+      disableClaudeAiConnectors: true,
+      disableRemoteControl: true,
+      crossSessionInbound: 'refuse',
+      permissions: { deny: ['mcp__computer-use'] },
+      env: { CLAUDE_CODE_AUTO_CONNECT_IDE: 'false', CLAUDE_CODE_ENABLE_CFC: '0', CLAUDE_CODE_ARTIFACT_COMMENTS: '0' },
+    });
+    // loadout's own servers still load; the flag only drops the others.
+    expect(isolated).toContain('--mcp-config');
+    expect(isolated).toContain('--plugin-dir');
+    expect(isolated).toContain('--permission-mode');
+    // The settings path goes through the WSL translation like the other paths.
+    const translated = claudeArgs(claude, TASK, [], { toPath: (p) => `W:${p}` });
+    expect(translated[translated.indexOf('--settings') + 1]).toBe(`W:${claude.settings}`);
+
+    const codex = materialize(decision, 'codex', NO_SEARCH, tempDir('loadout-s-'), (p) => p, true);
+    expect(codex.settings).toBeUndefined();
+    expect(codexArgs(codex, TASK, [], { headless: true })).not.toContain('--ignore-user-config');
+    expect(codexArgs(codex, TASK, [], { headless: true, isolate: true }).slice(0, 10)).toEqual([
+      'exec', '--ignore-user-config', '--disable', 'apps', '--disable', 'plugins', '--disable', 'skill_mcp_dependency_install', '-m', 'gpt-6.1-sol',
+    ]);
+    expect(codexArgs(codex, TASK, [], { headless: true, isolate: true }).some((a) => a.startsWith('mcp_servers.postgres='))).toBe(true);
+  });
+
+  it('refuses unsupported --isolate launches before routing or writing a session', () => {
+    const cli = join(import.meta.dirname, '..', 'src', 'cli.ts');
+    const run = (...args: string[]) => {
+      const home = tempDir('loadout-iso-');
+      const result = spawnSync(process.execPath, ['--import', import.meta.resolve('tsx'), cli, ...args], { env: { ...process.env, LOADOUT_HOME: home }, encoding: 'utf8', timeout: 20_000 });
+      return { result, sessions: existsSync(join(home, 'sessions')) };
+    };
+    const codex = run('codex', '--isolate', '--dry-run', '--lexical', TASK);
+    expect(codex.result.status).not.toBe(0);
+    expect(codex.result.stderr).toBe('loadout: --isolate for codex needs --headless: interactive Codex has no flag to skip the user config\n');
+    expect(codex.sessions).toBe(false);
+
+    const cases: [string, ...string[]][] = [['claude', '--mcp-config', 'user.json'], ['claude', '--settings={}'], ['codex', '--headless', '--', '-c', 'mcp_servers.x.command="x"'], ['codex', '--headless', '--', '-cmcp_servers.private.url="u"']];
+    for (const [agent, ...own] of cases) {
+      const refused = run(agent, '--isolate', '--dry-run', '--lexical', TASK, ...(agent === 'claude' ? ['--'] : []), ...own);
+      expect(refused.result.status).not.toBe(0);
+      expect(refused.result.stderr).toMatch(/^loadout: --isolate refuses (--mcp-config|--settings|-c) after --: it would undo the isolation\n$/);
+      expect(refused.sessions).toBe(false);
+      expect(refused.result.stderr).not.toContain('private');
+    }
+  });
+
+  it('finds passthrough arguments that would undo --isolate, in every spelling', () => {
+    for (const args of [['--settings', '{}'], ['--settings={}'], ['--mcp-config', 'a.json'], ['--mcp-config=a.json'], ['--agents', '{}'], ['--agents={}'], ['--plugin-dir', 'p'], ['--plugin-dir=p'], ['--plugin-url', 'u'], ['--plugin-url=u'], ['--chrome'], ['--ide'],
+      ['--channels', 'plugin:p@m'], ['--channels=plugin:p@m'], ['--dangerously-load-development-channels', 'server:s'], ['--cloud'], ['--remote', 't'], ['--environment=e'], ['--teleport'],
+      ['--remote-control'], ['--remote-control=name'], ['--rc'], ['--desktop'], ['--']]) {
+      // The flag's name only, never the caller's value.
+      expect(isolateConflict('claude', ['--permission-mode', 'plan', ...args])).toBe(args[0]!.split('=')[0]);
+    }
+    expect(isolateConflict('claude', ['--permission-mode', 'plan', '--model', 'opus', '--remote-control-session-name-prefix', 'p'])).toBeUndefined();
+    // Any config override: a `projects` trust entry re-enables config layers that can carry servers.
+    for (const args of [['-c', 'model_reasoning_effort="high"'], ['-c', 'projects."/r".trust_level="trusted"'], ['-c', 'mcp_servers.x.command="x"'], ['-cmcp_servers.x.url="u"'], ['-c=mcp_servers.x.url="u"'], ['-c=features.apps=true'], ['--config', 'features.apps=true'], ['--config=mcp_servers.x.url="u"'], ['--enable', 'apps'], ['--enable=apps']]) {
+      expect(isolateConflict('codex', ['--skip-git-repo-check', ...args])).toBe(args[0]!.startsWith('-c') ? '-c' : args[0]!.split('=')[0]);
+    }
+    expect(isolateConflict('codex', ['--skip-git-repo-check', '-C', 'dir', '--disable', 'apps'])).toBeUndefined();
+  });
+
   it('keeps Codex MCP keys unique and connects HTTP servers through library keys', () => {
     const http = { id: 'mcp:a.b', kind: 'mcp' as const, name: 'a.b', description: '', source: '', server: { url: 'https://x.dev/mcp', headers: { Authorization: 'Bearer t' } } };
     const other = { ...http, id: 'mcp:a_b', name: 'a_b' };
@@ -1530,16 +1604,27 @@ describe('cache and state folders under the loadout home', () => {
     const staleLink = `${'e'.repeat(32)}.json`;
     // Left by an earlier version, whose temp names ended in pid and time.
     const legacyTmp = `${'f'.repeat(32)}.json.4242.1700000000000.tmp`;
+    const staleWarned = `${'0'.repeat(32)}.warned`;
     writeFileSync(join(outside, 'precious.json'), 'precious');
     symlinkSync(join(outside, 'precious.json'), join(stateDir, staleLink));
-    for (const f of [staleState, staleTmp, legacyTmp, 'precious.json', 'notes.txt']) writeFileSync(join(stateDir, f), 'x');
-    for (const f of [staleState, staleTmp, legacyTmp, 'precious.json', 'notes.txt']) utimesSync(join(stateDir, f), old, old);
+    for (const f of [staleState, staleTmp, legacyTmp, staleWarned, 'precious.json', 'notes.txt']) writeFileSync(join(stateDir, f), 'x');
+    for (const f of [staleState, staleTmp, legacyTmp, staleWarned, 'precious.json', 'notes.txt']) utimesSync(join(stateDir, f), old, old);
     lutimesSync(join(stateDir, staleLink), old, old);
     const { client } = fakeClient({ 'webapp-testing': 0.95 }, { exact: 1 });
     expect(await promptContext({ session_id: 's1', prompt: TASK }, { library, config: DEFAULT_CONFIG, client, stateDir })).toContain('webapp-testing');
     expect(readdirSync(stateDir).sort()).toEqual(['notes.txt', 'precious.json', stateName('s1')].sort());
     expect(readFileSync(join(outside, 'precious.json'), 'utf8')).toBe('precious');
     expect(readFileSync(join(outside, 'state.json'), 'utf8')).toContain('webapp-testing');
+  });
+
+  it('warns about a missing key every time, and writes no marker, when the hook state folder is a link', () => {
+    const outside = tempDir('loadout-outside-');
+    const stateDir = join(home(), 'hook');
+    symlinkSync(outside, stateDir, 'junction');
+    const deps = { config: DEFAULT_CONFIG, stateDir };
+    expect(noKeyWarning({ session_id: 'a', prompt: TASK }, deps)).toBe(NO_KEY_WARNING);
+    expect(noKeyWarning({ session_id: 'a', prompt: TASK }, deps)).toBe(NO_KEY_WARNING);
+    expect(readdirSync(outside)).toEqual([]);
   });
 });
 
@@ -1678,6 +1763,7 @@ describe('claude hook', () => {
     expect(await promptContext({ session_id: 's2', prompt: TASK }, deps)).toContain('webapp-testing');
 
     expect(JSON.parse(hookOutput('x'))).toEqual({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: 'x' } });
+    expect(JSON.parse(hookOutput('x', 'w'))).toEqual({ systemMessage: 'w', hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: 'x' } });
   });
 
   it('writes no hook state through a linked sessions folder', async () => {
@@ -1737,5 +1823,95 @@ describe('claude hook', () => {
     expect(await promptContext({ session_id: 'g', prompt: TASK }, { library, config: DEFAULT_CONFIG, stateDir })).toBeUndefined();
     expect(isFollowUp('continue')).toBe(true);
     expect(isFollowUp('/pdf')).toBe(false);
+  });
+
+  it('warns once per session that there is no key, only when the Jev router is configured', () => {
+    const stateDir = tempDir('loadout-hook-');
+    const { client } = fakeClient({});
+    const noKey = { config: DEFAULT_CONFIG, stateDir };
+    expect(noKeyWarning({ session_id: 'a', prompt: TASK }, noKey)).toBe(NO_KEY_WARNING);
+    expect(noKeyWarning({ session_id: 'a', prompt: TASK }, noKey)).toBeUndefined();
+    expect(noKeyWarning({ session_id: 'b', prompt: TASK }, noKey)).toBe(NO_KEY_WARNING);
+    expect(noKeyWarning({ session_id: 'c', prompt: TASK }, { ...noKey, client })).toBeUndefined();
+    expect(noKeyWarning({ session_id: 'd', prompt: TASK }, { ...noKey, config: { ...DEFAULT_CONFIG, router: 'lexical' } })).toBeUndefined();
+    expect(noKeyWarning({ prompt: TASK }, noKey)).toBe(NO_KEY_WARNING);
+    expect(noKeyWarning({ prompt: TASK }, noKey)).toBe(NO_KEY_WARNING);
+    // A state dir that cannot be created still warns, every time.
+    const blocked = join(tempDir('loadout-hook-'), 'file');
+    writeFileSync(blocked, '');
+    const unwritable = { ...noKey, stateDir: join(blocked, 'hook') };
+    expect(noKeyWarning({ session_id: 'e', prompt: TASK }, unwritable)).toBe(NO_KEY_WARNING);
+    expect(noKeyWarning({ session_id: 'e', prompt: TASK }, unwritable)).toBe(NO_KEY_WARNING);
+    // The state dir itself is a file: mkdir's EEXIST is not the marker's.
+    const fileDir = { ...noKey, stateDir: blocked };
+    expect(noKeyWarning({ session_id: 'f', prompt: TASK }, fileDir)).toBe(NO_KEY_WARNING);
+  });
+
+  // Root ignores the mode, and Windows has no POSIX write bit on folders.
+  it.skipIf(process.getuid?.() === 0 || process.platform === 'win32')('warns every time when the marker write fails with anything but EEXIST', () => {
+    const stateDir = tempDir('loadout-hook-');
+    chmodSync(stateDir, 0o555);
+    try {
+      expect(noKeyWarning({ session_id: 'a', prompt: TASK }, { config: DEFAULT_CONFIG, stateDir })).toBe(NO_KEY_WARNING);
+      expect(noKeyWarning({ session_id: 'a', prompt: TASK }, { config: DEFAULT_CONFIG, stateDir })).toBe(NO_KEY_WARNING);
+    } finally {
+      chmodSync(stateDir, 0o755);
+    }
+  });
+
+  describe('no-key warning through the hook process', () => {
+    const run = (host: 'claude' | 'codex', home: string, session: string, prompt = 'fix the flaky login test on CI') =>
+      spawnSync(process.execPath, ['--import', 'tsx', join(import.meta.dirname, '../src/cli.ts'), 'hook', host], {
+        encoding: 'utf8', timeout: 10_000,
+        env: { ...process.env, TYPESAFE_API_KEY: '', LOADOUT_HOME: home },
+        input: JSON.stringify({ session_id: session, prompt, cwd: home }),
+      });
+    const homeWith = (jev: Record<string, unknown>) => {
+      const home = tempDir('loadout-nokey-');
+      writeFileSync(join(home, 'config.json'), JSON.stringify({ ...DEFAULT_CONFIG, embeddings: false, jev: { ...DEFAULT_CONFIG.jev, ...jev } }));
+      return home;
+    };
+
+    it('shows the warning once per session as a systemMessage, to Claude Code and Codex alike', () => {
+      const home = homeWith({});
+      for (const host of ['claude', 'codex'] as const) {
+        const first = run(host, home, host);
+        expect(first.status, first.stderr).toBe(0);
+        expect(JSON.parse(first.stdout)).toEqual({ systemMessage: NO_KEY_WARNING });
+        const again = run(host, home, host);
+        expect(again.stdout).toBe('');
+        expect(again.stderr).toBe('');
+      }
+    });
+
+    it('warns when the session opens with a short follow-up-style prompt', () => {
+      const home = homeWith({});
+      const first = run('claude', home, 'short', 'fix tests');
+      expect(first.status, first.stderr).toBe(0);
+      expect(JSON.parse(first.stdout)).toEqual({ systemMessage: NO_KEY_WARNING });
+      expect(run('claude', home, 'short', 'continue').stdout).toBe('');
+    });
+
+    it('keeps the warning for a later prompt when building context fails', () => {
+      const home = homeWith({});
+      mkdirSync(join(home, 'library'));
+      writeFileSync(join(home, 'library/mcp.json'), '{ not json');
+      const failed = run('claude', home, 'broken');
+      expect(failed.status).toBe(0);
+      expect(failed.stdout).toBe('');
+      expect(JSON.parse(run('claude', home, 'broken', 'ok').stdout)).toEqual({ systemMessage: NO_KEY_WARNING });
+    });
+
+    it('never names the key file, whether it is missing or unreadable', () => {
+      const missing = join(tempDir('loadout-keydir-'), 'KEYFILE-CANARY-missing');
+      const unreadable = join(tempDir('loadout-keydir-'), 'KEYFILE-CANARY-dir');
+      mkdirSync(unreadable);
+      for (const [apiKeyFile, session] of [[missing, 'm'], [unreadable, 'u']] as const) {
+        const result = run('claude', homeWith({ apiKeyFile }), session);
+        expect(result.status).toBe(0);
+        expect(result.stdout + result.stderr).not.toMatch(/CANARY|loadout-keydir|config\.json/);
+      }
+      expect(JSON.parse(run('claude', homeWith({ apiKeyFile: missing }), 'm2').stdout)).toEqual({ systemMessage: NO_KEY_WARNING });
+    });
   });
 });
