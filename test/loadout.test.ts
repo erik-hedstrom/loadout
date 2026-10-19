@@ -167,6 +167,20 @@ describe('E9 security', () => {
       expect(refused.out).toContain('TYPESAFE_BASE_URL');
       expect(refused.out).not.toContain(canary);
       expect(requests).toEqual([]);
+      // The hook, which runs on every prompt, must refuse too; it fails quietly (exit 0, a note on stderr).
+      // Asynchronous, so the listener can record a request while the hook runs.
+      const hook = await new Promise<string>((done) => {
+        const child = spawn(process.execPath, ['--import', 'tsx', join(import.meta.dirname, '../src/cli.ts'), 'hook', 'claude'], {
+          env: { ...process.env, LOADOUT_HOME: home, TYPESAFE_API_KEY: canary, TYPESAFE_BASE_URL: '' },
+        });
+        let out = '';
+        child.stdout.on('data', (d) => (out += d));
+        child.stderr.on('data', (d) => (out += d));
+        child.on('close', () => done(out));
+        child.stdin.end(JSON.stringify({ prompt: TASK, cwd: home, session_id: 'e9' }));
+      });
+      expect(hook).not.toContain(canary);
+      expect(requests).toEqual([]);
       // Named outside config.json, the same URL does receive the key.
       await routeWith({ TYPESAFE_BASE_URL: url });
       expect(requests).toEqual([`Bearer ${canary}`]);
