@@ -642,7 +642,7 @@ binary alone on `PATH`, so the `claude` judge needed no new seam.
 | D7 | P1 | `loadout doctor` | Claude | cloud | done ([#20](https://github.com/erik-hedstrom/loadout/pull/20)) |
 | D2 | P0 | Live Codex hook test | Claude | local + erik | todo (needs Erik to trust the hook in `/hooks`) |
 | D3 | P2 | Desktop and IDE hosts end to end | Claude | local | todo (generic MCP only, 2026-10-12) |
-| D5 | P2 | Isolation mode | Codex | cloud | review ([#32](https://github.com/erik-hedstrom/loadout/pull/32)) |
+| D5 | P2 | Isolation mode | Codex | cloud | review ([#32](https://github.com/erik-hedstrom/loadout/pull/32)). Claude MCP done; plugins and interactive Codex cannot be hidden |
 | D4 | P2 | Gateway: native tools via `tools/list_changed` | Codex | cloud | todo |
 | D6 | P2 | HTTP: cancellation reaches Jev | Claude | cloud | done ([#19](https://github.com/erik-hedstrom/loadout/pull/19)) |
 | D8 | P1 | Host capability matrix (verified vs generated) | Claude | cloud | done ([#18](https://github.com/erik-hedstrom/loadout/pull/18)) |
@@ -849,6 +849,21 @@ Acceptance:
   the session, through official flags only (`--strict-mcp-config`; Codex
   `--ignore-user-config` where available).
 - Document what cannot be hidden.
+
+Learnings (2026-10-12, docs read, no live run): flags checked against
+Claude Code's [CLI reference](https://code.claude.com/docs/en/cli-reference),
+[mcp](https://code.claude.com/docs/en/mcp#disable-claude-ai-connectors) and
+[settings reference](https://code.claude.com/docs/en/settings-reference#disableclaudeaiconnectors)
+pages, and openai/codex at 4a93bd2 (`exec/src/cli.rs`, `cli/src/main.rs`,
+`features/src/lib.rs`, `config/src/loader/mod.rs`).
+- The isolation flags go before the passthrough: a value-taking flag or a `--`
+  at its end would otherwise swallow them.
+- A Codex `-c` override feeds project trust, so any override can re-enable
+  project config layers; `--isolate` refuses them all.
+- Left: a live check on a machine with both CLIs (does a user-scope MCP server
+  and a plugin server disappear, does the claude.ai connector list shrink).
+  Decision for Erik: whether `--setting-sources project,local` is acceptable
+  as the plugin story.
 
 **D6. HTTP cancellation.**
 
