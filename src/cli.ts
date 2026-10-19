@@ -4,27 +4,32 @@ import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { DEFAULT_CONFIG, loadConfig, paths, resolveApiKey, writeDefaultConfig, type Config } from './config.js';
 import { jevClient } from './jev.js';
-import { claudeArgs, codexArgs, hostSetup, HOSTS, launch, materialize, pathTranslator, which, windowsPath, type Agent, type Host } from './launch.js';
+import { claudeArgs, codexArgs, hostSetup, HOSTS, isolateConflict, launch, materialize, pathTranslator, which, windowsPath, type Agent, type Host } from './launch.js';
 import { addFromGitHub, addSkills, librarySources, parseGitHub, scanLibrary, skillExcerpt, type AddResult } from './library.js';
 import { repoSignals } from './repo.js';
 import { route } from './route.js';
 import { cachedEmbeddings, libraryEmbeddings } from './embed.js';
-import { doctor, formatDoctor } from './doctor.js';
+import { doctor, formatDoctor, onPath } from './doctor.js';
+import { detectHosts, interactive, PACKS, packSources, wizard } from './init.js';
 import { HOOK_FAILURE_NOTE, hookOutput, isFollowUp, promptContext, type HookInput } from './hook.js';
 import { reportJson, type Capability, type RouteDecision } from './types.js';
 
 const USAGE = `loadout — pick the model, skills and MCP servers for each agent session
 
 Usage:
-  loadout init [--key-file <path>]        Write ~/.loadout/config.json
+  loadout init [--key-file <path>] [--pack <name>]...
+                                          Write ~/.loadout/config.json and add starter packs
+                                          (${PACKS.map((p) => p.name).join(', ')}); with no flags in a
+                                          terminal, asks, then prints host setup
   loadout add <dir|github-url>...         Copy skills into the library (searches recursively)
   loadout list [--json] [--sources]       Show the library (--sources: the add commands that rebuild it)
   loadout audit [--json] [--adopt]        Estimate installed listings; optionally copy skills to ~/.loadout
   loadout route [--json] [--lexical] <task>
                                           Show what would be selected, without launching
-  loadout claude [--dry-run] [--headless] <task> [-- <claude args>]
-  loadout codex  [--dry-run] [--headless] <task> [-- <codex args>]
+  loadout claude [--dry-run] [--headless] [--isolate] <task> [-- <claude args>]
+  loadout codex  [--dry-run] [--headless] [--isolate] <task> [-- <codex args>]
                                           --headless runs once and exits (claude -p / codex exec)
+                                          --isolate hides your own MCP servers (codex: needs --headless)
   loadout mcp [--lexical]                 Serve the library over MCP (stdio): find_tools, load_skill,
                                           and a gateway to the library's MCP servers
   loadout mcp --http [--port 8787] [--host 127.0.0.1] [--token-file f] [--allowed-host h]
@@ -59,6 +64,35 @@ function router(config: Config, lexical: boolean) {
     console.error('loadout: no TypeSafe API key found; falling back to the lexical router');
   }
   return apiKey ? jevClient({ apiKey, baseUrl: config.jev.baseUrl, model: config.jev.model }) : undefined;
+}
+
+/** `loadout add` for each spec, printing what happened; returns how many failed. */
+function addSources(specs: string[]): number {
+  let failed = 0;
+  for (const spec of specs) {
+    let r: AddResult;
+    try {
+      r = parseGitHub(spec) ? addFromGitHub(spec, paths.library()) : addSkills(resolve(spec), paths.library());
+    } catch (err) {
+      console.error(`${spec}: ${err instanceof Error ? err.message.split('\n')[0] : err}`);
+      failed++;
+      continue;
+    }
+    const total = r.added.length + r.updated.length;
+    console.log(`${spec}: ${total ? `${r.added.length} added, ${r.updated.length} updated` : 'no skills found'}`);
+    for (const { name, folder } of r.renamed) console.log(`  "${name}" already exists from another source; installed as ${folder}`);
+    for (const { path, reason } of r.skipped) console.log(`  skipped ${path}: ${reason}`);
+  }
+  return failed;
+}
+
+/** `loadout setup <host>`'s output. */
+function setupText(host: Host, windowsFlag?: boolean): string {
+  // Desktop apps on a WSL machine are Windows apps; the CLIs follow where they are installed.
+  const desktop = host === 'claude-desktop' || host === 'cursor';
+  const windows = windowsFlag ?? (Boolean(process.env.WSL_DISTRO_NAME) && (desktop || pathTranslator(onPath(host === 'claude-code' ? 'claude' : host))('/') !== '/'));
+  const { where, snippet } = hostSetup(host, windows);
+  return `# ${where}\n${snippet}`;
 }
 
 const note = (message: string) => console.error(`loadout: ${message}`);
@@ -190,30 +224,36 @@ async function main(): Promise<number> {
 
   switch (command) {
     case 'init': {
-      const { values } = parseArgs({ args: rest, options: { 'key-file': { type: 'string' } } });
+      // Fixed text on every rejected argument here: a mistyped value can be a pasted key.
+      let values: { 'key-file'?: string; pack?: string[] };
+      try {
+        ({ values } = parseArgs({ args: rest, options: { 'key-file': { type: 'string' }, pack: { type: 'string', multiple: true } } }));
+      } catch {
+        fail('usage: loadout init [--key-file <path>] [--pack <name>]...');
+      }
+      const index = () => embeddingsFor(scanLibrary(paths.library()), config).then(() => {});
+      if (interactive(rest, process.stdin, process.stdout)) {
+        return wizard(process.stdin, process.stdout, config, {
+          add: addSources,
+          index,
+          hosts: detectHosts(onPath),
+          setup: setupText,
+        });
+      }
       const keyFile = values['key-file'] ? resolve(values['key-file']) : undefined;
-      if (keyFile && !existsSync(keyFile)) fail(`key file not found: ${keyFile}`);
+      if (keyFile && !existsSync(keyFile)) fail('key file not found; check the path given to --key-file');
+      const { sources, unknown } = packSources(values.pack ?? []);
+      if (unknown.length) fail(`unknown pack; packs: ${PACKS.map((p) => p.name).join(', ')}`);
       console.log(`wrote ${writeDefaultConfig(keyFile ? { apiKeyFile: keyFile } : {})}`);
-      return 0;
+      if (!sources.length) return 0;
+      const failed = addSources(sources);
+      await index();
+      return failed ? 1 : 0;
     }
 
     case 'add': {
       if (rest.length === 0) fail('add needs at least one directory or GitHub URL');
-      let failed = 0;
-      for (const spec of rest) {
-        let r: AddResult;
-        try {
-          r = parseGitHub(spec) ? addFromGitHub(spec, paths.library()) : addSkills(resolve(spec), paths.library());
-        } catch (err) {
-          console.error(`${spec}: ${err instanceof Error ? err.message.split('\n')[0] : err}`);
-          failed++;
-          continue;
-        }
-        const total = r.added.length + r.updated.length;
-        console.log(`${spec}: ${total ? `${r.added.length} added, ${r.updated.length} updated` : 'no skills found'}`);
-        for (const { name, folder } of r.renamed) console.log(`  "${name}" already exists from another source; installed as ${folder}`);
-        for (const { path, reason } of r.skipped) console.log(`  skipped ${path}: ${reason}`);
-      }
+      const failed = addSources(rest);
       // Index new skills now, so the next session does not wait for it.
       await embeddingsFor(scanLibrary(paths.library()), config);
       return failed ? 1 : 0;
@@ -260,19 +300,23 @@ async function main(): Promise<number> {
       const { values, positionals } = parseArgs({
         args: own,
         allowPositionals: true,
-        options: { 'dry-run': { type: 'boolean' }, lexical: { type: 'boolean' }, headless: { type: 'boolean' } },
+        options: { 'dry-run': { type: 'boolean' }, lexical: { type: 'boolean' }, headless: { type: 'boolean' }, isolate: { type: 'boolean' } },
       });
       const task = positionals.join(' ').trim();
       if (!task) fail(`${agent} needs a task`);
+      // Refused before routing: that is a paid Jev call, and a session dir would be left behind.
+      if (values.isolate && agent === 'codex' && !values.headless) fail('--isolate for codex needs --headless: interactive Codex has no flag to skip the user config');
+      const conflict = values.isolate ? isolateConflict(agent, passthrough) : undefined;
+      if (conflict) fail(`--isolate refuses ${conflict} after --: it would undo the isolation`);
 
       const bin = which(agent);
       const toPath = pathTranslator(bin);
       const decision = await decide(task, config, Boolean(values.lexical));
-      const session = materialize(decision, agent, config, paths.sessions(), toPath);
+      const session = materialize(decision, agent, config, paths.sessions(), toPath, Boolean(values.isolate));
       console.error(explain(decision, session.effort ? `${session.model} (${session.effort})` : session.model));
       console.error(`session: ${session.dir}`);
 
-      const opts = { headless: Boolean(values.headless), toPath };
+      const opts = { headless: Boolean(values.headless), isolate: Boolean(values.isolate), toPath };
       const args = agent === 'claude' ? claudeArgs(session, task, passthrough, opts) : codexArgs(session, task, passthrough, opts);
       if (values['dry-run']) {
         // POSIX single quotes: nothing inside is expanded, unlike JSON's double quotes.
@@ -329,11 +373,7 @@ async function main(): Promise<number> {
       const { values, positionals } = parseArgs({ args: rest, allowPositionals: true, options: { windows: { type: 'boolean' } } });
       const host = positionals[0] as Host;
       if (!HOSTS.includes(host)) fail(`setup needs a host: ${HOSTS.join(', ')}`);
-      // Desktop apps on a WSL machine are Windows apps; the CLIs follow where they are installed.
-      const desktop = host === 'claude-desktop' || host === 'cursor';
-      const windows = values.windows ?? (Boolean(process.env.WSL_DISTRO_NAME) && (desktop || pathTranslator(which(host === 'claude-code' ? 'claude' : host))('/') !== '/'));
-      const { where, snippet } = hostSetup(host, windows);
-      console.log(`# ${where}\n${snippet}`);
+      console.log(setupText(host, values.windows));
       return 0;
     }
 
