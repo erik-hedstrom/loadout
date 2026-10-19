@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -104,6 +105,22 @@ describe('sweep stability', () => {
     expect(report).toContain('| test | 1 | 100.00% (1/1) | 1.000000 | 100.00% (1/1) | 1.000000 |');
     expect(report).toContain('| all | 2 | 50.00% (1/2) | 0.666667 | 100.00% (2/2) | 1.000000 |');
   });
+
+  // The tests above call the exports; this runs the scripts the way the README does, so an entry-point guard
+  // that is false on a supported Node (import.meta.main needs 22.18) fails here instead of exiting silently.
+  it('runs both scripts from the command line', () => {
+    const cli = (script: string, args: string[]) => spawnSync(process.execPath, ['--import', 'tsx', join('bench', script), ...args],
+      { encoding: 'utf8', timeout: 60_000, env: { ...process.env, LOADOUT_HOME: temp() } });
+    const runs = [temp(), temp()];
+    runs.forEach((dir) => jsonl(dir, 'decisions.jsonl', [row('a', ['x'])]));
+    const stability = cli('stability.ts', runs);
+    expect(stability.status, stability.stderr).toBe(0);
+    expect(stability.stdout).toContain('# Sweep stability');
+    const { target, args } = fixture();
+    const judge = cli('judge.ts', args);
+    expect(judge.status, judge.stderr).toBe(0);
+    expect(readdirSync(target)).toContain('report-offline.md');
+  }, 120_000);
 
   it.each(['text', 'missing', 'duplicate', 'timing'])('refuses incomparable or invalid sweeps: %s', async (problem) => {
     const { stabilityReport } = await import('../bench/stability.js');

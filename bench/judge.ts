@@ -18,7 +18,8 @@
  *   npx tsx bench/judge.ts <sweep dir> [--backend claude|codex|files] [--model opus] [--effort high] [--batch 10] [--blind-from <sweep dir>]
  */
 import { appendFileSync, existsSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { paths } from '../src/config.js';
 import { escapeSkillTags } from '../src/launch.js';
@@ -339,4 +340,4 @@ Offered as optional: ${r.offered.map((p) => p.key).join(', ') || 'nothing'}`;
   console.log(`judge ${offline ? '$0 (offline)' : costLabel(backend, cost)} → ${reportFile}`);
 }
 
-if (import.meta.main) await judgeSweep(process.argv.slice(2));
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await judgeSweep(process.argv.slice(2));
