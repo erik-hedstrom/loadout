@@ -26,6 +26,8 @@ export interface RequestUsage {
   cacheWrite1h: number | null;
   /** Codex's reasoning tokens, already inside `output`. */
   reasoning: number | null;
+  /** Made inside a subagent (Claude's `parent_tool_use_id`): billed, but not the main thread's request 1 or 2+. */
+  subagent: boolean;
 }
 
 export interface RunUsage {
@@ -36,6 +38,8 @@ export interface RunUsage {
   turns: number | null;
   model: string | null;
   version: string | null;
+  /** The result event's totals per model (Claude): shows a model other than the requested one, such as a subagent's. */
+  modelUsage: Record<string, Record<string, unknown>> | null;
   /** Counters that differ between the summed requests and the result event's own total (Claude), or []. */
   unreconciled: string[];
 }
@@ -92,6 +96,7 @@ export function claudeUsage(stdout: string): RunUsage {
         cacheWrite5m: Number.isSafeInteger(u?.cache_creation?.ephemeral_5m_input_tokens) ? u.cache_creation.ephemeral_5m_input_tokens : null,
         cacheWrite1h: Number.isSafeInteger(u?.cache_creation?.ephemeral_1h_input_tokens) ? u.cache_creation.ephemeral_1h_input_tokens : null,
         reasoning: null,
+        subagent: typeof e.parent_tool_use_id === 'string',
       };
       // Later blocks of one message repeat the usage and may carry its final output count: keep the largest.
       const prev = byId.get(id);
@@ -110,6 +115,7 @@ export function claudeUsage(stdout: string): RunUsage {
     costUsd: typeof result?.total_cost_usd === 'number' ? result.total_cost_usd : null,
     turns: typeof result?.num_turns === 'number' ? result.num_turns : null,
     model, version, unreconciled,
+    modelUsage: result?.modelUsage && typeof result.modelUsage === 'object' ? result.modelUsage : null,
   };
 }
 
@@ -123,7 +129,7 @@ export function codexUsage(stdout: string): RunUsage {
   if (cacheRead + cacheWrite > input) throw new Error('cached input exceeds input');
   return {
     granularity: 'turn',
-    requests: [{ n: 1, at: null, model: null, uncached: input - cacheRead - cacheWrite, cacheWrite, cacheRead, output: counter(last.output_tokens, 'output_tokens'), cacheWrite5m: null, cacheWrite1h: null, reasoning: Number.isSafeInteger(last.reasoning_output_tokens) ? last.reasoning_output_tokens : null }],
-    costUsd: null, turns: null, model: null, version: null, unreconciled: [],
+    requests: [{ n: 1, at: null, model: null, uncached: input - cacheRead - cacheWrite, cacheWrite, cacheRead, output: counter(last.output_tokens, 'output_tokens'), cacheWrite5m: null, cacheWrite1h: null, reasoning: Number.isSafeInteger(last.reasoning_output_tokens) ? last.reasoning_output_tokens : null, subagent: false }],
+    costUsd: null, turns: null, model: null, version: null, unreconciled: [], modelUsage: null,
   };
 }

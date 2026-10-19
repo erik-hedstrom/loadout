@@ -22,7 +22,7 @@ class Counted extends EventTarget {
 
 function page() {
   const doc = new Counted();
-  const button = new Counted();
+  const button = Object.assign(new Counted(), { contains: (node) => node === button });
   const item = new EventTarget();
   const panel = Object.assign(new Counted(), { hidden: true, contains: (node) => node === panel || node === item });
   const outside = new EventTarget();

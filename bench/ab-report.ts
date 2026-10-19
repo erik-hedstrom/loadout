@@ -1,7 +1,7 @@
 /** The A/B pilot's rows and verdicts, and the report written from them. */
 import type { Host } from './overhead.js';
 import type { Arm } from './pairwise.js';
-import type { RequestUsage } from './usage.js';
+import type { RequestUsage, RunUsage } from './usage.js';
 
 export interface RunRow {
   id: string;
@@ -28,6 +28,8 @@ export interface RunRow {
   requests: (RequestUsage & { gapMs: number | null })[];
   totals: { uncached: number; cacheWrite: number; cacheRead: number; output: number; effectiveInput: number | null; costUsd: number | null; turns: number | null };
   unreconciled: string[];
+  /** Claude's per-model totals from the result event; null where the host reports none. */
+  modelUsage: RunUsage['modelUsage'];
   coldCacheRisk: boolean;
   toolCalls: number;
   toolErrors: number;
@@ -98,11 +100,12 @@ export function report(rows: RunRow[], verdicts: Verdict[]): string {
   }
 
   out.push('', '## 3. Request 1 against requests 2+ (per request, uncached / write / read)', '',
-    'Request 1 carries the prompt-specific hook context, which cannot be cached on first use; later requests should read it from cache. A loadout − bare difference that stays in "uncached" or "write" on requests 2+ means the injected text is paid every turn. Codex: not shown (`codex exec --json` reports one thread total).', '',
-    '| Host | Prompt | Arm | Request 1 | Requests 2+ (mean per request) | Requests per run |', '| --- | --- | --- | --- | --- | ---: |');
+    'Request 1 carries the prompt-specific hook context, which cannot be cached on first use; later requests should read it from cache. A loadout − bare difference that stays in "uncached" or "write" on requests 2+ means the injected text is paid every turn. Subagent requests are billed in every total but left out of this split. Codex: not shown (`codex exec --json` reports one thread total).', '',
+    '| Host | Prompt | Arm | Request 1 | Requests 2+ (mean per request) | Main-thread requests per run | Subagent requests (all runs) |', '| --- | --- | --- | --- | --- | ---: | ---: |');
   for (const host of hosts.filter((h) => h === 'claude')) for (const prompt of prompts) for (const arm of ['bare', 'loadout'] as const) {
     const rs = cell(rows, host, prompt, arm).filter((r) => r.granularity === 'request');
-    if (rs.length) out.push(`| ${host} | ${prompt} | ${arm} | ${triple(rs.flatMap((r) => r.requests.slice(0, 1)))} | ${triple(rs.flatMap((r) => r.requests.slice(1)))} | ${show(spread(rs.map((r) => r.requests.length)))} |`);
+    const thread = (r: RunRow) => r.requests.filter((q) => !q.subagent);
+    if (rs.length) out.push(`| ${host} | ${prompt} | ${arm} | ${triple(rs.flatMap((r) => thread(r).slice(0, 1)))} | ${triple(rs.flatMap((r) => thread(r).slice(1)))} | ${show(spread(rs.map((r) => thread(r).length)))} | ${rs.reduce((n, r) => n + r.requests.length - thread(r).length, 0)} |`);
   }
 
   out.push('', '## 4. Cold start (warm-up run) against warm (measured runs)', '',
@@ -117,9 +120,10 @@ export function report(rows: RunRow[], verdicts: Verdict[]): string {
   }
 
   const silent = (r: RunRow) => r.arm === 'loadout' && !r.warmup && !r.invalid && r.hook.contextChars === 0;
-  const flagged = rows.filter((r) => r.coldCacheRisk || r.unreconciled.length || r.invalid || silent(r));
+  const models = (r: RunRow) => Object.keys(r.modelUsage ?? {});
+  const flagged = rows.filter((r) => r.coldCacheRisk || r.unreconciled.length || r.invalid || silent(r) || models(r).length > 1);
   out.push('', '## 5. Flags', '');
-  out.push(...(flagged.length ? flagged.map((r) => `- ${r.id}${r.warmup ? ' (warm-up)' : ''}: ${[r.invalid && `invalid: ${r.invalid}`, r.coldCacheRisk && 'coldCacheRisk (a gap of over 5 minutes since this arm\'s previous request)', r.unreconciled.length && `usage differs from the result event in ${r.unreconciled.join(', ')}`, silent(r) && 'the hook added no context, so this run may measure the bare setup'].filter(Boolean).join('; ')}`) : ['None.']));
+  out.push(...(flagged.length ? flagged.map((r) => `- ${r.id}${r.warmup ? ' (warm-up)' : ''}: ${[r.invalid && `invalid: ${r.invalid}`, r.coldCacheRisk && 'coldCacheRisk (a gap of over 5 minutes since this arm\'s previous request)', r.unreconciled.length && `usage differs from the result event in ${r.unreconciled.join(', ')}`, silent(r) && 'the hook added no context, so this run may measure the bare setup', models(r).length > 1 && `tokens were billed to ${models(r).join(', ')}`].filter(Boolean).join('; ')}`) : ['None.']));
   const timedOut = rows.filter((r) => r.timedOut);
   if (timedOut.length) out.push(`- Timed out: ${timedOut.map((r) => r.id).join(', ')}.`);
   const stopped = rows.filter((r) => r.stop && r.stop !== 'success');

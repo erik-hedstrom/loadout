@@ -1,11 +1,12 @@
-import { spawn } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import { report, type RunRow, type Verdict } from '../bench/ab-report.js';
-import { AB_MODELS, blockers, buildCommand, checkRun, hiddenResult, hookFacts, openedSkills, planLines, promptText, redactNames, runEnv, schedule, scrub, type Ctx, type Evidence, type Job, type Options } from '../bench/ab.js';
-import { toolEvents } from '../bench/stream.js';
+import { AB_MODELS, blockers, buildCommand, checkRun, copyOutputs, hiddenResult, hookFacts, main, openedSkills, planLines, promptText, redactNames, refuseOtherSettings, refuseStopped, routedByKeyword, runEnv, schedule, scrub, type Ctx, type Evidence, type Job, type Options } from '../bench/ab.js';
+import { JEV_FALLBACK_NOTE, NO_KEY_WARNING } from '../src/hook.js';
+import { hookShim, toolEvents } from '../bench/stream.js';
 import { claudeUsage, codexUsage, effectiveInput } from '../bench/usage.js';
 
 const temps: string[] = [];
@@ -31,6 +32,15 @@ describe('usage per request', () => {
     const u = claudeUsage([line('m1', 'claude-sonnet-5', 5), line('m1', 'claude-sonnet-5', 90), line('x', '<synthetic>', 0)].join('\n'));
     expect(u.requests.map((r) => r.output)).toEqual([90]);
     expect(u.unreconciled).toEqual(['no result usage']);
+  });
+
+  it('marks subagent requests and keeps the result event\'s totals per model', () => {
+    const line = (id: string, parent?: string) => JSON.stringify({ type: 'assistant', ...(parent ? { parent_tool_use_id: parent } : {}), message: { id, model: 'claude-sonnet-5', usage: { input_tokens: 1, cache_creation_input_tokens: 0, cache_read_input_tokens: 10, output_tokens: 2 } } });
+    const result = JSON.stringify({ type: 'result', usage: { input_tokens: 2, cache_creation_input_tokens: 0, cache_read_input_tokens: 20, output_tokens: 4 }, modelUsage: { 'claude-sonnet-5': { inputTokens: 1 }, 'claude-haiku-5': { inputTokens: 1 } } });
+    const u = claudeUsage([line('m1'), line('m2', 'toolu_1'), result].join('\n'));
+    expect(u.requests.map((r) => r.subagent)).toEqual([false, true]);
+    expect(Object.keys(u.modelUsage ?? {})).toEqual(['claude-sonnet-5', 'claude-haiku-5']);
+    expect(codexUsage(codexStream).modelUsage).toBeNull();
   });
 
   it('says which counters differ from the result event', () => {
@@ -179,11 +189,29 @@ describe('plan', () => {
     const found = blockers({ ...options, hosts: ['claude'] }, { PATH: '/usr/bin' });
     expect(found.some((b) => b.includes('CLAUDE_CODE_OAUTH_TOKEN'))).toBe(true);
   });
+
+  it('wants the key in a key file for Claude, whose MCP allowlist and hook scrub can drop the variable', () => {
+    const home = temp('loadout-ab-home-');
+    const keyFile = join(home, 'key');
+    writeFileSync(keyFile, 'file-key-value\n');
+    vi.stubEnv('LOADOUT_HOME', home);
+    vi.stubEnv('TYPESAFE_API_KEY', 'env-key-value');
+    try {
+      const needsFile = (o: Options) => blockers(o, {}).some((b) => b.includes('through a key file'));
+      writeFileSync(join(home, 'config.json'), JSON.stringify({ router: 'jev' }));
+      expect(needsFile({ ...options, hosts: ['claude'] })).toBe(true);
+      expect(needsFile({ ...options, hosts: ['codex'] })).toBe(false);
+      writeFileSync(join(home, 'config.json'), JSON.stringify({ router: 'jev', jev: { apiKeyFile: keyFile } }));
+      expect(needsFile({ ...options, hosts: ['claude'] })).toBe(false);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
 });
 
 const evidence = (over: Partial<Evidence> = {}): Evidence => {
   const stream = toolEvents(claudeStream);
-  return { usage: claudeUsage(claudeStream), events: stream.events, hooks: stream.hooks, inventory: stream.inventory, failedBeforeModel: false, hookInvocations: 1, uncountedContext: 0, pluginDir: '/opt/loadout/plugins/loadout', codexHook: true, requestedModel: 'sonnet', ...over };
+  return { usage: claudeUsage(claudeStream), hooks: stream.hooks, inventory: stream.inventory, failedBeforeModel: false, hookInvocations: 1, uncountedContext: 0, keywordRouted: false, pluginDir: '/opt/loadout/plugins/loadout', codexHook: true, requestedModel: 'sonnet', ...over };
 };
 
 describe('validity', () => {
@@ -208,6 +236,34 @@ describe('validity', () => {
     expect(checkRun({ host: 'claude', arm: 'loadout' }, { ...e, hooks: [] })).toContain('ran 0 UserPromptSubmit');
     expect(checkRun({ host: 'claude', arm: 'loadout' }, { ...e, failedBeforeModel: true })).toContain('before the model');
     expect(checkRun({ host: 'claude', arm: 'loadout' }, { ...e, requestedModel: 'opus' })).toContain('resolved model');
+  });
+
+  it('stops the batch on a loadout arm that routed by keyword, on either host', () => {
+    const e = evidence();
+    expect(checkRun({ host: 'claude', arm: 'loadout' }, { ...e, keywordRouted: true })).toContain('routed by keyword');
+    expect(checkRun({ host: 'codex', arm: 'loadout' }, evidence({ usage: codexUsage(codexStream), hooks: [], inventory: undefined, keywordRouted: true }))).toContain('routed by keyword');
+  });
+
+  it('sees keyword routing in the hook\'s warning or stderr and in a find_tools result', () => {
+    const warned = JSON.stringify({ systemMessage: NO_KEY_WARNING });
+    const events = (result: string) => [{ tool: 'mcp__loadout__find_tools', detail: '{}', ok: true, result: JSON.stringify(result) }];
+    expect(routedByKeyword(`${warned}\n`, '', [])).toBe(true);
+    expect(routedByKeyword('', `${JEV_FALLBACK_NOTE}\n`, [])).toBe(true);
+    expect(routedByKeyword('', '', events('- "ux-copy" (keyword match): Write copy'))).toBe(true);
+    expect(routedByKeyword('', '', events('(Jev unavailable (timeout); used keyword ranking)\n- "a" (fit 0.5)'))).toBe(true);
+    expect(routedByKeyword('', '', events('- "ux-copy" (fit 0.91, best match): Write copy'))).toBe(false);
+    expect(routedByKeyword('', '', [{ ...events('(keyword match)')[0]!, ok: false }, { tool: 'mcp__other__find_tools', detail: '{}', ok: true, result: '"(keyword match)"' }])).toBe(false);
+    expect(routedByKeyword(`${JSON.stringify({ hookSpecificOutput: { additionalContext: 'x' } })}\n`, '', [])).toBe(false);
+  });
+
+  it('keeps an MCP tool\'s result for the validity check and no other tool\'s', () => {
+    const lines = [
+      { type: 'assistant', message: { content: [{ type: 'tool_use', id: 't1', name: 'mcp__loadout__find_tools', input: {} }, { type: 'tool_use', id: 't2', name: 'Read', input: {} }] } },
+      { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 't1', content: [{ type: 'text', text: '- "a" (keyword match): d' }] }, { type: 'tool_result', tool_use_id: 't2', content: 'file text' }] } },
+      { type: 'item.completed', item: { type: 'mcp_tool_call', server: 'loadout', tool: 'find_tools', status: 'completed', result: { content: [{ type: 'text', text: '(keyword match)' }] } } },
+    ].map((l) => JSON.stringify(l)).join('\n');
+    const { events } = toolEvents(lines);
+    expect(events.map((x) => [x.tool, x.result?.includes('keyword match') ?? null])).toEqual([['mcp__loadout__find_tools', true], ['Read', null], ['mcp__loadout__find_tools', true]]);
   });
 
   it('checks the Codex arms by the shim\'s count', () => {
@@ -239,6 +295,38 @@ describe('what a run shows', () => {
     ];
     expect(openedSkills(events).sort()).toEqual(['investigate-first', 'surgical-patch', 'ux-copy', 'user-research'].sort());
     expect(openedSkills(toolEvents(claudeStream).events)).toEqual(['ux-copy']);
+  });
+
+  it('refuses to copy any output when a file holds a credential, and never prints it', () => {
+    const dir = temp('loadout-ab-leak-');
+    const [work, dest] = [join(dir, 'work'), join(dir, 'dest')];
+    mkdirSync(work, { recursive: true });
+    writeFileSync(join(work, 'notes.md'), 'fine\n');
+    expect(copyOutputs(work, dest, [], ['sentinel-jev-key'])).toBe(true);
+    expect(readFileSync(join(dest, 'notes.md'), 'utf8')).toBe('fine\n');
+
+    writeFileSync(join(work, 'config.txt'), 'key = sentinel-jev-key\n');
+    expect(copyOutputs(work, dest, [], ['sentinel-jev-key', 'oauth-token-value'])).toBe(false);
+    expect(existsSync(dest)).toBe(false);
+
+    // Not a value the harness holds: a login token (JWT) or an API key, which an agent could read from its own home.
+    for (const token of ['eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ1c2VyIn0.c2lnbmF0dXJl', `sk-${'a1B2'.repeat(8)}`]) {
+      writeFileSync(join(work, 'config.txt'), `token ${token}\n`);
+      expect(copyOutputs(work, dest, [], [])).toBe(false);
+      expect(existsSync(dest)).toBe(false);
+    }
+  });
+
+  it('copies what the judge sees and nothing else: no dotfiles, dependencies or build output', () => {
+    const dir = temp('loadout-ab-copy-');
+    const [work, dest] = [join(dir, 'work'), join(dir, 'dest')];
+    for (const f of ['app.js', '.env', 'node_modules/x/index.js', 'dist/out.js', 'src/b.js', 'package-lock.json']) {
+      mkdirSync(join(work, f, '..'), { recursive: true });
+      writeFileSync(join(work, f), `${work}/${f}\n`);
+    }
+    expect(copyOutputs(work, dest, [[work, '<work>']], [])).toBe(true);
+    expect((readdirSync(dest, { recursive: true }) as string[]).map((f) => f.replace(/\\/g, '/')).filter((f) => f.endsWith('.js')).sort()).toEqual(['app.js', 'src/b.js']);
+    expect(readFileSync(join(dest, 'app.js'), 'utf8')).toBe('<work>/app.js\n');
   });
 
   it('removes skill names from both arms\' files and counts them', () => {
@@ -284,6 +372,13 @@ describe('the c1-debug-13 fixture', () => {
     expect(hiddenResult(dir, hidden)).toMatchObject({ passed: true, failed: 0 });
   });
 
+  it('also passes a fix that tells the button apart with button.contains', () => {
+    const dir = copy();
+    writeFileSync(join(dir, 'menu.js'), REFERENCE_FIX.replace('if (event.target === button || panel.contains(event.target)) return;', 'if (panel.contains(event.target) || button.contains(event.target)) return;'));
+    expect(readFileSync(join(dir, 'menu.js'), 'utf8')).toContain('button.contains(event.target)');
+    expect(hiddenResult(dir, hidden)).toMatchObject({ passed: true, failed: 0 });
+  });
+
   it('keeps the hidden test and the fix out of the agent\'s folder', () => {
     const names = readdirSync(join(fixtures, 'c1-debug-13'), { recursive: true }).map(String);
     expect(names.sort()).toEqual(['README.md', 'index.html', 'menu.js', 'menu.test.mjs', 'package.json']);
@@ -300,10 +395,10 @@ describe('the c1-debug-13 fixture', () => {
 const row = (over: Partial<RunRow>): RunRow => ({
   id: 'x', host: 'claude', arm: 'bare', prompt: 'p1', repeat: 1, warmup: false, seq: 0, startedAt: '2026-10-19T10:00:00.000Z', endedAt: '2026-10-19T10:01:00.000Z', ms: 60_000,
   hostVersion: '2.1.281', requestedModel: 'sonnet', model: 'claude-sonnet-5', exit: 0, timedOut: false, stop: 'success', granularity: 'request',
-  requests: [{ n: 1, at: null, model: null, uncached: 10, cacheWrite: 1000, cacheRead: 20000, output: 100, cacheWrite5m: 1000, cacheWrite1h: 0, reasoning: null, gapMs: 1000 },
-    { n: 2, at: null, model: null, uncached: 2, cacheWrite: 100, cacheRead: 21000, output: 50, cacheWrite5m: 100, cacheWrite1h: 0, reasoning: null, gapMs: 5000 }],
+  requests: [{ n: 1, at: null, model: null, uncached: 10, cacheWrite: 1000, cacheRead: 20000, output: 100, cacheWrite5m: 1000, cacheWrite1h: 0, reasoning: null, subagent: false, gapMs: 1000 },
+    { n: 2, at: null, model: null, uncached: 2, cacheWrite: 100, cacheRead: 21000, output: 50, cacheWrite5m: 100, cacheWrite1h: 0, reasoning: null, subagent: false, gapMs: 5000 }],
   totals: { uncached: 12, cacheWrite: 1100, cacheRead: 41000, output: 150, effectiveInput: 5000, costUsd: 0.1, turns: 2 },
-  unreconciled: [], coldCacheRisk: false, toolCalls: 0, toolErrors: 0, loadoutTools: [], skillsOpened: [], hook: { invocations: 0, contextChars: 0, listed: [], injected: [] }, hiddenTest: null, ...over,
+  unreconciled: [], modelUsage: null, coldCacheRisk: false, toolCalls: 0, toolErrors: 0, loadoutTools: [], skillsOpened: [], hook: { invocations: 0, contextChars: 0, listed: [], injected: [] }, hiddenTest: null, ...over,
 });
 
 describe('report', () => {
@@ -311,8 +406,8 @@ describe('report', () => {
     row({ id: 'w', warmup: true, repeat: 0, prompt: 'warmup', totals: { uncached: 20, cacheWrite: 30000, cacheRead: 0, output: 5, effectiveInput: 40000, costUsd: 0.2, turns: 1 } }),
     row({ id: 'b1' }), row({ id: 'b2', repeat: 2, totals: { uncached: 14, cacheWrite: 1300, cacheRead: 41000, output: 170, effectiveInput: 6000, costUsd: 0.12, turns: 2 } }),
     row({ id: 'l1', arm: 'loadout', hook: { invocations: 1, contextChars: 2400, listed: ['ux-copy'], injected: ['ux-copy'] }, totals: { uncached: 12, cacheWrite: 2100, cacheRead: 41000, output: 150, effectiveInput: 6000, costUsd: 0.13, turns: 2 },
-      requests: [{ n: 1, at: null, model: null, uncached: 10, cacheWrite: 2000, cacheRead: 20000, output: 100, cacheWrite5m: 2000, cacheWrite1h: 0, reasoning: null, gapMs: 1000 }, { n: 2, at: null, model: null, uncached: 2, cacheWrite: 100, cacheRead: 21000, output: 50, cacheWrite5m: 100, cacheWrite1h: 0, reasoning: null, gapMs: 5000 }], skillsOpened: ['ux-copy'] }),
-    row({ id: 'c1', host: 'codex', arm: 'loadout', granularity: 'turn', requests: [{ n: 1, at: null, model: null, uncached: 9000, cacheWrite: 0, cacheRead: 52000, output: 2300, cacheWrite5m: null, cacheWrite1h: null, reasoning: 900, gapMs: null }],
+      requests: [{ n: 1, at: null, model: null, uncached: 10, cacheWrite: 2000, cacheRead: 20000, output: 100, cacheWrite5m: 2000, cacheWrite1h: 0, reasoning: null, subagent: false, gapMs: 1000 }, { n: 2, at: null, model: null, uncached: 2, cacheWrite: 100, cacheRead: 21000, output: 50, cacheWrite5m: 100, cacheWrite1h: 0, reasoning: null, subagent: false, gapMs: 5000 }], skillsOpened: ['ux-copy'] }),
+    row({ id: 'c1', host: 'codex', arm: 'loadout', granularity: 'turn', requests: [{ n: 1, at: null, model: null, uncached: 9000, cacheWrite: 0, cacheRead: 52000, output: 2300, cacheWrite5m: null, cacheWrite1h: null, reasoning: 900, subagent: false, gapMs: null }],
       totals: { uncached: 9000, cacheWrite: 0, cacheRead: 52000, output: 2300, effectiveInput: null, costUsd: null, turns: null }, coldCacheRisk: true }),
     row({ id: 'bad', repeat: 2, arm: 'loadout', invalid: 'timed out before the host reported usage' }),
   ];
@@ -337,11 +432,60 @@ describe('report', () => {
     expect(text).toContain('ux-copy / ux-copy / ux-copy');
   });
 
+  it('leaves subagent requests out of the request 1 / 2+ split, counts them apart and flags a second model', () => {
+    const sub = { n: 3, at: null, model: null, uncached: 500, cacheWrite: 9000, cacheRead: 0, output: 10, cacheWrite5m: 9000, cacheWrite1h: 0, reasoning: null, subagent: true, gapMs: 100 };
+    const base = row({});
+    const withSub = report([{ ...base, requests: [...base.requests, sub], modelUsage: { 'claude-sonnet-5': {}, 'claude-haiku-5': {} } }], []);
+    expect(withSub).toContain('| claude | p1 | bare | 10 / 1,000 / 20,000 | 2 / 100 / 21,000 | 2 | 1 |');
+    expect(withSub).toContain('tokens were billed to claude-sonnet-5, claude-haiku-5');
+  });
+
   it('splits request 1 from requests 2+ for Claude and says not shown for Codex', () => {
-    expect(text).toContain('| claude | p1 | loadout | 10 / 2,000 / 20,000 | 2 / 100 / 21,000 | 2 |');
+    expect(text).toContain('| claude | p1 | loadout | 10 / 2,000 / 20,000 | 2 / 100 / 21,000 | 2 | 0 |');
     expect(text).not.toContain('| codex | p1 | loadout | 9,000');
     expect(text).toContain('not shown');
     expect(text).toContain('| codex | p1 | loadout | 1 | 9,000 | 0 | 52,000 | 2,300 | 85% | not shown | not shown | not shown |');
+  });
+});
+
+describe('resuming and finishing a study', () => {
+  const study = (rows: RunRow[], settings: Partial<Options> = {}) => {
+    const dir = temp('loadout-ab-study-');
+    const o = { ...options, ...settings };
+    writeFileSync(join(dir, 'config.json'), JSON.stringify({ ...o, versions: {}, schedule: rows.map((r) => r.id) }));
+    writeFileSync(join(dir, 'rows.jsonl'), rows.map((r) => JSON.stringify(r)).join('\n') + '\n');
+    writeFileSync(join(dir, 'INCOMPLETE'), 'x');
+    return dir;
+  };
+  const rows = [row({ id: 'claude/bare/warmup/0', prompt: 'warmup', repeat: 0, warmup: true }), row({ id: 'claude/loadout/p1/1', arm: 'loadout' })];
+
+  it('refuses to resume with another model, which would pair rows measured under different ones', () => {
+    const dir = study(rows);
+    refuseOtherSettings(dir, options);
+    expect(() => refuseOtherSettings(dir, { ...options, models: { ...AB_MODELS, claude: 'opus' } })).toThrow(/other settings \(models\)/);
+    expect(() => refuseOtherSettings(dir, { ...options, repeats: 3, maxTurns: 10 })).toThrow(/repeats, maxTurns/);
+    refuseOtherSettings(join(dir, 'new'), options);
+  });
+
+  it('refuses to continue or finish after a row that stopped the batch, but not after an unusable run', async () => {
+    const stopped = (invalid: string) => study([...rows, row({ id: 'claude/bare/p1/1', invalid })]);
+    refuseStopped(stopped('timed out before the host reported usage'));
+    expect(() => refuseStopped(stopped('credential in output'))).toThrow('credential in output');
+    const dir = stopped('ambient plugin in the bare arm; measurement invalid');
+    await expect(main(['--judge-only', dir], { print: () => {} })).rejects.toThrow('stopped this study');
+    expect(existsSync(join(dir, 'INCOMPLETE'))).toBe(true);
+  });
+
+  it('--judge-only removes the INCOMPLETE marker only when every scheduled run has a row', async () => {
+    const dir = study(rows);
+    await main(['--judge-only', dir], { print: () => {} });
+    expect(existsSync(join(dir, 'INCOMPLETE'))).toBe(false);
+    expect(readFileSync(join(dir, 'report.md'), 'utf8')).toContain('# A/B pilot report');
+
+    const partial = study(rows);
+    writeFileSync(join(partial, 'config.json'), JSON.stringify({ ...options, schedule: [...rows.map((r) => r.id), 'claude/loadout/p1/2'] }));
+    await main(['--judge-only', partial], { print: () => {} });
+    expect(existsSync(join(partial, 'INCOMPLETE'))).toBe(true);
   });
 });
 
@@ -350,7 +494,8 @@ describe.skipIf(process.platform === 'win32')('bench/ab.ts --run against stand-i
   const NODE = process.execPath;
   const wrapper = (script: string) => `#!/bin/sh\nexec "${NODE}" "${script}" "$@"\n`;
 
-  const claudeScript = (log: string) => `
+  // `leak`: the loadout arm's agent writes the TypeSafe key it was given into a deliverable.
+  const claudeScript = (log: string, leak = false) => `
 import { appendFileSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 const args = process.argv.slice(2);
@@ -370,6 +515,7 @@ if (args.includes('--json-schema')) {
   }
   ev({ type: 'system', subtype: 'init', model: 'claude-sonnet-5', claude_code_version: '2.1.281', tools: ['Bash'], mcp_servers: mcp.map((name) => ({ name, status: 'connected' })), plugins: [...(plugin ? [{ name: 'loadout', path: plugin, source: 'loadout@inline' }] : []), { name: 'agents-md', path: 'builtin', source: 'agents-md@builtin' }] });
   writeFileSync('notes.md', 'A short deliverable for ' + process.cwd() + '\\n');
+  if (${leak} && process.env.TYPESAFE_API_KEY) writeFileSync('setup.md', 'export TYPESAFE_API_KEY=' + process.env.TYPESAFE_API_KEY + '\\n');
   const usage = (i, w, r, o) => ({ input_tokens: i, cache_creation_input_tokens: w, cache_read_input_tokens: r, output_tokens: o });
   ev({ type: 'assistant', message: { id: 'm1', model: 'claude-sonnet-5', content: [{ type: 'text', text: 'ok' }], usage: usage(2, plugin ? 900 : 400, 5000, 50) }, timestamp: new Date().toISOString() });
   ev({ type: 'assistant', message: { id: 'm2', model: 'claude-sonnet-5', content: [{ type: 'text', text: 'done' }], usage: usage(1, 50, 6000, 20) }, timestamp: new Date().toISOString() });
@@ -397,7 +543,17 @@ if (args.includes('--output-schema')) {
 }
 `;
 
-  it('records warm-ups apart from interleaved measured runs, one hook call per loadout run, and no credential', async () => {
+  it('hands the host the hook\'s output and keeps its stderr for the validity check', () => {
+    const dir = temp('loadout-ab-shim-');
+    const [marker, capture, shim] = ['marks', 'out', 'loadout'].map((n) => join(dir, n)) as [string, string, string];
+    writeFileSync(shim, hookShim(marker, `echo '{"a":1}'; echo noted >&2`, capture), { mode: 0o755 });
+    const r = spawnSync('/bin/sh', [shim], { encoding: 'utf8' });
+    expect([r.status, r.stdout, r.stderr]).toEqual([0, '{"a":1}', '']);
+    expect([readFileSync(marker, 'utf8'), readFileSync(capture, 'utf8'), readFileSync(`${capture}.err`, 'utf8')]).toEqual(['invoked\n', '{"a":1}\n', 'noted\n']);
+  });
+
+  /** Stand-in CLIs on PATH, a loadout home with one skill, and a way to start bench/ab.ts against them. */
+  const stage = (leak = false) => {
     const dir = temp('loadout-ab-smoke-');
     const bin = join(dir, 'bin');
     const home = join(dir, 'home');
@@ -407,26 +563,34 @@ if (args.includes('--output-schema')) {
     for (const d of [bin, home, join(loadoutHome, 'library', 'skills', 'ux-copy')]) mkdirSync(d, { recursive: true });
     writeFileSync(join(loadoutHome, 'config.json'), JSON.stringify({ router: 'lexical', embeddings: false }));
     writeFileSync(join(loadoutHome, 'library', 'skills', 'ux-copy', 'SKILL.md'), '---\nname: ux-copy\ndescription: Write interface copy such as error pages and button labels.\n---\nKeep it short.\n');
-    writeFileSync(join(dir, 'claude.mjs'), claudeScript(log));
+    writeFileSync(join(dir, 'claude.mjs'), claudeScript(log, leak));
     writeFileSync(join(dir, 'codex.mjs'), codexScript(log));
     writeFileSync(join(bin, 'claude'), wrapper(join(dir, 'claude.mjs')), { mode: 0o755 });
     writeFileSync(join(bin, 'codex'), wrapper(join(dir, 'codex.mjs')), { mode: 0o755 });
-
-    const lines: string[] = [];
-    const code = await new Promise<number | null>((resolve) => {
+    const start = (args: string[]) => new Promise<{ code: number | null; text: string }>((resolve) => {
+      const lines: string[] = [];
       // An absolute loader: the hook the shim runs inherits these arguments and starts in another folder.
-      const child = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), 'bench/ab.ts', '--run', '--repeats', '1', '--ids', 'c1-web-14,c1-debug-13', '--out', out], {
+      const child = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), 'bench/ab.ts', '--run', '--out', out, ...args], {
         cwd: repo,
         env: { PATH: `${bin}:/usr/bin:/bin`, HOME: home, LOADOUT_HOME: loadoutHome, CLAUDE_CODE_OAUTH_TOKEN: 'oauth-secret-value', TYPESAFE_API_KEY: 'jev-secret-value' },
         stdio: ['ignore', 'pipe', 'pipe'],
       });
       child.stdout.on('data', (d: Buffer) => lines.push(String(d)));
       child.stderr.on('data', (d: Buffer) => lines.push(String(d)));
-      child.on('close', resolve);
+      child.on('close', (code) => resolve({ code, text: lines.join('') }));
     });
-    expect(code, lines.join('')).toBe(0);
+    const rowsOf = () => readFileSync(join(out, 'rows.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l) as RunRow);
+    const calls = () => (existsSync(log) ? readFileSync(log, 'utf8').trim().split('\n').map((l) => JSON.parse(l) as { host: string; args: string[]; env: string[]; cwd: string }) : []);
+    return { dir, out, start, rowsOf, calls };
+  };
 
-    const rows: RunRow[] = readFileSync(join(out, 'rows.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+  it('records warm-ups apart from interleaved measured runs, one hook call per loadout run, and no credential', async () => {
+    const { dir, out, start, rowsOf, calls: callsOf } = stage();
+    const { code, text } = await start(['--repeats', '1', '--ids', 'c1-web-14,c1-debug-13']);
+    expect(code, text).toBe(0);
+    const lines = [text];
+
+    const rows = rowsOf();
     // Per host: two warm-ups, then (2 prompts × 2 arms) measured, in schedule order.
     expect(rows).toHaveLength(2 * (2 + 4));
     expect(rows.slice(0, 2).map((r) => [r.arm, r.warmup])).toEqual([['bare', true], ['loadout', true]]);
@@ -445,7 +609,7 @@ if (args.includes('--output-schema')) {
     expect(rows.find((r) => r.host === 'codex')!.totals).toMatchObject({ uncached: 2000, cacheRead: 6000, effectiveInput: null });
 
     // The arms differ only in the loadout pieces: the same flags, the same environment names.
-    const calls = readFileSync(log, 'utf8').trim().split('\n').map((l) => JSON.parse(l) as { host: string; args: string[]; env: string[] });
+    const calls = callsOf();
     for (const host of ['claude', 'codex']) {
       const [bare, loadout] = ['bare', 'loadout'].map((arm) => calls.filter((c) => c.host === host).find((c) => (host === 'claude' ? c.args.includes('--plugin-dir') : c.args.some((a) => a.startsWith('mcp_servers.'))) === (arm === 'loadout'))!);
       expect(bare!.env.filter((n) => !['TYPESAFE_API_KEY', 'LOADOUT_HOME'].includes(n))).toEqual(loadout!.env.filter((n) => !['TYPESAFE_API_KEY', 'LOADOUT_HOME'].includes(n)));
@@ -473,5 +637,47 @@ if (args.includes('--output-schema')) {
     expect(everything).toContain('<work>');
     expect(everything).not.toContain(dir);
     expect(`${lines.join('')}\n${everything}`).not.toMatch(/oauth-secret-value|jev-secret-value/);
+    // One work folder for every run: its path is in the prompt prefix the cache keys on.
+    expect(new Set(calls.map((c) => c.cwd)).size).toBe(1);
+  }, 180_000);
+
+  it('stops the batch when an agent writes the TypeSafe key into a deliverable, copies nothing and refuses to resume', async () => {
+    const { out, start, rowsOf } = stage(true);
+    const args = ['--hosts', 'claude', '--repeats', '1', '--ids', 'c1-web-14'];
+    const { code, text } = await start(args);
+    expect(code).toBe(1);
+    expect(text).toContain('claude/loadout/c1-web-14/1: credential in output');
+    const rows = rowsOf();
+    // Two warm-ups (not copied), then the first measured run is the loadout arm and ends the batch.
+    expect(rows.map((r) => [r.id, r.invalid])).toEqual([['claude/bare/warmup/0', undefined], ['claude/loadout/warmup/0', undefined], ['claude/loadout/c1-web-14/1', 'credential in output']]);
+    expect(existsSync(join(out, 'INCOMPLETE'))).toBe(true);
+    expect(existsSync(join(out, 'outputs', 'claude', 'c1-web-14', 'loadout-1'))).toBe(false);
+    const everything = (readdirSync(out, { recursive: true }) as string[]).filter((f) => statSync(join(out, f)).isFile() && !/^streams[/\\]/.test(f)).map((f) => readFileSync(join(out, f), 'utf8')).join('\n');
+    expect(`${text}\n${everything}`).not.toMatch(/oauth-secret-value|jev-secret-value/);
+
+    const again = await start(args);
+    expect(again.code).toBe(1);
+    expect(again.text).toContain('stopped this study');
+    expect(rowsOf()).toHaveLength(3);
+  }, 180_000);
+
+  it('resumes in the same work folder, and refuses to resume with another model before running anything', async () => {
+    const { out, start, rowsOf, calls } = stage();
+    const args = ['--hosts', 'claude', '--repeats', '1', '--ids', 'c1-web-14'];
+    expect((await start(args)).code).toBe(0);
+    const before = calls().length;
+    const other = await start([...args, '--claude-model', 'opus']);
+    expect(other.code).toBe(1);
+    expect(other.text).toContain('other settings (models)');
+    expect(calls()).toHaveLength(before);
+    expect(existsSync(join(out, 'INCOMPLETE'))).toBe(false);
+
+    // Lose the last measured run, as a crash would, and resume with the same settings.
+    const kept = rowsOf().slice(0, -1);
+    writeFileSync(join(out, 'rows.jsonl'), kept.map((r) => JSON.stringify(r)).join('\n') + '\n');
+    writeFileSync(join(out, 'verdicts.jsonl'), '');
+    expect((await start(args)).code).toBe(0);
+    expect(rowsOf()).toHaveLength(kept.length + 1);
+    expect(new Set(calls().map((c) => c.cwd)).size).toBe(1);
   }, 180_000);
 });

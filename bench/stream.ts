@@ -1,7 +1,7 @@
 /** What invoke.ts and ab.ts read from a headless agent run: its tool calls, hook events and the PATH shim that counts hook invocations. */
 
-/** One tool call; `ok` is false when the call itself failed (a failed call is not an invocation). */
-export interface Event { tool: string; detail: string; ok: boolean; id?: string }
+/** One tool call; `ok` is false when the call itself failed (a failed call is not an invocation). `result` is an MCP call's result as JSON text, for validity checks only: it is never written to a row. */
+export interface Event { tool: string; detail: string; ok: boolean; id?: string; result?: string }
 export interface Inventory { plugins: { name: string; path?: string; source?: string }[]; mcpServers: { name: string; status: string }[] }
 // Rows are committed to a public repo: a hook keeps what validity needs, not the user's plugin
 // list, local paths or the hook's skill text. `injected` names the skills whose full text the hook
@@ -48,7 +48,9 @@ export function toolEvents(stream: string): { events: Event[]; hooks: HookExecut
     } else if (e.type === 'user') {
       // Claude reports each tool result in the next user message.
       for (const b of e.message?.content ?? []) {
-        if (b.type === 'tool_result' && !b.is_error) for (const ev of events) if (ev.id === b.tool_use_id) ev.ok = true;
+        if (b.type === 'tool_result' && !b.is_error) {
+          for (const ev of events) if (ev.id === b.tool_use_id) { ev.ok = true; if (ev.tool.startsWith('mcp__')) ev.result = JSON.stringify(b.content ?? ''); }
+        }
       }
     } else if (e.type === 'result') {
       costUsd = e.total_cost_usd;
@@ -62,7 +64,7 @@ export function toolEvents(stream: string): { events: Event[]; hooks: HookExecut
       const toolError = it.result?.isError === true || it.result?.is_error === true;
       const ok = it.status === 'completed' && !it.error && !toolError && (it.exit_code === undefined || it.exit_code === null || it.exit_code === 0);
       if (it.type === 'command_execution') events.push({ tool: 'shell', detail: String(it.command ?? ''), ok });
-      if (it.type === 'mcp_tool_call') events.push({ tool: `mcp__${it.server}__${it.tool}`, detail: JSON.stringify(it.arguments ?? {}), ok });
+      if (it.type === 'mcp_tool_call') events.push({ tool: `mcp__${it.server}__${it.tool}`, detail: JSON.stringify(it.arguments ?? {}), ok, result: JSON.stringify(it.result ?? '') });
     }
   }
   // A run killed before any model response (a stall after init and the hook) sends no result event.
@@ -75,9 +77,10 @@ const quote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 /**
  * A `loadout` for PATH that counts how often the host calls the hook (`marker` gets "invoked" before it runs, so a
  * killed hook still counts, and "context" after it, so a silent invocation cannot cover for context an uncounted hook
- * supplied) and, when `capture` is given, keeps each invocation's one-line output there.
+ * supplied) and, when `capture` is given, keeps each invocation's one-line output there and its stderr in
+ * `<capture>.err` (the host then no longer sees that stderr; a hook that exits 0 has none it reads).
  */
 export function hookShim(marker: string, command: string, capture?: string): string {
   const m = quote(marker);
-  return `#!/bin/sh\nprintf 'invoked\\n' >> ${m}\nout=$(/bin/sh -c ${quote(command)}); status=$?\ncase $out in *'<skill_relevance>'*) printf 'context\\n' >> ${m};; esac\n${capture ? `printf '%s\\n' "$out" >> ${quote(capture)}\n` : ''}printf '%s' "$out"\nexit $status\n`;
+  return `#!/bin/sh\nprintf 'invoked\\n' >> ${m}\nout=$(/bin/sh -c ${quote(command)}${capture ? ` 2>> ${quote(`${capture}.err`)}` : ''}); status=$?\ncase $out in *'<skill_relevance>'*) printf 'context\\n' >> ${m};; esac\n${capture ? `printf '%s\\n' "$out" >> ${quote(capture)}\n` : ''}printf '%s' "$out"\nexit $status\n`;
 }

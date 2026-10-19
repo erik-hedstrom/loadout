@@ -6,7 +6,7 @@ import { createMenu } from './menu.js';
 // so `fire` repeats the event on `doc` the way a browser would, unless a handler stopped it.
 function page() {
   const doc = new EventTarget();
-  const button = new EventTarget();
+  const button = Object.assign(new EventTarget(), { contains: (node) => node === button });
   const item = new EventTarget();
   const panel = Object.assign(new EventTarget(), { hidden: true, contains: (node) => node === panel || node === item });
   const outside = new EventTarget();
