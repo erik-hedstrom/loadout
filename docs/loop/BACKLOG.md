@@ -63,8 +63,11 @@ Each PR body's **Review state** section has the round-by-round record.
 
 **A2. `loadout audit`.**
 
-Why: this is the entry point for the audience. "Your 312 installed skills add
-~38k tokens to every request" is the sentence people share.
+Why: this is the entry point for the audience, and the sentence people share
+must be a measured one. B1 measured Claude Code's skill listing at about 10
+tokens per skill: +477 input tokens at 50 skills and +12.3k at 1,232 (Haiku,
+generated skill names, first call;
+[RESULTS](../../bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request)).
 
 Acceptance:
 - Read-only scan of Claude Code (user and project skills, enabled plugins'
@@ -142,7 +145,7 @@ Acceptance:
 | B3 | P1 | Fact-checked comparison with alternatives | Codex | cloud | review ([#34](https://github.com/erik-hedstrom/loadout/pull/34)) |
 | B2 | P1 | Launch kit drafts | Claude | cloud | todo (after A1, B1) |
 | B4 | P1 | Repo polish: description, topics, social preview, badges | Claude | cloud + erik | review ([#33](https://github.com/erik-hedstrom/loadout/pull/33); Erik applies settings and uploads the preview) |
-| B6 | P2 | GitHub profile README draft | Claude | cloud | review ([#31](https://github.com/erik-hedstrom/loadout/pull/31); Erik publishes) |
+| B6 | P2 | GitHub profile README draft | Claude | cloud | review ([#31](https://github.com/erik-hedstrom/loadout/pull/31); Erik fills two placeholders and publishes) |
 | B5 | P2 | Awesome-list and directory submissions (drafts) | Codex | erik | todo (repo public since 2026-10-12; agents draft, Erik submits) |
 | B7 | P1 | MCP overhead study: what configured MCP servers cost per request, natively and through loadout | Claude | cloud (harness, done) + local (runs) | in progress: harness merged in [#38](https://github.com/erik-hedstrom/loadout/pull/38), with no ambient Claude plugins (2026-10-15 decision); live runs wait for Erik's approval of the estimate |
 | B8 | P0 | Backlog items from the launch-readiness review, 2026-10-13, MCP token cost first | Claude | local + erik | todo (the review is private, on Erik's machine) |
@@ -225,6 +228,12 @@ Acceptance:
 Acceptance: `docs/launch/profile-README.md` for github.com/erik-hedstrom,
 presenting loadout and the engineering behind it (benchmarks, reviews,
 cross-vendor agents). Erik publishes.
+
+Learnings: links use absolute URLs, because the file is copied into another
+repo. Headline numbers are C1's untuned ones, with Wilson intervals. No run's
+judging is shown to be cross-family: C1's request provenance is unverified,
+and v4's requests were expanded by Sonnet and judged by Opus. Left: Erik
+writes the personal line and publishes.
 
 **B7. MCP overhead study.**
 
@@ -387,6 +396,7 @@ Decisions for Erik:
 | C12 | P1 | Audit the need gate on held-out prompts | Claude | cloud (design) + local (runs) | todo |
 | C13 | P1 | Pure-Jev baseline on main: offline scoring and routing stability | Codex (tools) + Claude (runs) | local | review: baseline measured 2026-10-16 ([RESULTS](../../bench/RESULTS.md#c13-2026-10-16-pure-jev-baseline-on-main)) |
 | C8 | P0 | Skill use with the hook-only plugin | Claude | local | review ([#25](https://github.com/erik-hedstrom/loadout/pull/25)) |
+| C10 | P2 | Bench quick fixes: sequential outcome judge, tier fixed across arms, stale A2 number | Claude | cloud | in review ([#40](https://github.com/erik-hedstrom/loadout/pull/40)) |
 
 **C13. Pure-Jev baseline without more model spend.**
 
@@ -547,6 +557,20 @@ users install has the hook only. Add a plugin arm (`--plugin-dir`) to
 Acceptance: a third row in that RESULTS table, with raw results. The README's
 "has not been measured" is then replaced by the number.
 
+**C10. Bench quick fixes.** From the launch-readiness review, 2026-10-13. $0,
+no paid calls.
+- `bench/outcome.ts` judged two requests at once; AGENTS.md rule 6 says judges
+  run sequentially so their cached prompt stays warm. Now a loop, with a test
+  that runs the script against a stand-in `claude` and checks the calls never
+  overlap.
+- `decisionFor` keeping the row's tier for the bare arm is correct: both arms
+  of a pair run the same model (`gpt-6.1-sol` in all 8 pilot pairs). Comment and test only.
+- A2's rationale quoted the withdrawn description-sum estimate; it now
+  carries B1's measured figures and scope.
+
+Learnings: a script that spawns the CLIs can be tested by putting a fake
+binary alone on `PATH`, so the `claude` judge needed no new seam.
+
 ## D. Integrations and robustness
 
 | ID | P | Task | Agent | Lane | Status |
@@ -563,7 +587,7 @@ Acceptance: a third row in that RESULTS table, with raw results. The README's
 | D8 | P1 | Host capability matrix (verified vs generated) | Claude | cloud | done ([#18](https://github.com/erik-hedstrom/loadout/pull/18)) |
 | D9 | P1 | Codex parity: neutral session skill dir, tier presets | Claude | cloud | done ([#21](https://github.com/erik-hedstrom/loadout/pull/21)); Codex launch not re-run live |
 | D15 | P0 | MCP discovery: make library MCP servers findable and usable through the search server | Claude | cloud + local | in progress: code and tests merged in [#39](https://github.com/erik-hedstrom/loadout/pull/39); the live check is left |
-| D17 | P1 | `loadout mcp` ready within Codex's MCP start-up grace | Claude | local (measure) + cloud (fix) | measured 2026-10-15: under 1 s from ext4, 6–7 s from `/mnt/c`; module loading, not the scan (see below) |
+| D17 | P1 | `loadout mcp` ready within Codex's MCP start-up grace | Claude | local (measure) + cloud (fix) | review ([#43](https://github.com/erik-hedstrom/loadout/pull/43)): WSL install advice in the README; `required = true` in the `--windows` TOML, not in the plugin (see below); measured 2026-10-15: under 1 s from ext4, 6–7 s from `/mnt/c` |
 | D12 | P0 | Codex: install the hook and search as one step, if Codex allows it | Codex | local | done ([#23](https://github.com/erik-hedstrom/loadout/pull/23)): `plugins/loadout-codex` through `.agents/plugins/marketplace.json`; install checked offline; the hook still needs `/hooks` trust; the live run is D2 |
 
 **D17. MCP start-up inside Codex's grace period.** Codex leaves an optional
@@ -582,30 +606,48 @@ Acceptance:
 - Document `required = true` for Codex users, after checking whether the
   Codex plugin's `.mcp.json` accepts it.
 
-Measured (2026-10-15, $0; `main` at `fbee5cb`, 1,262-skill library on
-ext4, Node 24.15, WSL2 on Windows 11). This is the time from process start
-to the `initialize` reply, over three or four warm runs:
-
-| How it runs | Reply |
-|---|---|
-| inside WSL, checkout on ext4 | 0.41 s |
-| inside WSL, checkout on `/mnt/c` | 5.9 s |
-| `wsl.exe --exec node` from Windows, ext4 | 0.54–0.79 s |
-| `wsl.exe --exec node` from Windows, `/mnt/c` | 6.0–7.0 s |
-
-Split on `/mnt/c`: importing `dist/mcp.js` and the MCP SDK took 3.9 s, the
-other CLI modules 0.75 s, and the cached library scan 0.04 s (0.75 s
-cold). On ext4 the same three took 0.11, 0.03 and 0.04 s. **The scan is not
-the cost: loading many small module files over 9P is.** So the second
+Measured on 2026-10-15 ($0; [RESULTS](../../bench/RESULTS.md#mcp-start-up-under-wsl-d17-2026-10-15)):
+`initialize` answers in 0.4–0.8 s from ext4 and 5.9–7.0 s from `/mnt/c`.
+The scan is not the cost: loading many small module files over 9P is. So the second
 acceptance bullet would save 0.04 s warm, or up to 0.75 s on a cold first
 run (measured on `/mnt/c`; a cold run on ext4 was not measured), against
-3.9 s of module loading. It is not worth doing as written. What is left:
-- Tell WSL users to run `loadout mcp` from a Linux-filesystem install
-  (ORCHESTRATOR.md already says so for this machine), and say why.
-- `required = true`, as above. Through `wsl.exe` from ext4 the first run
-  took 0.79 s, close to the grace.
-- Bundling `dist` would cut the file count. Only if the steps above are
-  not enough: it adds a build step.
+3.9 s of module loading. It is not worth doing as written.
+
+Done (2026-10-16, $0):
+- The README's WSL paragraph tells users to install on the Linux filesystem,
+  with the numbers above.
+- What Codex 0.160.1 accepts (source at tag `rust-v0.160.1`, links below):
+  - `required` is a per-server boolean, parsed for `config.toml` and for a
+    plugin's `.mcp.json` alike: plugin servers go through the same
+    `McpServerConfig` deserializer
+    ([mcp_types.rs#L248-L252](https://github.com/openai/codex/blob/rust-v0.160.1/codex-rs/config/src/mcp_types.rs#L248-L252),
+    [#L607-L616](https://github.com/openai/codex/blob/rust-v0.160.1/codex-rs/config/src/mcp_types.rs#L607-L616),
+    [plugin_config.rs#L157](https://github.com/openai/codex/blob/rust-v0.160.1/codex-rs/codex-mcp/src/plugin_config.rs#L157)).
+    Codex 0.160.1 rejects `required = "yes"` in `config.toml` with
+    "expected a boolean", so the key is known.
+  - Codex waits for a required server before building the tool list
+    ([tool_catalog.rs#L282-L329](https://github.com/openai/codex/blob/rust-v0.160.1/codex-rs/codex-mcp/src/connection_manager/tool_catalog.rs#L282-L329)),
+    and a required server that fails to start fails the session start
+    ("required MCP servers failed to initialize",
+    [required.rs#L17-L63](https://github.com/openai/codex/blob/rust-v0.160.1/codex-rs/codex-mcp/src/connection_manager/required.rs#L17-L63)).
+  - A user's plugin policy can set `enabled`, approvals and tool lists for a
+    plugin's server, but not `required`
+    ([types.rs#L1019](https://github.com/openai/codex/blob/rust-v0.160.1/codex-rs/config/src/types.rs#L1019),
+    [loader.rs#L968-L989](https://github.com/openai/codex/blob/rust-v0.160.1/codex-rs/core-plugins/src/loader.rs#L968-L989)).
+  - `mcp_optional_startup_grace_ms` (default 1000) is top-level only; 0
+    waits for each optional server up to its `startup_timeout_sec`
+    (default 30 s)
+    ([config_toml.rs#L318-L322](https://github.com/openai/codex/blob/rust-v0.160.1/codex-rs/config/src/config_toml.rs#L318-L322),
+    [rmcp_client.rs#L105](https://github.com/openai/codex/blob/rust-v0.160.1/codex-rs/codex-mcp/src/rmcp_client.rs#L105)).
+- So `loadout setup codex --windows`, the `wsl.exe` path measured above,
+  prints `required = true` (test: `prints host configs that attach the
+  search server`). The plugin's `.mcp.json` leaves it out: with it, a
+  missing or broken `loadout` would fail every Codex session, and users
+  could not turn that off short of disabling search. The README gives plugin
+  users `mcp_optional_startup_grace_ms = 0` instead. Erik can reverse this.
+- Not done: bundling `dist`. Only if the steps above are not enough: it adds
+  a build step. A live Codex session with `required = true` has not been
+  run.
 
 **D10. In-host first: loadout as a Claude Code plugin.**
 
@@ -941,7 +983,7 @@ Learnings (2026-10-09):
 | E1 | P0 | GitHub Actions CI | Codex | cloud | done ([PR #2](https://github.com/erik-hedstrom/loadout/pull/2)) |
 | E2 | P0 | LICENSE, CONTRIBUTING, SECURITY.md, templates | Claude | cloud + erik | done ([PR #1](https://github.com/erik-hedstrom/loadout/pull/1)) |
 | E7 | P0 | Vendor-independent bench judges and expander | Codex | cloud | done ([PR #5](https://github.com/erik-hedstrom/loadout/pull/5)) |
-| E8 | P0 | Repo-wide simplification pass | Claude (pr-reviewer finds, worker fixes) + Codex review | cloud | in progress (merged: bench/ [#11](https://github.com/erik-hedstrom/loadout/pull/11), src/ [#12](https://github.com/erik-hedstrom/loadout/pull/12), Markdown [#15](https://github.com/erik-hedstrom/loadout/pull/15); Markdown rest in review, [#26](https://github.com/erik-hedstrom/loadout/pull/26)); left: the WSL-only `bench.test.ts` failure |
+| E8 | P0 | Repo-wide simplification pass | Claude (pr-reviewer finds, worker fixes) + Codex review | cloud | in progress (merged: bench/ [#11](https://github.com/erik-hedstrom/loadout/pull/11), src/ [#12](https://github.com/erik-hedstrom/loadout/pull/12), Markdown [#15](https://github.com/erik-hedstrom/loadout/pull/15); Markdown rest in review, [#26](https://github.com/erik-hedstrom/loadout/pull/26)); the WSL-only `bench.test.ts` failure moved to E15 |
 | E9 | P0 | Security hardening from the read-only Sol review | Codex | cloud | done ([PR #4](https://github.com/erik-hedstrom/loadout/pull/4), re-measure [PR #7](https://github.com/erik-hedstrom/loadout/pull/7)) |
 | E3 | P1 | Split the test file per module | Codex | cloud | todo |
 | E5 | P1 | Changelog and release automation | Codex | cloud | todo (with A4) |
@@ -950,6 +992,7 @@ Learnings (2026-10-09):
 | E11 | P1 | Fixed-text diagnostics in the gateway and relay | Codex | cloud | done ([PR #10](https://github.com/erik-hedstrom/loadout/pull/10)) |
 | E12 | P1 | A tool-less Codex bench backend (codex-cli 0.160.1 keeps unified_exec on) | Codex | local | todo |
 | E13 | P1 | Apply Engineer standards to both review paths, with a blocking necessity pass | Codex + Claude review | cloud | review ([#41](https://github.com/erik-hedstrom/loadout/pull/41)) |
+| E15 | P1 | Test flakes: WSL-only `bench.test.ts` failure, Windows spawn timeouts | Claude | local | review ([#44](https://github.com/erik-hedstrom/loadout/pull/44)) |
 
 **E10. Build without optional dependencies.** src/embed.ts:24 types
 `@huggingface/transformers` with `typeof import(...)`. So `tsc` fails when npm
@@ -1016,6 +1059,33 @@ the rules are published and exercised on a representative PR.
 
 Learned: on Windows, `npm test` needed repository-local TEMP/TMP when the
 sandbox could not load Vitest's temp files.
+
+**E15. Test flakes on the merge gate.** Two failures that were already on
+main made the gate noisy during the 2026-10-16 merge round (CI reruns,
+"known flake" notes).
+- `bench.test.ts` "keeps the escaped Claude catalog in an identical
+  system-prompt file across batches" failed every time in WSL2. There `which`
+  finds the Windows `claude`, so `systemPromptArgs` (bench/lib.ts) translates
+  the prompt-file path through `wslpath`, which the test file mocks: the path
+  became the mocked `codex features list` text. The test now sets `PATH` to an
+  empty folder.
+- Tests that spawn `node --import tsx` failed at random on Windows runners at
+  vitest's 5 s default (doctor, audit, bench, loadout and overhead tests in CI
+  history). Vitest fails a synchronous test that ran past its timeout even
+  after `spawnSync` returns, so only a higher `testTimeout` helps. It is now
+  30 s in vitest.config.ts. Per-test overrides of 30 s or less are gone; the
+  audit case-variant test keeps its loop guard, raised from 5 s to 15 s.
+
+Acceptance: the bench test passes in WSL2; the full suite passes on Windows
+under load; `ci-full` green.
+
+Learnings:
+- Repro for the timeouts: the full suite pinned to 4 cores (CI's
+  `windows-latest` size) next to a busy loop on the same cores. Before: 25
+  failed, all at 5 s or at a lower per-test timeout. After: all passed; the
+  slowest test took 13.4 s.
+- `codex features list` and `wslpath` share the mocked `execFileSync` in
+  bench.test.ts. A test that reaches either one must control its input.
 
 **E1. CI.**
 
@@ -1118,7 +1188,7 @@ Starting points from Sol's review (2026-10-07):
 - `test/`: bench.test.ts "keeps the escaped Claude catalog…" fails on a
   machine where `which('claude')` finds a Windows `claude` under `/mnt/c`.
   `pathTranslator` then calls the mocked `execFileSync`. Seen in WSL during
-  D10; CI does not have that PATH.
+  D10; CI does not have that PATH. Fixed in E15.
 
 Markdown area ([#15](https://github.com/erik-hedstrom/loadout/pull/15)):
 `pr-reviewer` found 28 items in DESIGN, HANDOFF, README and bench/README; Sol

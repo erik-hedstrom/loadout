@@ -39,7 +39,7 @@ export function readJsonl<T>(file: string): T[] {
     .map((line) => JSON.parse(line) as T);
 }
 
-/** Rebuild a stored decision without routing again; empty arms retain only the tier. */
+/** Rebuild a stored decision without routing again. Empty arms keep the row's tier so both arms of a pair run the same model: the comparison is about skills, not tier. */
 export function decisionFor(row: SweepRow, library: Capability[], empty: boolean): RouteDecision {
   const byKey = new Map(library.map((c) => [capabilityKey(c), c]));
   const scored = (picks: SweepRow['loaded']): ScoredCapability[] =>
