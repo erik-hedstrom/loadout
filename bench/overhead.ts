@@ -153,9 +153,13 @@ export function cli(host: Host) {
   return { bin: host, prefix: [] };
 }
 
-/** The isolated Claude configuration up to the MCP servers, shared by B1 and B7. */
-export function claudeIsolation(mcp: object, settings: object = { disableAllHooks: true }): string[] {
-  return ['-p', '--output-format', 'stream-json', '--verbose', '--no-session-persistence', '--restricted', '--setting-sources', '', '--settings', JSON.stringify(settings), '--strict-mcp-config', '--mcp-config', JSON.stringify({ mcpServers: mcp })];
+/**
+ * The isolated Claude configuration up to the MCP servers, shared by B1, B7 and the A/B pilot. `--restricted` removes the
+ * built-in tools that run code, which the zero-tool studies want and the pilot's agents need; `prompt` follows `-p`, because
+ * `--mcp-config` is variadic and would swallow a trailing positional.
+ */
+export function claudeIsolation(mcp: object, settings: object = { disableAllHooks: true }, opts: { restricted?: boolean; prompt?: string } = {}): string[] {
+  return ['-p', ...(opts.prompt === undefined ? [] : [opts.prompt]), '--output-format', 'stream-json', '--verbose', '--no-session-persistence', ...(opts.restricted === false ? [] : ['--restricted']), '--setting-sources', '', '--settings', JSON.stringify(settings), '--strict-mcp-config', '--mcp-config', JSON.stringify({ mcpServers: mcp })];
 }
 /** Codex overrides shared by exec, debug and app-server (ignore-user-config is exec-only). */
 export function codexSettings(mcpServers: object): string[] {

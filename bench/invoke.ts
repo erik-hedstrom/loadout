@@ -33,6 +33,7 @@ import { loadConfig, paths } from '../src/config.js';
 import { claudeArgs, claudeHookBlock, codexArgs, hookCommand, materialize, pathTranslator, which, type Agent } from '../src/launch.js';
 import { capabilityKey, scanLibrary } from '../src/library.js';
 import { decisionFor, readJsonl, run } from './lib.js';
+import { hookShim, toolEvents, type Inventory } from './stream.js';
 import type { SweepRow } from './sweep.js';
 
 const { values, positionals } = parseArgs({
@@ -75,14 +76,6 @@ if (agent === 'claude') {
 const NOTE = '\n\n(Test run: nothing is attached and the folder is empty. Where the request refers to files or data you do not have, create small realistic sample inputs and carry on.)';
 const out = join(dir, `invoke-${agent}-${mode}.jsonl`);
 
-/** One tool call; `ok` is false when the call itself failed (a failed call is not an invocation). */
-interface Event { tool: string; detail: string; ok: boolean; id?: string }
-interface Inventory { plugins: { name: string; path?: string }[] }
-// Rows are committed to a public repo: a hook keeps what validity needs, not the user's plugin
-// list, local paths or the hook's skill text. `injected` names the skills whose full text the hook
-// put in context: those reach the agent without an open.
-interface HookExecution { id: string; name: string; exit_code?: number; outcome?: string; context: boolean; injected: string[] }
-
 const isLoadout = (name: string) => /^loadout(?:@|$)/i.test(name);
 
 function checkInventory(inventory: Inventory | undefined, hookInvocations: number, uncountedContext: number, pluginDir?: string): string | undefined {
@@ -105,68 +98,6 @@ function checkInventory(inventory: Inventory | undefined, hookInvocations: numbe
   return undefined;
 }
 
-/** Tool calls from Claude's stream-json or Codex's --json event stream. */
-function toolEvents(stream: string): { events: Event[]; hooks: HookExecution[]; costUsd?: number; inventory?: Inventory; failedBeforeModel: boolean; result?: { isError: boolean; subtype?: string } } {
-  const events: Event[] = [];
-  const hooks = new Map<string, HookExecution>();
-  let costUsd: number | undefined;
-  let failedBeforeModel = false;
-  let modelResponded = false;
-  let result: { isError: boolean; subtype?: string } | undefined;
-  let inventory: Inventory | undefined;
-  for (const line of stream.split('\n')) {
-    let e: any;
-    try {
-      e = JSON.parse(line);
-    } catch {
-      continue;
-    }
-    if (e.type === 'system' && e.subtype === 'init') {
-      // A malformed init counts as no inventory, so the row is still saved as invalid.
-      inventory = Array.isArray(e.plugins) ? { plugins: e.plugins } : undefined;
-    } else if (e.type === 'system' && e.hook_event === 'UserPromptSubmit' && (e.subtype === 'hook_started' || e.subtype === 'hook_response')) {
-      const hook: HookExecution = hooks.get(e.hook_id) ?? { id: e.hook_id, name: e.hook_name, context: false, injected: [] };
-      if (e.subtype === 'hook_response') {
-        hook.exit_code = e.exit_code;
-        hook.outcome = e.outcome;
-        // Silent hooks and other hooks need not return JSON.
-        let context: unknown;
-        try { context = JSON.parse(e.stdout).hookSpecificOutput?.additionalContext; } catch { context = undefined; }
-        if (typeof context === 'string') {
-          hook.context = context.includes('<skill_relevance>');
-          hook.injected = [...context.matchAll(/<skill name="([^"]*)"/g)].map((m) => m[1]!);
-        }
-      }
-      hooks.set(e.hook_id, hook);
-    } else if (e.type === 'assistant') {
-      modelResponded = true;
-      // A call only counts once its result arrives without an error.
-      for (const b of e.message?.content ?? []) if (b.type === 'tool_use') events.push({ tool: b.name, detail: JSON.stringify(b.input), ok: false, id: b.id });
-    } else if (e.type === 'user') {
-      // Claude reports each tool result in the next user message.
-      for (const b of e.message?.content ?? []) {
-        if (b.type === 'tool_result' && !b.is_error) for (const ev of events) if (ev.id === b.tool_use_id) ev.ok = true;
-      }
-    } else if (e.type === 'result') {
-      costUsd = e.total_cost_usd;
-      // An expired login ends as is_error at $0 (seen 2026-10-12). It would otherwise read as a miss.
-      // A run that used its turns has a cost, so it stays a valid miss as in the earlier arms.
-      failedBeforeModel = e.is_error === true && !(e.total_cost_usd > 0);
-      // Kept on the row, so analysis can tell a quota or API stop after billed turns from a miss.
-      result = { isError: e.is_error === true, subtype: e.subtype };
-    } else if (e.type === 'item.completed') {
-      const it = e.item ?? {};
-      const toolError = it.result?.isError === true || it.result?.is_error === true;
-      const ok = it.status === 'completed' && !it.error && !toolError && (it.exit_code === undefined || it.exit_code === null || it.exit_code === 0);
-      if (it.type === 'command_execution') events.push({ tool: 'shell', detail: String(it.command ?? ''), ok });
-      if (it.type === 'mcp_tool_call') events.push({ tool: `mcp__${it.server}__${it.tool}`, detail: JSON.stringify(it.arguments ?? {}), ok });
-    }
-  }
-  // A run killed before any model response (a stall after init and the hook) sends no result event.
-  if (!result) failedBeforeModel = !modelResponded;
-  return { events, hooks: [...hooks.values()], costUsd, inventory, failedBeforeModel, result };
-}
-
 let invalidRun: string | undefined;
 for (const id of values.ids.split(',')) {
   const row = rows.get(id);
@@ -182,12 +113,8 @@ for (const id of values.ids.split(',')) {
   const marker = shimDir ? join(shimDir, `${id}.invocations`) : '';
   if (shimDir) {
     writeFileSync(marker, '');
-    const quote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
     const markerPath = windowsAgent || process.platform === 'win32' ? toPath(marker).replace(/\\/g, '/') : marker;
-    // "invoked" before the hook runs (a killed hook still counts); "context" after, so silent
-    // invocations cannot cover for context that an uncounted hook supplied.
-    const m = quote(markerPath);
-    writeFileSync(join(shimDir, 'loadout'), `#!/bin/sh\nprintf 'invoked\\n' >> ${m}\nout=$(/bin/sh -c ${quote(hookCommand('claude', windowsAgent))}); status=$?\ncase $out in *'<skill_relevance>'*) printf 'context\\n' >> ${m};; esac\nprintf '%s' "$out"\nexit $status\n`, { mode: 0o700 });
+    writeFileSync(join(shimDir, 'loadout'), hookShim(markerPath, hookCommand('claude', windowsAgent)), { mode: 0o700 });
   }
   const task = row.request + NOTE;
   const args =
