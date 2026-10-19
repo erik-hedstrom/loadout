@@ -44,7 +44,7 @@ describe('Codex plugin', () => {
     expect(JSON.parse(readFileSync(join(dir, '.mcp.json'), 'utf8'))).toEqual({
       mcpServers: {
         loadout: {
-          command: 'loadout', args: ['mcp'], env_vars: ['TYPESAFE_API_KEY', 'LOADOUT_HOME'],
+          command: 'loadout', args: ['mcp'], env_vars: ['TYPESAFE_API_KEY', 'TYPESAFE_BASE_URL', 'LOADOUT_HOME'],
           tools: Object.fromEntries(SEARCH_TOOLS.map((tool) => [tool, { approval_mode: 'approve' }])),
         },
       },

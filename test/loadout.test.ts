@@ -154,15 +154,14 @@ describe('E9 security', () => {
       // No embeddings: the model load would dominate the run time and is not what this test checks.
       writeFileSync(join(home, 'config.json'), JSON.stringify({ jev: { baseUrl: url }, embeddings: false }));
       const canary = 'e9-key-canary';
-      const routeWith = (extra: Record<string, string>) => new Promise<{ code: number | null; out: string }>((done) => {
-        const child = spawn(process.execPath, ['--import', 'tsx', join(import.meta.dirname, '../src/cli.ts'), 'route', TASK], {
-          env: { ...process.env, LOADOUT_HOME: home, TYPESAFE_API_KEY: canary, TYPESAFE_BASE_URL: '', ...extra },
-        });
+      const routeIn = (env: NodeJS.ProcessEnv) => new Promise<{ code: number | null; out: string }>((done) => {
+        const child = spawn(process.execPath, ['--import', 'tsx', join(import.meta.dirname, '../src/cli.ts'), 'route', TASK], { env });
         let out = '';
         child.stdout.on('data', (d) => (out += d));
         child.stderr.on('data', (d) => (out += d));
         child.on('close', (code) => done({ code, out }));
       });
+      const routeWith = (extra: Record<string, string>) => routeIn({ ...process.env, LOADOUT_HOME: home, TYPESAFE_API_KEY: canary, TYPESAFE_BASE_URL: '', ...extra });
       const refused = await routeWith({});
       expect(refused.code).not.toBe(0);
       expect(refused.out).toContain('TYPESAFE_BASE_URL');
@@ -170,7 +169,15 @@ describe('E9 security', () => {
       expect(requests).toEqual([]);
       // Named outside config.json, the same URL does receive the key.
       await routeWith({ TYPESAFE_BASE_URL: url });
-      expect(requests[0]).toBe(`Bearer ${canary}`);
+      expect(requests).toEqual([`Bearer ${canary}`]);
+      // Codex starts the plugin's server with its own baseline variables plus the plugin's env_vars only, so
+      // the URL must be among them: run with exactly that environment.
+      const plugin = JSON.parse(readFileSync(join(import.meta.dirname, '../plugins/loadout-codex/.mcp.json'), 'utf8'));
+      const shell: NodeJS.ProcessEnv = { ...process.env, LOADOUT_HOME: home, TYPESAFE_API_KEY: canary, TYPESAFE_BASE_URL: url };
+      const baseline = ['PATH', 'HOME', 'USERPROFILE', 'SYSTEMROOT', 'TEMP', 'TMP', 'TMPDIR'];
+      const keep = new Set([...baseline, ...plugin.mcpServers.loadout.env_vars].map((name: string) => name.toUpperCase()));
+      await routeIn(Object.fromEntries(Object.entries(shell).filter(([name]) => keep.has(name.toUpperCase()))));
+      expect(requests).toEqual([`Bearer ${canary}`, `Bearer ${canary}`]);
     } finally {
       listener.close();
     }
@@ -1082,7 +1089,7 @@ describe('launch', () => {
 
     const codex = materialize(decision, 'codex', DEFAULT_CONFIG, tempDir('loadout-s-'));
     const overrides = codexArgs(codex, TASK, []).filter((a) => a.startsWith('mcp_servers.'));
-    expect(overrides[0]).toMatch(/^mcp_servers\.loadout=\{ "command" = .*"env_vars" = \["TYPESAFE_API_KEY"\], "tools" = \{ "find_tools" = \{ "approval_mode" = "approve" \}, "load_skill" = \{ "approval_mode" = "approve" \} \} \}$/);
+    expect(overrides[0]).toMatch(/^mcp_servers\.loadout=\{ "command" = .*"env_vars" = \["TYPESAFE_API_KEY", "TYPESAFE_BASE_URL"\], "tools" = \{ "find_tools" = \{ "approval_mode" = "approve" \}, "load_skill" = \{ "approval_mode" = "approve" \} \} \}$/);
     expect(overrides[0]).not.toContain('call_server_tool');
     expect(codexArgs(codex, TASK, []).at(-1)).toContain('loadout find_tools tool');
 
@@ -1099,7 +1106,7 @@ describe('launch', () => {
     expect(codexWsl.where).toContain('WSL');
     expect(codex).not.toContain('codex plugin add');
     expect(codex).toMatch(/\[mcp_servers\.loadout\]\ncommand = "wsl\.exe"\nargs = \[.*"mcp", "--windows-paths"\]/);
-    expect(codex).toContain('env_vars = ["TYPESAFE_API_KEY"]');
+    expect(codex).toContain('env_vars = ["TYPESAFE_API_KEY", "TYPESAFE_BASE_URL"]');
     // Codex waits for a required server before the first request (D17).
     expect(parseToml(codex)).toMatchObject({ mcp_servers: { loadout: { command: 'wsl.exe', required: true } } });
     expect(codex).toContain('[mcp_servers.loadout.tools.find_tools]\napproval_mode = "approve"');

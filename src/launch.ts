@@ -327,7 +327,7 @@ export function hostSetup(host: Host, windows: boolean): { where: string; snippe
           `command = ${toToml(s.command)}`,
           `args = ${toToml(s.args ?? [])}`,
           ...(s.env ? [`env = ${toToml(s.env)}`] : []),
-          `env_vars = ["TYPESAFE_API_KEY"]`,
+          `env_vars = ["TYPESAFE_API_KEY", "TYPESAFE_BASE_URL"]`,
           // Through wsl.exe the server can miss Codex's 1 s grace for optional servers; Codex then adds its
           // tools mid-session, which changes the request prefix (D17). The plugin leaves this out on purpose:
           // users cannot override a plugin server's `required`, and a failed start would block every session.
@@ -488,8 +488,9 @@ export function codexArgs(session: Session, task: string, extra: string[], opts:
     used.add(SEARCH_SERVER);
     const server = {
       ...session.search,
-      // Forwarded from the environment, never put on the command line.
-      env_vars: ['TYPESAFE_API_KEY'],
+      // Forwarded from the environment, never put on the command line. Codex gives a stdio server only these
+      // and its default variables, and jevBaseUrl() needs TYPESAFE_BASE_URL to reach a non-default Jev host.
+      env_vars: ['TYPESAFE_API_KEY', 'TYPESAFE_BASE_URL'],
       tools: Object.fromEntries(SEARCH_TOOLS.map((t) => [t, { approval_mode: 'approve' }])),
     };
     args.push('-c', `mcp_servers.${SEARCH_SERVER}=${toToml(server)}`);
