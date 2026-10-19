@@ -724,7 +724,7 @@ describe('positive controls', () => {
         expect(canaryFound(gateway, c, [{ name: 'mcp__loadout__server_tools', input, isError: Boolean(res.isError), content }]), JSON.stringify(content).slice(0, 300)).toBe(true);
       }
     } finally { await client.close(); await gw.close(); }
-  }, 30_000);
+  });
 
   it('picks a different canary per configuration: the last tool of the last server', () => {
     const picks = (['n1', 'n5', 'n20'] as const).map(canaryOf);
