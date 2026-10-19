@@ -638,9 +638,10 @@ in [LEAKAGE.md](LEAKAGE.md).
   `large-bare`, from [bench/c2-score.ts](../../c2-score.ts). All 14 tied: S =
   0.50, interval 0.39 to 0.61, "not shown". One win and 13 ties: 0.54, 0.42 to
   0.66, "not shown". Two wins, 12 ties: 0.57, 0.448 to 0.70, "not shown". Three
-  wins, 11 ties: 0.61, 0.48 to 0.74, "match". Four wins, 10 ties: 0.64, 0.50 to
+  wins, 11 ties: 0.61, 0.48 to 0.74, "match". Four wins, 10 ties: 0.64, 0.504 to
   0.77, "better". Nine wins, one tie, four losses: 0.68, 0.43 to 0.85, "not
-  shown". So "match" needs 3 wins and no loss; ties alone never reach it. Erik
+  shown". So the fewest wins that reach "match" is 3, with no loss; ties alone
+  never reach it. Erik
   set the margin at 0.05 (Decided by Erik).
 - **Secondary, never a conclusion: the decisive-pair win rate,** wins / (wins +
   losses) with a 95% Wilson interval, next to the tie and split counts. It
@@ -696,14 +697,14 @@ stay below 100k; the worst request below does not assume it.
 | Item | Count | Estimate |
 |---|---:|---|
 | `large-bare` runs | 18 | $6-27 |
-| `small-bare` and `small-loadout` runs | 36 | $0.60-2.70 (Haiku 4.5: $6-27) |
+| `small-bare` and `small-loadout` runs | 36 | $0.60-2.70 |
 | Jev routing for `small-loadout` ($0.0012 per decision, [C1](../../RESULTS.md#c1-2026-10-08-new-held-out-requests)), hook only | 18 | about $0.02; `find_tools` calls add more, not measured |
-| Smoke run, one run per arm | 3 | $0.36-1.65 (Haiku 4.5: $0.65-3.00) |
+| Smoke run, one run per arm | 3 | $0.36-1.65 |
 | Codex judging (3 pairs x 2 orders x 18 tasks, then the same number of guess calls), sequential | 216 | plan quota, cost not reported |
 
 Prices are Anthropic's list prices as of 2026-10-06, not figures from RESULTS.
-Expected Claude cost at list price, with no reruns: about $7-31 with Haiku 5.5,
-$12-57 with Haiku 4.5. It is cash: each batch's workspace key bills the API.
+Expected Claude cost at list price, with no reruns: about $7-31 with Haiku 5.5.
+It is cash: each batch's workspace key bills the API.
 
 A run's ceiling (`--max-budget-usd`) is its high per-run figure plus room for
 the worst request, since a stop can land late (Arms). A worst request is at most
@@ -718,7 +719,6 @@ fit under it (the smoke run checks).
 |---|---:|---:|
 | Sonnet 5.5 | $4.10 | $9.70 ($1.50 + 2 x $4.10) |
 | Haiku 5.5 | $0.205 | $0.485 ($0.075 + 2 x $0.205) |
-| Haiku 4.5 | $2.05 | $4.85 ($0.75 + 2 x $2.05) |
 
 **Approvals.** For each arm the approval is (n - 1) x high + ceiling, which is
 also the monthly spend limit of that arm's workspace (Credentials and spend),
@@ -733,7 +733,9 @@ can spend up to its ceiling.
 - Before each task and each rerun, the runner checks that every arm's approved
   cost minus its spent cost (the higher of the stream's priced usage and the
   vendor's, Jev and invalid runs included) is at least that arm's ceiling, and
-  that the approved hours cover it. If any arm fails, every arm stops at that
+  that the approved hours cover it. Those hours are agent run time as the
+  runner measures it (108 attempts x 15 minutes, about 27 h), not collection or
+  extraction time. If any arm fails, every arm stops at that
   same position.
 - The task whose rerun cannot be funded, and every task after the stop, are
   "not run" in all arms; the runs already made for that task are set aside and
@@ -743,19 +745,20 @@ can spend up to its ceiling.
   could fund; controls and non-controls fall into it as they come. Nothing in
   the rate depends on one arm's spending alone.
 
-| Batch | Approved | Haiku 4.5 |
-|---|---:|---:|
-| `large-bare` | 35 x $1.50 + $9.70 = $62.20 | same |
-| `small-bare` | 35 x $0.075 + $0.485 = $3.11 | 35 x $0.75 + $4.85 = $31.10 |
-| `small-loadout` | $3.11 | $31.10 |
-| Smoke run (two small arms first, then `large-bare`) | 2 x $0.075 + $9.70 = $9.85 | 2 x $0.75 + $9.70 = $11.20 |
-| Jev, `small-loadout` and smoke | about $0.04 | same |
-| **Total** | **about $78** | **about $136** |
+| Batch | Approved |
+|---|---:|
+| `large-bare` | 35 x $1.50 + $9.70 = $62.20 |
+| `small-bare` | 35 x $0.075 + $0.485 = $3.11 |
+| `small-loadout` | $3.11 |
+| Smoke run (two small arms first, then `large-bare`) | 2 x $0.075 + $9.70 = $9.85 |
+| Jev, `small-loadout` and smoke | about $0.04 |
+| **Total** | **about $78** |
 
 These are caps, not expectations: the expected cost is the no-reruns figure
-above. Wall clock is about 108 x 15 minutes (the cap; about 27 h) plus the smoke
-run, up to 10 minutes per attempt for collection and extraction, and the wait
-for the vendor's usage: a planning figure the smoke run replaces with measured
+above. Wall clock is about 108 x 15 minutes (the cap; about 27 h, the approved
+hours) plus the smoke run, up to 10 minutes per attempt for collection and
+extraction, and the wait for the vendor's usage, which the approved hours do
+not count: a planning figure the smoke run replaces with measured
 ones before the full run is approved.
 
 ## Decided by Erik (2026-10-19)
@@ -769,13 +772,13 @@ ones before the full run is approved.
   about $78 (Expected spend). Approved hours: about 27 h.
 - Matching margin: 0.05 below parity (Analysis).
 - Licences: before anything is pushed, check the licences of the skills a run
-  loaded; where a licence is unclear, commit only derived values.
+  loaded.
 - As drafted: delegation off in every arm (Arms); invalid and `output rejected`
   runs score as a loss for their arm, and each `invalid` run still halts the
   plan for Erik to classify (Analysis); compaction off in every arm; raw
   results committed after the gates under What is committed, with Erik reading
-  the folder before any push; the loadout arm measures hook plus search; the
-  prompt cache shared between an arm's runs is a stated limit (Credentials and
+  the folder before any push; the loadout arm measures hook plus search (as
+  drafted); the prompt cache shared between an arm's runs is a stated limit (Credentials and
   spend); no Codex-family replication (it needs a Claude judge).
 
 ## Open for Erik

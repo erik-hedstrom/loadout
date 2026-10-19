@@ -530,14 +530,14 @@ Learnings (cloud half): [fixtures and protocol](../../bench/fixtures/c2/PROTOCOL
   Spend is the vendor's usage for the key, checked against the stream to 5%.
 - The score is S = 0.5 + (W - L) / (2n) over all paired tasks, with a Tango
   score interval (`bench/c2-score.ts`) and a margin of 0.05 (Erik, 2026-10-19).
-  With 14 pairs, "match" needs 3 wins and no loss (lower bound 0.476), and two
-  wins and 12 ties stay "not shown" (0.448); the decisive-pair rate is
+  With 14 pairs, the fewest wins that reach "match" is 3, with no loss (lower
+  bound 0.476), and two wins and 12 ties stay "not shown" (0.448); the decisive-pair rate is
   secondary ([Analysis](../../bench/fixtures/c2/PROTOCOL.md#analysis)).
 - The documented env switches turn off compaction, the non-streaming fallback,
   the 1-hour cache TTL and the background title request in all arms, and every
   delegation tool is denied. Every `invalid` run halts the plan (all arms) for
-  Erik to classify. Approvals are (n - 1) x high + ceiling, about $78 with
-  Haiku 5.5 and $136 with Haiku 4.5, under one shared stopping rule: see
+  Erik to classify. Approvals are (n - 1) x high + ceiling, about $78 (Haiku
+  5.5), under one shared stopping rule: see
   [Arms](../../bench/fixtures/c2/PROTOCOL.md#arms) and
   [Expected spend](../../bench/fixtures/c2/PROTOCOL.md#expected-spend-local-run).
 - Raw results are committed after a secret scan and a paths and usernames scan,
@@ -545,9 +545,8 @@ Learnings (cloud half): [fixtures and protocol](../../bench/fixtures/c2/PROTOCOL
   ([What is committed](../../bench/fixtures/c2/PROTOCOL.md#what-is-committed)).
 - Decided by Erik (2026-10-19): the full protocol; a VM with the Bash sandbox
   inside it; Haiku 5.5 and Sonnet 5.5; approvals of about $78 and 27 h; the 0.05
-  margin; a licence check of the loaded skills before any push, committing only
-  derived values where a licence is unclear; the shared prompt cache accepted as
-  a limit. Still open before the run: the Anthropic Console organization and
+  margin; a licence check of the loaded skills before any push; the shared prompt
+  cache accepted as a limit. Still open before the run: the Anthropic Console organization and
   workspaces (and who archives them), the dedicated Jev key and whether Jev
   reports usage per key, and E14
   ([Decided by Erik](../../bench/fixtures/c2/PROTOCOL.md#decided-by-erik-2026-10-19)).

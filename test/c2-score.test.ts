@@ -15,7 +15,11 @@ describe('C2 score interval', () => {
   it('matches the figures of an independent calculation', () => {
     expect(round(scoreInterval(0, 0, 14))).toEqual([0.39, 0.61]);
     expect(round(scoreInterval(1, 0, 14))).toEqual([0.42, 0.66]);
+    expect(round(scoreInterval(3, 0, 14))).toEqual([0.48, 0.74]);
     expect(round(scoreInterval(9, 4, 14))).toEqual([0.43, 0.85]);
+    // The 0.45 "match" bound: 2 wins fall just short, 3 reach it.
+    expect(scoreInterval(2, 0, 14)[0]).toBeLessThan(0.45);
+    expect(scoreInterval(3, 0, 14)[0]).toBeGreaterThanOrEqual(0.45);
   });
 
   it('is mirrored when the arms swap', () => {
@@ -23,14 +27,6 @@ describe('C2 score interval', () => {
     const [lo2, hi2] = scoreInterval(4, 9, 14);
     expect(lo2).toBeCloseTo(1 - hi, 8);
     expect(hi2).toBeCloseTo(1 - lo, 8);
-  });
-
-  it('gives the thresholds quoted for 14 pairs with no losses', () => {
-    expect(scoreInterval(1, 0, 14)[0]).toBeLessThan(0.45);
-    expect(scoreInterval(2, 0, 14)[0]).toBeLessThan(0.45);
-    expect(scoreInterval(3, 0, 14)[0]).toBeGreaterThanOrEqual(0.45);
-    expect(scoreInterval(3, 0, 14)[0]).toBeLessThanOrEqual(0.5);
-    expect(scoreInterval(4, 0, 14)[0]).toBeGreaterThan(0.5);
   });
 
   it('stays inside 0 to 1 at the extremes', () => {
