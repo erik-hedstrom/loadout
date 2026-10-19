@@ -92,7 +92,8 @@ describe('E9 security', () => {
       for (const relative of ['.', '', 'repo']) {
         vi.stubEnv('HOME', relative);
         vi.stubEnv('USERPROFILE', relative);
-        expect(() => loadoutHome(), relative).toThrow('absolute');
+        // On Windows libuv itself rejects a relative USERPROFILE (ENOENT), before our check runs; either way it throws.
+        expect(() => loadoutHome(), relative).toThrow(/absolute|uv_os_homedir/);
       }
       vi.unstubAllEnvs();
       const absolute = join(tmpdir(), 'loadout-home');
@@ -1472,10 +1473,7 @@ describe('cache and state folders under the loadout home', () => {
     // Not under the home: not ours to police, however it is spelled.
     expect(isPlainFolder(outside)).toBe(true);
     expect(isPlainFolder(join(dir, '..', 'elsewhere'))).toBe(true);
-    // A relative home, and a home that is itself a link, are fine.
-    vi.stubEnv('LOADOUT_HOME', relative(process.cwd(), dir));
-    expect(isPlainFolder(join(dir, 'index'))).toBe(true);
-    expect(isPlainFolder(join(dir, 'linked'))).toBe(false);
+    // A home that is itself a link is fine. (A relative home is refused by loadoutHome, tested under E9.)
     const homeLink = join(tempDir('loadout-link-'), 'home');
     symlinkSync(dir, homeLink);
     vi.stubEnv('LOADOUT_HOME', homeLink);
