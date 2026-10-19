@@ -1,0 +1,75 @@
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { spawn } from 'node:child_process';
+import { afterAll, describe, expect, it } from 'vitest';
+import type { Capability } from '../src/types.js';
+import { decisionFor } from '../bench/lib.js';
+import type { SweepRow } from '../bench/sweep.js';
+
+const temps: string[] = [];
+afterAll(() => temps.forEach((dir) => rmSync(dir, { recursive: true, force: true })));
+
+const ids = ['a', 'b', 'c'];
+
+/** Runs `outcome.ts --judge-only` with a stand-in `claude` as the only thing on PATH, so a real one can never be reached. */
+async function judge(standInMode: number) {
+  const dir = mkdtempSync(join(tmpdir(), 'loadout-outcome-test-'));
+  temps.push(dir);
+  const sweep = join(dir, 'sweep');
+  for (const id of ids) {
+    for (const arm of ['bare', 'loadout']) {
+      mkdirSync(join(sweep, 'outcome', id, arm), { recursive: true });
+      writeFileSync(join(sweep, 'outcome', id, `${arm}.json`), JSON.stringify({ arm }));
+    }
+  }
+  writeFileSync(join(sweep, 'decisions.jsonl'), ids.map((id) => JSON.stringify({ id, request: 'r', tier: 'medium', loaded: [], offered: [] })).join('\n') + '\n');
+
+  const bin = join(dir, 'bin');
+  const log = join(dir, 'calls.log');
+  mkdirSync(bin);
+  writeFileSync(
+    join(bin, 'claude'),
+    `#!/bin/sh\n/bin/cat >/dev/null\necho start >> "${log}"\n/bin/sleep 0.2\necho end >> "${log}"\nprintf '{"structured_output":{"winner":"first","confidence":"high","reasons":"x"},"total_cost_usd":0,"duration_ms":1,"usage":{"input_tokens":1}}'\n`,
+    { mode: standInMode },
+  );
+
+  const code = await new Promise<number | null>((resolve) => {
+    const child = spawn(process.execPath, ['--import', 'tsx', 'bench/outcome.ts', sweep, '--ids', ids.join(','), '--judge-only'], {
+      cwd: join(import.meta.dirname, '..'),
+      env: { ...process.env, LOADOUT_HOME: dir, PATH: bin },
+      stdio: 'ignore',
+    });
+    child.on('close', resolve);
+  });
+  return { code, log, verdicts: join(sweep, 'outcome', 'verdicts.jsonl') };
+}
+
+// The stand-in `claude` is a shell script, which Windows cannot run from PATH.
+describe.skipIf(process.platform === 'win32')('bench/outcome.ts judging', () => {
+  it('runs one judge call at a time, so the cached prompt stays warm', async () => {
+    const { code, log, verdicts } = await judge(0o755);
+    expect(code).toBe(0);
+    // Two orders per request: overlapping calls would show "start" twice in a row.
+    expect(readFileSync(log, 'utf8').trim().split('\n')).toEqual(Array(ids.length * 2).fill(['start', 'end']).flat());
+    expect(readFileSync(verdicts, 'utf8').trim().split('\n')).toHaveLength(ids.length);
+  }, 60_000);
+
+  it('fails, and calls nothing else, when the stand-in cannot run', async () => {
+    const { code, log } = await judge(0o644);
+    expect(code).not.toBe(0);
+    expect(existsSync(log)).toBe(false);
+  }, 60_000);
+});
+
+describe('bench decisionFor', () => {
+  it("keeps the row's tier for the bare arm and carries no skills", () => {
+    const library: Capability[] = [{ id: 'skill:pdf', kind: 'skill', name: 'pdf', description: 'd', source: '/x/pdf' }];
+    const row: SweepRow = { id: 'a', category: 'c', request: 'r', tier: 'small', loaded: [{ key: 'pdf', fit: 0.9 }], offered: [{ key: 'pdf', fit: 0.5 }], shortlist: [], costUsd: 0, ms: 0 };
+    expect(decisionFor(row, library, false).selected).toHaveLength(1);
+    const bare = decisionFor(row, library, true);
+    expect(bare.tier).toBe(row.tier);
+    expect(bare.selected).toEqual([]);
+    expect(bare.suggested).toEqual([]);
+  });
+});
