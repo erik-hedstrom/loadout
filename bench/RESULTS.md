@@ -166,6 +166,71 @@ calls. The rerun passed every guard. Spend: 16 haiku calls with rows (about
 136k input tokens) plus up to 4 probes, on the subscription. No Jev or Codex
 spend.
 
+## C13 (2026-10-16): pure-Jev baseline on main
+
+Before more Claude Code and Codex spend, the router on main (155d7ec, after
+D15 and B7) was measured with Jev alone: three identical sweeps of v4's 315
+requests and of C1's 300, and the gold-label route bench. No retuning, no new
+judging: the sweeps are scored offline against the earlier judgements
+(`judge.ts --offline`, backlog C13). Library and embeddings as in v4 and C1.
+
+**Quality, test split** (95% Wilson intervals). Offline scoring reuses the
+judge's earlier ratings; a load it never rated is "unrated", and load
+precision is given as a pair: unrated counted not useful / counted useful.
+
+Usefulness rows are lower bounds: they count only skills the judge already rated helpful.
+
+| | v4 runs 1 / 2 / 3 (121 need) | v4 control, post-E9 | C1 runs 1 / 2 / 3 (84 need) | C1 at 7d90442 |
+|---|---|---:|---|---:|
+| A useful skill loaded | 74% / 74% / 74% (65–81) | 72% | 70% / 70% / 70% (60–79) | 73% |
+| Useful loaded or offered | 85% / 86% / 87% | 85% | 80% / 80% / 80% | 80% |
+| Nothing loaded when none is needed | 82% / 82% / 82% | 82% | 75% / 75% / 75% | 74% |
+| Loaded skills that are useful | 78–82% / 80–82% / 79–82% | 80% | 65–71% / 67–70% / 67–70% | 64% |
+| Unrated loads | 7 / 4 / 5 of ~155 | — | 7 / 3 / 4 of ~115 | — |
+
+- Quality on main is within the intervals of the earlier runs on both
+  request sets. C1's precision gap against v4 is still there.
+- Misleading loads: **not shown.** Offline scoring counts only loads the
+  judge already rated misleading (1–2%), and the unrated loads could be
+  misleading too. C1's 7% at 7d90442 is not comparable until they are judged.
+- v4 is scored against the post-E9 control's ratings only. Pooling all four
+  earlier v4 judgings fails: the judge rated the same request and skill
+  differently in two of them (`integrations-04`, `cli-creator`).
+- "Missed a clearly better skill" is not shown offline.
+
+**Gold tasks** (route bench, 199 tasks × 1,000 / 5,000 / 20,000 skills,
+policy tuned on dev, reported on test): recall 93% / 92% / 90% with 5%
+needless loads at the default budget; v3 had 94% / 95% / 93% with 5%. A second
+complete run of the same bench, started 10 minutes earlier on the same
+checkout (its origin was not recorded), gave 93% / 93% / 92%, 5% needless.
+Both are within v3's pooled interval (90–96%).
+
+**Stability** (`bench/stability.ts`, test split):
+
+| | v4 (213) | C1 (201) |
+|---|---:|---:|
+| Same loaded set in all three runs | 89% (190) | 91% (183) |
+| Mean pairwise Jaccard, loaded | 0.95 | 0.95 |
+| Same loaded-or-offered set in all three runs | 83% (177) | 84% (168) |
+
+- About one request in ten gets a different loaded set on an identical rerun.
+  Single-run differences smaller than that are noise.
+- Keyword fallbacks: 1 in 1,815 decisions.
+- Latency per decision fell within the hour (test split): p50 from 2.8 s
+  (v4) and 2.0 s (C1) in the first runs to 1.0 s and 0.9 s in the last, p95
+  from 6.6 s and 5.2 s to 1.3 s and 1.1 s. Both parts fell: the Jev calls'
+  wall time (p50 2.1 → 0.9 s, v4, all rows) and the local remainder (0.57 →
+  0.10 s).
+  The machine ran other work during the first runs, and a Jev call's wall time
+  includes client-side delay, so the cause is not shown.
+- Cost per decision: $0.00122 (v4) and $0.00117 (C1).
+
+Rows: `results/2026-10-16T17-39-02-sweep/`, `18-07-05`, `18-19-29` (v4);
+`17-54-45`, `18-15-07`, `18-22-14` (C1); `18-24-39-…` and `18-14-42-…` (gold);
+`results/2026-10-16-jev-baseline/` (stability and the scripts that ran the
+burn and the scoring); the gold numbers are in each gold run's `summary.md`. Cost: Jev $2.21 for the sweeps and about
+$0.57 per gold run; scoring $0.
+
 ## C1 (2026-10-08): new held-out requests
 
 v4's 315 requests had been used for tuning twice, so the router was measured
