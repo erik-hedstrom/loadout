@@ -39,7 +39,7 @@ export function readJsonl<T>(file: string): T[] {
     .map((line) => JSON.parse(line) as T);
 }
 
-/** Rebuild a stored decision without routing again; empty arms retain only the tier. */
+/** Rebuild a stored decision without routing again. Empty arms keep the row's tier so both arms of a pair run the same model: the comparison is about skills, not tier. */
 export function decisionFor(row: SweepRow, library: Capability[], empty: boolean): RouteDecision {
   const byKey = new Map(library.map((c) => [capabilityKey(c), c]));
   const scored = (picks: SweepRow['loaded']): ScoredCapability[] =>
@@ -58,11 +58,11 @@ export function decisionFor(row: SweepRow, library: Capability[], empty: boolean
   };
 }
 
-export function run(bin: string, args: string[], cwd: string, timeoutMs: number): Promise<{ stdout: string; stderr: string; code: number | null; timedOut: boolean }> {
+export function run(bin: string, args: string[], cwd: string, timeoutMs: number, env?: NodeJS.ProcessEnv): Promise<{ stdout: string; stderr: string; code: number | null; timedOut: boolean }> {
   return new Promise((resolve) => {
     // Its own process group, so a timeout also stops what the CLI started (Codex's native
     // binary, the Windows process behind claude.exe), which would otherwise hold the pipes open.
-    const child = spawn(bin, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
+    const child = spawn(bin, args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
     let stdout = '';
     let stderr = '';
     let timedOut = false;

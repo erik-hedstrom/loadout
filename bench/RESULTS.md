@@ -45,7 +45,75 @@ Revised 2026-10-07 after PR #6 round 4, before any paid call. Results: [B1 resul
   No config edits or credential copying. Host-owned state: Claude adds temp-cwd entries to
   ~/.claude.json; Codex writes logs. Outcome quality is not measured.
 
+## B7 method (not run yet): what configured MCP servers cost per request
+
+No measurement exists for this study; this section holds the method only, and
+the harness is `bench/mcp-overhead.ts` (plan, estimate and decisions in the
+backlog, B7).
+
+- Fixture stdio MCP servers (issue tracker, database, browser, docs shapes) in
+  three configurations: 1 server (10 tools), 5 (110), 20 (485).
+- Claude Code, haiku, isolated configuration as in B1 but without `--tools`, so
+  the built-in tool search tool is not removed. Arms: no MCP; native with
+  `ENABLE_TOOL_SEARCH` default, `false` and `auto`; the servers behind
+  loadout's gateway (default and `false`). Codex: no MCP, native, gateway.
+- No ambient Claude plugins: every run gets a fresh empty `CLAUDE_CONFIG_DIR`
+  under the work root and requires `CLAUDE_CODE_OAUTH_TOKEN` for Erik's personal
+  subscription. Init must report `plugins: []`; missing, malformed or non-empty
+  plugins refuse the measurement, regardless of where plugin files live.
+- Two fresh sessions per arm, strictly one command at a time, every command of
+  every arm in one working directory that is emptied before it (both hosts put
+  the working directory in the prompt). Claude sends two requests in one process
+  (`--input-format stream-json`, `--no-session-persistence`); the counters of
+  each request are those of its assistant message: uncached, cache creation and
+  cache read input tokens. Codex sends one `--ephemeral` request with
+  `--ignore-user-config --ignore-rules`: a second turn would need a persisted
+  session.
+- Deferral is inferred, not reported by the host. A row is invalid, and not
+  recorded, unless it passes its controls:
+  - every MCP arm has a positive input delta over the same host's baseline;
+  - Claude: every declared server is connected and no others (from the init
+    list);
+  - Claude with tool search off lists every fixture tool;
+  - Claude with the default or `auto` lists every tool, or lists ToolSearch and
+    answers a canary: a third message, not measured and bounded by
+    `--max-turns 4`, asks for the last tool of the last server. Its lookup must
+    be a non-error ToolSearch result with a `tool_reference` block whose
+    `tool_name` is exactly the qualified tool; text that mentions the tool does
+    not count;
+  - the gateway lists loadout's four tools, or lists ToolSearch (tool search
+    defers loadout's own tools too), and a non-error `server_tools` result for
+    the canary's server has the tool's own line; `find_tools` may be tried
+    first;
+  - Codex's `app-server`, on an empty temporary `CODEX_HOME` like every free
+    command, lists exactly the declared servers and tools. That checks the
+    declaration, not what the paid exec loads (backlog, B7, "Isolation").
+- Reading column: Claude rows read "all loaded" with tool search off, "all
+  loaded (ToolSearch present)" or "(no ToolSearch)" where the default or `auto`
+  listed every tool, "deferred (canary found)" where fewer were listed, and
+  "gateway" for the gateway arms (the listed-tool columns show whether loadout's
+  own tools were deferred). Codex rows read "not shown": `exec` reports no tool
+  list. No model-free tool inventory was found for Claude (`init.tools` lists
+  what is loaded; whether `/context` runs under `-p` is unverified); Codex's
+  `mcpServerStatus/list` is one.
+- What each CLI can load, and what the harness does about it
+  (refuse, neutralise with a flag, or record as identical across arms), is one
+  table: backlog, B7, "Isolation". The plan prints it, and a `--run` saves the
+  names of the identical items present in `host-state.json`. A live Codex cloud
+  bundle, live server-managed Claude settings and the Windows
+  registry policy are not seen; the plan prints them as preconditions.
+- The host version is stored on each row and may not change during the study;
+  Claude's skill, command and agent inventory and Codex's version may not
+  drift.
+- Host writes are printed by the plan. Claude settings, history and plugins
+  move to its temporary home ([env-vars, `CLAUDE_CONFIG_DIR`](https://code.claude.com/docs/en/env-vars));
+  relocation of `~/.claude.json` bookkeeping and the MCP log cache is unverified,
+  so both remain listed conservatively. Codex's database writes and API-key
+  alternative remain Erik's decision (backlog, B7).
+
 ## B1 results (2026-10-07): what installed skills cost per request
+
+Note (2026-10-14): B1 measured the earlier `find_skills` tool text. The tool is now `find_tools` with a changed description (skills-only: 336 and 492 characters for the server instructions and the tool description, instead of 337 and 473), so the figures below describe the earlier text and are not remeasured.
 
 Raw rows: [bench/results/2026-10-07T21-04-16-645Z-overhead/](results/2026-10-07T21-04-16-645Z-overhead/).
 Claude Code CLI, haiku, two fresh sessions per arm, deltas over the
@@ -97,6 +165,71 @@ model request had started is not verified, so they count as up to 4 more
 calls. The rerun passed every guard. Spend: 16 haiku calls with rows (about
 136k input tokens) plus up to 4 probes, on the subscription. No Jev or Codex
 spend.
+
+## C13 (2026-10-16): pure-Jev baseline on main
+
+Before more Claude Code and Codex spend, the router on main (155d7ec, after
+D15 and B7) was measured with Jev alone: three identical sweeps of v4's 315
+requests and of C1's 300, and the gold-label route bench. No retuning, no new
+judging: the sweeps are scored offline against the earlier judgements
+(`judge.ts --offline`, backlog C13). Library and embeddings as in v4 and C1.
+
+**Quality, test split** (95% Wilson intervals). Offline scoring reuses the
+judge's earlier ratings; a load it never rated is "unrated", and load
+precision is given as a pair: unrated counted not useful / counted useful.
+
+Usefulness rows are lower bounds: they count only skills the judge already rated helpful.
+
+| | v4 runs 1 / 2 / 3 (121 need) | v4 control, post-E9 | C1 runs 1 / 2 / 3 (84 need) | C1 at 7d90442 |
+|---|---|---:|---|---:|
+| A useful skill loaded | 74% / 74% / 74% (65–81) | 72% | 70% / 70% / 70% (60–79) | 73% |
+| Useful loaded or offered | 85% / 86% / 87% | 85% | 80% / 80% / 80% | 80% |
+| Nothing loaded when none is needed | 82% / 82% / 82% | 82% | 75% / 75% / 75% | 74% |
+| Loaded skills that are useful | 78–82% / 80–82% / 79–82% | 80% | 65–71% / 67–70% / 67–70% | 64% |
+| Unrated loads | 7 / 4 / 5 of ~155 | — | 7 / 3 / 4 of ~115 | — |
+
+- Quality on main is within the intervals of the earlier runs on both
+  request sets. C1's precision gap against v4 is still there.
+- Misleading loads: **not shown.** Offline scoring counts only loads the
+  judge already rated misleading (1–2%), and the unrated loads could be
+  misleading too. C1's 7% at 7d90442 is not comparable until they are judged.
+- v4 is scored against the post-E9 control's ratings only. Pooling all four
+  earlier v4 judgings fails: the judge rated the same request and skill
+  differently in two of them (`integrations-04`, `cli-creator`).
+- "Missed a clearly better skill" is not shown offline.
+
+**Gold tasks** (route bench, 199 tasks × 1,000 / 5,000 / 20,000 skills,
+policy tuned on dev, reported on test): recall 93% / 92% / 90% with 5%
+needless loads at the default budget; v3 had 94% / 95% / 93% with 5%. A second
+complete run of the same bench, started 10 minutes earlier on the same
+checkout (its origin was not recorded), gave 93% / 93% / 92%, 5% needless.
+Both are within v3's pooled interval (90–96%).
+
+**Stability** (`bench/stability.ts`, test split):
+
+| | v4 (213) | C1 (201) |
+|---|---:|---:|
+| Same loaded set in all three runs | 89% (190) | 91% (183) |
+| Mean pairwise Jaccard, loaded | 0.95 | 0.95 |
+| Same loaded-or-offered set in all three runs | 83% (177) | 84% (168) |
+
+- About one request in ten gets a different loaded set on an identical rerun.
+  Single-run differences smaller than that are noise.
+- Keyword fallbacks: 1 in 1,815 decisions.
+- Latency per decision fell within the hour (test split): p50 from 2.8 s
+  (v4) and 2.0 s (C1) in the first runs to 1.0 s and 0.9 s in the last, p95
+  from 6.6 s and 5.2 s to 1.3 s and 1.1 s. Both parts fell: the Jev calls'
+  wall time (p50 2.1 → 0.9 s, v4, all rows) and the local remainder (0.57 →
+  0.10 s).
+  The machine ran other work during the first runs, and a Jev call's wall time
+  includes client-side delay, so the cause is not shown.
+- Cost per decision: $0.00122 (v4) and $0.00117 (C1).
+
+Rows: `results/2026-10-16T17-39-02-sweep/`, `18-07-05`, `18-19-29` (v4);
+`17-54-45`, `18-15-07`, `18-22-14` (C1); `18-24-39-…` and `18-14-42-…` (gold);
+`results/2026-10-16-jev-baseline/` (stability and the scripts that ran the
+burn and the scoring); the gold numbers are in each gold run's `summary.md`. Cost: Jev $2.21 for the sweeps and about
+$0.57 per gold run; scoring $0.
 
 ## C1 (2026-10-08): new held-out requests
 
@@ -381,10 +514,11 @@ Claude Code (Sonnet 5.5), nothing preloaded. As after `loadout setup
 claude-code`, the session has the loadout MCP server plus the `UserPromptSubmit`
 hook, which routes the prompt and adds the skills that fit as context:
 
-| Claude Code, same 10 requests | Opened a skill the judge rates useful |
-|---|---:|
-| Search tool only | 2 of 10 |
-| Search tool + prompt hook | **6 of 10** |
+| Claude Code, same 10 requests | Opened a skill the judge rates useful | Hook injected a skill's full text |
+|---|---:|---:|
+| Search tool only | 2 of 10 | no hook |
+| Search tool + prompt hook | **6 of 10** | not recorded |
+| Hook-only plugin, as users install it (2026-10-12) | **0 of 10** | 6 of 10 |
 
 In the 4 misses the hook did offer the right skill, and Claude still did not
 open it:
@@ -392,6 +526,41 @@ open it:
   calling any tool;
 - on the MCP server and the threat model it used up its 8 turns or 4 minutes
   first (shell commands are not approved in these runs).
+
+**The hook-only plugin gets a skill to the agent only when it injects the
+skill's text; in these runs Claude could not open a skill it was pointed to**
+([C8](../docs/loop/BACKLOG.md), [#25](https://github.com/erik-hedstrom/loadout/pull/25)).
+`plugins/loadout` was loaded with `--plugin-dir`, with no MCP server. Every
+row passed the bench's checks: the plugin was loaded, one loadout hook ran
+(counted by the bench's own PATH shim), and no other loadout hook or plugin
+was present. The hook added `<skill_relevance>` context on all 10 prompts.
+- **In 6, it also injected one skill's full text:** `mcp-builder`,
+  `changelog-generator`, `vendor-review`, `uncertainty-and-units`,
+  `security-threat-model` and `statistical-analysis`. Whether the judge rates
+  each one useful is not shown for this arm; the hook arm above opened
+  `uncertainty-and-units` and `statistical-analysis` on the same requests.
+  Whether Claude followed the injected text is not measured.
+- **Claude opened no library skill (0 of 10).** On the other 4 requests the
+  context only pointed to a skill. It says to call `load_skill`, or to read
+  `SKILL.md` in the folder given. The plugin has no `load_skill`; that was the
+  search arm's MCP server, through which the hook arm opened skills on these
+  same 4 requests.
+- Reading the folder failed. A one-call probe on the same setup got: "Claude
+  requested permissions to read from \\\\wsl.localhost\\…\\SKILL.md, but you
+  haven't granted it yet". In a headless run nobody can grant it.
+- 7 runs used their 8 turns, mostly on shell commands that were not approved.
+  3 finished: 2 answered in text without a tool call, and 1 made one
+  successful `Skill` call, then wrote files. That tool reaches only skills
+  installed in Claude Code, not the library, so it does not count as opened.
+
+So this shows the headless case, with loadout in WSL behind Windows Claude
+Code. An interactive session would ask the user for permission to read each
+skill: not measured. The arm also differs from the two above in that the
+bench's shim is first on PATH; that changes how the hook is reached, not what
+the agent sees.
+
+Raw: [invoke-claude-plugin.jsonl](results/2026-10-06T05-40-33-sweep/invoke-claude-plugin.jsonl).
+Cost: $1.93 reported by Claude Code (Sonnet, subscription); Jev under $0.02.
 
 These are small samples (10 requests per cell, capped runs), not outcome
 measurements: they show whether the skill reaches the agent's context, not
@@ -504,6 +673,32 @@ Raw (n = 20): [main](results/2026-10-12T17-12-14-107Z-hook-latency-main/),
 [main](results/2026-10-12T17-11-00-448Z-hook-latency-main/),
 [cache](results/2026-10-12T17-11-32-851Z-hook-latency-d11/).
 Cost: about $0.13 of Jev in total.
+
+### MCP start-up under WSL (D17, 2026-10-15)
+
+**From a checkout on `/mnt/c`, `loadout mcp` took 5.9–7.0 s to answer
+`initialize`; from the Linux filesystem, 0.4–0.8 s.** Codex gives an
+optional MCP server about 1 s before it leaves the server's tools out of the
+first request. Main at `fbee5cb`, the 1,262-skill library on ext4, Node
+24.15, WSL2 on Windows 11. Time from process start to the `initialize`
+reply, three or four warm runs each:
+
+| How it runs | Reply |
+|---|---|
+| inside WSL, checkout on ext4 | 0.41 s |
+| inside WSL, checkout on `/mnt/c` | 5.9 s |
+| `wsl.exe --exec node` from Windows, ext4 | 0.54–0.79 s |
+| `wsl.exe --exec node` from Windows, `/mnt/c` | 6.0–7.0 s |
+
+- Split on `/mnt/c`: importing `dist/mcp.js` and the MCP SDK took 3.9 s,
+  the other CLI modules 0.75 s, and the cached library scan 0.04 s (0.75 s
+  cold). On ext4 the same three took 0.11, 0.03 and 0.04 s. Module loading
+  over 9P is the cost, not the scan.
+- A cold run on ext4: not shown.
+- One machine, one session. Raw results were not kept, so these numbers
+  cannot be recomputed.
+
+Cost: $0.
 
 ### Is the work better? (outcome pilot, 2026-10-07)
 

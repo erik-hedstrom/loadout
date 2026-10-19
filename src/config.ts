@@ -98,6 +98,7 @@ export const paths = {
   config: () => join(loadoutHome(), 'config.json'),
   library: () => join(loadoutHome(), 'library'),
   sessions: () => join(loadoutHome(), 'sessions'),
+  index: () => join(loadoutHome(), 'index'),
   embeddings: () => join(loadoutHome(), 'index', 'embeddings'),
 };
 
@@ -164,6 +165,11 @@ export function writeDefaultConfig(overrides: Partial<Config['jev']> = {}): stri
   const config: Partial<Config> = Object.keys(overrides).length ? { ...existing, jev: { ...existing.jev, ...overrides } as Config['jev'] } : existing;
   writeFileSync(file, JSON.stringify(config, null, 2) + '\n');
   return file;
+}
+
+/** The environment for a child process that needs no loadout credential. Windows matches env names in any case. */
+export function withoutKey(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  return Object.fromEntries(Object.entries(env).filter(([name]) => name.toUpperCase() !== 'TYPESAFE_API_KEY'));
 }
 
 export function resolveApiKey(config: Config): string | undefined {

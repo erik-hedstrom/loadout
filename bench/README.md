@@ -75,6 +75,8 @@ npx tsx bench/expand.ts bench/data/seeds.jsonl          # Sonnet expands each in
 npx tsx bench/sweep.ts                                  # route all 315 (~$0.39 of Jev per sweep in E9), stores raw answers
 npx tsx bench/judge.ts bench/results/<sweep>            # Opus: blind pass, then adjudicates disagreements (~$5 first time)
 npx tsx bench/judge.ts bench/results/<sweep2> --blind-from bench/results/<sweep>   # re-run after a change: adjudication only
+npx tsx bench/judge.ts <new-sweep> --offline --blind-from <blind-sweep> --verdicts-from <judged-sweep> # $0 scoring; writes report-offline.md; repeat --verdicts-from to pool ratings; unrated loads bound precision
+npx tsx bench/stability.ts <sweep1> <sweep2> <sweep3>    # $0; same request IDs/texts, dev/test stability, fallbacks, latency and cost to stdout
 npx tsx bench/invoke.ts bench/results/<sweep> --agent claude|codex --mode routed|search --ids a,b,c
 ```
 
@@ -90,3 +92,12 @@ are then routed and judged as above, with `--requests bench/data/requests-c1.jso
   cached: about $0.10 per 20-request batch instead of $0.90.
 - `invoke.ts` runs the real agents headless, which takes minutes per request
   and uses your subscriptions.
+
+## MCP overhead (B7)
+
+`npx tsx bench/mcp-overhead.ts --offline` prints the characters each arm puts
+in front of the host from local fixture MCP servers (no CLI, no network). The
+plan, the cost estimate and the live runs are described in the backlog (B7).
+Claude runs require `CLAUDE_CODE_OAUTH_TOKEN` for Erik's personal subscription;
+see the [B7 method](RESULTS.md#b7-method-not-run-yet-what-configured-mcp-servers-cost-per-request)
+for isolation and runtime checks.
