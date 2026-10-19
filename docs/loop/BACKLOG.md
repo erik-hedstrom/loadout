@@ -41,7 +41,6 @@ Each PR body's **Review state** section has the round-by-round record.
 | [#36](https://github.com/erik-hedstrom/loadout/pull/36) | D14 Codex plugin forwards `LOADOUT_HOME` (P1) | one open Codex P1 (`/proc`) waits for Erik: accept or override; merge before #28 |
 | [#35](https://github.com/erik-hedstrom/loadout/pull/35) | iteration 8 log row | superseded by the row below; close it once this file lands |
 | [#34](https://github.com/erik-hedstrom/loadout/pull/34) | B3 comparison | Codex threads resolved after the 2026-10-16 skills.sh read; merge gate |
-| [#33](https://github.com/erik-hedstrom/loadout/pull/33) | B4 repo polish drafts | clean; merge gate |
 | [#32](https://github.com/erik-hedstrom/loadout/pull/32) | D5 `--isolate` | open Codex P1 (resume into a live session, declined from the docs) and two P2s (one documented as a gap, one disclosed): Erik accepts or overrides |
 | [#31](https://github.com/erik-hedstrom/loadout/pull/31) | B6 profile README draft | clean; merge gate |
 | [#30](https://github.com/erik-hedstrom/loadout/pull/30) | A3 init wizard | four open Codex P2 threads, three declined and one partly fixed: Erik accepts the rebuttals or overrides |
@@ -63,8 +62,11 @@ Each PR body's **Review state** section has the round-by-round record.
 
 **A2. `loadout audit`.**
 
-Why: this is the entry point for the audience. "Your 312 installed skills add
-~38k tokens to every request" is the sentence people share.
+Why: this is the entry point for the audience, and the sentence people share
+must be a measured one. B1 measured Claude Code's skill listing at about 10
+tokens per skill: +477 input tokens at 50 skills and +12.3k at 1,232 (Haiku,
+generated skill names, first call;
+[RESULTS](../../bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request)).
 
 Acceptance:
 - Read-only scan of Claude Code (user and project skills, enabled plugins'
@@ -141,8 +143,8 @@ Acceptance:
 | B1 | P0 | Token-waste study: measured per-request overhead of popular skill packs | Claude | local (measure) + cloud (analysis) | done ([PR #6](https://github.com/erik-hedstrom/loadout/pull/6); follow-ups under "Left" in its learnings) |
 | B3 | P1 | Fact-checked comparison with alternatives | Claude | cloud | review ([#34](https://github.com/erik-hedstrom/loadout/pull/34); [docs/comparison.md](../comparison.md)) |
 | B2 | P1 | Launch kit drafts | Claude | cloud | todo (after A1, B1) |
-| B4 | P1 | Repo polish: description, topics, social preview, badges | Claude | cloud + erik | review ([#33](https://github.com/erik-hedstrom/loadout/pull/33); Erik applies settings and uploads the preview) |
-| B6 | P2 | GitHub profile README draft | Claude | cloud | review ([#31](https://github.com/erik-hedstrom/loadout/pull/31); Erik publishes) |
+| B4 | P1 | Repo polish: description, topics, social preview, badges | Claude | cloud + erik | blocked: Erik applies settings and uploads the preview (drafts merged in [#33](https://github.com/erik-hedstrom/loadout/pull/33)) |
+| B6 | P2 | GitHub profile README draft | Claude | cloud | blocked: Erik fills two placeholders and publishes (draft merged in [#31](https://github.com/erik-hedstrom/loadout/pull/31)) |
 | B5 | P2 | Awesome-list and directory submissions (drafts) | Codex | erik | todo (repo public since 2026-10-12; agents draft, Erik submits) |
 | B7 | P1 | MCP overhead study: what configured MCP servers cost per request, natively and through loadout | Claude | cloud (harness, done) + local (runs) | in progress: harness merged in [#38](https://github.com/erik-hedstrom/loadout/pull/38), with no ambient Claude plugins (2026-10-15 decision); live runs wait for Erik's approval of the estimate |
 | B8 | P0 | Backlog items from the launch-readiness review, 2026-10-13, MCP token cost first | Claude | local + erik | todo (the review is private, on Erik's machine) |
@@ -222,14 +224,18 @@ Learnings:
   them, and on the agent-use and pilot counts, were computed for the page.
 - `developers.openai.com` and `skills.sh` (including its audits page and API
   docs) were blocked from the cloud session. They were read locally on
-  2026-10-16: the Codex docs confirm the budget figures only, and the skills.sh
-  audits page and API docs are summarized in the directory row (the two
-  skills.sh Codex threads).
+  2026-10-16 and 2026-10-19. The Codex skills docs confirm the budget,
+  `enabled = false`, `$` mentions and `allow_implicit_invocation`; the
+  skills.sh audits page and API docs are summarized in the directory row (the
+  two skills.sh Codex threads). The Claude Code tool-search section and the
+  Codex config reference were re-read on 2026-10-19.
 - "toolsift" is `abdulmunimjemal/toolsift`; other searches return
   unrelated review sites.
 - Left: a measured comparison against Claude Code tool search and toolsift
-  on the same MCP set; the Codex docs do not state the 1,024-character cap,
-  the ordering or the curation flags.
+  on the same MCP set; the Codex docs do not state the 1,024-character cap, the
+  ordering, `include_instructions` or `prompt_visible`, which rest on the
+  pinned source; B1's +546 for loadout's MCP server predates `find_tools` and
+  is not remeasured.
 
 **B4. Repo polish.**
 
@@ -239,11 +245,26 @@ Acceptance:
 - CI and license badges.
 - A CHANGELOG.
 
+Status: drafts in `docs/launch/repo-settings.md` (description, topics,
+Settings steps), `docs/brand/social-preview.{svg,png}`, one badge line in the
+README and `CHANGELOG.md` (Unreleased only). Left for Erik: apply the settings
+and upload the preview.
+
+Learnings:
+- The CHANGELOG has no version section while A4 (npm) and E5 (release
+  automation) are open.
+
 **B6. Profile README.**
 
 Acceptance: `docs/launch/profile-README.md` for github.com/erik-hedstrom,
 presenting loadout and the engineering behind it (benchmarks, reviews,
 cross-vendor agents). Erik publishes.
+
+Learnings: links use absolute URLs, because the file is copied into another
+repo. Headline numbers are C1's untuned ones, with Wilson intervals. No run's
+judging is shown to be cross-family: C1's request provenance is unverified,
+and v4's requests were expanded by Sonnet and judged by Opus. Left: Erik
+writes the personal line and publishes.
 
 **B7. MCP overhead study.**
 
@@ -405,6 +426,7 @@ Decisions for Erik:
 | C11 | P1 | `bench/outcome.ts` keeps per-request usage | Claude | cloud | todo |
 | C12 | P1 | Audit the need gate on held-out prompts | Claude | cloud (design) + local (runs) | todo |
 | C8 | P0 | Skill use with the hook-only plugin | Claude | local | review ([#25](https://github.com/erik-hedstrom/loadout/pull/25)) |
+| C10 | P2 | Bench quick fixes: sequential outcome judge, tier fixed across arms, stale A2 number | Claude | cloud | in review ([#40](https://github.com/erik-hedstrom/loadout/pull/40)) |
 
 **C1. New held-out requests.**
 
@@ -538,6 +560,20 @@ users install has the hook only. Add a plugin arm (`--plugin-dir`) to
 
 Acceptance: a third row in that RESULTS table, with raw results. The README's
 "has not been measured" is then replaced by the number.
+
+**C10. Bench quick fixes.** From the launch-readiness review, 2026-10-13. $0,
+no paid calls.
+- `bench/outcome.ts` judged two requests at once; AGENTS.md rule 6 says judges
+  run sequentially so their cached prompt stays warm. Now a loop, with a test
+  that runs the script against a stand-in `claude` and checks the calls never
+  overlap.
+- `decisionFor` keeping the row's tier for the bare arm is correct: both arms
+  of a pair run the same model (`gpt-6.1-sol` in all 8 pilot pairs). Comment and test only.
+- A2's rationale quoted the withdrawn description-sum estimate; it now
+  carries B1's measured figures and scope.
+
+Learnings: a script that spawns the CLIs can be tested by putting a fake
+binary alone on `PATH`, so the `claude` judge needed no new seam.
 
 ## D. Integrations and robustness
 
@@ -1191,7 +1227,8 @@ Acceptance: `test/` holds one file per module, with shared fakes in
 **E5. Releases.**
 
 Acceptance: changesets or release-please, with a CHANGELOG generated from
-PRs.
+PRs. A hand-written CHANGELOG.md exists since B4; the tool must take it over
+rather than start a second one.
 
 **E6. Architecture diagram.**
 
