@@ -62,7 +62,11 @@ export function loadoutCommand(sub: string[], windowsAgent: boolean): McpServerC
   const entry = fileURLToPath(new URL(import.meta.url.endsWith('.ts') ? './cli.ts' : './cli.js', import.meta.url));
   const cli = [...loaderArgs(process.execArgv), entry, ...sub];
   if (!windowsAgent) return { command: process.execPath, args: cli, ...(process.env.LOADOUT_HOME ? { env: { LOADOUT_HOME: process.env.LOADOUT_HOME } } : {}) };
-  const home = process.env.LOADOUT_HOME ? ['/usr/bin/env', `LOADOUT_HOME=${process.env.LOADOUT_HOME}`] : [];
+  // Nothing crosses wsl.exe without WSLENV, which Codex does not pass on, so values the WSL side needs are
+  // fixed in the command. TYPESAFE_BASE_URL has to come this way: jevBaseUrl() refuses a non-default URL
+  // from config.json alone. Neither value is a secret.
+  const fixed = (['LOADOUT_HOME', 'TYPESAFE_BASE_URL'] as const).filter((name) => process.env[name]).map((name) => `${name}=${process.env[name]}`);
+  const home = fixed.length ? ['/usr/bin/env', ...fixed] : [];
   const distro = process.env.WSL_DISTRO_NAME ? ['-d', process.env.WSL_DISTRO_NAME] : [];
   return { command: 'wsl.exe', args: [...distro, '--exec', ...home, process.execPath, ...cli, '--windows-paths'] };
 }

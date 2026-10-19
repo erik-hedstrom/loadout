@@ -1114,6 +1114,26 @@ describe('launch', () => {
     expect(win.args!.slice(-2)).toEqual(['mcp', '--windows-paths']);
   });
 
+  // Codex does not pass WSLENV, so only the command line reaches the WSL side: without this, a Jev URL set
+  // outside config.json would never arrive and the server would refuse or use the default host.
+  it('carries LOADOUT_HOME and TYPESAFE_BASE_URL across wsl.exe in the command, never the key', () => {
+    try {
+      vi.stubEnv('LOADOUT_HOME', '/home/me/.loadout');
+      vi.stubEnv('TYPESAFE_BASE_URL', 'https://staging.example');
+      vi.stubEnv('TYPESAFE_API_KEY', 'wsl-key-canary');
+      const args = searchServer(true).args!;
+      const env = args.indexOf('/usr/bin/env');
+      expect(args.slice(env, env + 3)).toEqual(['/usr/bin/env', 'LOADOUT_HOME=/home/me/.loadout', 'TYPESAFE_BASE_URL=https://staging.example']);
+      expect(args.indexOf('--exec')).toBeLessThan(env);
+      expect(args.join(' ')).not.toContain('wsl-key-canary');
+      vi.stubEnv('LOADOUT_HOME', '');
+      vi.stubEnv('TYPESAFE_BASE_URL', '');
+      expect(searchServer(true).args).not.toContain('/usr/bin/env');
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('prints host configs that attach the search server', () => {
     const codexWsl = hostSetup('codex', true);
     const codex = codexWsl.snippet;
