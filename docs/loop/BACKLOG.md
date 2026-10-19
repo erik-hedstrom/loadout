@@ -429,12 +429,13 @@ Decisions for Erik:
 | C5 | P2 | Retrieval beyond 200 candidates (Jev tournament) | Codex | cloud | todo |
 | C6 | P2 | Multi-intent requests | Claude | cloud | todo |
 | C7 | P1 | Recommended packs with measured upside (first: frontend with Impeccable) | Codex (harness) + Claude (runs) | cloud (fixtures) + local (runs) | todo (after B1, C2) |
-| C11 | P1 | `bench/outcome.ts` keeps per-request usage | Claude | cloud | todo |
+| C11 | P1 | `bench/outcome.ts` keeps per-request usage | Claude | cloud | done in C14 for the A/B harness (`bench/usage.ts`, fixture tests); `outcome.ts` itself is unchanged |
 | C12 | P1 | Audit the need gate on held-out prompts | Claude | cloud (design) + local (runs) | todo |
 | C13 | P1 | Pure-Jev baseline on main: offline scoring and routing stability | Codex (tools) + Claude (runs) | local | done ([#45](https://github.com/erik-hedstrom/loadout/pull/45)): baseline measured 2026-10-16 ([RESULTS](../../bench/RESULTS.md#c13-2026-10-16-pure-jev-baseline-on-main)) |
 | C8 | P0 | Skill use with the hook-only plugin | Claude | local | done ([#25](https://github.com/erik-hedstrom/loadout/pull/25)): headless, the hook injected a skill's text in 6 of 10; Claude opened 0 of 10, none of the 4 it was only pointed to (D13) |
 | C9 | P1 | Host-model fallback router when there is no TypeSafe key | Claude (design) | cloud (code) + local (bench) | todo |
 | C10 | P2 | Bench quick fixes: sequential outcome judge, tier fixed across arms, stale A2 number | Claude | cloud | done ([#40](https://github.com/erik-hedstrom/loadout/pull/40)) |
+| C14 | P1 | A/B pilot: three prompts with and without loadout in the stock CLIs, tokens (cached apart from uncached) and quality | Claude (harness) + Erik (runs) | cloud (harness) + local (runs) | review: harness, plan and tests done; the paid pilot has not run (needs `CLAUDE_CODE_OAUTH_TOKEN` and the TypeSafe key, from WSL) |
 
 **C13. Pure-Jev baseline without more model spend.**
 
@@ -658,6 +659,71 @@ no paid calls.
 
 Learnings: a script that spawns the CLIs can be tested by putting a fake
 binary alone on `PATH`, so the `claude` judge needed no new seam.
+
+**C14. A/B pilot.** Erik, 2026-10-19: test three prompts with and without
+loadout, evaluate the output and compare token use; he asked about tokens in,
+their effect on caching and output quality, and a small Codex A/B he ran
+showed problems. `bench/ab.ts` runs it on the stock CLIs the way a user
+installs loadout: the plugin and MCP server in Claude Code, the MCP server and
+hook in Codex. Method, selection rule and caveats:
+[RESULTS](../../bench/RESULTS.md#c14-method-not-run-yet-three-prompts-with-and-without-loadout).
+
+`npx tsx bench/ab.ts` (plan, $0), `--run [--repeats 2] [--hosts claude,codex]
+[--ids a,b] [--out <dir>]` (resumable; `INCOMPLETE` until judged),
+`--judge-only <dir>`.
+
+Acceptance:
+- One script records, per run, tokens **per model request** from the host's own
+  report (Claude: each assistant message's usage, deduplicated by message id;
+  Codex: `exec --json` reports only a thread total, so one entry per run), with
+  uncached input, cache writes, cache reads and output apart everywhere, plus
+  cost, turns, time, tools (loadout's named), skills opened, the hook's context
+  size and the skill names it listed or injected, and the `c1-debug-13` hidden
+  test result. This closes C11's acceptance for the harness, with fixture tests.
+- The cold cache does not skew the arms: one recorded warm-up per host and arm,
+  excluded from comparisons and reported as the cold start; measured runs
+  interleaved with the first arm alternating; a request gap over 5 minutes flags
+  `coldCacheRisk`; request 1 is reported apart from requests 2+.
+- Validity stops the batch: the loadout plugin present exactly once in the
+  loadout arm and absent in bare, no other plugin, the hook run once (loadout) or
+  never (bare), the loadout MCP server connected, the model as requested, no run
+  failed before the model.
+- Blind pairwise judging in both orders, cross-family (Sol judges Claude's
+  outputs, Opus judges Codex's), skill names removed from both arms' files.
+- `report.md` per host, arm and prompt, with the loadout − bare difference.
+- Tests with no network and no paid call, `$0` to build and plan. The paid pilot
+  is below.
+
+Estimate for the paid pilot (the plan prints it, with its assumptions): 28
+runs (4 warm-ups), Claude at most 420 requests and Codex 14 thread totals,
+about 1 to 3 hours, subscription quota; Jev about 14 routing calls (under
+$0.05); 24 judge calls (Opus and Sol quota). Needs Erik: the Claude
+subscription token, the TypeSafe key, a Linux shell (WSL), and a go-ahead.
+
+Learnings (2026-10-19):
+- `claude -p` with a black-holed proxy and a fresh config directory runs the
+  prompt hook and prints the init event before any model call, so the stream
+  fixtures, the plugin loading under `--setting-sources ''` and the PATH shim
+  are checked for free. The init lists the built-in `agents-md` plugin
+  (`source: agents-md@builtin`) even with no plugin: **B7's "init plugins must be
+  empty" check would refuse every Claude run**. `ab.ts` ignores `@builtin`.
+- `codex exec --json`'s `turn.completed.usage` is the thread's running total,
+  not the last request's (`usage_from_last_total`). Per-request Codex usage
+  needs the app-server, a different integration.
+- Claude Code writes one assistant event per content block, all with the same
+  message id and usage; and a `<synthetic>` assistant message with zero usage
+  for a login failure. Both are handled and tested.
+- `--restricted`, which B7 uses, removes the code-running tools; the pilot's
+  agents need them, so `claudeIsolation` takes `restricted: false`.
+- Codex's `--dangerously-bypass-hook-trust` would also run an ambient
+  `$CODEX_HOME/hooks.json`, which `--ignore-user-config` does not skip: the
+  plan blocks the Codex hook arm if one exists.
+- The working folder is one fixed path for every run (emptied each time),
+  because both hosts put it in the prompt and a different path per run would
+  break the shared cache prefix.
+
+Left: run the pilot (Erik's go-ahead), write the results into RESULTS and
+`report.md`, and decide whether two repeats are enough to say anything.
 
 ## D. Integrations and robustness
 

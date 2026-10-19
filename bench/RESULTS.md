@@ -111,6 +111,67 @@ backlog, B7).
   so both remain listed conservatively. Codex's database writes and API-key
   alternative remain Erik's decision (backlog, B7).
 
+## C14 method (not run yet): three prompts with and without loadout
+
+No measurement exists for this study. The harness is `bench/ab.ts` (backlog,
+C14); `npx tsx bench/ab.ts` prints the plan and the estimate and spends
+nothing.
+
+- **Prompts.** `c1-web-14` (404-page copy), `c1-apps-08` (a questionnaire),
+  `c1-debug-13` (a mobile menu that will not close, with a small fixture
+  project and a hidden test). The selection rule: held-out C1 **test** rows
+  where all three 2026-10-16 Jev reruns loaded the same set and the C1 judge
+  rated a loaded skill useful, one per kind (copy, document, code). These are
+  cases where loadout should help. They are not a random sample, so no general
+  claim follows from them.
+- **Hosts and arms.** The stock `claude` (2.1.281, `sonnet`) and `codex`
+  (0.160.1, `gpt-6.1-sol`), each **bare** and with **loadout** as the documented
+  install gives it: for Claude the shipped plugin (its prompt hook) and the
+  `loadout` MCP server; for Codex the MCP server and the prompt hook. B7's
+  isolation applies to both arms: allowlisted environment, a fresh Claude home
+  with the subscription token, `--ignore-user-config` for Codex, so no ambient
+  plugin or MCP tool reaches the numbers. The arms share every other flag, the
+  model, the turn cap and the timeout.
+- **Tokens.** Per model request from the host's own report, with uncached input,
+  cache writes, cache reads and output always apart. Claude: each assistant
+  message's usage, deduplicated by message id. Codex: `codex exec --json` gives
+  the thread total once per run (`turn.completed` carries the running total, in
+  codex-rs `exec/src/event_processor_with_jsonl_output.rs` at rust-v0.160.1), so
+  Codex has no per-request split. Effective input weights Claude's cache writes
+  1.25 (5 minutes) or 2 (1 hour) and reads 0.1 (Anthropic's published
+  multipliers); Codex's is not shown.
+- **Cold-cache skew.** The arms have different prefixes (loadout adds MCP tool
+  definitions and, per prompt, the hook's context), so each has its own cache
+  entry, and a cold first run would charge cache writes to whichever arm ran
+  first. So each host and arm gets one **warm-up run** on a neutral prompt,
+  recorded and excluded from every comparison, and the measured runs alternate
+  bare and loadout, the arm that goes first alternating by prompt and repeat.
+  Each request's gap since the same arm's previous request is stored, and a gap
+  over 5 minutes flags the run `coldCacheRisk`. Request 1 of each run is
+  reported apart from requests 2+: the per-prompt hook context cannot be cached
+  the first time, and later requests should read it from cache. The warm-up
+  (cold) and measured (warm) runs are shown side by side.
+- **Quality.** The `c1-debug-13` hidden test (outside tap closes, Escape
+  closes, an inside tap does not, the menu reopens, listeners are removed) is
+  run on a copy of each run's folder and never put in the agent's. The
+  deliverables are then compared blind in both orders (only a preference that
+  holds in both counts), cross-family: Claude-host outputs by Codex (Sol),
+  Codex-host outputs by Claude Opus. Skill names are removed from both arms'
+  files first; a skill's own template can still show the arm.
+- **Sample.** Two repeats per cell: ranges, not intervals, and "not shown" where
+  the sample does not support a claim.
+- **Rows.** `bench/results/<timestamp>-ab-pilot/`: `rows.jsonl` (names only, no
+  paths, no skill text), `outputs/` (the deliverables, this machine's folders
+  written as variables), `verdicts.jsonl`, `report.md`. The raw streams are
+  kept in `streams/`, which is gitignored: they hold file contents, local paths
+  and the hook's skill text.
+- **Not verified offline** (the first paid runs check them): `--max-turns` is
+  absent from `claude --help` 2.1.281; whether `Bash(node --test *)` matches the
+  agent's test command; whether the Codex hook registers through `-c
+  hooks.UserPromptSubmit` with `--dangerously-bypass-hook-trust` (the source
+  says it should; the shim's count decides); whether `loadout mcp` sees the key
+  under Claude's MCP environment allowlist.
+
 ## B1 results (2026-10-07): what installed skills cost per request
 
 Note (2026-10-14): B1 measured the earlier `find_skills` tool text. The tool is now `find_tools` with a changed description (skills-only: 336 and 492 characters for the server instructions and the tool description, instead of 337 and 473), so the figures below describe the earlier text and are not remeasured.

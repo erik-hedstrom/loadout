@@ -8,3 +8,4 @@ bench/data/embeddings/
 bench/data/models/
 .claude/settings.local.json
 .vitest/
+bench/results/*-ab-pilot/streams/
