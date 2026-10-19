@@ -40,6 +40,7 @@ describe('Codex plugin', () => {
     expect(plugin.name).toBe('loadout-codex');
     expect(plugin.description).toContain("TypeSafe's Jev API");
     expect(JSON.parse(readFileSync(join(dir, 'hooks/hooks.json'), 'utf8'))).toEqual(claudeHookBlock('loadout hook codex'));
+    // No `required`: Codex would accept it, but users cannot override it for a plugin server (D17).
     expect(JSON.parse(readFileSync(join(dir, '.mcp.json'), 'utf8'))).toEqual({
       mcpServers: {
         loadout: {
