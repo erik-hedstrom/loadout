@@ -6,6 +6,7 @@ import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { basename, join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterAll, describe, expect, it, vi } from 'vitest';
+import { parse as parseToml } from 'smol-toml';
 import { DEFAULT_CONFIG, type Config } from '../src/config.js';
 import { jevClient, JevError, validateResponse, type Question, type SystemOneClient } from '../src/jev.js';
 import { claudeArgs, claudeHookSettings, codexArgs, escapeSkillTags, hookCommand, hostSetup, launch, loaderArgs, materialize, searchServer, toToml } from '../src/launch.js';
@@ -929,6 +930,8 @@ describe('launch', () => {
     expect(codex).not.toContain('codex plugin add');
     expect(codex).toMatch(/\[mcp_servers\.loadout\]\ncommand = "wsl\.exe"\nargs = \[.*"mcp", "--windows-paths"\]/);
     expect(codex).toContain('env_vars = ["TYPESAFE_API_KEY"]');
+    // Codex waits for a required server before the first request (D17).
+    expect(parseToml(codex)).toMatchObject({ mcp_servers: { loadout: { command: 'wsl.exe', required: true } } });
     expect(codex).toContain('[mcp_servers.loadout.tools.find_tools]\napproval_mode = "approve"');
     expect(codex).not.toContain('call_server_tool');
     expect(codex).toMatch(/\[\[hooks\.UserPromptSubmit\]\]\n\[\[hooks\.UserPromptSubmit\.hooks\]\]\ntype = "command"\ncommand = "wsl\.exe .* hook codex --windows-paths"\ntimeout = 30$/);
@@ -1148,7 +1151,7 @@ describe('mcp server', () => {
     expect((await s.call('server_tools', { server: 'missing' })).isError).toBe(true);
     expect((await s.call('server_tools', { server: 'canary', tool: 'ledger_memo' })).text).toMatch(/^"ledger_memo": .*\ninput schema: \{/);
     await s.close();
-  }, 20_000);
+  });
 
   describe('MCP discovery', () => {
     const goal = 'Read the memo of a ZX Ledger entry';
@@ -1227,7 +1230,7 @@ describe('mcp server', () => {
         await s2.call('server_tools', { server: 'canary' });
         expect((await s2.call('find_tools', { goal: ledgerGoal })).text).toMatch(/^No skill or MCP server/);
         await s2.close();
-      }, 20_000);
+      });
 
       it('never starts a server to index it', async () => {
         const dir = tempDir('loadout-toolindex-');
@@ -1282,7 +1285,7 @@ describe('mcp server', () => {
           );
         expect(await Promise.all([run('a'), run('b')])).toEqual([0, 0]);
         expect(withTools([named('a'), named('b')], dir).map((c) => c.tools)).toEqual([[{ name: 'tool_299', description: 'a' }], [{ name: 'tool_299', description: 'b' }]]);
-      }, 30_000);
+      });
 
       it('does not reuse tools after the server config, env or headers change', () => {
         const dir = tempDir('loadout-toolindex-');

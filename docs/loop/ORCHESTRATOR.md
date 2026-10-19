@@ -178,8 +178,8 @@ about it. Work in this order:
   - Check all six `ci` jobs and `build-without-optional` on the current head:
     `gh pr view N --json headRefOid,statusCheckRollup`. Main has no branch
     protection, so GitHub does not enforce this.
-  - Windows on Node 22 can flake on 5 s subprocess timeouts:
-    `gh run rerun <id> --failed`, once.
+  - Windows subprocess tests run under a 30 s `testTimeout` (E15). If one
+    still times out, `gh run rerun <id> --failed`, once, and note it on E15.
   - A job that fails with no steps never started. Read its check-run
     annotation: on 2026-10-12 it was the spending limit, before the repo went
     public.
