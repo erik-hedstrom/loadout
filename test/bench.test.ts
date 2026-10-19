@@ -261,7 +261,7 @@ body
     const upper = runSeeds(dir, ['--effort', 'high', '--prefix', 'C1', '--out', join(dir, 'seeds-C1.jsonl')]);
     expect(upper.status).not.toBe(0);
     expect(upper.stderr).toContain('usage');
-  }, 15_000);
+  });
 
   it.each(['wrong count', 'duplicate', 'empty', 'malformed', 'cross-category duplicate'])('refuses a seed category with $0 without appending it', (problem) => {
     const dir = temp(), out = join(dir, 'seeds-c1.jsonl');
@@ -460,6 +460,10 @@ body
     });
     const argv = process.argv;
     vi.stubEnv('LOADOUT_HOME', dir);
+    // No `claude` on PATH, so the prompt file keeps its local path. Under WSL the
+    // real PATH can hold the Windows claude, and translating through wslpath
+    // would reach this file's mocked execFileSync.
+    vi.stubEnv('PATH', dir);
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
     try {
       process.argv = [process.execPath, 'bench/judge.ts', dir, '--batch', '1'];
