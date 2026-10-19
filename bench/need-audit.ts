@@ -109,7 +109,7 @@ export function needAudit(labelsFile: string, dirs: string[], split: 'dev' | 'te
 
   const mean = (xs: Obs[]) => xs.reduce((sum, o) => sum + o.need, 0) / xs.length;
   const labelled = (n: Label['need']) => byId.filter((xs) => xs[0]!.label.need === n);
-  const quietEveryRun = byId.filter((xs) => needed(xs[0]!) && xs.every((o) => o.need < policy.need));
+  const quietEveryRun = byId.filter((xs) => needed(xs[0]!) && xs.every((o) => o.replay(policy.need).quiet));
   lines.push(
     '', '## `need` by judge label (mean over runs, per request)', '',
     ...(['essential', 'helpful', 'none'] as const).map((n) => {

@@ -258,8 +258,8 @@ runs repeat the same 99 requests, so pooled intervals are optimistic):
 
 - **The gate never silenced an essential request** (0 of 32 rows).
 - It silenced 30 of 176 helpful-or-essential rows. Seven requests (16% of
-  the 44) were quiet in all four runs, all labelled helpful, with `need`
-  between 0.33 and 0.47. Their useful skills are mostly generic ones
+  the 44) were quiet in all four runs, all labelled helpful, with mean `need`
+  0.34 to 0.46. Their useful skills are mostly generic ones
   (`webapp-testing`, `frontend-ui-engineering`, `docx`/`pdf`), with some
   specific ones among them (`supabase`, `api-and-interface-design`,
   `property-based-testing`, `surgical-patch`, `lean-build`). Suppressing
@@ -304,8 +304,8 @@ requests of 44 with a useful load and one more needless load of 55, which
 does not clear the rule (p = 0.125). Raising it loses useful loads and, at
 0.6, 6 of 44 (p = 0.031, uncorrected over seven thresholds), for about the same drop in
 needless loads (4 of 55). The Jev question was left alone: the audit shows
-no failure on essential requests, and the misses are generic skills the judge
-rated only helpful.
+no failure on essential requests, and the misses are mostly generic skills the
+judge rated only helpful.
 
 Not shown:
 - Misleading loads at any threshold: loads the blind judge did not list are
