@@ -107,6 +107,7 @@ function toolEvents(stream: string): { events: Event[]; hooks: HookExecution[]; 
   const hooks = new Map<string, HookExecution>();
   let costUsd: number | undefined;
   let failedBeforeModel = false;
+  let modelResponded = false;
   let result: { isError: boolean; subtype?: string } | undefined;
   let inventory: Inventory | undefined;
   for (const line of stream.split('\n')) {
@@ -131,6 +132,7 @@ function toolEvents(stream: string): { events: Event[]; hooks: HookExecution[]; 
       }
       hooks.set(e.hook_id, hook);
     } else if (e.type === 'assistant') {
+      modelResponded = true;
       // A call only counts once its result arrives without an error.
       for (const b of e.message?.content ?? []) if (b.type === 'tool_use') events.push({ tool: b.name, detail: JSON.stringify(b.input), ok: false, id: b.id });
     } else if (e.type === 'user') {
@@ -153,6 +155,8 @@ function toolEvents(stream: string): { events: Event[]; hooks: HookExecution[]; 
       if (it.type === 'mcp_tool_call') events.push({ tool: `mcp__${it.server}__${it.tool}`, detail: JSON.stringify(it.arguments ?? {}), ok });
     }
   }
+  // A run killed before any model response (a stall after init and the hook) sends no result event.
+  if (!result) failedBeforeModel = !modelResponded;
   return { events, hooks: [...hooks.values()], costUsd, inventory, failedBeforeModel, result };
 }
 

@@ -58,7 +58,10 @@ describe('benchmark backends', () => {
     { mode: 'plugin', windowsAgent: false, problem: 'bad init' },
     { mode: 'plugin', windowsAgent: false, problem: 'plugins not a list' },
     { mode: 'plugin', windowsAgent: false, problem: 'auth failure' },
+    { mode: 'plugin', windowsAgent: false, problem: 'stalled' },
+    { mode: 'plugin', windowsAgent: false, problem: 'capped' },
   ])('records hook evidence and paid rows in $mode (WSL: $windowsAgent, ambient: $ambient, problem: $problem)', async ({ mode, windowsAgent, ambient, problem }) => {
+    const killed = problem === 'stalled' || problem === 'capped';
     const dir = join(temp(), "sweep ' $value"), binDir = temp();
     mkdirSync(dir);
     const repo = join(import.meta.dirname, '..');
@@ -127,30 +130,36 @@ body
       }).flat();
       const child = new EventEmitter() as ChildProcess;
       child.stdout = new PassThrough(); child.stderr = new PassThrough();
+      // Killed by run()'s timeout: no result event, and the close comes from the kill.
+      const killed = problem === 'stalled' || problem === 'capped';
+      child.kill = () => { queueMicrotask(() => child.emit('close', null)); return true; };
       queueMicrotask(() => {
         child.stdout!.emit('data', Buffer.from([
           ...(problem === 'no init' ? [] : [problem === 'bad init' ? '{"type":"system","subtype":"init","plugins":' : problem === 'plugins not a list' ? { type: 'system', subtype: 'init', plugins: null } : { type: 'system', subtype: 'init', ...inventory }]),
           ...hooks,
-          { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Read', id: 'read-a', input: { file_path: '/library/skills/skill-a/SKILL.md' } }] } },
-          { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'read-a' }] } },
-          problem === 'auth failure' ? { type: 'result', subtype: 'success', is_error: true, total_cost_usd: 0 } : { type: 'result', total_cost_usd: 0.05 },
+          ...(problem === 'stalled' ? [] : [
+            { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Read', id: 'read-a', input: { file_path: '/library/skills/skill-a/SKILL.md' } }] } },
+            { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'read-a' }] } },
+          ]),
+          ...(killed ? [] : [problem === 'auth failure' ? { type: 'result', subtype: 'success', is_error: true, total_cost_usd: 0 } : { type: 'result', total_cost_usd: 0.05 }]),
         ].map((e) => typeof e === 'string' ? e : JSON.stringify(e)).join('\n')));
-        child.emit('close', problem === 'no init' ? 1 : 0);
+        if (!killed) child.emit('close', problem === 'no init' ? 1 : 0);
       });
       return child;
     });
     const argv = process.argv;
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
     try {
-      process.argv = [process.execPath, 'bench/invoke.ts', dir, '--agent', 'claude', '--mode', mode, '--ids', 'a,b'];
+      process.argv = [process.execPath, 'bench/invoke.ts', dir, '--agent', 'claude', '--mode', mode, '--ids', 'a,b', ...(killed ? ['--timeout-s', '0.05'] : [])];
       vi.resetModules();
-      if (ambient || problem && problem !== 'silent hook') {
-        const reason = problem === 'auth failure' ? 'agent failed before the model ran' : problem === 'no init' || problem === 'bad init' || problem === 'plugins not a list' ? 'no startup inventory' : ambient === 'plugin' ? 'ambient loadout plugin; measurement invalid' : ambient === 'absolute' ? 'uncounted loadout hook context; measurement invalid' : problem === 'missing plugin' ? 'missing loadout plugin; measurement invalid' : mode === 'routed' || mode === 'search' ? 'unexpected loadout UserPromptSubmit hook; measurement invalid' : 'expected exactly one loadout UserPromptSubmit hook; measurement invalid';
+      if (ambient || problem && problem !== 'silent hook' && problem !== 'capped') {
+        const reason = problem === 'auth failure' || problem === 'stalled' ? 'agent failed before the model ran' : problem === 'no init' || problem === 'bad init' || problem === 'plugins not a list' ? 'no startup inventory' : ambient === 'plugin' ? 'ambient loadout plugin; measurement invalid' : ambient === 'absolute' ? 'uncounted loadout hook context; measurement invalid' : problem === 'missing plugin' ? 'missing loadout plugin; measurement invalid' : mode === 'routed' || mode === 'search' ? 'unexpected loadout UserPromptSubmit hook; measurement invalid' : 'expected exactly one loadout UserPromptSubmit hook; measurement invalid';
         await expect(import('../bench/invoke.js')).rejects.toThrow(reason);
         const rows = readFileSync(join(dir, `invoke-claude-${mode}.jsonl`), 'utf8').trim().split('\n').map((line) => JSON.parse(line));
         expect(rows).toHaveLength(1);
         expect(calls).toHaveLength(1);
-        expect(rows[0]).toMatchObject({ id: 'a', invalid: reason, costUsd: problem === 'auth failure' ? 0 : 0.05, exit: problem === 'no init' ? 1 : 0, timedOut: false, invoked: ['skill-a'], tools: ['Read'], inventory: problem === 'no init' || problem === 'bad init' || problem === 'plugins not a list' ? null : reduced(inventories[0]!), hookInvocations: hookCounts[0]!, hookEventCount: hookCounts[0]! + (ambient === 'absolute' ? 1 : 0) });
+        expect(rows[0]).toMatchObject({ id: 'a', invalid: reason, exit: problem === 'no init' ? 1 : problem === 'stalled' ? null : 0, timedOut: problem === 'stalled', invoked: problem === 'stalled' ? [] : ['skill-a'], tools: problem === 'stalled' ? [] : ['Read'], inventory: problem === 'no init' || problem === 'bad init' || problem === 'plugins not a list' ? null : reduced(inventories[0]!), hookInvocations: hookCounts[0]!, hookEventCount: hookCounts[0]! + (ambient === 'absolute' ? 1 : 0) });
+        expect(rows[0].costUsd).toBe(problem === 'auth failure' ? 0 : problem === 'stalled' ? undefined : 0.05);
         if (problem === 'auth failure') expect(rows[0].outcome).toEqual({ isError: true, subtype: 'success' });
         expect(rows[0].hooks).toHaveLength(hookCounts[0]! + (ambient === 'absolute' ? 1 : 0));
         return;
@@ -172,7 +181,7 @@ body
       const rows = readFileSync(join(dir, `invoke-claude-${mode}.jsonl`), 'utf8').trim().split('\n').map((line) => JSON.parse(line));
       expect(rows.map((row) => row.id)).toEqual(['a', 'b']);
       for (const [i, row] of rows.entries()) {
-        expect(row).toMatchObject({ agent: 'claude', mode, model: 'sonnet', invoked: ['skill-a'], searches: [], tools: ['Read'], exit: 0, timedOut: false, costUsd: 0.05, hookInvocations: hookCounts[i]!, hookEventCount: hookCounts[i]!, hookContext: problem !== 'silent hook' && hookCounts[i]! > 0 });
+        expect(row).toMatchObject({ agent: 'claude', mode, model: 'sonnet', invoked: ['skill-a'], searches: [], tools: ['Read'], exit: killed ? null : 0, timedOut: killed, hookInvocations: hookCounts[i]!, hookEventCount: hookCounts[i]!, hookContext: problem !== 'silent hook' && hookCounts[i]! > 0 });
         if (mode !== 'routed') expect(row).toMatchObject({ loaded: [], injected: [], offered: [] });
         expect(row.inventory).toEqual(reduced(inventories[i]!));
         // Rows are public: no ambient plugin names or paths, and no hook skill text.
@@ -180,6 +189,7 @@ body
         expect(row).not.toHaveProperty('invalid');
         expect(row.hooks).toHaveLength(hookCounts[i]!);
         expect(row.hooks.map((h: { injected: string[] }) => h.injected)).toEqual(row.hooks.map((h: { context: boolean }) => h.context ? ['skill-a'] : []));
+        expect(row.costUsd).toBe(killed ? undefined : 0.05);
         expect(row.ms).toBeGreaterThanOrEqual(0);
       }
       expect(process.env.PATH).toBe(fakePath);
