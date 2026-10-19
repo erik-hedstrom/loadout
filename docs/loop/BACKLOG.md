@@ -402,8 +402,35 @@ Decisions for Erik:
 | C7 | P1 | Recommended packs with measured upside (first: frontend with Impeccable) | Codex (harness) + Claude (runs) | cloud (fixtures) + local (runs) | todo (after B1, C2) |
 | C11 | P1 | `bench/outcome.ts` keeps per-request usage | Claude | cloud | todo |
 | C12 | P1 | Audit the need gate on held-out prompts | Claude | cloud (design) + local (runs) | todo |
+| C13 | P1 | Pure-Jev baseline on main: offline scoring and routing stability | Codex (tools) + Claude (runs) | local | review: baseline measured 2026-10-16 ([RESULTS](../../bench/RESULTS.md#c13-2026-10-16-pure-jev-baseline-on-main)) |
 | C8 | P0 | Skill use with the hook-only plugin | Claude | local | review ([#25](https://github.com/erik-hedstrom/loadout/pull/25)) |
 | C10 | P2 | Bench quick fixes: sequential outcome judge, tier fixed across arms, stale A2 number | Claude | cloud | in review ([#40](https://github.com/erik-hedstrom/loadout/pull/40)) |
+
+**C13. Pure-Jev baseline without more model spend.**
+
+Why: Erik approved measuring a pure-Jev baseline before more Claude/Codex
+spend (2026-10-16).
+
+Acceptance: `bench/judge.ts --offline --blind-from <dir>` reuses blind answers
+and per-skill ratings from repeated `--verdicts-from <dir>` sources through
+the existing scorer, rejects changed request texts, and reports unrated loads
+with precision bounds and Wilson intervals by dev/test split.
+`bench/stability.ts <dir> <dir> ...` reports per-run fallbacks, latency and
+cost, plus identical-set shares and pairwise Jaccard for loaded and
+loaded-or-offered sets by split. Small fixture tests require no key, network
+or model calls. Cost: $0.
+
+Learnings ([RESULTS](../../bench/RESULTS.md#c13-2026-10-16-pure-jev-baseline-on-main)):
+- Main at 155d7ec routes within the intervals of the earlier runs on both
+  request sets and on the gold tasks; 1 keyword fallback in 1,815 decisions.
+- About 1 request in 10 gets a different loaded set on an identical rerun.
+- Pooling v4's four earlier judgings fails: the judge rated the same request
+  and skill differently in two of them, so offline v4 scores use the post-E9
+  control's ratings only.
+- Offline scoring cannot show misleading loads it has no rating for, so a
+  drop in misleading loads is "not shown" until those loads are judged.
+- `judgeSweep(args)` and `stabilityReport(dirs)` are the entry points; the
+  scripts that ran the burn and the scoring are committed with the results.
 
 **C1. New held-out requests.**
 
