@@ -11,7 +11,7 @@ import { route } from './route.js';
 import { cachedEmbeddings, libraryEmbeddings } from './embed.js';
 import { doctor, formatDoctor, onPath } from './doctor.js';
 import { detectHosts, interactive, PACKS, packSources, wizard } from './init.js';
-import { HOOK_FAILURE_NOTE, hookOutput, isFollowUp, promptContext, type HookInput } from './hook.js';
+import { HOOK_FAILURE_NOTE, hookOutput, isFollowUp, noKeyWarning, promptContext, type HookInput } from './hook.js';
 import { reportJson, type Capability, type RouteDecision } from './types.js';
 
 const USAGE = `loadout — pick the model, skills and MCP servers for each agent session
@@ -171,22 +171,25 @@ async function runHook(rest: string[]): Promise<number> {
     for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
     const input = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}') as HookInput;
     const prompt = input.prompt?.trim();
-    // Follow-ups add no context, so skip the config, library and embedding startup cost.
-    if (!prompt || isFollowUp(prompt)) return 0;
+    if (!prompt) return 0;
     const config = loadConfig();
     const apiKey = config.router === 'jev' ? resolveApiKey(config) : undefined;
     // No retries and a short timeout: two Jev requests must fit well inside the deadline.
     const client = apiKey ? jevClient({ apiKey, baseUrl: config.jev.baseUrl, model: config.jev.model, timeoutMs: 8_000, retries: 0 }) : undefined;
-    const context = await promptContext(input, {
+    const stateDir = join(paths.sessions(), 'hook');
+    // Follow-ups add no context, so skip the library and embedding startup cost.
+    const context = isFollowUp(prompt) ? undefined : await promptContext(input, {
       library: scanLibrary(paths.library(), { cache: true }),
       config,
       client,
       embeddings: client && config.embeddings ? await cachedEmbeddings(paths.embeddings()) : undefined,
       repo: repoSignals(input.cwd && existsSync(input.cwd) ? input.cwd : process.cwd()),
-      stateDir: join(paths.sessions(), 'hook'),
+      stateDir,
       ...(values['windows-paths'] ? { toPath: windowsPath } : {}),
     });
-    if (context) console.log(hookOutput(context));
+    // After promptContext, so a throw there cannot use up the once-per-session marker unseen.
+    const warning = noKeyWarning(input, { config, client, stateDir });
+    if (context || warning) console.log(hookOutput(context, warning));
   } catch {
     console.error(HOOK_FAILURE_NOTE);
   } finally {
