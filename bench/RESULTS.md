@@ -131,7 +131,10 @@ nothing.
   isolation applies to both arms: allowlisted environment, a fresh Claude home
   with the subscription token, `--ignore-user-config` for Codex, so no ambient
   plugin or MCP tool reaches the numbers. The arms share every other flag, the
-  model, the turn cap and the timeout.
+  model, the turn cap and the timeout. One difference from the Linux plugin
+  install: the Codex MCP server is `required = true`, as `loadout setup codex`
+  writes it, so a failed start stops the run; the plugin leaves it out on
+  purpose (comment in `src/launch.ts`).
 - **Tokens.** Per model request from the host's own report, with uncached input,
   cache writes, cache reads and output always apart. Claude: each assistant
   message's usage, deduplicated by message id. Codex: `codex exec --json` gives
@@ -160,6 +163,17 @@ nothing.
   files first; a skill's own template can still show the arm.
 - **Sample.** Two repeats per cell: ranges, not intervals, and "not shown" where
   the sample does not support a claim.
+- **What stops the batch.** A loadout arm that routed by keyword (the hook's
+  no-key warning or Jev-fallback note, or a `find_tools` result tagged as a
+  keyword match), any file in a run's folder holding the TypeSafe key, the
+  Claude subscription token or something shaped like a login token or API key
+  (nothing is copied, and the value is never printed; Codex's own login token is
+  not read, so only its shape is caught), and the plugin, hook, server or model
+  checks. Claude runs need the key in a key file named by the loadout config,
+  because the variable alone may not reach the MCP server or the hook. An
+  `--out` folder is one study: it is not resumed with other settings or past
+  such a row, and a resume works in the same temporary folder, which keeps the
+  working directory in the cached prefix unchanged.
 - **Rows.** `bench/results/<timestamp>-ab-pilot/`: `rows.jsonl` (names only, no
   paths, no skill text), `outputs/` (the deliverables, this machine's folders
   written as variables), `verdicts.jsonl`, `report.md`. The raw streams are
@@ -169,8 +183,10 @@ nothing.
   absent from `claude --help` 2.1.281; whether `Bash(node --test *)` matches the
   agent's test command; whether the Codex hook registers through `-c
   hooks.UserPromptSubmit` with `--dangerously-bypass-hook-trust` (the source
-  says it should; the shim's count decides); whether `loadout mcp` sees the key
-  under Claude's MCP environment allowlist.
+  says it should; the shim's count decides); whether the key file and a
+  non-default `LOADOUT_HOME` reach `loadout mcp` and the hook under Claude's MCP
+  environment allowlist and subprocess scrub (a keyword-routed loadout run
+  stops the batch).
 
 ## B1 results (2026-10-07): what installed skills cost per request
 

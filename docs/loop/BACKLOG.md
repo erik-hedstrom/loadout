@@ -155,6 +155,7 @@ Acceptance:
 | B7 | P1 | MCP overhead study: what configured MCP servers cost per request, natively and through loadout | Claude | cloud (harness, done) + local (runs) | in progress: harness merged in [#38](https://github.com/erik-hedstrom/loadout/pull/38), with no ambient Claude plugins (2026-10-15 decision); live runs wait for Erik's approval of the estimate |
 | B8 | P0 | Backlog items from the launch-readiness review, 2026-10-13, MCP token cost first | Claude | local + erik | todo (the review is private, on Erik's machine) |
 | B9 | P1 | Savings from an adopted library: what a user saves after moving skills and MCP servers into loadout | Claude | local | todo (after B7) |
+| B10 | P1 | B7: Claude 2.1.281's init lists `@builtin` plugins even with `--setting-sources ""` and a fresh config dir, so `plugins.length !== 0` (`bench/mcp-overhead.ts`, the "Claude init plugins must be empty" check) would refuse every B7 Claude run; ignore `@builtin` plugins as the A/B harness does (`isBuiltin` in `bench/ab.ts`) | Claude | cloud | todo. Seen on 2.1.281 by C14 in a free probe (`claude -p` with HTTPS_PROXY pointed at a closed port prints the init event and makes no model call); not reproduced by review, so confirm with the same probe first |
 
 **B8. Items from the launch-readiness review.** The review (2026-10-13) is
 private ([ORCHESTRATOR](ORCHESTRATOR.md#local-the-default)).
@@ -429,13 +430,13 @@ Decisions for Erik:
 | C5 | P2 | Retrieval beyond 200 candidates (Jev tournament) | Codex | cloud | todo |
 | C6 | P2 | Multi-intent requests | Claude | cloud | todo |
 | C7 | P1 | Recommended packs with measured upside (first: frontend with Impeccable) | Codex (harness) + Claude (runs) | cloud (fixtures) + local (runs) | todo (after B1, C2) |
-| C11 | P1 | `bench/outcome.ts` keeps per-request usage | Claude | cloud | done in C14 for the A/B harness (`bench/usage.ts`, fixture tests); `outcome.ts` itself is unchanged |
+| C11 | P1 | `bench/outcome.ts` keeps per-request usage | Claude | cloud | partly done: the A/B harness (C14) keeps per-request usage (`bench/usage.ts`, fixture tests); `outcome.ts` itself is unchanged and still open |
 | C12 | P1 | Audit the need gate on held-out prompts | Claude | cloud (design) + local (runs) | todo |
 | C13 | P1 | Pure-Jev baseline on main: offline scoring and routing stability | Codex (tools) + Claude (runs) | local | done ([#45](https://github.com/erik-hedstrom/loadout/pull/45)): baseline measured 2026-10-16 ([RESULTS](../../bench/RESULTS.md#c13-2026-10-16-pure-jev-baseline-on-main)) |
 | C8 | P0 | Skill use with the hook-only plugin | Claude | local | done ([#25](https://github.com/erik-hedstrom/loadout/pull/25)): headless, the hook injected a skill's text in 6 of 10; Claude opened 0 of 10, none of the 4 it was only pointed to (D13) |
 | C9 | P1 | Host-model fallback router when there is no TypeSafe key | Claude (design) | cloud (code) + local (bench) | todo |
 | C10 | P2 | Bench quick fixes: sequential outcome judge, tier fixed across arms, stale A2 number | Claude | cloud | done ([#40](https://github.com/erik-hedstrom/loadout/pull/40)) |
-| C14 | P1 | A/B pilot: three prompts with and without loadout in the stock CLIs, tokens (cached apart from uncached) and quality | Claude (harness) + Erik (runs) | cloud (harness) + local (runs) | review ([#47](https://github.com/erik-hedstrom/loadout/pull/47)): harness, plan and tests done; the paid pilot has not run (needs `CLAUDE_CODE_OAUTH_TOKEN` and the TypeSafe key, from WSL) |
+| C14 | P1 | A/B pilot: three prompts with and without loadout in the stock CLIs, tokens (cached apart from uncached) and quality | Claude (harness) + Erik (runs) | cloud (harness) + local (runs) | review ([#47](https://github.com/erik-hedstrom/loadout/pull/47)): harness, plan and tests done, reviews addressed (resume refuses other settings or a batch-stopping row; credentials in outputs and keyword-routed loadout runs stop the batch); the paid pilot has not run (needs `CLAUDE_CODE_OAUTH_TOKEN` and the TypeSafe key in a key file, from WSL) |
 
 **C13. Pure-Jev baseline without more model spend.**
 
@@ -687,7 +688,10 @@ Acceptance:
 - Validity stops the batch: the loadout plugin present exactly once in the
   loadout arm and absent in bare, no other plugin, the hook run once (loadout) or
   never (bare), the loadout MCP server connected, the model as requested, no run
-  failed before the model.
+  failed before the model; a loadout arm that routed by keyword (no key reached
+  it, or Jev failed); a credential, or something shaped like one, in a run's
+  folder (nothing is copied). A study folder is not resumed with other settings
+  or past such a row.
 - Blind pairwise judging in both orders, cross-family (Sol judges Claude's
   outputs, Opus judges Codex's), skill names removed from both arms' files.
 - `report.md` per host, arm and prompt, with the loadout − bare difference.
@@ -698,7 +702,8 @@ Estimate for the paid pilot (the plan prints it, with its assumptions): 28
 runs (4 warm-ups), Claude at most 420 requests and Codex 14 thread totals,
 about 1 to 3 hours, subscription quota; Jev about 14 routing calls (under
 $0.05); 24 judge calls (Opus and Sol quota). Needs Erik: the Claude
-subscription token, the TypeSafe key, a Linux shell (WSL), and a go-ahead.
+subscription token, the TypeSafe key in a key file (`loadout init --key-file`), a
+Linux shell (WSL), and a go-ahead.
 
 Learnings (2026-10-19):
 - `claude -p` with a black-holed proxy and a fresh config directory runs the
@@ -706,7 +711,7 @@ Learnings (2026-10-19):
   fixtures, the plugin loading under `--setting-sources ''` and the PATH shim
   are checked for free. The init lists the built-in `agents-md` plugin
   (`source: agents-md@builtin`) even with no plugin: **B7's "init plugins must be
-  empty" check would refuse every Claude run**. `ab.ts` ignores `@builtin`.
+  empty" check would refuse every Claude run** (B10). `ab.ts` ignores `@builtin`.
 - `codex exec --json`'s `turn.completed.usage` is the thread's running total,
   not the last request's (`usage_from_last_total`). Per-request Codex usage
   needs the app-server, a different integration.
