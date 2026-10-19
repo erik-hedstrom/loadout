@@ -914,7 +914,7 @@ Learnings (2026-10-09):
 | E1 | P0 | GitHub Actions CI | Codex | cloud | done ([PR #2](https://github.com/erik-hedstrom/loadout/pull/2)) |
 | E2 | P0 | LICENSE, CONTRIBUTING, SECURITY.md, templates | Claude | cloud + erik | done ([PR #1](https://github.com/erik-hedstrom/loadout/pull/1)) |
 | E7 | P0 | Vendor-independent bench judges and expander | Codex | cloud | done ([PR #5](https://github.com/erik-hedstrom/loadout/pull/5)) |
-| E8 | P0 | Repo-wide simplification pass | Claude (pr-reviewer finds, worker fixes) + Codex review | cloud | in progress (merged: bench/ [#11](https://github.com/erik-hedstrom/loadout/pull/11), src/ [#12](https://github.com/erik-hedstrom/loadout/pull/12), Markdown [#15](https://github.com/erik-hedstrom/loadout/pull/15); Markdown rest in review, [#26](https://github.com/erik-hedstrom/loadout/pull/26)); left: the WSL-only `bench.test.ts` failure |
+| E8 | P0 | Repo-wide simplification pass | Claude (pr-reviewer finds, worker fixes) + Codex review | cloud | in progress (merged: bench/ [#11](https://github.com/erik-hedstrom/loadout/pull/11), src/ [#12](https://github.com/erik-hedstrom/loadout/pull/12), Markdown [#15](https://github.com/erik-hedstrom/loadout/pull/15); Markdown rest in review, [#26](https://github.com/erik-hedstrom/loadout/pull/26)); the WSL-only `bench.test.ts` failure moved to E15 |
 | E9 | P0 | Security hardening from the read-only Sol review | Codex | cloud | done ([PR #4](https://github.com/erik-hedstrom/loadout/pull/4), re-measure [PR #7](https://github.com/erik-hedstrom/loadout/pull/7)) |
 | E3 | P1 | Split the test file per module | Codex | cloud | todo |
 | E5 | P1 | Changelog and release automation | Codex | cloud | todo (with A4) |
@@ -923,6 +923,7 @@ Learnings (2026-10-09):
 | E11 | P1 | Fixed-text diagnostics in the gateway and relay | Codex | cloud | done ([PR #10](https://github.com/erik-hedstrom/loadout/pull/10)) |
 | E12 | P1 | A tool-less Codex bench backend (codex-cli 0.160.1 keeps unified_exec on) | Codex | local | todo |
 | E13 | P1 | Apply Engineer standards to both review paths, with a blocking necessity pass | Codex + Claude review | cloud | review ([#41](https://github.com/erik-hedstrom/loadout/pull/41)) |
+| E15 | P1 | Test flakes: WSL-only `bench.test.ts` failure, Windows spawn timeouts | Claude | local | review ([#44](https://github.com/erik-hedstrom/loadout/pull/44)) |
 
 **E10. Build without optional dependencies.** src/embed.ts:24 types
 `@huggingface/transformers` with `typeof import(...)`. So `tsc` fails when npm
@@ -989,6 +990,33 @@ the rules are published and exercised on a representative PR.
 
 Learned: on Windows, `npm test` needed repository-local TEMP/TMP when the
 sandbox could not load Vitest's temp files.
+
+**E15. Test flakes on the merge gate.** Two failures that were already on
+main made the gate noisy during the 2026-10-16 merge round (CI reruns,
+"known flake" notes).
+- `bench.test.ts` "keeps the escaped Claude catalog in an identical
+  system-prompt file across batches" failed every time in WSL2. There `which`
+  finds the Windows `claude`, so `systemPromptArgs` (bench/lib.ts) translates
+  the prompt-file path through `wslpath`, which the test file mocks: the path
+  became the mocked `codex features list` text. The test now sets `PATH` to an
+  empty folder.
+- Tests that spawn `node --import tsx` failed at random on Windows runners at
+  vitest's 5 s default (doctor, audit, bench, loadout and overhead tests in CI
+  history). Vitest fails a synchronous test that ran past its timeout even
+  after `spawnSync` returns, so only a higher `testTimeout` helps. It is now
+  30 s in vitest.config.ts. Per-test overrides of 30 s or less are gone; the
+  audit case-variant test keeps its loop guard, raised from 5 s to 15 s.
+
+Acceptance: the bench test passes in WSL2; the full suite passes on Windows
+under load; `ci-full` green.
+
+Learnings:
+- Repro for the timeouts: the full suite pinned to 4 cores (CI's
+  `windows-latest` size) next to a busy loop on the same cores. Before: 25
+  failed, all at 5 s or at a lower per-test timeout. After: all passed; the
+  slowest test took 13.4 s.
+- `codex features list` and `wslpath` share the mocked `execFileSync` in
+  bench.test.ts. A test that reaches either one must control its input.
 
 **E1. CI.**
 
@@ -1091,7 +1119,7 @@ Starting points from Sol's review (2026-10-07):
 - `test/`: bench.test.ts "keeps the escaped Claude catalog…" fails on a
   machine where `which('claude')` finds a Windows `claude` under `/mnt/c`.
   `pathTranslator` then calls the mocked `execFileSync`. Seen in WSL during
-  D10; CI does not have that PATH.
+  D10; CI does not have that PATH. Fixed in E15.
 
 Markdown area ([#15](https://github.com/erik-hedstrom/loadout/pull/15)):
 `pr-reviewer` found 28 items in DESIGN, HANDOFF, README and bench/README; Sol
