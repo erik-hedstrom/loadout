@@ -1,4 +1,4 @@
-import fs, { existsSync, lutimesSync, utimesSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import fs, { chmodSync, existsSync, lutimesSync, utimesSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import crypto, { createHash } from 'node:crypto';
 import { syncBuiltinESMExports } from 'node:module';
@@ -10,7 +10,7 @@ import { parse as parseToml } from 'smol-toml';
 import { DEFAULT_CONFIG, jevBaseUrl, loadoutHome, type Config } from '../src/config.js';
 import { jevClient, JevError, validateResponse, type Question, type SystemOneClient } from '../src/jev.js';
 import { claudeArgs, claudeHookSettings, codexArgs, escapeSkillTags, hookCommand, hostSetup, isolateConflict, launch, loaderArgs, materialize, searchServer, toToml } from '../src/launch.js';
-import { hookOutput, isFollowUp, HOOK_FAILURE_NOTE, JEV_FALLBACK_NOTE, promptContext } from '../src/hook.js';
+import { hookOutput, isFollowUp, HOOK_FAILURE_NOTE, JEV_FALLBACK_NOTE, noKeyWarning, NO_KEY_WARNING, promptContext } from '../src/hook.js';
 import { createServer, readSkillFile, serveHttp } from '../src/mcp.js';
 import { rememberTools, withTools } from '../src/toolindex.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
@@ -1718,16 +1718,27 @@ describe('cache and state folders under the loadout home', () => {
     const staleLink = `${'e'.repeat(32)}.json`;
     // Left by an earlier version, whose temp names ended in pid and time.
     const legacyTmp = `${'f'.repeat(32)}.json.4242.1700000000000.tmp`;
+    const staleWarned = `${'0'.repeat(32)}.warned`;
     writeFileSync(join(outside, 'precious.json'), 'precious');
     symlinkSync(join(outside, 'precious.json'), join(stateDir, staleLink));
-    for (const f of [staleState, staleTmp, legacyTmp, 'precious.json', 'notes.txt']) writeFileSync(join(stateDir, f), 'x');
-    for (const f of [staleState, staleTmp, legacyTmp, 'precious.json', 'notes.txt']) utimesSync(join(stateDir, f), old, old);
+    for (const f of [staleState, staleTmp, legacyTmp, staleWarned, 'precious.json', 'notes.txt']) writeFileSync(join(stateDir, f), 'x');
+    for (const f of [staleState, staleTmp, legacyTmp, staleWarned, 'precious.json', 'notes.txt']) utimesSync(join(stateDir, f), old, old);
     lutimesSync(join(stateDir, staleLink), old, old);
     const { client } = fakeClient({ 'webapp-testing': 0.95 }, { exact: 1 });
     expect(await promptContext({ session_id: 's1', prompt: TASK }, { library, config: DEFAULT_CONFIG, client, stateDir })).toContain('webapp-testing');
     expect(readdirSync(stateDir).sort()).toEqual(['notes.txt', 'precious.json', stateName('s1')].sort());
     expect(readFileSync(join(outside, 'precious.json'), 'utf8')).toBe('precious');
     expect(readFileSync(join(outside, 'state.json'), 'utf8')).toContain('webapp-testing');
+  });
+
+  it('warns about a missing key every time, and writes no marker, when the hook state folder is a link', () => {
+    const outside = tempDir('loadout-outside-');
+    const stateDir = join(home(), 'hook');
+    symlinkSync(outside, stateDir, 'junction');
+    const deps = { config: DEFAULT_CONFIG, stateDir };
+    expect(noKeyWarning({ session_id: 'a', prompt: TASK }, deps)).toBe(NO_KEY_WARNING);
+    expect(noKeyWarning({ session_id: 'a', prompt: TASK }, deps)).toBe(NO_KEY_WARNING);
+    expect(readdirSync(outside)).toEqual([]);
   });
 });
 
@@ -1866,6 +1877,7 @@ describe('claude hook', () => {
     expect(await promptContext({ session_id: 's2', prompt: TASK }, deps)).toContain('webapp-testing');
 
     expect(JSON.parse(hookOutput('x'))).toEqual({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: 'x' } });
+    expect(JSON.parse(hookOutput('x', 'w'))).toEqual({ systemMessage: 'w', hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: 'x' } });
   });
 
   it('writes no hook state through a linked sessions folder', async () => {
@@ -1925,5 +1937,95 @@ describe('claude hook', () => {
     expect(await promptContext({ session_id: 'g', prompt: TASK }, { library, config: DEFAULT_CONFIG, stateDir })).toBeUndefined();
     expect(isFollowUp('continue')).toBe(true);
     expect(isFollowUp('/pdf')).toBe(false);
+  });
+
+  it('warns once per session that there is no key, only when the Jev router is configured', () => {
+    const stateDir = tempDir('loadout-hook-');
+    const { client } = fakeClient({});
+    const noKey = { config: DEFAULT_CONFIG, stateDir };
+    expect(noKeyWarning({ session_id: 'a', prompt: TASK }, noKey)).toBe(NO_KEY_WARNING);
+    expect(noKeyWarning({ session_id: 'a', prompt: TASK }, noKey)).toBeUndefined();
+    expect(noKeyWarning({ session_id: 'b', prompt: TASK }, noKey)).toBe(NO_KEY_WARNING);
+    expect(noKeyWarning({ session_id: 'c', prompt: TASK }, { ...noKey, client })).toBeUndefined();
+    expect(noKeyWarning({ session_id: 'd', prompt: TASK }, { ...noKey, config: { ...DEFAULT_CONFIG, router: 'lexical' } })).toBeUndefined();
+    expect(noKeyWarning({ prompt: TASK }, noKey)).toBe(NO_KEY_WARNING);
+    expect(noKeyWarning({ prompt: TASK }, noKey)).toBe(NO_KEY_WARNING);
+    // A state dir that cannot be created still warns, every time.
+    const blocked = join(tempDir('loadout-hook-'), 'file');
+    writeFileSync(blocked, '');
+    const unwritable = { ...noKey, stateDir: join(blocked, 'hook') };
+    expect(noKeyWarning({ session_id: 'e', prompt: TASK }, unwritable)).toBe(NO_KEY_WARNING);
+    expect(noKeyWarning({ session_id: 'e', prompt: TASK }, unwritable)).toBe(NO_KEY_WARNING);
+    // The state dir itself is a file: mkdir's EEXIST is not the marker's.
+    const fileDir = { ...noKey, stateDir: blocked };
+    expect(noKeyWarning({ session_id: 'f', prompt: TASK }, fileDir)).toBe(NO_KEY_WARNING);
+  });
+
+  // Root ignores the mode, and Windows has no POSIX write bit on folders.
+  it.skipIf(process.getuid?.() === 0 || process.platform === 'win32')('warns every time when the marker write fails with anything but EEXIST', () => {
+    const stateDir = tempDir('loadout-hook-');
+    chmodSync(stateDir, 0o555);
+    try {
+      expect(noKeyWarning({ session_id: 'a', prompt: TASK }, { config: DEFAULT_CONFIG, stateDir })).toBe(NO_KEY_WARNING);
+      expect(noKeyWarning({ session_id: 'a', prompt: TASK }, { config: DEFAULT_CONFIG, stateDir })).toBe(NO_KEY_WARNING);
+    } finally {
+      chmodSync(stateDir, 0o755);
+    }
+  });
+
+  describe('no-key warning through the hook process', () => {
+    const run = (host: 'claude' | 'codex', home: string, session: string, prompt = 'fix the flaky login test on CI') =>
+      spawnSync(process.execPath, ['--import', 'tsx', join(import.meta.dirname, '../src/cli.ts'), 'hook', host], {
+        encoding: 'utf8', timeout: 10_000,
+        env: { ...process.env, TYPESAFE_API_KEY: '', LOADOUT_HOME: home },
+        input: JSON.stringify({ session_id: session, prompt, cwd: home }),
+      });
+    const homeWith = (jev: Record<string, unknown>) => {
+      const home = tempDir('loadout-nokey-');
+      writeFileSync(join(home, 'config.json'), JSON.stringify({ ...DEFAULT_CONFIG, embeddings: false, jev: { ...DEFAULT_CONFIG.jev, ...jev } }));
+      return home;
+    };
+
+    it('shows the warning once per session as a systemMessage, to Claude Code and Codex alike', () => {
+      const home = homeWith({});
+      for (const host of ['claude', 'codex'] as const) {
+        const first = run(host, home, host);
+        expect(first.status, first.stderr).toBe(0);
+        expect(JSON.parse(first.stdout)).toEqual({ systemMessage: NO_KEY_WARNING });
+        const again = run(host, home, host);
+        expect(again.stdout).toBe('');
+        expect(again.stderr).toBe('');
+      }
+    });
+
+    it('warns when the session opens with a short follow-up-style prompt', () => {
+      const home = homeWith({});
+      const first = run('claude', home, 'short', 'fix tests');
+      expect(first.status, first.stderr).toBe(0);
+      expect(JSON.parse(first.stdout)).toEqual({ systemMessage: NO_KEY_WARNING });
+      expect(run('claude', home, 'short', 'continue').stdout).toBe('');
+    });
+
+    it('keeps the warning for a later prompt when building context fails', () => {
+      const home = homeWith({});
+      mkdirSync(join(home, 'library'));
+      writeFileSync(join(home, 'library/mcp.json'), '{ not json');
+      const failed = run('claude', home, 'broken');
+      expect(failed.status).toBe(0);
+      expect(failed.stdout).toBe('');
+      expect(JSON.parse(run('claude', home, 'broken', 'ok').stdout)).toEqual({ systemMessage: NO_KEY_WARNING });
+    });
+
+    it('never names the key file, whether it is missing or unreadable', () => {
+      const missing = join(tempDir('loadout-keydir-'), 'KEYFILE-CANARY-missing');
+      const unreadable = join(tempDir('loadout-keydir-'), 'KEYFILE-CANARY-dir');
+      mkdirSync(unreadable);
+      for (const [apiKeyFile, session] of [[missing, 'm'], [unreadable, 'u']] as const) {
+        const result = run('claude', homeWith({ apiKeyFile }), session);
+        expect(result.status).toBe(0);
+        expect(result.stdout + result.stderr).not.toMatch(/CANARY|loadout-keydir|config\.json/);
+      }
+      expect(JSON.parse(run('claude', homeWith({ apiKeyFile: missing }), 'm2').stdout)).toEqual({ systemMessage: NO_KEY_WARNING });
+    });
   });
 });
