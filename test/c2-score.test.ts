@@ -20,6 +20,8 @@ describe('C2 score interval', () => {
     // The 0.45 "match" bound: 2 wins fall just short, 3 reach it.
     expect(scoreInterval(2, 0, 14)[0]).toBeLessThan(0.45);
     expect(scoreInterval(3, 0, 14)[0]).toBeGreaterThanOrEqual(0.45);
+    // 4 wins clear parity ("better"), at 0.504.
+    expect(scoreInterval(4, 0, 14)[0]).toBeGreaterThan(0.5);
   });
 
   it('is mirrored when the arms swap', () => {
