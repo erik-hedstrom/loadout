@@ -1,5 +1,6 @@
-[![CI](https://github.com/erik-hedstrom/loadout/actions/workflows/ci.yml/badge.svg)](https://github.com/erik-hedstrom/loadout/actions/workflows/ci.yml)
 # loadout
+
+[![CI](https://github.com/erik-hedstrom/loadout/actions/workflows/ci.yml/badge.svg)](https://github.com/erik-hedstrom/loadout/actions/workflows/ci.yml) [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 Pick the model, skills and MCP servers for each coding-agent session from a
 library of any size. Routing costs **$0.0011 per decision** on
@@ -264,6 +265,20 @@ through `loadout setup claude-code`; its fixed token cost is measured in
 Under WSL, Windows apps reach the server through `wsl.exe` and get Windows
 paths. Keep the TypeSafe key in the config's `apiKeyFile` (environment
 variables do not cross from a Windows app into WSL).
+
+Under WSL, install loadout on the Linux filesystem (under `~`), not in a
+checkout on `/mnt/c`. From `/mnt/c`, Node loads loadout's many module files
+over the slow Windows file share, and `loadout mcp` took 5.9–7.0 s to answer
+instead of 0.4–0.8 s ([one machine](bench/RESULTS.md#mcp-start-up-under-wsl-d17-2026-10-15)).
+Codex leaves out an optional MCP server that is not ready about 1 s after
+start, and adds its tools mid-session. The TOML from `loadout setup codex
+--windows` sets `required = true`, so Codex waits for search before the first
+request, and will not start a session if loadout fails to start (from Codex
+0.160.1's source; not yet run in a live session). The plugin does not set
+it, because users cannot turn it off for a plugin's server. To make Codex
+wait for the plugin's server too, set `mcp_optional_startup_grace_ms = 0` at
+the top of `~/.codex/config.toml`; Codex then waits for every optional MCP
+server, up to its start-up timeout.
 
 Tier-to-model mapping, thresholds and caps live in `~/.loadout/config.json`
 (only your overrides are stored; everything else follows the defaults).

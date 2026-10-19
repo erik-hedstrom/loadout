@@ -6,10 +6,10 @@
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { parseArgs } from 'node:util';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { loadConfig, paths, resolveApiKey } from '../src/config.js';
 import { cachedEmbeddings } from '../src/embed.js';
 import { hookOutput, promptContext } from '../src/hook.js';
@@ -56,7 +56,7 @@ export function replayPreload(replies: SystemOneResponse[], endpoint: string): s
   return code;
 }
 
-if (import.meta.main) {
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const { values } = parseArgs({ options: { limit: { type: 'string', default: '10' } } });
   const limit = Number(values.limit);
   const dev = readJsonl<{ id: string; request: string }>(join(DATA, 'requests.jsonl')).filter((r) => splitOf(r.id) === 'dev');
