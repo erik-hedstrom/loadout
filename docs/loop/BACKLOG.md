@@ -430,7 +430,7 @@ Decisions for Erik:
 | C6 | P2 | Multi-intent requests | Claude | cloud | todo |
 | C7 | P1 | Recommended packs with measured upside (first: frontend with Impeccable) | Codex (harness) + Claude (runs) | cloud (fixtures) + local (runs) | todo (after B1, C2) |
 | C11 | P1 | `bench/outcome.ts` keeps per-request usage | Claude | cloud | todo |
-| C12 | P1 | Audit the need gate on held-out prompts | Claude | cloud (design) + local (runs) | todo |
+| C12 | P1 | Audit the need gate on held-out prompts | Claude | cloud (design) + local (runs) | done (PR pending): audited on C1 dev, no change ([RESULTS](../../bench/RESULTS.md#c12-2026-10-19-the-need-gate-on-c1-dev)) |
 | C13 | P1 | Pure-Jev baseline on main: offline scoring and routing stability | Codex (tools) + Claude (runs) | local | done ([#45](https://github.com/erik-hedstrom/loadout/pull/45)): baseline measured 2026-10-16 ([RESULTS](../../bench/RESULTS.md#c13-2026-10-16-pure-jev-baseline-on-main)) |
 | C8 | P0 | Skill use with the hook-only plugin | Claude | local | done ([#25](https://github.com/erik-hedstrom/loadout/pull/25)): headless, the hook injected a skill's text in 6 of 10; Claude opened 0 of 10, none of the 4 it was only pointed to (D13) |
 | C9 | P1 | Host-model fallback router when there is no TypeSafe key | Claude (design) | cloud (code) + local (bench) | todo |
@@ -586,6 +586,19 @@ proves nothing, and that task is now used, so it is not a tuning input.
 Acceptance: rate need on C1's dev split against the judge's labels; report
 false "no skill" decisions with Wilson intervals; change the threshold or
 the question only if dev shows a gain, then report on C1 test.
+
+Learnings ([RESULTS](../../bench/RESULTS.md#c12-2026-10-19-the-need-gate-on-c1-dev)),
+`bench/need-audit.ts`, $0:
+- Replaying `decide()` on stored answers needs no new Jev run: it matches the
+  stored loads in 396 of 396 dev rows (4 sweeps × 99).
+- At 0.5 the gate says "no skill" on 17% of the judge's helpful-or-essential
+  rows (30/176, 12–23%) and on 0 of 32 essential ones. The 7 requests quiet
+  in every run are all "helpful" with generic useful skills.
+- `need` is stable across reruns (median range 0.017) but weakly separates
+  the labels (AUC 0.72; median 0.52 for none, 0.66 for helpful).
+- No change: threshold 0.4 gains a useful load on 4 requests of 44 and loses
+  none (sign test p = 0.125), so it is not shown to help; C1 test not scored.
+- Not shown: misleading loads, and the effect on what is offered.
 
 **C8. Skill use with the hook-only plugin.** RESULTS has 6 of 10 for the
 search tool plus the hook, and 2 of 10 for the search tool alone. The plugin
