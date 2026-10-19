@@ -238,8 +238,7 @@ claude plugin install loadout@loadout
 
 You can also use `/plugin` inside a session. The plugin routes every prompt
 and adds the skills that fit as context, so sessions started without the
-launcher get the skills that fit as context, without relying on the agent to
-search. The
+launcher do not rely on the agent to search. The
 [search tool plus prompt hook](bench/RESULTS.md#do-agents-use-what-they-are-given)
 raised Claude Code's skill use from 2 to 6 of 10 sessions. In 10 headless
 sessions with the hook-only plugin, the hook injected a skill's full text in 6

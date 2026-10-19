@@ -575,7 +575,9 @@ Learnings (2026-10-12, [#25](https://github.com/erik-hedstrom/loadout/pull/25)):
   measured. Next: D13.
 - The first write-up counted only opens and missed the injections, which sat
   in hook text that the privacy redaction then dropped. Rows now list the
-  injected skill names per hook (Sol's review caught it).
+  injected skill names per hook (Sol's review caught it). The committed rows
+  predate 2419a22, so they still carry `hookEventCount`, `hookContext` and the
+  hook's `event`, which current `bench/invoke.ts` no longer writes.
 - The bench took six review rounds to measure the right thing. Skill context is
   not an execution counter (a hook legitimately returns nothing). A PATH shim
   the bench owns counts invocations, plus a `context` mark for invocations
