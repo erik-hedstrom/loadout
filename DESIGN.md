@@ -41,30 +41,30 @@ flowchart TB
 
     subgraph routing["Routing: route() in src/route.ts"]
         GATE{"Jev client?"}
-        RET["Retrieve: BM25, plus embeddings when available<br/>top maxCandidates (200 by default);<br/>a library that size or smaller passes whole"]
-        JEV["Jev SystemOneClient<br/>wide request: pick, need, model tier<br/>close request: top shortlist (8 by default)"]
-        DEC["decide()<br/>load, offer, inject or stay quiet<br/>up to 3 skills, 2 MCP servers, 4 offers (defaults)"]
-        LEX["Lexical router<br/>loads matches at least half the top BM25 score,<br/>up to 3 skills and 2 MCP servers (defaults)<br/>no offers; tier = defaultTier"]
-        MEN["withMentions()<br/>skills the task names, found in the whole library:<br/>first, up to 3, marked for injection<br/>a named skill also lifts quiet (the need gate)<br/>every route result passes through; unchanged when none is named"]
+        RET["Retrieve<br/>BM25, plus embeddings when available"]
+        JEV["Jev SystemOneClient<br/>wide request, then close request"]
+        DEC["decide()<br/>load, offer, inject or stay quiet"]
+        LEX["Lexical router<br/>keyword match, no offers"]
+        MEN["withMentions()<br/>skills the task names, loaded and injected"]
         GATE -->|"yes"| RET
-        GATE -->|"no: no key, router: lexical, or --lexical"| LEX
+        GATE -->|"no"| LEX
         RET --> JEV
-        JEV -->|"Jev fails, not cancelled"| LEX
+        JEV -->|"Jev fails"| LEX
         JEV --> DEC
-        JEV -->|"model tier, picked in route(), not decide()"| MEN
+        JEV -->|"model tier"| MEN
         DEC --> MEN
         LEX --> MEN
     end
 
     subgraph out["Output"]
-        HC["Hook context<br/>skill_relevance list: Jev fit, or a keyword score relative to the top match<br/>(1.00 for a named skill the router did not rate)<br/>once per skill per session id; with lexical routing, only when a skill is named"]
-        LC["Launcher prompt<br/>Claude: skill_relevance note in the system prompt<br/>Codex: skills listed in the prompt; the note only when no skill is loaded or offered<br/>with Jev the note names the skills and servers, or says none fit; with lexical routing it is the search hint, when search is on"]
-        INJ["Injected SKILL.md text, hook and launcher<br/>named skills, and clear winners with Jev, if inject.enabled (default)<br/>past 12,000 characters, cut with a pointer to the file; hook: once per skill per session id"]
-        LSN["Launcher session only<br/>skills, loaded and offered: Claude generated plugin, Codex paths in the prompt<br/>MCP servers: Claude mcp.json, Codex -c mcp_servers (the stdio and credentialed ones relayed by loadout mcp-launch)<br/>tier: Claude --model, Codex -m; each adds an effort setting when the tier has one"]
-        DR["Decision report<br/>route: stdout, text or --json; launchers: the text summary on stderr<br/>includes the decision warning, if any:<br/>Jev fell back to keywords, or more than 3 skills named<br/>launchers also write decision.json to the session directory"]
-        NOTE["Notes on stderr<br/>CLI, before routing: library is empty (route, launcher);<br/>no key found, using lexical routing (not when lexical was chosen)<br/>hook, fixed text: Jev fell back to keyword ranking (after routing);<br/>hook failed or hit its 20 s deadline"]
-        FSR["find_tools result<br/>returned to the agent, after any decision warning:<br/>Jev-ranked skills and gateway servers with a fit score,<br/>or keyword matches when lexical (skills, then servers),<br/>or a note that nothing fits"]
-        LS["load_skill result<br/>one library skill's SKILL.md (past 40,000 characters, cut with a pointer to the file)<br/>and up to 60 file names, or one text file up to 256 KB; no routing"]
+        HC["Hook context<br/>skill_relevance list of skills that fit"]
+        LC["Launcher prompt<br/>skill_relevance note"]
+        INJ["Injected SKILL.md text<br/>named skills and clear winners"]
+        LSN["Launcher session only<br/>loaded skills, MCP servers, model tier"]
+        DR["Decision report<br/>stdout for route, stderr for launchers"]
+        NOTE["Notes on stderr<br/>warnings about the key, the library and fallbacks"]
+        FSR["find_tools result<br/>ranked skills and gateway servers, or a note that nothing fits"]
+        LS["load_skill result<br/>one skill's SKILL.md, or one of its files"]
         GW["Gateway: server_tools, call_server_tool<br/>library servers marked gateway: true; not over --http"]
     end
 
@@ -90,8 +90,8 @@ flowchart TB
     MEN --> INJ
     MEN --> LSN
     MEN --> DR
-    MEN -->|"hook only: Jev failed"| NOTE
-    MEN -->|"Jev: rated candidates, fit at least 0.5, at most 5<br/>also exact fit at least 0.8 when Jev judges the goal general<br/>and it names no installed skill<br/>lexical: the final selection, at most 5"| FSR
+    MEN -->|"hook: Jev failed"| NOTE
+    MEN -->|"ranked matches"| FSR
 ```
 
 Library edges: solid ones are read while routing, dotted ones when the output is
@@ -149,9 +149,10 @@ literal, atomic questions; every decision rule is code (`decide()` in
 1. **Retrieve.** BM25 over name + description, fused (RRF) with local
    `bge-small-en` embeddings when the optional `@huggingface/transformers` is
    installed; the query is the task text plus repo signals (name, top-level
-   files, dependencies, languages). Keeps the top `maxCandidates` (200); a library no larger than that goes whole. Local
-   and free: the library is embedded once (about a minute for 1,000 skills; new
-   skills at `loadout add`). On the synthetic benchmark the embeddings added
+   files, dependencies, languages). Keeps the top `maxCandidates` (200); a
+   library no larger than that goes whole. Local and free: the library is
+   embedded once (about a minute for 1,000 skills; new skills at
+   `loadout add`). On the synthetic benchmark the embeddings added
    nothing; on realistic, detailed requests they kept the judge's best skill in
    the candidates 87% of the time vs 80% for BM25 alone, because long prompts
    dilute keyword scores (see [bench/RESULTS.md](bench/RESULTS.md), v4).
@@ -224,8 +225,8 @@ literal, atomic questions; every decision rule is code (`decide()` in
    - the framing says the text is guidance that cannot override the user, the
      agent's instructions or approval settings.
 
-   The only addition outside the user turn is one line saying such blocks are
-   reference material: in the system prompt for Claude Code, in the prompt for
+   Injection adds one line saying such blocks are reference material: to the
+   system prompt for Claude Code, and to the prompt, before the blocks, for
    Codex. Delimiters do not make prompt injection impossible: injection
    raises the authority of third-party text compared with listing the skill, so
    it is limited to clear winners and explicit mentions, and can be turned off
@@ -267,12 +268,12 @@ library itself, in its own words, through MCP:
   request (D15), since it also finds gateway servers and their tools. There is
   no alias, since the package is unpublished and two near-identical tools would
   cost context; benchmarks run before
-  2026-10-14 used the earlier name (bench/RESULTS.md). The need gate is softened, since the agent
-  asked: when Jev judges the goal to be general work and the goal names no
-  installed skill, only near-certain exact fits (P ≥ 0.8) are shown. Without
-  Jev it returns keyword matches instead. Otherwise the answer says nothing
-  fits and names the closest skill, so the agent does not load a near miss.
-  About 1 s and $0.001 per search.
+  2026-10-14 used the earlier name (bench/RESULTS.md). The need gate is
+  softened, since the agent asked: when Jev judges the goal to be general work
+  and the goal names no installed skill, only near-certain exact fits
+  (P ≥ 0.8) are shown. Otherwise the answer says nothing fits and names the
+  closest skill, so the agent does not load a near miss. Without Jev it
+  returns keyword matches instead. About 1 s and $0.001 per search.
 - The tool description and the server's `instructions` ask for a search
   before the first specialised step, even in a familiar domain, and again when
   the domain changes. Measured uptake is still partial (bench/RESULTS.md, v4),
@@ -370,7 +371,7 @@ hook alone is not measured:
   with how to load them;
 - a clear winner or a named skill is injected once.
 
-Without Jev (no key, or Jev down) the hook adds nothing unless the prompt names
+Without Jev (no key, `"router": "lexical"`, or Jev down) the hook adds nothing unless the prompt names
 a skill.
 
 It runs before the host sends the prompt, so it has a hard budget. It gives
