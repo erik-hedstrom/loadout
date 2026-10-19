@@ -23,7 +23,8 @@ import {
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { parse as parseYaml } from 'yaml';
-import { loadoutHome, withoutKey } from './config.js';
+import { paths, withoutKey } from './config.js';
+import { isPlainFolder, writeCacheFile } from './safefs.js';
 import type { Capability, McpServerConfig } from './types.js';
 
 const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---/;
@@ -207,6 +208,7 @@ function manifestStamp(dir: string, cutoffNs: bigint): string | undefined {
 
 function readScanCache(dir: string, root: string): ScanCache | undefined {
   try {
+    if (!isPlainFolder(dir)) return undefined;
     const cache: unknown = JSON.parse(readConfined(dir, SCAN_CACHE_FILE, SCAN_CACHE_BYTES).toString('utf8'));
     if (!cache || typeof cache !== 'object') return undefined;
     const c = cache as Partial<ScanCache>;
@@ -220,29 +222,10 @@ function readScanCache(dir: string, root: string): ScanCache | undefined {
   }
 }
 
-function writeScanCache(dir: string, cache: ScanCache): void {
-  const tmp = join(dir, `${SCAN_CACHE_FILE}.${randomUUID()}.tmp`);
-  try {
-    mkdirSync(dir, { recursive: true });
-    writeFileSync(tmp, JSON.stringify(cache), { flag: 'wx' });
-    renameSync(tmp, join(dir, SCAN_CACHE_FILE));
-  } catch (err) {
-    // Cache persistence cannot prevent routing, and errors may quote untrusted paths or contents.
-    const code = (err as NodeJS.ErrnoException).code;
-    // Another Windows hook may still hold the destination open; a later scan can retry quietly.
-    if (code !== 'EPERM' && code !== 'EBUSY') console.error('loadout: library metadata cache could not be saved');
-    // The failure is reported once above. A cleanup error (ENOTDIR on Linux when the index
-    // path is a file) adds nothing, and a leftover temp file has a unique name.
-    try {
-      rmSync(tmp, { force: true });
-    } catch {}
-  }
-}
-
-export function scanLibrary(libraryDir: string, options: { cache?: boolean } = {}): Capability[] {
+export function scanLibrary(libraryDir: string, options: { cache?: boolean; skipped?: string[] } = {}): Capability[] {
   const dirs = subdirs(join(libraryDir, 'skills'));
   // Routing opts in; audit, doctor and other read-only callers must neither create nor refresh the cache.
-  const cacheDir = options.cache ? join(loadoutHome(), 'index') : undefined;
+  const cacheDir = options.cache ? paths.index() : undefined;
   const root = cacheDir && existsSync(join(libraryDir, 'skills')) ? realpathSync(join(libraryDir, 'skills')) : '';
   const cache = cacheDir ? readScanCache(cacheDir, root) : undefined;
   const cutoffNs = BigInt(Date.now() - RACY_WINDOW_MS) * 1_000_000n;
@@ -251,6 +234,11 @@ export function scanLibrary(libraryDir: string, options: { cache?: boolean } = {
   let changed = cache === undefined;
   const capabilities: Capability[] = [];
   for (const dir of dirs) {
+    // A skill folder named "mcp:x" would share the key of the server x.
+    if (basename(dir).startsWith('mcp:') || unofferable(basename(dir))) {
+      options.skipped?.push(basename(dir));
+      continue;
+    }
     const stamp = cacheDir ? manifestStamp(dir, cutoffNs) : undefined;
     const cached = byFolder.get(basename(dir));
     const hit = stamp !== undefined && cached?.[1] === stamp;
@@ -265,10 +253,15 @@ export function scanLibrary(libraryDir: string, options: { cache?: boolean } = {
 
   const mcpFile = join(libraryDir, 'mcp.json');
   for (const [name, { description = '', autoApprove, gateway, ...server }] of Object.entries(readMcpServers(libraryDir))) {
+    // A server named "mcp:x" would share the key of a server named "x"; an empty name cannot be sent back.
+    if (name === '' || name.startsWith('mcp:') || unofferable(`mcp:${name}`)) {
+      options.skipped?.push(`mcp:${name}`);
+      continue;
+    }
     capabilities.push({ id: `mcp:${name}`, kind: 'mcp', name, description, source: mcpFile, server, autoApprove: autoApprove === true, gateway: gateway === true });
   }
 
-  if (cacheDir && (changed || skills.length !== cache?.skills.length)) writeScanCache(cacheDir, { version: SCAN_CACHE_VERSION, root, skills });
+  if (cacheDir && (changed || skills.length !== cache?.skills.length)) writeCacheFile(cacheDir, SCAN_CACHE_FILE, JSON.stringify({ version: SCAN_CACHE_VERSION, root, skills }), 'library metadata');
   return capabilities;
 }
 
@@ -287,6 +280,17 @@ export function librarySources(libraryDir: string): { origin: string; skills: nu
     .map(([origin, e]) => ({ origin, skills: e.skills, revisions: [...e.revisions] }))
     .sort((a, b) => b.skills - a.skills || a.origin.localeCompare(b.origin));
 }
+
+/**
+ * Whether `escapeSkillTags` (launch.ts, which imports this module) would change the text. Skill folders, server
+ * names and tool names the agent must name back exactly cannot hold tag text, so such ones are never offered.
+ */
+export const hasTagText = (text: string) => /<\/?skill/i.test(text);
+
+/** The longest key the MCP tools take back; their input schemas cap it. */
+export const KEY_CHARS = 200;
+/** A key the agent could not send back exactly: escaping would change it, or the tools would refuse it. */
+const unofferable = (key: string) => hasTagText(key) || key.length > KEY_CHARS;
 
 /** Unique key of a capability: the skill's folder (names repeat across sources) or `mcp:<server>`. */
 export const capabilityKey = (c: Capability) => (c.kind === 'skill' ? basename(c.source) : `mcp:${c.name}`);
