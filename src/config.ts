@@ -179,6 +179,21 @@ export function withoutKey(env: NodeJS.ProcessEnv = process.env): NodeJS.Process
   return Object.fromEntries(Object.entries(env).filter(([name]) => name.toUpperCase() !== 'TYPESAFE_API_KEY'));
 }
 
+/**
+ * Where the key may be sent. Whoever sets LOADOUT_HOME picks config.json (for a host-started server, possibly
+ * through the open repository), so config.json alone must not redirect the key: a URL other than the default
+ * has to come from TYPESAFE_BASE_URL, which the user sets outside it. A config.json URL that differs from the
+ * default is refused, not ignored, so a setup that relied on it fails loudly instead of quietly switching hosts.
+ */
+export function jevBaseUrl(config: Config): string {
+  const fromEnv = process.env.TYPESAFE_BASE_URL?.trim();
+  if (fromEnv) return fromEnv;
+  if (config.jev.baseUrl !== DEFAULT_CONFIG.jev.baseUrl) {
+    throw new Error('jev.baseUrl in config.json is not the default; the key is sent to another host only when TYPESAFE_BASE_URL names it');
+  }
+  return config.jev.baseUrl;
+}
+
 export function resolveApiKey(config: Config): string | undefined {
   const fromEnv = process.env.TYPESAFE_API_KEY?.trim();
   if (fromEnv) return fromEnv;

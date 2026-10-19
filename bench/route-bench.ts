@@ -20,7 +20,7 @@
 import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
-import { DEFAULT_CONFIG, loadConfig, resolveApiKey, type Config } from '../src/config.js';
+import { DEFAULT_CONFIG, jevBaseUrl, loadConfig, resolveApiKey, type Config } from '../src/config.js';
 import { EmbeddingStore } from '../src/embed.js';
 import { jevClient } from '../src/jev.js';
 import { bm25 } from '../src/prefilter.js';
@@ -101,7 +101,7 @@ const base = loadConfig();
 const config: Config = { ...DEFAULT_CONFIG, jev: base.jev, router: 'jev' };
 const apiKey = resolveApiKey(base);
 if (ARMS.has('loadout') && !apiKey) throw new Error('loadout arm needs TYPESAFE_API_KEY or jev.apiKeyFile in ~/.loadout/config.json');
-const client = apiKey ? jevClient({ apiKey, baseUrl: config.jev.baseUrl, model: config.jev.model, timeoutMs: 30_000, retries: 5 }) : undefined;
+const client = apiKey ? jevClient({ apiKey, baseUrl: jevBaseUrl(config), model: config.jev.model, timeoutMs: 30_000, retries: 5 }) : undefined;
 
 const store = new EmbeddingStore(join(DATA, 'embeddings'));
 if (ARMS.has('hybrid') || ARMS.has('loadout')) {

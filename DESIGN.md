@@ -315,7 +315,8 @@ See [SECURITY.md](SECURITY.md#prompt-hook) for data sent to TypeSafe.
 
 ### Router backends
 
-- `jev` (default): TypeSafe official API, `TYPESAFE_API_KEY`.
+- `jev` (default): TypeSafe official API, `TYPESAFE_API_KEY`. The key goes to
+  another URL only when `TYPESAFE_BASE_URL` names it (`jevBaseUrl()`).
 - `lexical`: prefilter only, no network. For offline use and as a benchmark arm.
 
 ## Benchmark

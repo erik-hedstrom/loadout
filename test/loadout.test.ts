@@ -7,7 +7,7 @@ import { basename, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { parse as parseToml } from 'smol-toml';
-import { DEFAULT_CONFIG, loadoutHome, type Config } from '../src/config.js';
+import { DEFAULT_CONFIG, jevBaseUrl, loadoutHome, type Config } from '../src/config.js';
 import { jevClient, JevError, validateResponse, type Question, type SystemOneClient } from '../src/jev.js';
 import { claudeArgs, claudeHookSettings, codexArgs, escapeSkillTags, hookCommand, hostSetup, isolateConflict, launch, loaderArgs, materialize, searchServer, toToml } from '../src/launch.js';
 import { hookOutput, isFollowUp, HOOK_FAILURE_NOTE, JEV_FALLBACK_NOTE, promptContext } from '../src/hook.js';
@@ -122,6 +122,59 @@ describe('E9 security', () => {
       vi.unstubAllEnvs();
     }
   });
+
+  it('sends the key to a config.json Jev URL only when TYPESAFE_BASE_URL names it', () => {
+    try {
+      vi.stubEnv('TYPESAFE_BASE_URL', '');
+      expect(jevBaseUrl(DEFAULT_CONFIG)).toBe('https://api.typesafe.ai');
+      const redirected = { ...DEFAULT_CONFIG, jev: { ...DEFAULT_CONFIG.jev, baseUrl: 'https://attacker.example' } };
+      expect(() => jevBaseUrl(redirected)).toThrow('TYPESAFE_BASE_URL');
+      vi.stubEnv('TYPESAFE_BASE_URL', ' https://staging.example ');
+      expect(jevBaseUrl(redirected)).toBe('https://staging.example');
+      expect(jevBaseUrl(DEFAULT_CONFIG)).toBe('https://staging.example');
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  // The end-to-end case behind the rule: a home chosen through the environment (e.g. /proc/self/cwd/.loadout)
+  // supplies a config.json that points Jev at a listener. The CLI must fail before any request carries the key.
+  it('never contacts a Jev URL that only config.json names', async () => {
+    const requests: (string | undefined)[] = [];
+    const listener = createHttpServer((req, res) => {
+      requests.push(req.headers.authorization);
+      res.writeHead(401).end();
+    });
+    await new Promise<void>((done) => listener.listen(0, '127.0.0.1', done));
+    try {
+      const url = `http://127.0.0.1:${(listener.address() as { port: number }).port}`;
+      const home = tempDir('loadout-e9-');
+      mkdirSync(join(home, 'library', 'skills', 'demo'), { recursive: true });
+      writeFileSync(join(home, 'library', 'skills', 'demo', 'SKILL.md'), '---\nname: demo\ndescription: Demo skill for testing the key rule.\n---\nBody.\n');
+      // No embeddings: the model load would dominate the run time and is not what this test checks.
+      writeFileSync(join(home, 'config.json'), JSON.stringify({ jev: { baseUrl: url }, embeddings: false }));
+      const canary = 'e9-key-canary';
+      const routeWith = (extra: Record<string, string>) => new Promise<{ code: number | null; out: string }>((done) => {
+        const child = spawn(process.execPath, ['--import', 'tsx', join(import.meta.dirname, '../src/cli.ts'), 'route', TASK], {
+          env: { ...process.env, LOADOUT_HOME: home, TYPESAFE_API_KEY: canary, TYPESAFE_BASE_URL: '', ...extra },
+        });
+        let out = '';
+        child.stdout.on('data', (d) => (out += d));
+        child.stderr.on('data', (d) => (out += d));
+        child.on('close', (code) => done({ code, out }));
+      });
+      const refused = await routeWith({});
+      expect(refused.code).not.toBe(0);
+      expect(refused.out).toContain('TYPESAFE_BASE_URL');
+      expect(refused.out).not.toContain(canary);
+      expect(requests).toEqual([]);
+      // Named outside config.json, the same URL does receive the key.
+      await routeWith({ TYPESAFE_BASE_URL: url });
+      expect(requests[0]).toBe(`Bearer ${canary}`);
+    } finally {
+      listener.close();
+    }
+  }, 60_000);
 
   it('redacts MCP values in list JSON, route JSON and saved decisions', async () => {
     const home = tempDir('loadout-e9-');

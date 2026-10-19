@@ -8,7 +8,7 @@
  */
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { loadConfig, resolveApiKey } from '../src/config.js';
+import { jevBaseUrl, loadConfig, resolveApiKey } from '../src/config.js';
 import { jevClient, type Question } from '../src/jev.js';
 import { loadCorpus, loadTasks, pool, readJsonl, RESULTS, splitOf, type Row } from './lib.js';
 
@@ -40,7 +40,7 @@ const tasks = loadTasks();
 const config = loadConfig();
 const apiKey = resolveApiKey(config);
 if (!apiKey) throw new Error('needs TYPESAFE_API_KEY');
-const client = jevClient({ apiKey, baseUrl: config.jev.baseUrl, model: config.jev.model, timeoutMs: 30_000 });
+const client = jevClient({ apiKey, baseUrl: jevBaseUrl(config), model: config.jev.model, timeoutMs: 30_000 });
 
 const out = join(RESULTS, `${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}-need-probe`);
 mkdirSync(out, { recursive: true });
