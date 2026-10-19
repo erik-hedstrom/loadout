@@ -237,13 +237,14 @@ claude plugin install loadout@loadout
 
 You can also use `/plugin` inside a session. The plugin routes every prompt
 and adds the skills that fit as context, so sessions started without the
-launcher get the right skills without relying on the agent to search. The
+launcher get the skills that fit as context, without relying on the agent to
+search. The
 [search tool plus prompt hook](bench/RESULTS.md#do-agents-use-what-they-are-given)
 raised Claude Code's skill use from 2 to 6 of 10 sessions. In 10 headless
-sessions with the hook-only plugin, the hook injected a skill's full text in 6.
-Claude opened no skill the hook only pointed to: the plugin has no
-`load_skill`, and reading the library needs a permission that a headless run
-cannot grant. Each skill
+sessions with the hook-only plugin, the hook injected a skill's full text in 6
+and only pointed to a skill in the other 4. Claude opened none of those 4: the
+plugin has no `load_skill`, and in headless runs with loadout in WSL, reading
+the library needed a permission that the run could not grant. Each skill
 is offered once per session, and short follow-ups ("yes", "go on") are not
 routed. For Codex CLI, `loadout setup codex` prints:
 

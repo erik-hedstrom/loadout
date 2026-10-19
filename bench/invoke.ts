@@ -12,7 +12,8 @@
  *           claude-code`: does the agent open what the hook suggests?
  *   plugin  (Claude) the shipped hook-only plugin; nothing preloaded and no
  *           MCP server: does the agent open what the hook suggests?
- * Ambient hooks that call loadout by absolute path bypass PATH; only their context shows, so a silent one is not detected.
+ * Ambient hooks that call loadout by absolute path bypass PATH; only their context
+ * shows, so a silent one is not detected.
  *
  * Each run is capped (Claude --max-turns, a timeout), since only the agent's
  * first moves matter here. It starts in an empty folder where the agent may
@@ -77,7 +78,10 @@ const out = join(dir, `invoke-${agent}-${mode}.jsonl`);
 /** One tool call; `ok` is false when the call itself failed (a failed call is not an invocation). */
 interface Event { tool: string; detail: string; ok: boolean; id?: string }
 interface Inventory { plugins: { name: string; path?: string }[] }
-interface HookExecution { id: string; name: string; event: string; exit_code?: number; outcome?: string; additionalContext?: string }
+// Rows are committed to a public repo: a hook keeps what validity needs, not the user's plugin
+// list, local paths or the hook's skill text. `injected` names the skills whose full text the hook
+// put in context: those reach the agent without an open.
+interface HookExecution { id: string; name: string; exit_code?: number; outcome?: string; context: boolean; injected: string[] }
 
 const isLoadout = (name: string) => /^loadout(?:@|$)/i.test(name);
 
@@ -85,7 +89,7 @@ function checkInventory(inventory: Inventory | undefined, hookInvocations: numbe
   if (!inventory) return 'no startup inventory';
   const normalize = (p: string) => {
     const path = p.replace(/\\/g, '/').replace(/\/$/, '');
-    return toPath('/') !== '/' || process.platform === 'win32' ? path.toLowerCase() : path;
+    return windowsAgent || process.platform === 'win32' ? path.toLowerCase() : path;
   };
   let ownPlugins = 0;
   for (const plugin of inventory.plugins) {
@@ -121,14 +125,17 @@ function toolEvents(stream: string): { events: Event[]; hooks: HookExecution[]; 
       // A malformed init counts as no inventory, so the row is still saved as invalid.
       inventory = Array.isArray(e.plugins) ? { plugins: e.plugins } : undefined;
     } else if (e.type === 'system' && e.hook_event === 'UserPromptSubmit' && (e.subtype === 'hook_started' || e.subtype === 'hook_response')) {
-      const hook: HookExecution = hooks.get(e.hook_id) ?? { id: e.hook_id, name: e.hook_name, event: e.hook_event };
+      const hook: HookExecution = hooks.get(e.hook_id) ?? { id: e.hook_id, name: e.hook_name, context: false, injected: [] };
       if (e.subtype === 'hook_response') {
         hook.exit_code = e.exit_code;
         hook.outcome = e.outcome;
         // Silent hooks and other hooks need not return JSON.
         let context: unknown;
         try { context = JSON.parse(e.stdout).hookSpecificOutput?.additionalContext; } catch { context = undefined; }
-        if (typeof context === 'string') hook.additionalContext = context;
+        if (typeof context === 'string') {
+          hook.context = context.includes('<skill_relevance>');
+          hook.injected = [...context.matchAll(/<skill name="([^"]*)"/g)].map((m) => m[1]!);
+        }
       }
       hooks.set(e.hook_id, hook);
     } else if (e.type === 'assistant') {
@@ -193,7 +200,7 @@ for (const id of values.ids.split(',')) {
   const marks = shimDir ? readFileSync(marker, 'utf8').split('\n') : [];
   if (shimDir) rmSync(marker);
   const hookInvocations = marks.filter((l) => l === 'invoked').length;
-  const contextResponses = hooks.filter((h) => h.additionalContext?.includes('<skill_relevance>')).length;
+  const contextResponses = hooks.filter((h) => h.context).length;
   const invalid = agent !== 'claude' ? undefined : failedBeforeModel ? 'agent failed before the model ran' : checkInventory(inventory, hookInvocations, contextResponses - marks.filter((l) => l === 'context').length, session.pluginDir);
 
   // Which library skills did the agent actually open?
@@ -218,14 +225,9 @@ for (const id of values.ids.split(',')) {
     agent,
     mode,
     model: session.model,
-    // Rows are committed to a public repo: keep what validity needs, not the user's plugin
-    // list, local paths or the hook's skill text.
     inventory: inventory ? { loadoutPlugins: inventory.plugins.filter((p) => isLoadout(p.name)).map((p) => p.name), otherPlugins: inventory.plugins.filter((p) => !isLoadout(p.name)).length } : null,
-    // `injected` names the skills whose full text the hook put in context: those reach the agent without an open.
-    hooks: hooks.map(({ additionalContext, ...h }) => ({ ...h, context: additionalContext?.includes('<skill_relevance>') ?? false, injected: [...(additionalContext ?? '').matchAll(/<skill name="([^"]*)"/g)].map((m) => m[1]!) })),
+    hooks,
     hookInvocations,
-    hookEventCount: hooks.length,
-    hookContext: hooks.some((h) => h.additionalContext?.includes('<skill_relevance>')),
     ...(invalid ? { invalid } : {}),
     // What the session actually carried (search mode carries nothing).
     loaded: decision.selected.map((s) => capabilityKey(s.capability)),

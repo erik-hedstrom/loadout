@@ -97,7 +97,7 @@ export function claudeHookBlock(command: string): object {
   return { hooks: { UserPromptSubmit: [{ hooks: [{ type: 'command', command, timeout: 30 }] }] } };
 }
 
-/** The settings.json hook for this checkout's loadout (setup's WSL snippet, bench/invoke.ts). */
+/** The settings.json hook for this checkout's loadout (setup's WSL snippet). */
 export function claudeHookSettings(windowsAgent: boolean): object {
   return claudeHookBlock(hookCommand('claude', windowsAgent));
 }

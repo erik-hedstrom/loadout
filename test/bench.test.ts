@@ -131,7 +131,6 @@ body
       const child = new EventEmitter() as ChildProcess;
       child.stdout = new PassThrough(); child.stderr = new PassThrough();
       // Killed by run()'s timeout: no result event, and the close comes from the kill.
-      const killed = problem === 'stalled' || problem === 'capped';
       child.kill = () => { queueMicrotask(() => child.emit('close', null)); return true; };
       queueMicrotask(() => {
         child.stdout!.emit('data', Buffer.from([
@@ -158,7 +157,7 @@ body
         const rows = readFileSync(join(dir, `invoke-claude-${mode}.jsonl`), 'utf8').trim().split('\n').map((line) => JSON.parse(line));
         expect(rows).toHaveLength(1);
         expect(calls).toHaveLength(1);
-        expect(rows[0]).toMatchObject({ id: 'a', invalid: reason, exit: problem === 'no init' ? 1 : problem === 'stalled' ? null : 0, timedOut: problem === 'stalled', invoked: problem === 'stalled' ? [] : ['skill-a'], tools: problem === 'stalled' ? [] : ['Read'], inventory: problem === 'no init' || problem === 'bad init' || problem === 'plugins not a list' ? null : reduced(inventories[0]!), hookInvocations: hookCounts[0]!, hookEventCount: hookCounts[0]! + (ambient === 'absolute' ? 1 : 0) });
+        expect(rows[0]).toMatchObject({ id: 'a', invalid: reason, exit: problem === 'no init' ? 1 : problem === 'stalled' ? null : 0, timedOut: problem === 'stalled', invoked: problem === 'stalled' ? [] : ['skill-a'], tools: problem === 'stalled' ? [] : ['Read'], inventory: problem === 'no init' || problem === 'bad init' || problem === 'plugins not a list' ? null : reduced(inventories[0]!), hookInvocations: hookCounts[0]! });
         expect(rows[0].costUsd).toBe(problem === 'auth failure' ? 0 : problem === 'stalled' ? undefined : 0.05);
         if (problem === 'auth failure') expect(rows[0].outcome).toEqual({ isError: true, subtype: 'success' });
         expect(rows[0].hooks).toHaveLength(hookCounts[0]! + (ambient === 'absolute' ? 1 : 0));
@@ -181,7 +180,8 @@ body
       const rows = readFileSync(join(dir, `invoke-claude-${mode}.jsonl`), 'utf8').trim().split('\n').map((line) => JSON.parse(line));
       expect(rows.map((row) => row.id)).toEqual(['a', 'b']);
       for (const [i, row] of rows.entries()) {
-        expect(row).toMatchObject({ agent: 'claude', mode, model: 'sonnet', invoked: ['skill-a'], searches: [], tools: ['Read'], exit: killed ? null : 0, timedOut: killed, hookInvocations: hookCounts[i]!, hookEventCount: hookCounts[i]!, hookContext: problem !== 'silent hook' && hookCounts[i]! > 0 });
+        expect(row).toMatchObject({ agent: 'claude', mode, model: 'sonnet', invoked: ['skill-a'], searches: [], tools: ['Read'], exit: killed ? null : 0, timedOut: killed, hookInvocations: hookCounts[i]! });
+        expect(row.hooks.some((h: { context: boolean }) => h.context)).toBe(problem !== 'silent hook' && hookCounts[i]! > 0);
         if (mode !== 'routed') expect(row).toMatchObject({ loaded: [], injected: [], offered: [] });
         expect(row.inventory).toEqual(reduced(inventories[i]!));
         // Rows are public: no ambient plugin names or paths, and no hook skill text.
