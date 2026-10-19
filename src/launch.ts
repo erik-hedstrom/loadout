@@ -2,7 +2,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { accessSync, constants, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { basename, delimiter, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { tierTarget, type Config } from './config.js';
+import { tierTarget, withoutKey, type Config } from './config.js';
 import { isPlainFolder } from './safefs.js';
 import { capabilityKey, copySkillConfined, skillBody } from './library.js';
 import { reportJson, type Capability, type McpServerConfig, type RouteDecision } from './types.js';
@@ -36,6 +36,8 @@ export interface Session {
   pluginDir?: string;
   /** Generated MCP config in Claude Code's `--mcp-config` format. */
   mcpConfig?: string;
+  /** Isolation settings for `--settings` (Claude only). A file, not inline JSON, so no shell or Windows quoting touches it. */
+  settings?: string;
   /** `loadout mcp` for this agent, when mid-session search is on. */
   search?: McpServerConfig;
 }
@@ -97,7 +99,7 @@ export function claudeHookBlock(command: string): object {
   return { hooks: { UserPromptSubmit: [{ hooks: [{ type: 'command', command, timeout: 30 }] }] } };
 }
 
-/** The settings.json hook for this checkout's loadout (setup's WSL snippet, bench/invoke.ts). */
+/** The settings.json hook for this checkout's loadout (setup's WSL snippet). */
 export function claudeHookSettings(windowsAgent: boolean): object {
   return claudeHookBlock(hookCommand('claude', windowsAgent));
 }
@@ -160,6 +162,7 @@ export function materialize(
   config: Config,
   sessionsDir: string,
   toPath: (p: string) => string = (p) => p,
+  isolate = false,
 ): Session {
   const id = `${new Date().toISOString().replace(/[:.]/g, '-')}-${Math.random().toString(36).slice(2, 6)}`;
   const dir = join(sessionsDir, id);
@@ -227,6 +230,24 @@ export function materialize(
       ...(search ? [[SEARCH_SERVER, search]] : []),
     ]);
     writeFileSync(session.mcpConfig, JSON.stringify({ mcpServers }, null, 2), { mode: 0o600 });
+  }
+
+  if (agent === 'claude' && isolate) {
+    // `--strict-mcp-config` is not documented to drop the claude.ai connectors the CLI fetches itself; this setting does.
+    // Inside an IDE terminal Claude Code connects to the IDE on its own. The variables turn that and Chrome off, and set
+    // here they outrank the shell and the user, project and local settings files. `/background` restarts the session
+    // with `--settings` but not `--no-chrome`, so Chrome's opt-out lives here too. The built-in `computer-use` server stays
+    // on in a project where the user enabled it, so its tools are denied instead. Artifact comments can start a turn,
+    // so reading them is off too.
+    session.settings = join(dir, 'settings.json');
+    const settings = {
+      disableClaudeAiConnectors: true,
+      disableRemoteControl: true,
+      crossSessionInbound: 'refuse',
+      permissions: { deny: ['mcp__computer-use'] },
+      env: { CLAUDE_CODE_AUTO_CONNECT_IDE: 'false', CLAUDE_CODE_ENABLE_CFC: '0', CLAUDE_CODE_ARTIFACT_COMMENTS: '0' },
+    };
+    writeFileSync(session.settings, JSON.stringify(settings), { mode: 0o600 });
   }
 
   return session;
@@ -361,11 +382,13 @@ export function pathTranslator(binPath: string | undefined): (p: string) => stri
 }
 
 /** `wslpath -w`. Its stderr is dropped, not forwarded: it can name library folders, and the hook reports failure in fixed text. */
-export const windowsPath = (p: string) => execFileSync('wslpath', ['-w', p], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+export const windowsPath = (p: string) => execFileSync('wslpath', ['-w', p], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], env: withoutKey() }).trim();
 
 export interface LaunchOptions {
   /** Run once and exit (`claude -p`, `codex exec`) instead of an interactive session. */
   headless?: boolean;
+  /** Codex: skip the user's config.toml. Claude's isolation comes from `materialize(..., isolate)`. */
+  isolate?: boolean;
   toPath?: (p: string) => string;
 }
 
@@ -376,6 +399,8 @@ export function claudeArgs(session: Session, task: string, extra: string[], opts
   const prompt = [task, ...session.injected].join('\n\n');
   const args = [...(opts.headless ? ['-p'] : []), prompt, '--model', session.model];
   if (session.effort) args.push('--effort', session.effort);
+  // Ahead of the passthrough: a value-taking flag or a `--` at its end must not swallow these.
+  if (session.settings) args.push('--strict-mcp-config', '--no-chrome', '--settings', toPath(session.settings));
   if (session.pluginDir) args.push('--plugin-dir', toPath(session.pluginDir));
   const appended = [session.relevance, session.injected.length ? TRUST_NOTE : undefined].filter(Boolean).join('\n\n');
   if (appended) args.push('--append-system-prompt', appended);
@@ -430,8 +455,33 @@ export function codexPrompt(session: Session, task: string): string {
   ].join('\n');
 }
 
+/**
+ * The first argument after `--` that would undo `--isolate`. Claude: one that adds MCP servers, channels or
+ * integrations, moves the session to the cloud, or replaces loadout's --settings; a bare `--`, which would turn
+ * later flags into the prompt. Codex: --enable, and any config override, since keys such as `projects` trust
+ * re-enable config layers that can carry servers. Anything else passes through unchanged.
+ */
+export function isolateConflict(agent: Agent, args: string[]): string | undefined {
+  // Returns the flag's name, never the argument: a refusal must not echo what the caller typed.
+  for (const a of args) {
+    if (agent === 'claude' && a === '--') return '--';
+    if (agent === 'codex' && /^-c/.test(a)) return '-c';
+    const flag = (agent === 'claude' ? CLAUDE_REFUSED : ['--enable', '--config']).find((f) => a === f || a.startsWith(`${f}=`));
+    if (flag) return flag;
+  }
+  return undefined;
+}
+
+const CLAUDE_REFUSED = [
+  '--settings', '--mcp-config', '--agents', '--plugin-dir', '--plugin-url', '--chrome', '--ide',
+  '--channels', '--dangerously-load-development-channels', '--cloud', '--remote', '--environment', '--teleport',
+  '--remote-control', '--rc', '--desktop',
+];
+
 export function codexArgs(session: Session, task: string, extra: string[], opts: LaunchOptions = {}): string[] {
-  const args = [...(opts.headless ? ['exec'] : []), '-m', session.model];
+  // --ignore-user-config leaves on Apps (ChatGPT connectors, a host-owned MCP server), plugins and installing a skill's MCP dependencies.
+  const isolation = ['--ignore-user-config', '--disable', 'apps', '--disable', 'plugins', '--disable', 'skill_mcp_dependency_install'];
+  const args = [...(opts.headless ? ['exec'] : []), ...(opts.isolate ? isolation : []), '-m', session.model];
   if (session.effort) args.push('-c', `model_reasoning_effort=${toToml(session.effort)}`);
   const used = new Set<string>();
   if (session.search) {
