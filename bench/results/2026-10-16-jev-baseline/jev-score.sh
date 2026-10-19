@@ -2,8 +2,8 @@
 # Score the 2026-10-16 Jev burn with C13's offline tools (no model calls). Run inside the WSL clone.
 set -u
 cd /var/tmp/loadout-jev || exit 1
-cp /mnt/c/Users/erikh/AppData/Local/Temp/judge.ts /mnt/c/Users/erikh/AppData/Local/Temp/stability.ts bench/
-sed -i 's/\r$//' bench/judge.ts bench/stability.ts
+# The reports were produced by bench/judge.ts and bench/stability.ts as of commit 18f36b0 (PR #45);
+# a checkout of that commit or later reproduces them.
 R=bench/results
 V4BLIND=$R/2026-10-06T02-08-14-sweep
 V4V=(--verdicts-from $R/2026-10-07T21-34-39-sweep)
@@ -19,5 +19,4 @@ done
 echo "reports: $(ls $R/2026-10-16T*-sweep/report-offline.md 2>/dev/null | wc -l)"
 npx tsx bench/stability.ts $(printf "$R/%s-sweep " "${V4RUNS[@]}") > /var/tmp/stability-v4.md 2>&1 || true
 npx tsx bench/stability.ts $(printf "$R/%s-sweep " "${C1RUNS[@]}") > /var/tmp/stability-c1.md 2>&1 || true
-npx tsx bench/tune.ts "$R/2026-10-16T18-24-39-popular+bm25+hybrid+loadout" > /var/tmp/tune.md 2>&1 || true
 echo done

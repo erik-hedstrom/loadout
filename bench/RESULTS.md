@@ -178,6 +178,8 @@ judging: the sweeps are scored offline against the earlier judgements
 judge's earlier ratings; a load it never rated is "unrated", and load
 precision is given as a pair: unrated counted not useful / counted useful.
 
+Usefulness rows are lower bounds: they count only skills the judge already rated helpful.
+
 | | v4 runs 1 / 2 / 3 (121 need) | v4 control, post-E9 | C1 runs 1 / 2 / 3 (84 need) | C1 at 7d90442 |
 |---|---|---:|---|---:|
 | A useful skill loaded | 74% / 74% / 74% (65–81) | 72% | 70% / 70% / 70% (60–79) | 73% |
@@ -214,15 +216,19 @@ Both are within v3's pooled interval (90–96%).
 - About one request in ten gets a different loaded set on an identical rerun.
   Single-run differences smaller than that are noise.
 - Keyword fallbacks: 1 in 1,815 decisions.
-- Latency p50 per decision fell from 2.7 s (v4) and 2.0 s (C1) in the first
-  runs to 1.0 s and 0.9 s in the last, an hour later; p95 from 6.9 s to 1.3 s.
-  The router code did not change, so this is Jev's load, not loadout's.
+- Latency per decision fell within the hour (test split): p50 from 2.8 s
+  (v4) and 2.0 s (C1) in the first runs to 1.0 s and 0.9 s in the last, p95
+  from 6.6 s and 5.2 s to 1.3 s and 1.1 s. Both parts fell: the Jev calls'
+  wall time (p50 2.1 → 0.9 s, v4, all rows) and the local remainder (0.57 →
+  0.10 s).
+  The machine ran other work during the first runs, and a Jev call's wall time
+  includes client-side delay, so the cause is not shown.
 - Cost per decision: $0.00122 (v4) and $0.00117 (C1).
 
 Rows: `results/2026-10-16T17-39-02-sweep/`, `18-07-05`, `18-19-29` (v4);
 `17-54-45`, `18-15-07`, `18-22-14` (C1); `18-24-39-…` and `18-14-42-…` (gold);
-`results/2026-10-16-jev-baseline/` (stability, tune output and the scripts
-that ran the burn and the scoring). Cost: Jev $2.21 for the sweeps and about
+`results/2026-10-16-jev-baseline/` (stability and the scripts that ran the
+burn and the scoring); the gold numbers are in each gold run's `summary.md`. Cost: Jev $2.21 for the sweeps and about
 $0.57 per gold run; scoring $0.
 
 ## C1 (2026-10-08): new held-out requests
