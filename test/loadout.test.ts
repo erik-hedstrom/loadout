@@ -3,7 +3,7 @@ import { homedir, tmpdir } from 'node:os';
 import crypto, { createHash } from 'node:crypto';
 import { syncBuiltinESMExports } from 'node:module';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { basename, join, relative } from 'node:path';
+import { basename, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { parse as parseToml } from 'smol-toml';
@@ -85,16 +85,16 @@ describe('E9 security', () => {
     try {
       vi.stubEnv('LOADOUT_HOME', '');
       expect(loadoutHome()).toBe(join(homedir(), '.loadout'));
-      for (const relative of ['.loadout', './x', 'x/../y']) {
-        vi.stubEnv('LOADOUT_HOME', relative);
+      for (const value of ['.loadout', './x', 'x/../y']) {
+        vi.stubEnv('LOADOUT_HOME', value);
         expect(() => loadoutHome()).toThrow('absolute');
       }
       vi.stubEnv('LOADOUT_HOME', '');
-      for (const relative of ['.', '', 'repo']) {
-        vi.stubEnv('HOME', relative);
-        vi.stubEnv('USERPROFILE', relative);
+      for (const value of ['.', '', 'repo']) {
+        vi.stubEnv('HOME', value);
+        vi.stubEnv('USERPROFILE', value);
         // On Windows libuv itself rejects a relative USERPROFILE (ENOENT), before our check runs; either way it throws.
-        expect(() => loadoutHome(), relative).toThrow(/absolute|uv_os_homedir/);
+        expect(() => loadoutHome(), value).toThrow(/absolute|uv_os_homedir/);
       }
       vi.unstubAllEnvs();
       const absolute = join(tmpdir(), 'loadout-home');
@@ -748,7 +748,7 @@ describe('route', () => {
   });
 
   it('loads the clear winner of the close comparison even when it only helps with part', async () => {
-    // "Helps with part" for everything: no candidate reaches P(exact) â‰¥ 0.8, but webapp-testing wins the comparison.
+    // "Helps with part" for everything: no candidate reaches P(exact) ≥ 0.8, but webapp-testing wins the comparison.
     const { client } = fakeClient({ 'webapp-testing': 0.95, 'gh-actions-debug': 0.3 }, { exact: 0.3 });
     const decision = await route({ task: TASK, repo: REPO, library, config, client });
     expect(decision.selected.map((s) => s.capability.name)).toEqual(['webapp-testing']);
@@ -923,7 +923,7 @@ describe('launch', () => {
   it('serialises TOML inline values and rejects what TOML cannot hold', () => {
     expect(toToml({ env: { A: 'x"y' }, n: 1 })).toBe('{ "env" = { "A" = "x\\"y" }, "n" = 1 }');
     expect(toToml('a\x7fb')).toBe('"a\\u007Fb"');
-    expect(toToml('ðŸ˜€')).toBe('"ðŸ˜€"');
+    expect(toToml('😀')).toBe('"😀"');
     expect(() => toToml('\uD800x')).toThrow(/surrogate/);
     expect(() => toToml(Number.NaN)).toThrow();
   });
