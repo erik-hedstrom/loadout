@@ -435,7 +435,7 @@ Decisions for Erik:
 | C8 | P0 | Skill use with the hook-only plugin | Claude | local | done ([#25](https://github.com/erik-hedstrom/loadout/pull/25)): headless, the hook injected a skill's text in 6 of 10; Claude opened 0 of 10, none of the 4 it was only pointed to (D13) |
 | C9 | P1 | Host-model fallback router when there is no TypeSafe key | Claude (design) | cloud (code) + local (bench) | todo |
 | C10 | P2 | Bench quick fixes: sequential outcome judge, tier fixed across arms, stale A2 number | Claude | cloud | done ([#40](https://github.com/erik-hedstrom/loadout/pull/40)) |
-| C14 | P1 | A/B pilot: three prompts with and without loadout in the stock CLIs, tokens (cached apart from uncached) and quality | Claude (harness) + Erik (runs) | cloud (harness) + local (runs) | review: harness, plan and tests done; the paid pilot has not run (needs `CLAUDE_CODE_OAUTH_TOKEN` and the TypeSafe key, from WSL) |
+| C14 | P1 | A/B pilot: three prompts with and without loadout in the stock CLIs, tokens (cached apart from uncached) and quality | Claude (harness) + Erik (runs) | cloud (harness) + local (runs) | review ([#47](https://github.com/erik-hedstrom/loadout/pull/47)): harness, plan and tests done; the paid pilot has not run (needs `CLAUDE_CODE_OAUTH_TOKEN` and the TypeSafe key, from WSL) |
 
 **C13. Pure-Jev baseline without more model spend.**
 
