@@ -97,6 +97,7 @@ See [DESIGN.md](DESIGN.md) for the problem and architecture.
 ```bash
 npm install && npm run build && npm link
 loadout init --key-file /path/to/typesafe-key.txt   # or export TYPESAFE_API_KEY
+loadout init --pack documents                       # starter packs: documents, security, workflow
 loadout add https://github.com/obra/superpowers      # GitHub repos, subpaths, or local dirs
 ```
 

@@ -2,7 +2,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { accessSync, constants, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { basename, delimiter, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { tierTarget, type Config } from './config.js';
+import { tierTarget, withoutKey, type Config } from './config.js';
 import { isPlainFolder } from './safefs.js';
 import { capabilityKey, copySkillConfined, skillBody } from './library.js';
 import { reportJson, type Capability, type McpServerConfig, type RouteDecision } from './types.js';
@@ -361,7 +361,7 @@ export function pathTranslator(binPath: string | undefined): (p: string) => stri
 }
 
 /** `wslpath -w`. Its stderr is dropped, not forwarded: it can name library folders, and the hook reports failure in fixed text. */
-export const windowsPath = (p: string) => execFileSync('wslpath', ['-w', p], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+export const windowsPath = (p: string) => execFileSync('wslpath', ['-w', p], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], env: withoutKey() }).trim();
 
 export interface LaunchOptions {
   /** Run once and exit (`claude -p`, `codex exec`) instead of an interactive session. */

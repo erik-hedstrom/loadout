@@ -118,6 +118,13 @@ Acceptance:
 - Never edits host configs.
 - Completes in under 2 minutes, excluding downloads.
 
+Learnings (2026-10-12):
+- node:readline has no hidden input, and a terminal echoes what is typed, so
+  the wizard never prompts for the key or its file; it points to
+  TYPESAFE_API_KEY or `init --key-file`.
+- No "popular" pack: the skills.sh top list (`bench/data/popular.jsonl`) is
+  not committed, so nothing in the repo backs one.
+
 **A4. npm release.**
 
 Acceptance:
