@@ -663,7 +663,7 @@ binary alone on `PATH`, so the `claude` judge needed no new seam.
 | D7 | P1 | `loadout doctor` | Claude | cloud | done ([#20](https://github.com/erik-hedstrom/loadout/pull/20)) |
 | D2 | P0 | Live Codex hook test | Claude | local + erik | todo (needs Erik to trust the hook in `/hooks`) |
 | D3 | P2 | Desktop and IDE hosts end to end | Claude | local | todo (generic MCP only, 2026-10-12) |
-| D5 | P2 | Isolation mode | Codex | cloud | in progress: Claude MCP servers hidden ([#32](https://github.com/erik-hedstrom/loadout/pull/32), merged); plugin hooks, skills and mods disclosed, not hidden, and settings files kept (Erik, 2026-10-19); left: the live check, and the README's reason for not using `--setting-sources` should name the user's hooks, permission rules and settings `env` (it says permissions and model; loadout always passes `--model`); interactive Codex cannot be hidden |
+| D5 | P2 | Isolation mode | Codex | cloud | in progress: Claude MCP servers hidden ([#32](https://github.com/erik-hedstrom/loadout/pull/32), merged); plugin hooks, skills and mods disclosed for now and settings files kept (Erik, 2026-10-19); left: hiding plugins (deferred, e.g. `enabledPlugins` false for each installed plugin and `syncClaudeAiPlugins` false in the session settings), the live check, and the README's reason for not using `--setting-sources` should name the user's hooks, permission rules and settings `env` (it says permissions and model; loadout always passes `--model`); interactive Codex cannot be hidden |
 | D4 | P2 | Gateway: native tools via `tools/list_changed` | Codex | cloud | todo |
 | D6 | P2 | HTTP: cancellation reaches Jev | Claude | cloud | done ([#19](https://github.com/erik-hedstrom/loadout/pull/19)) |
 | D8 | P1 | Host capability matrix (verified vs generated) | Claude | cloud | done ([#18](https://github.com/erik-hedstrom/loadout/pull/18)) |
@@ -912,7 +912,7 @@ pages, and openai/codex at 4a93bd2 (`exec/src/cli.rs`, `cli/src/main.rs`,
   and a plugin server disappear, does the claude.ai connector list shrink).
   Erik decided on 2026-10-19: `--setting-sources` stays uncut (it would drop
   the user's hooks and permission rules), and plugin hooks, skills and mods
-  stay disclosed rather than hidden.
+  stay disclosed until plugin hiding, deferred to a follow-up, lands.
 
 **D6. HTTP cancellation.**
 
