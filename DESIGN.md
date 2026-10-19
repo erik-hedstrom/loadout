@@ -65,19 +65,19 @@ flowchart TB
         INJ["Injected SKILL.md text<br/>named skills and clear winners"]
         LSN["Launcher session only<br/>loaded skills, MCP servers, model tier"]
         DR["Decision report<br/>stdout for route, stderr for launchers"]
-        NOTE["Notes on stderr<br/>warnings about the key, the library and fallbacks"]
+        NOTE["Notes and warnings<br/>the key, the library and fallbacks"]
         FSR["find_tools result<br/>ranked skills and gateway servers, or a note that nothing fits"]
         LS["load_skill result<br/>one skill's SKILL.md, or one of its files"]
         GW["Gateway: server_tools, call_server_tool<br/>library servers marked gateway: true; not over --http"]
     end
 
-    host -->|"prompt or task + repo signals<br/>(hooks skip short follow-ups)"| routing
+    host -->|"prompt or task + repo signals"| routing
     LA -->|"attaches it when search is on (default)"| MS
     XH -->|"bundled .mcp.json"| MS
     CH -.->|"optional, added by the user"| MS
     MS -->|"find_tools: goal and keywords + repo signals"| routing
     MS -->|"load_skill"| LS
-    MS -->|"server_tools, call_server_tool; stdio only"| GW
+    MS -->|"server_tools, call_server_tool"| GW
     LIB --> RET
     LIB --> LEX
     LIB -->|"named skills"| MEN
@@ -106,7 +106,8 @@ retrieval, the lexical router and the named-skill scan): the launcher and
 without routing. Not drawn: the embedding index (it only feeds retrieval), the
 gateway's tool index (`server_tools` writes it; `find_tools` reads it before
 `route()` and adds the remembered tool text to each server's entry), the
-hook's per-session state file (it makes the "once per session id" rules),
+hook's per-session state files (they make the "once per session id" rules,
+including the no-key warning),
 `loadout mcp-launch` (the relay Codex runs for library MCP servers) and
 `loadout doctor` (read-only checks).
 
@@ -288,9 +289,9 @@ library itself, in its own words, through MCP:
 - **Gateway**: `server_tools` / `call_server_tool` reach the library's MCP
   servers, started on first use and kept for the session. Registered only when
   the library has servers marked `"gateway": true`, so a skills-only library
-  costs two tool definitions and its tool text is unchanged; only a library with gateway servers adds MCP
-  wording to the instructions and descriptions (sizes: D15 learnings in the
-  [backlog](docs/loop/BACKLOG.md)).
+  costs two tool definitions and its tool text is unchanged; only a library
+  with gateway servers adds MCP wording to the instructions and descriptions
+  (sizes: D15 learnings in the [backlog](docs/loop/BACKLOG.md)).
 - **Tool index.** A server's tools are known only once it has run. After a
   successful `server_tools`, the names and clipped descriptions are written to
   one file per server under `~/.loadout/index/mcp-tools/`, so sessions that
@@ -377,8 +378,9 @@ hook alone is not measured:
   with how to load them;
 - a clear winner or a named skill is injected once.
 
-Without Jev (no key, `"router": "lexical"`, or Jev down) the hook adds nothing unless the prompt names
-a skill.
+Without Jev (no key, `"router": "lexical"`, or Jev down) the hook adds no
+context unless the prompt names a skill. With no key it also shows the user a
+one-line warning (a `systemMessage`), once per session.
 
 It runs before the host sends the prompt, so it has a hard budget. It gives
 up after 20 s with no output, never retries Jev, and only uses the cached
