@@ -137,7 +137,7 @@ limits, batch revocation and usage checks replace a gateway.
   [authentication](https://platform.claude.com/docs/en/manage-claude/authentication)),
   so a forgotten key dies by itself.
 - **The threat.** Third-party skills can request a credential read and a
-  pre-approved `find_skills` call (`find_tools` in PR #39). That call runs outside
+  pre-approved `find_tools` call. That call runs outside
   the Bash sandbox and sends `goal` (up to 4,000 characters) and `keywords` to
   Jev: a key could stay live in logs until batch revocation, up to about 27 h. Revocation
   cannot undo that. Anthropic already holds the key for the model's own turns.
@@ -364,7 +364,7 @@ claude -p "$PROMPT" --output-format stream-json --verbose --include-hook-events 
 | Arm | `$MODEL` | `$MCP` | Additions |
 |---|---|---|---|
 | `small-bare` | `claude-haiku-5-5` | `{"mcpServers":{}}` | none |
-| `small-loadout` | `claude-haiku-5-5` | `{"mcpServers":{"loadout":{"command":"loadout","args":["mcp"],"env":{"LOADOUT_HOME":"<home>"}}}}` | `--plugin-dir <plugin copy>`; `$EXTRA_TOOLS` = `mcp__loadout__find_skills mcp__loadout__load_skill`; `LOADOUT_HOME=<home>` with the full library, `config.json` pointing `jev.apiKeyFile` at the batch's Jev key in `<keys>` and `jev.baseUrl` left at default |
+| `small-loadout` | `claude-haiku-5-5` | `{"mcpServers":{"loadout":{"command":"loadout","args":["mcp"],"env":{"LOADOUT_HOME":"<home>"}}}}` | `--plugin-dir <plugin copy>`; `$EXTRA_TOOLS` = `mcp__loadout__find_tools mcp__loadout__load_skill`; `LOADOUT_HOME=<home>` with the full library, `config.json` pointing `jev.apiKeyFile` at the batch's Jev key in `<keys>` and `jev.baseUrl` left at default |
 | `large-bare` | `claude-sonnet-5-5` | `{"mcpServers":{}}` | none |
 
 - `plugins/loadout` is hook-only; `loadout mcp` supplies two pre-approved
@@ -384,7 +384,7 @@ claude -p "$PROMPT" --output-format stream-json --verbose --include-hook-events 
     filter, which "adds Unix domain socket blocking" and comes with
     `npm install -g @anthropic-ai/sandbox-runtime`. Where `bwrap` cannot mount
     `/proc`, `enableWeakerNestedSandbox` is prohibited (Credentials and
-    spend): use a VM (Open for Erik).
+    spend): use a VM (Decided by Erik).
   - No task needs network from `Bash`: the Docker tasks cannot run `docker`,
     `ctl-ratelimiter-bug` runs `node --test` with no dependency, and the rest
     use the preinstalled tools.
@@ -466,7 +466,7 @@ AGENTS.md says to commit raw results, and a reviewer can check the numbers only
 against the outputs they came from. The fixtures and the agents' outputs are
 ours, so the only reasons to withhold anything are a secret, a path or a
 username. The streams also hold third-party skill text from `load_skill`
-results, which is not ours: Erik's read covers its licences (Open for Erik).
+results, which is not ours: Erik's read covers its licences (Decided by Erik).
 Committed under `bench/results/<timestamp>-c2/`:
 - per run: the final message, every file the collector kept, the stream (gzip,
   hook events included), the `claude` stderr, the extracted text, the
@@ -545,7 +545,7 @@ It passes when:
 - the Evidence checks pass for every smoke run, and the vendor's token sums for
   the smoke key equal the stream's exactly, per model.
 
-The run records: Jev requests per hook decision and per `find_skills` call, any
+The run records: Jev requests per hook decision and per `find_tools` call, any
 other model the vendor shows for the key (a side call), the largest input and
 output of one request in the stream, and the cost of the dearest request. The
 dearest request must fit the worst-request figure under Expected spend, and each
@@ -628,17 +628,20 @@ in [LEAKAGE.md](LEAKAGE.md).
   (W - L) / n, a paired method that keeps what the ties say; the formula and
   its tests are [bench/c2-score.ts](../../c2-score.ts) and
   [test/c2-score.test.ts](../../../test/c2-score.test.ts). The non-inferiority
-  margin is 0.10 below parity (0.5). For `small-loadout` against `large-bare`,
-  "match" is shown only if the lower bound is at least 0.40, "better" if it is
+  margin is 0.05 below parity (0.5). For `small-loadout` against `large-bare`,
+  "match" is shown only if the lower bound is at least 0.45, "better" if it is
   above 0.5, "worse" if the upper bound is below 0.5, else "not shown". Against
   `small-bare`, "helps" if the lower bound is above 0.5, "hurts" if the upper
   bound is below 0.5, else "not shown". Wins, ties and losses are always shown
   beside it.
-- **What 14 pairs can and cannot show.** All 14 tied: S = 0.50, interval 0.39
-  to 0.61, "not shown". One win and 13 ties: 0.54, 0.42 to 0.66, "match". Nine
-  wins, one tie, four losses: 0.68, 0.43 to 0.85. So one pair flips the label,
-  and "match" means "not clearly worse", which ties reach cheaply. A margin of
-  0.05 needs 3 wins and no loss. The margin is an assumption (Open for Erik).
+- **What 14 pairs can and cannot show.** Labels for `small-loadout` against
+  `large-bare`, from [bench/c2-score.ts](../../c2-score.ts). All 14 tied: S =
+  0.50, interval 0.39 to 0.61, "not shown". One win and 13 ties: 0.54, 0.42 to
+  0.66, "not shown". Two wins, 12 ties: 0.57, 0.448 to 0.70, "not shown". Three
+  wins, 11 ties: 0.61, 0.48 to 0.74, "match". Four wins, 10 ties: 0.64, 0.50 to
+  0.77, "better". Nine wins, one tie, four losses: 0.68, 0.43 to 0.85, "not
+  shown". So "match" needs 3 wins and no loss; ties alone never reach it. Erik
+  set the margin at 0.05 (Decided by Erik).
 - **Secondary, never a conclusion: the decisive-pair win rate,** wins / (wins +
   losses) with a 95% Wilson interval, next to the tie and split counts. It
   leaves ties out, so it reads 100% for one win and 13 ties. It is also shown
@@ -684,7 +687,7 @@ run. API list prices per million tokens (cache read and write at the usual
 |---|---|---:|
 | Sonnet 5.5 | $0.20, $2.50, $10 | $0.33-1.50 |
 | Haiku 5.5 | $0.01, $0.125, $0.50 | $0.02-0.08 |
-| Haiku 4.5 (if Erik picks it) | $0.10, $1.25, $5 | $0.16-0.75 |
+| Haiku 4.5 (not chosen) | $0.10, $1.25, $5 | $0.16-0.75 |
 
 For Haiku 5.5, every rate rises 5x for prompts over 100k tokens; the other two
 are assumed to do the same (the smoke run corrects this). The assumed contexts
@@ -694,7 +697,7 @@ stay below 100k; the worst request below does not assume it.
 |---|---:|---|
 | `large-bare` runs | 18 | $6-27 |
 | `small-bare` and `small-loadout` runs | 36 | $0.60-2.70 (Haiku 4.5: $6-27) |
-| Jev routing for `small-loadout` ($0.0012 per decision, [C1](../../RESULTS.md#c1-2026-10-08-new-held-out-requests)), hook only | 18 | about $0.02; `find_skills` calls add more, not measured |
+| Jev routing for `small-loadout` ($0.0012 per decision, [C1](../../RESULTS.md#c1-2026-10-08-new-held-out-requests)), hook only | 18 | about $0.02; `find_tools` calls add more, not measured |
 | Smoke run, one run per arm | 3 | $0.36-1.65 (Haiku 4.5: $0.65-3.00) |
 | Codex judging (3 pairs x 2 orders x 18 tasks, then the same number of guess calls), sequential | 216 | plan quota, cost not reported |
 
@@ -755,23 +758,30 @@ run, up to 10 minutes per attempt for collection and extraction, and the wait
 for the vendor's usage: a planning figure the smoke run replaces with measured
 ones before the full run is approved.
 
+## Decided by Erik (2026-10-19)
+
+- Sandbox: a VM, with the Bash sandbox inside it. The engine, egress mechanism,
+  resolver and collector sandbox are set when it is built; its setup and cost
+  are Erik's. Model spend does not change.
+- The full protocol, not a smaller pilot.
+- Tiers: Haiku 5.5 for small, Sonnet 5.5 for large.
+- Approvals: (n - 1) x high + ceiling under the shared, final stopping rule,
+  about $78 (Expected spend). Approved hours: about 27 h.
+- Matching margin: 0.05 below parity (Analysis).
+- Licences: before anything is pushed, check the licences of the skills a run
+  loaded; where a licence is unclear, commit only derived values.
+- As drafted: delegation off in every arm (Arms); invalid and `output rejected`
+  runs score as a loss for their arm, and each `invalid` run still halts the
+  plan for Erik to classify (Analysis); compaction off in every arm; raw
+  results committed after the gates under What is committed, with Erik reading
+  the folder before any push; the loadout arm measures hook plus search; the
+  prompt cache shared between an arm's runs is a stated limit (Credentials and
+  spend); no Codex-family replication (it needs a Claude judge).
+
 ## Open for Erik
 
-- Which Haiku: B1 and the hook probe used the `haiku` alias, and RESULTS does
-  not record what it resolved to.
-- Sonnet 5.5 or Opus as the large tier (the `invoke.ts` runs used Sonnet 5.5).
-- The sandbox: container or VM (a throwaway user is ruled out above), and the
-  engine, egress mechanism, resolver and collector sandbox. Unprivileged
-  containers cannot mount the fresh `/proc` that `claude`'s Bash sandbox needs,
-  and `enableWeakerNestedSandbox` is prohibited (Credentials and spend). So
-  I recommend a VM, with the Bash sandbox inside it. Model spend does not
-  change; the VM's setup and cost are yours to price.
-- Approved hours (Expected spend): about 27 h for 108 attempts of 15 minutes,
-  plus the smoke run and the collection and extraction time. Set the figure.
-- Approvals (Expected spend): I recommend (n - 1) x high + ceiling with the
-  shared, final stopping rule, about $78 with Haiku 5.5 or $136 with Haiku 4.5.
-  The alternative, n x ceiling, funds every attempt at its worst case: $349.20
-  for `large-bare`, about $395 in all (Haiku 4.5: $718).
+Needed before the run, not before the merge.
+
 - The Anthropic side (Credentials and spend): a Console organization, since the
   Admin and Usage APIs are not available to individual accounts; an Admin key
   that stays on the host; four workspaces (three arms and the smoke run), each
@@ -784,24 +794,3 @@ ones before the full run is approved.
   strings before anything goes to Jev (BACKLOG E14), and recording each
   decision's calls, tokens and cost. The lexical router needs no Jev key but
   is a different product, so not the primary comparison.
-- The streams hold third-party skill text from `load_skill` results: before
-  anything is pushed, check the licences of the skills a run loaded.
-- The matching margin, 0.10 below parity (Analysis), is my assumption. With it
-  one win and 13 ties reads "match" and 14 ties "not shown" by 0.008. A margin
-  of 0.05 needs 3 wins and no loss. I suggest 0.05; you decide, before any
-  result exists.
-- Delegation is off in every arm (Arms). Confirm, or ask for a subagent rule;
-  a subagent's requests would not be told apart from its parent's in the
-  vendor's record.
-- Invalid and `output rejected` runs count as a loss for their arm in the score
-  (Analysis). Confirm, or leave them out. Each `invalid` run halts the plan for
-  you to classify.
-- Raw results are committed after the gates under What is committed. Confirm
-  the gates and the sanitising tokens, and that you read the folder before any
-  push.
-- Compaction is off in every arm (see Arms): a run that fills the window stops
-  instead of compacting. Confirm, or ask for a compaction rule.
-- The prompt cache is shared between the runs of an arm (Credentials and
-  spend): accept it as a stated limit, or pay for a workspace per run.
-- A Codex-family replication (gpt-5.6-luna against gpt-6.1-sol) needs a Claude
-  judge and is not in this protocol.

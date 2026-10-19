@@ -26,8 +26,7 @@ describe('C2 score interval', () => {
   });
 
   it('gives the thresholds quoted for 14 pairs with no losses', () => {
-    expect(scoreInterval(0, 0, 14)[0]).toBeLessThan(0.4);
-    expect(scoreInterval(1, 0, 14)[0]).toBeGreaterThanOrEqual(0.4);
+    expect(scoreInterval(1, 0, 14)[0]).toBeLessThan(0.45);
     expect(scoreInterval(2, 0, 14)[0]).toBeLessThan(0.45);
     expect(scoreInterval(3, 0, 14)[0]).toBeGreaterThanOrEqual(0.45);
     expect(scoreInterval(3, 0, 14)[0]).toBeLessThanOrEqual(0.5);

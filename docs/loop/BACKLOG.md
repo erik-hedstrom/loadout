@@ -37,7 +37,7 @@ Each PR body's **Review state** section has the round-by-round record.
 |---|---|---|
 | [#41](https://github.com/erik-hedstrom/loadout/pull/41) | E13 stricter reviews with a blocking necessity pass (P1) | both reviews approve at ac6d69d; full matrix green; merge before this file's PR (needs Erik: the orchestrator's merge was blocked) |
 | [#40](https://github.com/erik-hedstrom/loadout/pull/40) | C10 bench quick fixes (P2) | both reviews clean; merge gate |
-| [#37](https://github.com/erik-hedstrom/loadout/pull/37) | C2 fixtures and protocol; adds E14 and D18 | round 15 and 16 findings fixed; both reviews approve at 0a647dc; full matrix green (one Windows timeout flake, rerun once); waits for Erik's C2 decisions (margin, VM, licence, scope) and two open Codex threads (P1 Jev key, P2 shared prompt cache) |
+| [#37](https://github.com/erik-hedstrom/loadout/pull/37) | C2 fixtures and protocol; adds E14 and D18 | round 15 and 16 findings fixed; both reviews approve at 0a647dc; full matrix green (one Windows timeout flake, rerun once); C2 decisions made 2026-10-19 (margin 0.05, VM, licence, full protocol); two stale Codex threads (P1 Jev key, P2 shared prompt cache) left open for Erik to resolve |
 | [#36](https://github.com/erik-hedstrom/loadout/pull/36) | D14 Codex plugin forwards `LOADOUT_HOME` (P1) | one open Codex P1 (`/proc`) waits for Erik: accept or override; merge before #28 |
 | [#35](https://github.com/erik-hedstrom/loadout/pull/35) | iteration 8 log row | superseded by the row below; close it once this file lands |
 | [#34](https://github.com/erik-hedstrom/loadout/pull/34) | B3 comparison | Codex threads resolved after the 2026-10-16 skills.sh read; merge gate |
@@ -423,7 +423,7 @@ Decisions for Erik:
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
 | C1 | P0 | New held-out request set + re-measure v4 | Codex (seeds, expand) + Claude (judge) | local | done ([#16](https://github.com/erik-hedstrom/loadout/pull/16)): precision falls on new requests (64% vs 82%); judged through local `claude -p`, not the API (see Learnings) |
-| C2 | P1 | Outcome eval on the small tier with fixed fixtures | Claude (design) | cloud (fixtures) + local (runs) | in progress ([#37](https://github.com/erik-hedstrom/loadout/pull/37): fixtures and protocol, open findings; runs local) |
+| C2 | P1 | Outcome eval on the small tier with fixed fixtures | Claude (design) | cloud (fixtures) + local (runs) | in progress ([#37](https://github.com/erik-hedstrom/loadout/pull/37): fixtures and protocol, decisions made 2026-10-19; Console, Jev key and E14 open before the run; runs local) |
 | C3 | P2 | Does Jev pick a sensible model tier? | Claude | cloud | todo (launcher only: the hook and search keep the user's model) |
 | C4 | P0 | Demote generic "fits everything" skills | Codex | cloud | todo (next: C1 shows over-loading on general business requests) |
 | C5 | P2 | Retrieval beyond 200 candidates (Jev tournament) | Codex | cloud | todo |
@@ -529,9 +529,9 @@ Learnings (cloud half): [fixtures and protocol](../../bench/fixtures/c2/PROTOCOL
   [PROTOCOL.md](../../bench/fixtures/c2/PROTOCOL.md#given-up-compared-with-a-harness-gateway).
   Spend is the vendor's usage for the key, checked against the stream to 5%.
 - The score is S = 0.5 + (W - L) / (2n) over all paired tasks, with a Tango
-  score interval (`bench/c2-score.ts`) and a margin of 0.10. With 14 pairs, 14
-  ties are "not shown" (0.39 to 0.61) but one win and 13 ties read "match"
-  (0.42 to 0.66), so the margin is Erik's to set; the decisive-pair rate is
+  score interval (`bench/c2-score.ts`) and a margin of 0.05 (Erik, 2026-10-19).
+  With 14 pairs, "match" needs 3 wins and no loss (lower bound 0.476), and two
+  wins and 12 ties stay "not shown" (0.448); the decisive-pair rate is
   secondary ([Analysis](../../bench/fixtures/c2/PROTOCOL.md#analysis)).
 - The documented env switches turn off compaction, the non-streaming fallback,
   the 1-hour cache TTL and the background title request in all arms, and every
@@ -543,6 +543,14 @@ Learnings (cloud half): [fixtures and protocol](../../bench/fixtures/c2/PROTOCOL
 - Raw results are committed after a secret scan and a paths and usernames scan,
   and Erik reads the folder before any push
   ([What is committed](../../bench/fixtures/c2/PROTOCOL.md#what-is-committed)).
+- Decided by Erik (2026-10-19): the full protocol; a VM with the Bash sandbox
+  inside it; Haiku 5.5 and Sonnet 5.5; approvals of about $78 and 27 h; the 0.05
+  margin; a licence check of the loaded skills before any push, committing only
+  derived values where a licence is unclear; the shared prompt cache accepted as
+  a limit. Still open before the run: the Anthropic Console organization and
+  workspaces (and who archives them), the dedicated Jev key and whether Jev
+  reports usage per key, and E14
+  ([Decided by Erik](../../bench/fixtures/c2/PROTOCOL.md#decided-by-erik-2026-10-19)).
 
 **C3. Tier choice.**
 
