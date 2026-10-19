@@ -1,6 +1,6 @@
 # Need gate audit (dev split)
 
-Gate: need < 0.5 selects nothing (`decide()` replayed on stored answers). Judge labels: 300 blind labels; 99 dev requests, 4 runs. Intervals are 95% Wilson; pooled rows repeat requests, so pooled intervals are optimistic.
+Gate: need < 0.5 selects nothing (`decide()` replayed on stored answers). Judge labels: bench/results/2026-10-08T13-13-52-sweep/judge-blind.jsonl (300 blind labels); 99 dev requests, 4 runs: bench/results/2026-10-08T13-13-52-sweep, bench/results/2026-10-16T17-54-45-sweep, bench/results/2026-10-16T18-15-07-sweep, bench/results/2026-10-16T18-22-14-sweep. Intervals are 95% Wilson; pooled rows repeat requests, so pooled intervals are optimistic.
 
 Rows without Jev answers (keyword fallback, not replayable): 0 / 0 / 0 / 0. Replay reproduces the stored loaded set in 396 of 396 rows.
 
@@ -22,6 +22,14 @@ Judge labels on these requests: 8 essential, 36 helpful, 55 none.
 - Range of `need` per request (max minus min): median 0.017, 90th percentile 0.030, max 0.117.
 - Gate verdict differs between runs: 5% (5/99, 2–11%).
 - Within 0.05 of the threshold in some run: 24% (24/99, 17–34%).
+
+## `need` by judge label (mean over runs, per request)
+
+- essential: median 0.77, range 0.71–0.87 (n=8).
+- helpful: median 0.66, range 0.34–0.82 (n=36).
+- none: median 0.52, range 0.30–0.82 (n=55).
+- Mean `need` at or above 0.5, judge none: 58% (32/55, 45–70%).
+- Needed requests below 0.5 in every run: 7 of 44 (c1-web-10 helpful, c1-web-16 helpful, c1-backend-02 helpful, c1-documents-21 helpful, c1-apps-02 helpful, c1-apps-04 helpful, c1-apps-09 helpful).
 
 ## Threshold sweep (pooled over runs)
 

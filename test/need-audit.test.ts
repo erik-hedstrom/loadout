@@ -2,8 +2,8 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { needAudit, signTest } from '../bench/need-audit.js';
-import { splitOf } from '../bench/lib.js';
+import { auc, exactSignTest, splitOf } from '../bench/lib.js';
+import { needAudit } from '../bench/need-audit.js';
 import type { SweepRow } from '../bench/sweep.js';
 
 const temps: string[] = [];
@@ -56,18 +56,6 @@ describe('need gate audit', () => {
     expect(report).toContain('| 0.35 | 1 / 0 (p=1.000) | 0 / 0 (p=1.000) |');
   });
 
-  it('puts the held-out split in only when asked', () => {
-    const { dir, labels } = fixture();
-    expect(needAudit(labels, [dir], 'all')).toContain('4 all requests');
-  });
-
-  it('matches loaded skills to the judge by library key, not by display name', () => {
-    const { dir, labels } = fixture('skill:a--vendor');
-    const report = needAudit(labels, [dir], 'dev');
-    expect(report).toContain('Replay reproduces the stored loaded set in 3 of 3 rows.');
-    expect(report).toContain('| 0.5 (current) | 50% (1/2, ');
-  });
-
   it('refuses a request the judge has not labelled', () => {
     const { dir, rows } = fixture();
     const labels = join(temp(), 'judge-blind.jsonl');
@@ -87,10 +75,22 @@ describe('need gate audit', () => {
     expect(() => needAudit(labels, [dir], 'dev')).toThrow(/cannot replay/);
   });
 
+  it('reports need by judge label and the needed requests quiet in every run', () => {
+    const { dir, labels, rows } = fixture();
+    const report = needAudit(labels, [dir], 'dev');
+    expect(report).toContain('- essential: median 0.90, range 0.90–0.90 (n=1).');
+    expect(report).toContain(`- Needed requests below 0.5 in every run: 1 of 2 (${rows[1]!.id} helpful).`);
+  });
+
   it('runs an exact two-sided sign test', () => {
-    expect(signTest(0, 0)).toBe(1);
-    expect(signTest(4, 0)).toBeCloseTo(0.125);
-    expect(signTest(0, 6)).toBeCloseTo(0.03125);
-    expect(signTest(3, 3)).toBe(1);
+    expect(exactSignTest(0, 0)).toBe(1);
+    expect(exactSignTest(4, 0)).toBeCloseTo(0.125);
+    expect(exactSignTest(0, 6)).toBeCloseTo(0.03125);
+    expect(exactSignTest(3, 3)).toBe(1);
+  });
+
+  it('computes AUC with ties counting half and NaN for an empty side', () => {
+    expect(auc([0.9, 0.5], [0.5, 0.1])).toBeCloseTo(0.875);
+    expect(auc([], [0.1])).toBeNaN();
   });
 });

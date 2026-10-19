@@ -2,7 +2,7 @@
  * Audit the need gate offline (backlog C12): replay `decide()` on the Jev answers stored in
  * saved sweeps and compare the gate with the judge's blind labels. No model calls.
  *
- *   npx tsx bench/need-audit.ts --labels <judge-blind.jsonl> [--split dev|test|all] [--out report.md] <sweep dir> ...
+ *   npx tsx bench/need-audit.ts --labels <judge-blind.jsonl> [--split dev|test] [--out report.md] <sweep dir> ...
  *
  * The split defaults to dev: tune on dev, report on test once (AGENTS.md).
  */
@@ -12,9 +12,9 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { DEFAULT_CONFIG } from '../src/config.js';
 import { capabilityKey } from '../src/library.js';
-import { decide, needScore, policyFrom, type Policy } from '../src/route.js';
+import { decide, needScore, policyFrom } from '../src/route.js';
 import type { Capability } from '../src/types.js';
-import { readJsonl, splitOf, wilson } from './lib.js';
+import { auc, exactSignTest, readJsonl, splitOf, wilson } from './lib.js';
 import type { SweepRow } from './sweep.js';
 
 interface Label { id: string; need: 'none' | 'helpful' | 'essential'; useful: string[] }
@@ -28,30 +28,13 @@ const candidate = (id: string | undefined): Capability => {
   return { id, kind: 'skill', name: id.slice('skill:'.length), description: '', source: id.slice('skill:'.length) };
 };
 
-/** Exact two-sided sign test: p of a split at least this uneven if gains and losses were equally likely. */
-export function signTest(gains: number, losses: number): number {
-  const n = gains + losses;
-  if (!n) return 1;
-  const tail = (k: number) => {
-    let c = 1, sum = 0; // c = C(n, i)
-    for (let i = 0; i <= k; i++) { sum += c; c = (c * (n - i)) / (i + 1); }
-    return sum / 2 ** n;
-  };
-  return Math.min(1, 2 * tail(Math.min(gains, losses)));
-}
+const median = (sorted: number[]) => (sorted[Math.floor((sorted.length - 1) / 2)]! + sorted[Math.ceil((sorted.length - 1) / 2)]!) / 2;
 
-/** P(a need-labelled request scores above a no-need one), ties counting half. */
-function auc(positive: number[], negative: number[]): number {
-  if (!positive.length || !negative.length) return NaN;
-  let wins = 0;
-  for (const p of positive) for (const n of negative) wins += p > n ? 1 : p === n ? 0.5 : 0;
-  return wins / (positive.length * negative.length);
-}
-
-export function needAudit(labelsFile: string, dirs: string[], split: 'dev' | 'test' | 'all' = 'dev', policy: Policy = policyFrom(DEFAULT_CONFIG)): string {
+export function needAudit(labelsFile: string, dirs: string[], split: 'dev' | 'test' = 'dev'): string {
+  const policy = policyFrom(DEFAULT_CONFIG);
   const labels = new Map(readJsonl<Label>(labelsFile).map((l) => [l.id, l]));
   const runs = dirs.map((dir) => new Map(readJsonl<SweepRow>(join(dir, 'decisions.jsonl')).map((r) => [r.id, r])));
-  const ids = [...runs[0]!.keys()].filter((id) => split === 'all' || splitOf(id) === split);
+  const ids = [...runs[0]!.keys()].filter((id) => splitOf(id) === split);
   for (const id of ids) {
     if (!labels.has(id)) throw new Error(`no judge label for ${id}`);
     runs.forEach((run, i) => {
@@ -80,9 +63,9 @@ export function needAudit(labelsFile: string, dirs: string[], split: 'dev' | 'te
   const needed = (o: Obs) => o.label.need !== 'none';
   const lines = [
     `# Need gate audit (${split} split)`, '',
-    `Gate: need < ${policy.need} selects nothing (\`decide()\` replayed on stored answers). Judge labels: ${labels.size} blind labels; ${ids.length} ${split} requests, ${dirs.length} runs. ` +
+    `Gate: need < ${policy.need} selects nothing (\`decide()\` replayed on stored answers). Judge labels: ${labelsFile} (${labels.size} blind labels); ${ids.length} ${split} requests, ${dirs.length} runs: ${dirs.join(', ')}. ` +
       `Intervals are 95% Wilson; pooled rows repeat requests, so pooled intervals are optimistic.`, '',
-    `Rows without Jev answers (keyword fallback, not replayable): ${dirs.map((d, i) => `${ids.length - perRun[i]!.length}`).join(' / ')}. ` +
+    `Rows without Jev answers (keyword fallback, not replayable): ${perRun.map((obs) => ids.length - obs.length).join(' / ')}. ` +
       `Replay reproduces the stored loaded set in ${flat.filter((o) => o.matches).length} of ${flat.length} rows.`, '',
   ];
 
@@ -124,6 +107,19 @@ export function needAudit(labelsFile: string, dirs: string[], split: 'dev' | 'te
     `- Within 0.05 of the threshold in some run: ${pct(near, byId.length)}.`,
   );
 
+  const mean = (xs: Obs[]) => xs.reduce((sum, o) => sum + o.need, 0) / xs.length;
+  const labelled = (n: Label['need']) => byId.filter((xs) => xs[0]!.label.need === n);
+  const quietEveryRun = byId.filter((xs) => needed(xs[0]!) && xs.every((o) => o.need < policy.need));
+  lines.push(
+    '', '## `need` by judge label (mean over runs, per request)', '',
+    ...(['essential', 'helpful', 'none'] as const).map((n) => {
+      const means = labelled(n).map(mean).sort((a, b) => a - b);
+      return `- ${n}: median ${means.length ? median(means).toFixed(2) : '—'}, range ${means.length ? `${means[0]!.toFixed(2)}–${means.at(-1)!.toFixed(2)}` : '—'} (n=${means.length}).`;
+    }),
+    `- Mean \`need\` at or above ${policy.need}, judge none: ${pct(labelled('none').filter((xs) => mean(xs) >= policy.need).length, labelled('none').length)}.`,
+    `- Needed requests below ${policy.need} in every run: ${quietEveryRun.length} of ${byId.filter((xs) => needed(xs[0]!)).length} (${quietEveryRun.map((xs) => `${xs[0]!.id} ${xs[0]!.label.need}`).join(', ') || 'none'}).`,
+  );
+
   lines.push(
     '', '## Threshold sweep (pooled over runs)', '',
     `Same policy otherwise. Useful load: a loaded skill is in the judge's \`useful\` list. AUC of \`need\` for "judge says a skill helps": ${auc(flat.filter(needed).map((o) => o.need), flat.filter((o) => !needed(o)).map((o) => o.need)).toFixed(3)}.`, '',
@@ -152,7 +148,7 @@ export function needAudit(labelsFile: string, dirs: string[], split: 'dev' | 'te
       return [d.filter((x) => x > 0).length, d.filter((x) => x < 0).length] as const;
     };
     const [gain, lose] = change(true, usefulShare), [more, fewer] = change(false, loadShare);
-    lines.push(`| ${t} | ${gain} / ${lose} (p=${signTest(gain, lose).toFixed(3)}) | ${more} / ${fewer} (p=${signTest(more, fewer).toFixed(3)}) |`);
+    lines.push(`| ${t} | ${gain} / ${lose} (p=${exactSignTest(gain, lose).toFixed(3)}) | ${more} / ${fewer} (p=${exactSignTest(more, fewer).toFixed(3)}) |`);
   }
   lines.push('', '"Useful" counts only skills the blind judge listed, so precision is a lower bound (C13).');
   return lines.join('\n') + '\n';
@@ -160,8 +156,8 @@ export function needAudit(labelsFile: string, dirs: string[], split: 'dev' | 'te
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const { values, positionals } = parseArgs({ allowPositionals: true, options: { labels: { type: 'string' }, split: { type: 'string', default: 'dev' }, out: { type: 'string' } } });
-  if (!values.labels || !positionals.length || !['dev', 'test', 'all'].includes(values.split!)) throw new Error('usage: need-audit.ts --labels <judge-blind.jsonl> [--split dev|test|all] [--out file] <sweep dir> ...');
-  const report = needAudit(values.labels, positionals, values.split as 'dev' | 'test' | 'all');
+  if (!values.labels || !positionals.length || !['dev', 'test'].includes(values.split!)) throw new Error('usage: need-audit.ts --labels <judge-blind.jsonl> [--split dev|test] [--out file] <sweep dir> ...');
+  const report = needAudit(values.labels, positionals, values.split as 'dev' | 'test');
   if (values.out) writeFileSync(values.out, report);
   console.log(report);
 }

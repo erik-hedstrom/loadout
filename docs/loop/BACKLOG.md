@@ -593,7 +593,7 @@ Learnings ([RESULTS](../../bench/RESULTS.md#c12-2026-10-19-the-need-gate-on-c1-d
   stored loads in 396 of 396 dev rows (4 sweeps × 99).
 - At 0.5 the gate says "no skill" on 17% of the judge's helpful-or-essential
   rows (30/176, 12–23%) and on 0 of 32 essential ones. The 7 requests quiet
-  in every run are all "helpful" with generic useful skills.
+  in every run are all "helpful", with mostly generic useful skills.
 - `need` is stable across reruns (median range 0.017) but weakly separates
   the labels (AUC 0.72; median 0.52 for none, 0.66 for helpful).
 - No change: threshold 0.4 gains a useful load on 4 requests of 44 and loses

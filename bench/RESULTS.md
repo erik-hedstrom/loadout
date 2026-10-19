@@ -243,10 +243,10 @@ reproduces the stored loaded set in 396 of 396 rows. C1 test was not scored:
 no change was made.
 
 The gate is `need < 0.5` selects nothing, where `need` is the mean of three
-Jev answers (`needScore()`). Rule fixed before the paired numbers were
-computed: change the threshold only if, per request, more needed requests
-gain a useful load than lose one (exact sign test, p < 0.05) without a
-significant rise in needless loads. The pooled table below was seen first.
+Jev answers (`needScore()`). The rule was set after the pooled sweep was
+seen and before the paired table: change the threshold only if, per request,
+more needed requests gain a useful load than lose one (exact sign test,
+p < 0.05) without a significant rise in needless loads.
 
 **The gate against the judge, dev, threshold 0.5** (95% Wilson; the four
 runs repeat the same 99 requests, so pooled intervals are optimistic):
@@ -259,17 +259,19 @@ runs repeat the same 99 requests, so pooled intervals are optimistic):
 - **The gate never silenced an essential request** (0 of 32 rows).
 - It silenced 30 of 176 helpful-or-essential rows. Seven requests (16% of
   the 44) were quiet in all four runs, all labelled helpful, with `need`
-  between 0.33 and 0.47. Their useful skills are generic ones
-  (`webapp-testing`, `frontend-ui-engineering`, `docx`/`pdf`). That is the
-  case the gate exists for, and the one it gets wrong when the judge counts
-  a generic skill as helpful.
+  between 0.33 and 0.47. Their useful skills are mostly generic ones
+  (`webapp-testing`, `frontend-ui-engineering`, `docx`/`pdf`), with some
+  specific ones among them (`supabase`, `api-and-interface-design`,
+  `property-based-testing`, `surgical-patch`, `lean-build`). Suppressing
+  generic skills is what the gate is for; it gets these wrong when the judge
+  counts a generic skill as helpful.
 - "Skill" for a none request is not a load: the fit threshold then loads
   nothing for 76% of none rows (167/220, 70–81%). The gate passes more than
   it loads.
 - `need` separates the judge's labels weakly: AUC 0.72 for "a skill helps".
-  Mean `need` per request, median: essential 0.79 (min 0.71), helpful 0.66
-  (min 0.34), none 0.52 (range 0.30–0.82). Half the none requests sit above
-  the threshold.
+  Mean `need` per request, median (range): essential 0.77 (0.71–0.87),
+  helpful 0.66 (0.34–0.82), none 0.52 (0.30–0.82). 32 of 55 none requests
+  (58%, 45–70%) have a mean at or above the threshold.
 - **`need` is stable across reruns; the verdict mostly is.** Per request the
   range over four runs has median 0.017 and max 0.117. The verdict differs
   between runs for 5% of requests (5/99, 2–11%); 24% (24/99, 17–34%) are
@@ -300,7 +302,7 @@ Paired per request against 0.5:
 **Decision: no change.** Lowering the threshold to 0.4 is a gain of 4
 requests of 44 with a useful load and one more needless load of 55, which
 does not clear the rule (p = 0.125). Raising it loses useful loads and, at
-0.6, significantly so (6 of 44, p = 0.031), for about the same drop in
+0.6, 6 of 44 (p = 0.031, uncorrected over seven thresholds), for about the same drop in
 needless loads (4 of 55). The Jev question was left alone: the audit shows
 no failure on essential requests, and the misses are generic skills the judge
 rated only helpful.
@@ -315,7 +317,15 @@ Not shown:
 
 Raw: [results/2026-10-19T20-56-00-c12-need-audit](results/2026-10-19T20-56-00-c12-need-audit/report-dev.md)
 (the stored answers are the four sweeps' `decisions.jsonl`; labels in the
-2026-10-08 sweep's `judge-blind.jsonl`).
+2026-10-08 sweep's `judge-blind.jsonl`). Command, from the repo root, with the
+labelled sweep first:
+
+```
+npx tsx bench/need-audit.ts --labels bench/results/2026-10-08T13-13-52-sweep/judge-blind.jsonl --split dev \
+  --out bench/results/2026-10-19T20-56-00-c12-need-audit/report-dev.md \
+  bench/results/2026-10-08T13-13-52-sweep bench/results/2026-10-16T17-54-45-sweep \
+  bench/results/2026-10-16T18-15-07-sweep bench/results/2026-10-16T18-22-14-sweep
+```
 
 ## C1 (2026-10-08): new held-out requests
 
