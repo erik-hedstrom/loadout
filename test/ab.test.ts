@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { report, type RunRow, type Verdict } from '../bench/ab-report.js';
-import { AB_MODELS, blockers, buildCommand, checkRun, copyOutputs, hiddenResult, hookFacts, main, openedSkills, planLines, promptText, redactNames, refuseOtherSettings, refuseStopped, routedByKeyword, runEnv, schedule, scrub, type Ctx, type Evidence, type Job, type Options } from '../bench/ab.js';
+import { AB_MODELS, blockers, buildCommand, checkRun, copyOutputs, hiddenResult, hookFacts, main, openedSkills, planLines, promptText, provenance, redactNames, refuseOtherSettings, refuseStopped, routedByKeyword, runEnv, schedule, scrub, type Ctx, type Evidence, type Job, type Options } from '../bench/ab.js';
 import { JEV_FALLBACK_NOTE, NO_KEY_WARNING } from '../src/hook.js';
 import { hookShim, toolEvents } from '../bench/stream.js';
 import { claudeUsage, codexUsage, effectiveInput } from '../bench/usage.js';
@@ -231,7 +231,7 @@ describe('plan', () => {
 
 const evidence = (over: Partial<Evidence> = {}): Evidence => {
   const stream = toolEvents(claudeStream);
-  return { usage: claudeUsage(claudeStream), hooks: stream.hooks, inventory: stream.inventory, failedBeforeModel: false, hookInvocations: 1, uncountedContext: 0, keywordRouted: false, pluginDir: '/opt/loadout/plugins/loadout', codexHook: true, requestedModel: 'sonnet', ...over };
+  return { usage: claudeUsage(claudeStream), hooks: stream.hooks, inventory: stream.inventory, failedBeforeModel: false, hookInvocations: 1, hookExits: [0], uncountedContext: 0, keywordRouted: false, pluginDir: '/opt/loadout/plugins/loadout', codexHook: true, requestedModel: 'sonnet', ...over };
 };
 
 describe('validity', () => {
@@ -246,8 +246,8 @@ describe('validity', () => {
     expect(checkRun({ host: 'claude', arm: 'loadout' }, { ...e, inventory: { ...e.inventory!, plugins: [...e.inventory!.plugins, { name: 'other', path: '/p', source: 'other@market' }] } })).toContain('plugin');
     expect(checkRun({ host: 'claude', arm: 'loadout' }, { ...e, inventory: { ...e.inventory!, mcpServers: [{ name: 'loadout', status: 'failed' }] } })).toContain('MCP server');
     expect(checkRun({ host: 'claude', arm: 'bare' }, e)).toContain('expected 0 loadout hook');
-    expect(checkRun({ host: 'claude', arm: 'bare' }, { ...e, hookInvocations: 0, hooks: [] })).toContain('plugin');
-    expect(checkRun({ host: 'claude', arm: 'bare' }, { ...e, hookInvocations: 0, hooks: [], inventory: { plugins: [{ name: 'agents-md', path: 'builtin', source: 'agents-md@builtin' }], mcpServers: [] } })).toBeUndefined();
+    expect(checkRun({ host: 'claude', arm: 'bare' }, { ...e, hookInvocations: 0, hookExits: [], hooks: [] })).toContain('plugin');
+    expect(checkRun({ host: 'claude', arm: 'bare' }, { ...e, hookInvocations: 0, hookExits: [], hooks: [], inventory: { plugins: [{ name: 'agents-md', path: 'builtin', source: 'agents-md@builtin' }], mcpServers: [] } })).toBeUndefined();
   });
 
   it('refuses a hook the shim did not see, a failed start and another model', () => {
@@ -256,6 +256,19 @@ describe('validity', () => {
     expect(checkRun({ host: 'claude', arm: 'loadout' }, { ...e, hooks: [] })).toContain('ran 0 UserPromptSubmit');
     expect(checkRun({ host: 'claude', arm: 'loadout' }, { ...e, failedBeforeModel: true })).toContain('before the model');
     expect(checkRun({ host: 'claude', arm: 'loadout' }, { ...e, requestedModel: 'opus' })).toContain('resolved model');
+  });
+
+  it('rejects a loadout hook that failed or never finished, on either host, and accepts one that exited 0 with no context', () => {
+    const e = evidence();
+    const failedResponse = (over: object) => ({ ...e, hooks: e.hooks.map((h) => ({ ...h, ...over })) });
+    expect(checkRun({ host: 'claude', arm: 'loadout' }, failedResponse({ exit_code: 2 }))).toContain('failed or unfinished');
+    expect(checkRun({ host: 'claude', arm: 'loadout' }, failedResponse({ outcome: 'error' }))).toContain('failed or unfinished');
+    expect(checkRun({ host: 'claude', arm: 'loadout' }, failedResponse({ exit_code: undefined, outcome: undefined }))).toContain('failed or unfinished');
+    expect(checkRun({ host: 'claude', arm: 'loadout' }, { ...e, hookExits: [1] })).toContain('did not finish successfully');
+    const codex = evidence({ usage: codexUsage(codexStream), hooks: [], inventory: undefined });
+    expect(checkRun({ host: 'codex', arm: 'loadout' }, { ...codex, hookExits: [127] })).toContain('did not finish successfully');
+    expect(checkRun({ host: 'codex', arm: 'loadout' }, { ...codex, hookExits: [] })).toContain('did not finish successfully');
+    expect(checkRun({ host: 'codex', arm: 'loadout' }, { ...codex, hookExits: [0] })).toBeUndefined();
   });
 
   it('stops the batch on a loadout arm that routed by keyword, on either host', () => {
@@ -290,8 +303,8 @@ describe('validity', () => {
     const e = evidence({ usage: codexUsage(codexStream), hooks: [], inventory: undefined });
     expect(checkRun({ host: 'codex', arm: 'loadout' }, e)).toBeUndefined();
     expect(checkRun({ host: 'codex', arm: 'loadout' }, { ...e, hookInvocations: 0 })).toContain('expected 1');
-    expect(checkRun({ host: 'codex', arm: 'bare' }, { ...e, hookInvocations: 0 })).toBeUndefined();
-    expect(checkRun({ host: 'codex', arm: 'loadout' }, { ...e, codexHook: false, hookInvocations: 0 })).toBeUndefined();
+    expect(checkRun({ host: 'codex', arm: 'bare' }, { ...e, hookInvocations: 0, hookExits: [] })).toBeUndefined();
+    expect(checkRun({ host: 'codex', arm: 'loadout' }, { ...e, codexHook: false, hookInvocations: 0, hookExits: [] })).toBeUndefined();
   });
 });
 
@@ -494,6 +507,31 @@ describe('resuming and finishing a study', () => {
     refuseOtherSettings(join(dir, 'new'), options, prov);
   });
 
+  it('refuses a resume after a skill\'s text or description is edited without renaming it', () => {
+    const home = temp('loadout-ab-lib-');
+    const file = join(home, 'library', 'skills', 'ux-copy', 'SKILL.md');
+    mkdirSync(join(file, '..'), { recursive: true });
+    const write = (description: string, body: string) => writeFileSync(file, `---\nname: ux-copy\ndescription: ${description}\n---\n${body}\n`);
+    write('Write interface copy.', 'Keep it short.');
+    vi.stubEnv('LOADOUT_HOME', home);
+    try {
+      const before = provenance();
+      expect(provenance()).toEqual(before);
+      const dir = study(rows);
+      writeFileSync(join(dir, 'config.json'), JSON.stringify({ ...options, ...before, versions: {}, schedule: [] }));
+      refuseOtherSettings(dir, options, before);
+      write('Write interface copy.', 'Keep it long.');
+      expect(() => refuseOtherSettings(dir, options, provenance())).toThrow(/other settings \(library\)/);
+      write('Write interface copy.', 'Keep it short.');
+      refuseOtherSettings(dir, options, provenance());
+      write('Write error pages.', 'Keep it short.');
+      expect(() => refuseOtherSettings(dir, options, provenance())).toThrow(/other settings \(library\)/);
+      expect(JSON.stringify(before)).not.toContain('Keep it');
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('refuses to continue or finish after a row that stopped the batch, but not after an unusable run', async () => {
     const stopped = (invalid: string) => study([...rows, row({ id: 'claude/bare/p1/1', invalid })]);
     refuseStopped(stopped('timed out before the host reported usage'));
@@ -550,13 +588,14 @@ if (args.includes('--json-schema')) {
 }
 `;
 
-  const codexScript = (log: string) => `
+  // `unifiedExec`: the install keeps unified_exec on whatever is set (E12), so it cannot judge tool-less.
+  const codexScript = (log: string, unifiedExec = false) => `
 import { appendFileSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 const args = process.argv.slice(2);
 const ev = (o) => console.log(JSON.stringify(o));
 if (args[0] === '--version') { console.log('codex-cli 0.160.1'); process.exit(0); }
-if (args.includes('features')) { for (const f of ['plugins', 'hooks', 'skill_mcp_dependency_install', 'shell_tool', 'unified_exec']) console.log(f.padEnd(32) + 'stable             false'); process.exit(0); }
+if (args.includes('features')) { for (const f of ['plugins', 'hooks', 'skill_mcp_dependency_install', 'shell_tool', 'unified_exec']) console.log(f.padEnd(32) + 'stable             ' + (${unifiedExec} && f === 'unified_exec' ? 'true' : 'false')); process.exit(0); }
 if (args.includes('--output-schema')) {
   process.stdin.resume();
   process.stdin.on('end', () => writeFileSync(args[args.indexOf('--output-last-message') + 1], JSON.stringify({ winner: 'second', confidence: 'low', reasons: 'x' })));
@@ -576,11 +615,19 @@ if (args.includes('--output-schema')) {
     writeFileSync(shim, hookShim(marker, `echo '{"a":1}'; echo noted >&2`, capture), { mode: 0o755 });
     const r = spawnSync('/bin/sh', [shim], { encoding: 'utf8' });
     expect([r.status, r.stdout, r.stderr]).toEqual([0, '{"a":1}', '']);
-    expect([readFileSync(marker, 'utf8'), readFileSync(capture, 'utf8'), readFileSync(`${capture}.err`, 'utf8')]).toEqual(['invoked\n', '{"a":1}\n', 'noted\n']);
+    expect([readFileSync(marker, 'utf8'), readFileSync(capture, 'utf8'), readFileSync(`${capture}.err`, 'utf8')]).toEqual(['invoked\nexit 0\n', '{"a":1}\n', 'noted\n']);
+  });
+
+  it('records the hook\'s exit status for the validity check, and passes the failure on to the host', () => {
+    const dir = temp('loadout-ab-shim-');
+    const [marker, shim] = ['marks', 'loadout'].map((n) => join(dir, n)) as [string, string];
+    writeFileSync(shim, hookShim(marker, 'exit 3'), { mode: 0o755 });
+    expect(spawnSync('/bin/sh', [shim], { encoding: 'utf8' }).status).toBe(3);
+    expect(readFileSync(marker, 'utf8')).toBe('invoked\nexit 3\n');
   });
 
   /** Stand-in CLIs on PATH, a loadout home with one skill, and a way to start bench/ab.ts against them. */
-  const stage = (leak = false) => {
+  const stage = (leak = false, unifiedExec = false) => {
     const dir = temp('loadout-ab-smoke-');
     const bin = join(dir, 'bin');
     const home = join(dir, 'home');
@@ -591,7 +638,7 @@ if (args.includes('--output-schema')) {
     writeFileSync(join(loadoutHome, 'config.json'), JSON.stringify({ router: 'lexical', embeddings: false }));
     writeFileSync(join(loadoutHome, 'library', 'skills', 'ux-copy', 'SKILL.md'), '---\nname: ux-copy\ndescription: Write interface copy such as error pages and button labels.\n---\nKeep it short.\n');
     writeFileSync(join(dir, 'claude.mjs'), claudeScript(log, leak));
-    writeFileSync(join(dir, 'codex.mjs'), codexScript(log));
+    writeFileSync(join(dir, 'codex.mjs'), codexScript(log, unifiedExec));
     writeFileSync(join(bin, 'claude'), wrapper(join(dir, 'claude.mjs')), { mode: 0o755 });
     writeFileSync(join(bin, 'codex'), wrapper(join(dir, 'codex.mjs')), { mode: 0o755 });
     const start = (args: string[], tmp?: string) => new Promise<{ code: number | null; text: string }>((resolve) => {
@@ -698,6 +745,21 @@ if (args.includes('--output-schema')) {
     const { code, text } = await start(['--hosts', 'claude', '--repeats', '1', '--ids', 'c1-web-14'], link);
     expect(code, text).toBe(0);
     expect(rowsOf()).toHaveLength(4);
+  }, 180_000);
+
+  it('stops before any agent launches when a judge the hosts need cannot run', async () => {
+    const { out, start, calls, rowsOf } = stage(false, true);
+    // Claude's outputs are judged by Codex, which here keeps unified_exec on.
+    const claude = await start(['--hosts', 'claude', '--repeats', '1', '--ids', 'c1-web-14']);
+    expect(claude.code).toBe(1);
+    expect(claude.text).toContain('claude outputs are judged by Codex and it cannot');
+    expect(calls()).toHaveLength(0);
+    expect(existsSync(join(out, 'rows.jsonl'))).toBe(false);
+    expect(existsSync(join(out, 'INCOMPLETE'))).toBe(false);
+    // Codex's outputs are judged by Claude, so a Codex-only study is not affected.
+    const codex = await start(['--hosts', 'codex', '--repeats', '1', '--ids', 'c1-web-14']);
+    expect(codex.code, codex.text).toBe(0);
+    expect(rowsOf().every((r) => r.host === 'codex')).toBe(true);
   }, 180_000);
 
   it('resumes in the same work folder, and refuses to resume with another model before running anything', async () => {

@@ -186,6 +186,32 @@ export const wilson = (k: number, n: number): string => {
   return `${(100 * Math.max(0, c - h)).toFixed(0)}–${(100 * Math.min(1, c + h)).toFixed(0)}%`;
 };
 
+const codexJudgeConfig = (effort?: string) => [
+  '-c', 'features.shell_tool=false', '-c', 'features.unified_exec=false', '-c', 'features.view_image=false',
+  ...(effort ? ['-c', `model_reasoning_effort=${JSON.stringify(effort)}`] : []),
+];
+
+/**
+ * Why Codex cannot judge tool-less on this install, or undefined. Free (`codex features list`, no model call). E12: on
+ * codex-cli 0.154.0 and 0.160.1 `unified_exec` stays on whatever is set, so this refuses there; a study that needs a Codex
+ * judge asks before it spends anything.
+ */
+export function codexJudgeRefusal(effort?: string): string | undefined {
+  const shim = process.platform === 'win32' ? which('codex') ?? which('codex.cmd') : undefined;
+  const { bin, prefix } = codexCli(shim ? [dirname(shim)] : []);
+  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/_(?:KEY|TOKEN|SECRET)$/i.test(key)));
+  const dir = mkdtempSync(join(tmpdir(), 'loadout-bench-codex-'));
+  try {
+    const features = execFileSync(bin, [...prefix, ...codexJudgeConfig(effort), 'features', 'list'], { cwd: dir, env, encoding: 'utf8', timeout: 15_000, stdio: ['ignore', 'pipe', 'ignore'] });
+    if (['shell_tool', 'unified_exec'].every((feature) => new RegExp(`^${feature}[\\t ]+\\S+[\\t ]+false[\\t ]*\\r?$`, 'm').test(features))) return undefined;
+    return 'Codex judging refused: features list must report shell_tool=false and unified_exec=false; read-only sandboxes permit credential file reads. Use --backend files or --backend claude.';
+  } catch {
+    return 'Codex judging refused: `codex features list` failed, so the judge cannot be checked.';
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 let codexToolsChecked = false;
 
 export async function modelJson<T>(prompt: string, schema: z.ZodType<T>, opts: {
@@ -222,18 +248,13 @@ export async function modelJson<T>(prompt: string, schema: z.ZodType<T>, opts: {
     const schemaFile = join(dir, 'schema.json');
     const answerFile = join(dir, 'answer.json');
     writeFileSync(schemaFile, JSON.stringify(jsonSchema));
-    const config = [
-      '-c', 'features.shell_tool=false', '-c', 'features.unified_exec=false', '-c', 'features.view_image=false',
-      ...(opts.effort ? ['-c', `model_reasoning_effort=${JSON.stringify(opts.effort)}`] : []),
-    ];
+    const config = codexJudgeConfig(opts.effort);
     const shim = process.platform === 'win32' ? which('codex') ?? which('codex.cmd') : undefined;
     const { bin, prefix } = codexCli(shim ? [dirname(shim)] : []);
     const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/_(?:KEY|TOKEN|SECRET)$/i.test(key)));
     if (!codexToolsChecked) {
-      const features = execFileSync(bin, [...prefix, ...config, 'features', 'list'], { cwd: dir, env, encoding: 'utf8', timeout: 15_000, stdio: ['ignore', 'pipe', 'ignore'] });
-      if (!['shell_tool', 'unified_exec'].every((feature) => new RegExp(`^${feature}[\\t ]+\\S+[\\t ]+false[\\t ]*\\r?$`, 'm').test(features))) {
-        throw new Error('Codex judging refused: features list must report shell_tool=false and unified_exec=false; read-only sandboxes permit credential file reads. Use --backend files or --backend claude.');
-      }
+      const refusal = codexJudgeRefusal(opts.effort);
+      if (refusal) throw new Error(refusal);
       codexToolsChecked = true;
     }
     const args = [

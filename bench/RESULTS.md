@@ -168,11 +168,18 @@ nothing.
   keyword match), any file in a run's folder holding the TypeSafe key, the
   Claude subscription token or something shaped like a login token or API key
   (nothing is copied, and the value is never printed; Codex's own login token is
-  not read, so only its shape is caught), and the plugin, hook, server or model
-  checks. Claude runs need the key in a key file named by the loadout config,
+  not read, so only its shape is caught), a loadout hook that exited non-zero
+  or never finished (the shim records each exit status; the Claude stream's
+  hook response is checked too), and the plugin, hook, server or model checks.
+  Before any agent runs, each judge the hosts need is checked (`codex features
+  list` must show `shell_tool` and `unified_exec` off): on the codex-cli
+  versions seen so far (0.154.0, 0.160.1; E12) it does not, so a study with the
+  Claude host is refused up front rather than after its quota is spent, and only
+  `--hosts codex` (judged by Claude) runs. Claude runs need the key in a key file named by the loadout config,
   because the variable alone may not reach the MCP server or the hook. An
   `--out` folder is one study: it is not resumed with other settings or past
-  such a row, and a resume works in the same temporary folder, which keeps the
+  such a row, nor after the code or a skill's text or description changed (a
+  commit and a library fingerprint are stored), and a resume works in the same temporary folder, which keeps the
   working directory in the cached prefix unchanged.
 - **Rows.** `bench/results/<timestamp>-ab-pilot/`: `rows.jsonl` (names only, no
   paths, no skill text), `outputs/` (the deliverables, this machine's folders

@@ -22,9 +22,9 @@ import { parseArgs } from 'node:util';
 import { loadConfig, paths, resolveApiKey } from '../src/config.js';
 import { JEV_FALLBACK_NOTE, NO_KEY_WARNING } from '../src/hook.js';
 import { hookCommand, SEARCH_SERVER, SEARCH_TOOLS, searchServer, toToml } from '../src/launch.js';
-import { capabilityKey, scanLibrary } from '../src/library.js';
+import { capabilityKey, readManifest, scanLibrary } from '../src/library.js';
 import { report, type RunRow, type Verdict } from './ab-report.js';
-import { DATA, modelJson, readJsonl, RESULTS, run } from './lib.js';
+import { codexJudgeRefusal, DATA, modelJson, readJsonl, RESULTS, run } from './lib.js';
 import { CLAUDE_MANAGED_PRECONDITION, CLAUDE_SCRUB_PRECONDITION, CLAUDE_SETTINGS, CLAUDE_SWITCH_PRECONDITION, CODEX_CLOUD_PRECONDITION, childEnv, claudeEnv, envAllowlist, hostWrites, redacted, refusedFiles, resetWork } from './mcp-overhead.js';
 import { assertTemporary, claudeIsolation, cli, execute, validateFeatures, type Command, type Host } from './overhead.js';
 import { deliverableFiles, deliverables, judgePair, JUDGE_SYSTEM, NOTE, PrefSchema, type Arm } from './pairwise.js';
@@ -171,12 +171,14 @@ export function openedSkills(events: Event[]): string[] {
   return [...names];
 }
 
-export interface Evidence { usage: RunUsage | null; hooks: HookExecution[]; inventory?: Inventory; failedBeforeModel: boolean; hookInvocations: number; uncountedContext: number; keywordRouted: boolean; pluginDir: string; codexHook: boolean; requestedModel: string }
+export interface Evidence { usage: RunUsage | null; hooks: HookExecution[]; inventory?: Inventory; failedBeforeModel: boolean; hookInvocations: number; /** Exit status the shim recorded for each invocation that finished. */ hookExits: number[]; uncountedContext: number; keywordRouted: boolean; pluginDir: string; codexHook: boolean; requestedModel: string }
 
 /** The reason this run cannot count, or undefined. A hard failure stops the batch: the arms did not differ the way the study says. */
 export function checkRun(job: Pick<Job, 'host' | 'arm'>, e: Evidence): string | undefined {
   const expected = job.arm === 'loadout' && (job.host === 'claude' || e.codexHook) ? 1 : 0;
   if (e.hookInvocations !== expected) return `expected ${expected} loadout hook invocation(s), saw ${e.hookInvocations}; measurement invalid`;
+  // A hook that succeeds with no context is fine (exit 0); one that failed or never finished is not, on either host.
+  if (e.hookExits.length !== e.hookInvocations || e.hookExits.some((code) => code !== 0)) return `the loadout hook did not finish successfully (${e.hookInvocations} started, exits ${JSON.stringify(e.hookExits)}); measurement invalid`;
   if (e.uncountedContext > 0) return 'uncounted loadout hook context; measurement invalid';
   if (job.arm === 'loadout' && e.keywordRouted) return 'the loadout arm routed by keyword (no TypeSafe key reached it, or Jev failed); measurement invalid';
   if (e.failedBeforeModel) return 'agent failed before the model ran';
@@ -189,6 +191,7 @@ export function checkRun(job: Pick<Job, 'host' | 'arm'>, e: Evidence): string | 
   if (job.arm === 'bare' && servers.length) return 'MCP server in the bare arm; measurement invalid';
   if (job.arm === 'loadout' && !(servers.length === 1 && servers[0]!.name === SEARCH_SERVER && servers[0]!.status === 'connected')) return 'loadout MCP server missing or not connected; measurement invalid';
   if (e.hooks.length !== expected) return `the host ran ${e.hooks.length} UserPromptSubmit hook(s), expected ${expected}; measurement invalid`;
+  if (e.hooks.some((h) => h.exit_code !== 0 || h.outcome !== 'success')) return 'the host reported the loadout hook as failed or unfinished; measurement invalid';
   if (e.usage?.model && !e.usage.model.toLowerCase().includes(e.requestedModel.toLowerCase())) return `the host resolved model ${e.usage.model}, not ${e.requestedModel}; measurement invalid`;
   return undefined;
 }
@@ -290,6 +293,25 @@ export function blockers(o: Options, env: NodeJS.ProcessEnv = process.env): stri
   return out;
 }
 
+/**
+ * Free: each judge the hosts need can run. The judging comes after every agent run, so a judge that cannot run would
+ * otherwise be found only after the quota is spent. Claude's outputs go to Codex, which cannot run tool-less on the
+ * codex-cli versions seen so far (E12); Codex's outputs go to Claude.
+ */
+export function judgeProblems(o: Options): string[] {
+  const out: string[] = [];
+  for (const host of o.hosts) {
+    const { backend } = JUDGES[host];
+    if (backend === 'codex') {
+      const refusal = codexJudgeRefusal();
+      if (refusal) out.push(`${host} outputs are judged by Codex and it cannot: ${refusal}`);
+    } else {
+      try { version('claude'); } catch { out.push(`${host} outputs are judged by Claude, and \`claude --version\` failed`); }
+    }
+  }
+  return out;
+}
+
 export function planLines(o: Options, env: NodeJS.ProcessEnv = process.env, root = '<work root>'): string[] {
   const jobs = schedule(o.hosts, o.ids, o.repeats);
   const specs = o.ids.map((id) => PILOT.find((p) => p.id === id) as PromptSpec);
@@ -350,7 +372,7 @@ async function execute1(job: Job, prompt: string, spec: PromptSpec | undefined, 
   const hookStderr = readFileSync(`${capture}.err`, 'utf8');
   const hook = { invocations: marks.filter((l) => l === 'invoked').length, ...hookFacts(captured) };
   const failedBeforeModel = job.host === 'claude' ? stream.failedBeforeModel : usage === null && !proc.timedOut;
-  const broken = checkRun(job, { usage, hooks: stream.hooks, inventory: stream.inventory, failedBeforeModel, hookInvocations: hook.invocations, keywordRouted: routedByKeyword(captured, hookStderr, stream.events),
+  const broken = checkRun(job, { usage, hooks: stream.hooks, inventory: stream.inventory, failedBeforeModel, hookInvocations: hook.invocations, hookExits: marks.filter((l) => l.startsWith('exit ')).map((l) => Number(l.slice(5))), keywordRouted: routedByKeyword(captured, hookStderr, stream.events),
     uncountedContext: stream.hooks.filter((h) => h.context).length - marks.filter((l) => l === 'context').length, pluginDir: join(REPO, 'plugins', 'loadout'), codexHook: o.codexHook, requestedModel: o.models[job.host] });
 
   // Request gaps: since this host and arm last made a request (completion to completion inside a run, which counts the request's
@@ -408,9 +430,10 @@ export function provenance(): Provenance {
   const git = (...args: string[]) => execFileSync('git', args, { cwd: REPO, encoding: 'utf8' }).trim();
   const head = git('rev-parse', 'HEAD');
   const dirty = git('status', '--porcelain', '--untracked-files=no') !== '';
-  // Keys only, not skill text: enough to refuse a resume after skills were added, removed or renamed.
-  const keys = scanLibrary(paths.library()).map((c) => capabilityKey(c)).sort();
-  return { commit: dirty ? `${head}+dirty` : head, library: `${keys.length} skills, ${createHash('sha256').update(keys.join('\n')).digest('hex').slice(0, 12)}` };
+  // Each capability's key, name and description, and a skill's SKILL.md text (read through readConfined), hashed and never
+  // shown: editing a skill without renaming it still changes what the hook injects.
+  const library = scanLibrary(paths.library()).map((c) => [capabilityKey(c), c.name, c.description, c.kind === 'skill' ? readManifest(c.source) ?? '' : ''].join('\0')).sort();
+  return { commit: dirty ? `${head}+dirty` : head, library: `${library.length} capabilities, ${createHash('sha256').update(library.join('\n')).digest('hex').slice(0, 12)}` };
 }
 
 const studySettings = (s: Options & Partial<Provenance>) => ({ hosts: s.hosts, ids: s.ids, repeats: s.repeats, models: s.models, maxTurns: s.maxTurns, timeoutS: s.timeoutS, codexHook: s.codexHook, commit: s.commit, library: s.library });
@@ -532,7 +555,7 @@ export async function main(args: string[], deps: { print?: (s: string) => void; 
     if (scheduled.length && scheduled.every((id) => rows.some((r) => r.id === id))) rmSync(join(dir, 'INCOMPLETE'), { force: true });
     return;
   }
-  const found = blockers(o, env);
+  const found = [...blockers(o, env), ...judgeProblems(o)];
   if (!values.run) {
     for (const line of planLines(o, env)) print(line);
     for (const b of found) print(`BLOCKED: ${b}`);

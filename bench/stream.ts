@@ -76,11 +76,11 @@ const quote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 
 /**
  * A `loadout` for PATH that counts how often the host calls the hook (`marker` gets "invoked" before it runs, so a
- * killed hook still counts, and "context" after it, so a silent invocation cannot cover for context an uncounted hook
- * supplied) and, when `capture` is given, keeps each invocation's one-line output there and its stderr in
+ * killed hook still counts, "exit <status>" once it ends, so an unfinished invocation has none, and "context" after it, so
+ * a silent invocation cannot cover for context an uncounted hook supplied) and, when `capture` is given, keeps each invocation's one-line output there and its stderr in
  * `<capture>.err` (the host then no longer sees that stderr; a hook that exits 0 has none it reads).
  */
 export function hookShim(marker: string, command: string, capture?: string): string {
   const m = quote(marker);
-  return `#!/bin/sh\nprintf 'invoked\\n' >> ${m}\nout=$(/bin/sh -c ${quote(command)}${capture ? ` 2>> ${quote(`${capture}.err`)}` : ''}); status=$?\ncase $out in *'<skill_relevance>'*) printf 'context\\n' >> ${m};; esac\n${capture ? `printf '%s\\n' "$out" >> ${quote(capture)}\n` : ''}printf '%s' "$out"\nexit $status\n`;
+  return `#!/bin/sh\nprintf 'invoked\\n' >> ${m}\nout=$(/bin/sh -c ${quote(command)}${capture ? ` 2>> ${quote(`${capture}.err`)}` : ''}); status=$?\nprintf 'exit %s\\n' "$status" >> ${m}\ncase $out in *'<skill_relevance>'*) printf 'context\\n' >> ${m};; esac\n${capture ? `printf '%s\\n' "$out" >> ${quote(capture)}\n` : ''}printf '%s' "$out"\nexit $status\n`;
 }
