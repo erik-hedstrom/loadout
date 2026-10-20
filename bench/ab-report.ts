@@ -38,6 +38,8 @@ export interface RunRow {
   hook: { invocations: number; contextChars: number; listed: string[]; injected: string[] };
   hiddenTest: { passed: boolean; tests: number; failed: number } | null;
   invalid?: string;
+  /** Set with `invalid: 'credential in output'`: the file and rule that stopped the copy, never the matched text. */
+  leak?: { file: string; rule: 'held secret' | 'token shape' };
 }
 
 export interface Verdict {

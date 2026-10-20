@@ -319,17 +319,20 @@ describe('what a run shows', () => {
     const [work, dest] = [join(dir, 'work'), join(dir, 'dest')];
     mkdirSync(work, { recursive: true });
     writeFileSync(join(work, 'notes.md'), 'fine\n');
-    expect(copyOutputs(work, dest, [], ['sentinel-jev-key'])).toBe(true);
+    expect(copyOutputs(work, dest, [], ['sentinel-jev-key'])).toBeNull();
     expect(readFileSync(join(dest, 'notes.md'), 'utf8')).toBe('fine\n');
 
     writeFileSync(join(work, 'config.txt'), 'key = sentinel-jev-key\n');
-    expect(copyOutputs(work, dest, [], ['sentinel-jev-key', 'oauth-token-value'])).toBe(false);
+    const held = copyOutputs(work, dest, [], ['sentinel-jev-key', 'oauth-token-value']);
+    // The file and rule, so a false positive can be told from a leak; never the value.
+    expect(held).toEqual({ file: 'config.txt', rule: 'held secret' });
+    expect(JSON.stringify(held)).not.toContain('sentinel-jev-key');
     expect(existsSync(dest)).toBe(false);
 
     // Not a value the harness holds: a login token (JWT) or an API key, which an agent could read from its own home.
     for (const token of ['eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ1c2VyIn0.c2lnbmF0dXJl', `sk-${'a1B2'.repeat(8)}`]) {
       writeFileSync(join(work, 'config.txt'), `token ${token}\n`);
-      expect(copyOutputs(work, dest, [], [])).toBe(false);
+      expect(copyOutputs(work, dest, [], [])).toEqual({ file: 'config.txt', rule: 'token shape' });
       expect(existsSync(dest)).toBe(false);
     }
   });
@@ -341,7 +344,7 @@ describe('what a run shows', () => {
       mkdirSync(join(work, f, '..'), { recursive: true });
       writeFileSync(join(work, f), `${work}/${f}\n`);
     }
-    expect(copyOutputs(work, dest, [[work, '<work>']], [])).toBe(true);
+    expect(copyOutputs(work, dest, [[work, '<work>']], [])).toBeNull();
     expect((readdirSync(dest, { recursive: true }) as string[]).map((f) => f.replace(/\\/g, '/')).filter((f) => f.endsWith('.js')).sort()).toEqual(['app.js', 'src/b.js']);
     expect(readFileSync(join(dest, 'app.js'), 'utf8')).toBe('<work>/app.js\n');
   });
@@ -466,10 +469,11 @@ describe('report', () => {
 });
 
 describe('resuming and finishing a study', () => {
+  const prov = { commit: 'abc123', library: '12 skills, 0123456789ab' };
   const study = (rows: RunRow[], settings: Partial<Options> = {}) => {
     const dir = temp('loadout-ab-study-');
     const o = { ...options, ...settings };
-    writeFileSync(join(dir, 'config.json'), JSON.stringify({ ...o, versions: {}, schedule: rows.map((r) => r.id) }));
+    writeFileSync(join(dir, 'config.json'), JSON.stringify({ ...o, ...prov, versions: {}, schedule: rows.map((r) => r.id) }));
     writeFileSync(join(dir, 'rows.jsonl'), rows.map((r) => JSON.stringify(r)).join('\n') + '\n');
     writeFileSync(join(dir, 'INCOMPLETE'), 'x');
     return dir;
@@ -478,10 +482,13 @@ describe('resuming and finishing a study', () => {
 
   it('refuses to resume with another model, which would pair rows measured under different ones', () => {
     const dir = study(rows);
-    refuseOtherSettings(dir, options);
-    expect(() => refuseOtherSettings(dir, { ...options, models: { ...AB_MODELS, claude: 'opus' } })).toThrow(/other settings \(models\)/);
-    expect(() => refuseOtherSettings(dir, { ...options, repeats: 3, maxTurns: 10 })).toThrow(/repeats, maxTurns/);
-    refuseOtherSettings(join(dir, 'new'), options);
+    refuseOtherSettings(dir, options, prov);
+    expect(() => refuseOtherSettings(dir, { ...options, models: { ...AB_MODELS, claude: 'opus' } }, prov)).toThrow(/other settings \(models\)/);
+    expect(() => refuseOtherSettings(dir, { ...options, repeats: 3, maxTurns: 10 }, prov)).toThrow(/repeats, maxTurns/);
+    // The code and the library are what is under test: a resume after a pull or a library change mixes them.
+    expect(() => refuseOtherSettings(dir, options, { ...prov, commit: 'other-commit' })).toThrow(/other settings \(commit\)/);
+    expect(() => refuseOtherSettings(dir, options, { ...prov, library: '13 skills, 000000000000' })).toThrow(/other settings \(library\)/);
+    refuseOtherSettings(join(dir, 'new'), options, prov);
   });
 
   it('refuses to continue or finish after a row that stopped the batch, but not after an unusable run', async () => {

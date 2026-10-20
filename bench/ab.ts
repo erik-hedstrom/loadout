@@ -22,7 +22,7 @@ import { parseArgs } from 'node:util';
 import { loadConfig, paths, resolveApiKey } from '../src/config.js';
 import { JEV_FALLBACK_NOTE, NO_KEY_WARNING } from '../src/hook.js';
 import { hookCommand, SEARCH_SERVER, SEARCH_TOOLS, searchServer, toToml } from '../src/launch.js';
-import { scanLibrary } from '../src/library.js';
+import { capabilityKey, scanLibrary } from '../src/library.js';
 import { report, type RunRow, type Verdict } from './ab-report.js';
 import { DATA, modelJson, readJsonl, RESULTS, run } from './lib.js';
 import { CLAUDE_MANAGED_PRECONDITION, CLAUDE_SCRUB_PRECONDITION, CLAUDE_SETTINGS, CLAUDE_SWITCH_PRECONDITION, CODEX_CLOUD_PRECONDITION, childEnv, claudeEnv, envAllowlist, hostWrites, redacted, refusedFiles, resetWork } from './mcp-overhead.js';
@@ -206,26 +206,33 @@ export function scrub(text: string, folders: [string, string][]): string {
 const CREDENTIAL_SHAPE = /\beyJ[\w-]{8,}\.[\w-]{8,}\.[\w-]{8,}|\bsk-[\w-]{20,}/;
 const CREDENTIAL_IN_OUTPUT = 'credential in output';
 
+/** Which deliverable stopped the copy and by which rule; never the matched text. */
+export interface Leak { file: string; rule: 'held secret' | 'token shape' }
+
 /**
  * The files the judge sees (`deliverableFiles`), as text and scrubbed; binary and large ones are left out. These files become
  * public, and the other vendor's judge reads them, so nothing is copied if any holds one of `secrets` or looks like a token:
- * an agent that read a credential can write it into a deliverable. Returns false then.
+ * an agent that read a credential can write it into a deliverable. Returns the first such file then, so a shape false
+ * positive can be told from a real leak after the work folder is gone; null when everything was copied.
  */
-export function copyOutputs(work: string, dest: string, folders: [string, string][], secrets: string[]): boolean {
+export function copyOutputs(work: string, dest: string, folders: [string, string][], secrets: string[]): Leak | null {
   rmSync(dest, { recursive: true, force: true });
   const files = deliverableFiles(work).flatMap((p) => {
     if (statSync(p).size > 200_000) return [];
     const buf = readFileSync(p);
     return buf.includes(0) ? [] : [[p, buf.toString('utf8')] as const];
   });
-  if (files.some(([, text]) => CREDENTIAL_SHAPE.test(text) || secrets.some((s) => text.includes(s)))) return false;
+  for (const [p, text] of files) {
+    const rule = secrets.some((s) => text.includes(s)) ? 'held secret' : CREDENTIAL_SHAPE.test(text) ? 'token shape' : null;
+    if (rule) return { file: relative(work, p).replace(/\\/g, '/'), rule };
+  }
   for (const [p, text] of files) {
     const to = join(dest, relative(work, p));
     mkdirSync(dirname(to), { recursive: true });
     writeFileSync(to, scrub(text, folders));
   }
   mkdirSync(dest, { recursive: true });
-  return true;
+  return null;
 }
 
 /** Runs the harness's own test against a copy of the agent's folder; the test is never in the folder the agent works in. */
@@ -356,12 +363,15 @@ async function execute1(job: Job, prompt: string, spec: PromptSpec | undefined, 
   const total = sumUsage(requests);
   const folders: [string, string][] = [[ctx.work, '<work>'], [homedir(), '~'], [tmpdir(), '<tmp>']];
   const dest = join(out, 'outputs', job.host, job.prompt, `${job.arm}-${job.repeat}`);
-  const leaked = !job.warmup && !copyOutputs(ctx.work, dest, folders, secrets);
-  const invalid = leaked ? CREDENTIAL_IN_OUTPUT : broken;
+  const leak = job.warmup ? null : copyOutputs(ctx.work, dest, folders, secrets);
+  const invalid = leak ? CREDENTIAL_IN_OUTPUT : broken;
   const hiddenTest = spec?.hidden && !job.warmup ? hiddenResult(ctx.work, join(FIXTURES, spec.hidden)) : null;
-  // Raw streams stay local (gitignored): they hold file contents, local paths and the hook's skill text.
-  mkdirSync(join(out, 'streams'), { recursive: true });
-  writeFileSync(join(out, 'streams', `${id.replace(/\//g, '_')}.jsonl`), proc.stdout);
+  // Raw streams stay local (gitignored): they hold file contents, local paths and the hook's skill text. After a leak the
+  // stream holds the credential too (the agent's own tool input), so it is not kept anywhere under bench/results.
+  if (!leak) {
+    mkdirSync(join(out, 'streams'), { recursive: true });
+    writeFileSync(join(out, 'streams', `${id.replace(/\//g, '_')}.jsonl`), proc.stdout);
+  }
   const tools = stream.events.map((e) => (e.ok ? e.tool : `${e.tool} (failed)`));
 
   return {
@@ -373,7 +383,7 @@ async function execute1(job: Job, prompt: string, spec: PromptSpec | undefined, 
     unreconciled: usage?.unreconciled ?? [], modelUsage: usage?.modelUsage ?? null,
     coldCacheRisk: requests.some((r) => (r.gapMs ?? 0) > CACHE_TTL_MS),
     toolCalls: tools.length, toolErrors: tools.filter((t) => t.endsWith('(failed)')).length, loadoutTools: [...new Set(tools.filter((t) => t.startsWith(`mcp__${SEARCH_SERVER}__`)))],
-    skillsOpened: openedSkills(stream.events), hook, hiddenTest,
+    skillsOpened: openedSkills(stream.events), hook, hiddenTest, ...(leak ? { leak } : {}),
     // A Codex run that timed out reports no usage: it cannot count, but it is not a broken arm.
     ...(invalid ? { invalid } : !usage ? { invalid: proc.timedOut ? UNUSABLE[0] : UNUSABLE[1] } : {}),
   };
@@ -386,13 +396,26 @@ function completed(file: string): RunRow[] {
   return existsSync(file) ? readJsonl<RunRow>(file) : [];
 }
 
-const studySettings = (o: Options) => ({ hosts: o.hosts, ids: o.ids, repeats: o.repeats, models: o.models, maxTurns: o.maxTurns, timeoutS: o.timeoutS, codexHook: o.codexHook });
+/** What is under test, beyond the options: loadout's own code (hook, router, MCP server) and the library it routes over. */
+export interface Provenance { commit: string; library: string }
 
-/** An --out folder is one study: resuming it with other settings (another model, say) would pair rows measured under different ones. */
-export function refuseOtherSettings(out: string, o: Options): void {
+/** Tracked changes count as a different commit; untracked files (this study's own results) do not. */
+export function provenance(): Provenance {
+  const git = (...args: string[]) => execFileSync('git', args, { cwd: REPO, encoding: 'utf8' }).trim();
+  const head = git('rev-parse', 'HEAD');
+  const dirty = git('status', '--porcelain', '--untracked-files=no') !== '';
+  // Keys only, not skill text: enough to refuse a resume after skills were added, removed or renamed.
+  const keys = scanLibrary(paths.library()).map((c) => capabilityKey(c)).sort();
+  return { commit: dirty ? `${head}+dirty` : head, library: `${keys.length} skills, ${createHash('sha256').update(keys.join('\n')).digest('hex').slice(0, 12)}` };
+}
+
+const studySettings = (s: Options & Partial<Provenance>) => ({ hosts: s.hosts, ids: s.ids, repeats: s.repeats, models: s.models, maxTurns: s.maxTurns, timeoutS: s.timeoutS, codexHook: s.codexHook, commit: s.commit, library: s.library });
+
+/** An --out folder is one study: resuming it with other settings (another model, other code or library) would pair rows measured under different ones. */
+export function refuseOtherSettings(out: string, o: Options, p: Provenance): void {
   const file = join(out, 'config.json');
   if (!existsSync(file)) return;
-  const [was, now] = [studySettings(JSON.parse(readFileSync(file, 'utf8')) as Options), studySettings(o)];
+  const [was, now] = [studySettings(JSON.parse(readFileSync(file, 'utf8')) as Options & Provenance), studySettings({ ...o, ...p })];
   const differs = (Object.keys(now) as (keyof typeof now)[]).filter((k) => JSON.stringify(was[k]) !== JSON.stringify(now[k]));
   if (differs.length) throw new Error(`${redacted(out)} was started with other settings (${differs.join(', ')}): resume it with the same options, or start a new --out`);
 }
@@ -403,21 +426,23 @@ export function refuseStopped(out: string): void {
   if (bad) throw new Error(`${bad.id} stopped this study (${bad.invalid}): delete ${redacted(out)} and start a new one`);
 }
 
-async function runAll(o: Options, out: string, deps: { token?: string; print: (s: string) => void; env: NodeJS.ProcessEnv }): Promise<void> {
+async function runAll(o: Options, out: string, deps: { token?: string; print: (s: string) => void; env: NodeJS.ProcessEnv; provenance: Provenance }): Promise<void> {
   // Derived from --out, not random: a resumed study then works in the same folder, and the folder is in the prefix the cache keys on.
   // The base is resolved once: tmpdir() can itself be a link (macOS without TMPDIR is /tmp -> /private/tmp), and assertTemporary
   // refuses a link as the nearest existing ancestor of a root that does not exist yet. Links below the base are still refused.
   const root = join(realpathSync(tmpdir()), `loadout-ab-${createHash('sha256').update(out).digest('hex').slice(0, 12)}`);
   assertTemporary(root);
   rmSync(root, { recursive: true, force: true });
-  mkdirSync(root, { recursive: true });
+  // Not recursive, and private: the name is predictable in a shared tmpdir, so anything that appears there between the
+  // remove and this call (a link included) fails with EEXIST instead of being used, and other users cannot read the hook's text.
+  mkdirSync(root, { mode: 0o700 });
   try {
     const rowsFile = join(out, 'rows.jsonl');
     const specs = o.ids.map((id) => PILOT.find((p) => p.id === id) as PromptSpec);
     const versions = Object.fromEntries(o.hosts.map((h) => [h, version(h)]));
     const secrets = [deps.token, resolveApiKey(loadConfig())].filter((s): s is string => !!s);
     const configFile = join(out, 'config.json');
-    if (!existsSync(configFile)) writeFileSync(configFile, JSON.stringify({ ...studySettings(o), versions, schedule: schedule(o.hosts, o.ids, o.repeats).map(jobId) }, null, 1) + '\n');
+    if (!existsSync(configFile)) writeFileSync(configFile, JSON.stringify({ ...studySettings({ ...o, ...deps.provenance }), versions, schedule: schedule(o.hosts, o.ids, o.repeats).map(jobId) }, null, 1) + '\n');
     if (o.hosts.includes('codex')) await codexPreflight(o, root);
     const shims = Object.fromEntries(o.hosts.map((h) => [h, join(root, 'shim', h)]));
     for (const dir of Object.values(shims)) mkdirSync(dir, { recursive: true });
@@ -433,7 +458,7 @@ async function runAll(o: Options, out: string, deps: { token?: string; print: (s
       if (previous.some((r) => r.host === row.host && r.hostVersion && row.hostVersion && r.hostVersion !== row.hostVersion)) row.invalid ??= `${row.host} version changed during the study; measurement invalid`;
       appendFileSync(rowsFile, JSON.stringify(row) + '\n');
       deps.print(`${row.id}: ${row.invalid ?? (row.timedOut ? 'timed out' : row.exit === 0 ? 'ok' : `exit ${row.exit}`)}; ${row.requests.length} request(s), ${row.totals.cacheRead} cache-read tokens, ${(row.ms / 1000).toFixed(0)} s${row.coldCacheRisk ? ' (coldCacheRisk)' : ''}`);
-      if (row.invalid && !UNUSABLE.includes(row.invalid)) throw new Error(`${row.id}: ${row.invalid}`);
+      if (row.invalid && !UNUSABLE.includes(row.invalid)) throw new Error(`${row.id}: ${row.invalid}${row.leak ? ` (${row.leak.file}, ${row.leak.rule})` : ''}`);
     }
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -512,11 +537,12 @@ export async function main(args: string[], deps: { print?: (s: string) => void; 
   if (found.length) throw new Error(`blocked: ${found.join('; ')}`);
   if (process.platform === 'win32') throw new Error('--run needs a Linux or macOS shell: the hook shim is a POSIX script (run from WSL with the Linux CLIs)');
   const out = resolve(values.out ?? join(RESULTS, `${new Date().toISOString().replace(/[:.]/g, '-')}-ab-pilot`));
-  refuseOtherSettings(out, o);
+  const p = provenance();
+  refuseOtherSettings(out, o, p);
   refuseStopped(out);
   mkdirSync(out, { recursive: true });
   writeFileSync(join(out, 'INCOMPLETE'), 'This run did not finish: resume it with --out, or delete the folder. Its rows are not a result.\n');
-  await runAll(o, out, { token: env.CLAUDE_CODE_OAUTH_TOKEN, print, env });
+  await runAll(o, out, { token: env.CLAUDE_CODE_OAUTH_TOKEN, print, env, provenance: p });
   const verdicts = await judgeAll(out, print);
   writeFileSync(join(out, 'report.md'), report(completed(join(out, 'rows.jsonl')), verdicts));
   rmSync(join(out, 'INCOMPLETE'));
