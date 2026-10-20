@@ -269,6 +269,9 @@ export function blockers(o: Options, env: NodeJS.ProcessEnv = process.env): stri
   }
   let config;
   try { config = loadConfig(); } catch { out.push('the loadout config is invalid (loadout doctor)'); }
+  // Lexical routing makes the hook stay quiet and skips the key checks below, so the loadout arm would
+  // look valid while measuring next to nothing: the study is a Jev study or it does not run.
+  if (config && config.router !== 'jev') out.push(`the loadout config sets "router": "${config.router}": the loadout arm would not route with Jev. Set "router": "jev" for the study`);
   if (config && scanLibrary(paths.library()).length === 0) out.push(`the loadout library is empty (${redacted(paths.library())}): the hook would route over nothing`);
   if (config?.router === 'jev' && !resolveApiKey(config)) out.push('the loadout arm needs a TypeSafe key (TYPESAFE_API_KEY or `loadout init --key-file`), or it measures keyword routing');
   // Claude can strip the variable from the MCP server (its environment allowlist) and the hook (its subprocess scrub), but not a key file the config names.

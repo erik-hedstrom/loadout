@@ -207,6 +207,23 @@ describe('plan', () => {
       vi.unstubAllEnvs();
     }
   });
+
+  it('refuses lexical routing for every host, even with a key, since the loadout arm would not route with Jev', () => {
+    const home = temp('loadout-ab-home-');
+    const keyFile = join(home, 'key');
+    writeFileSync(keyFile, 'file-key-value\n');
+    vi.stubEnv('LOADOUT_HOME', home);
+    try {
+      const lexical = (o: Options) => blockers(o, {}).some((b) => b.includes('"router": "lexical"'));
+      writeFileSync(join(home, 'config.json'), JSON.stringify({ router: 'lexical', jev: { apiKeyFile: keyFile } }));
+      expect(lexical({ ...options, hosts: ['codex'] })).toBe(true);
+      expect(lexical({ ...options, hosts: ['claude'] })).toBe(true);
+      writeFileSync(join(home, 'config.json'), JSON.stringify({ router: 'jev', jev: { apiKeyFile: keyFile } }));
+      expect(lexical({ ...options, hosts: ['codex'] })).toBe(false);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
 });
 
 const evidence = (over: Partial<Evidence> = {}): Evidence => {
