@@ -113,7 +113,11 @@ backlog, B7).
 
 ## C14 method (not run yet): three prompts with and without loadout
 
-No measurement exists for this study. The harness is `bench/ab.ts` (backlog,
+No usable measurement exists for this study. A first Codex pilot (2026-10-20,
+at e9d7239) is confounded: Codex loaded the global `$CODEX_HOME/AGENTS.md` into
+every run of both arms, and the loadout agent's search query repeated its text
+(see the backlog, C14). It is not a result; the harness now refuses a study
+while that file, or `AGENTS.override.md`, exists. The harness is `bench/ab.ts` (backlog,
 C14); `npx tsx bench/ab.ts` prints the plan and the estimate and spends
 nothing.
 

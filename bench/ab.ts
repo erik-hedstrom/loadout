@@ -12,7 +12,7 @@
  * the cache writes to whichever arm ran first. So every host and arm starts with one recorded warm-up run (excluded from
  * the comparisons, reported as the cold start), and the measured runs alternate between the arms.
  */
-import { appendFileSync, copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
@@ -277,8 +277,15 @@ export function blockers(o: Options, env: NodeJS.ProcessEnv = process.env): stri
   if (o.hosts.includes('codex')) {
     const refused = refusedFiles('codex');
     if (refused.length) out.push(`Codex state the study cannot isolate exists (${refused.map((f) => redacted(f)).join(', ')})`);
-    const hooksJson = join(env.CODEX_HOME || join(homedir(), '.codex'), 'hooks.json');
+    const codexHome = env.CODEX_HOME || join(homedir(), '.codex');
+    const hooksJson = join(codexHome, 'hooks.json');
     if (o.codexHook && existsSync(hooksJson)) out.push(`${redacted(hooksJson)} exists: the loadout arm bypasses hook trust for this invocation, which would run it. Move it away or pass --no-codex-hook`);
+    // Codex reads the first non-empty of these into every run's prompt (codex-rs/codex-home/src/instructions/mod.rs, rust-v0.160.1),
+    // and --ignore-user-config does not skip them. lstat: a symlink to a global instructions file counts, as it is how one is shared.
+    for (const name of ['AGENTS.override.md', 'AGENTS.md']) {
+      const file = join(codexHome, name);
+      if (lstatSync(file, { throwIfNoEntry: false })) out.push(`${redacted(file)} exists: Codex loads global instructions into every run of both arms, which steers the agent and its searches. Move it aside for the study`);
+    }
   }
   let config;
   try { config = loadConfig(); } catch { out.push('the loadout config is invalid (loadout doctor)'); }
@@ -332,7 +339,7 @@ export function planLines(o: Options, env: NodeJS.ProcessEnv = process.env, root
   for (const write of hostWrites(env)) lines.push(`HOST STATE: ${write}`);
   lines.push(`HOST STATE: the loadout arm's hook and MCP server write under the loadout home (${redacted(paths.sessions())}/hook state, the library scan cache), as in a user's install. Every run's folder, the shim directory and Claude's fresh homes are under one temporary work root, removed at the end.`);
   for (const p of [CODEX_CLOUD_PRECONDITION, CLAUDE_MANAGED_PRECONDITION, CLAUDE_SCRUB_PRECONDITION, CLAUDE_SWITCH_PRECONDITION]) lines.push(`PRECONDITION: ${p}`);
-  lines.push('DIFFERS from B7: Claude keeps its built-in tools (no --restricted) and its hooks (no disableAllHooks), because the agents edit files, run `node --test` and the loadout plugin is a hook; Codex keeps its shell and, in the loadout arm, the hooks feature. The Codex MCP server is `required = true`, as `loadout setup codex` writes it, so a failed start stops the run; the plugin install leaves it out on purpose (comment above `required = true` in src/launch.ts). Both arms of a host share every other flag.');
+  lines.push('DIFFERS from B7: Claude keeps its built-in tools (no --restricted) and its hooks (no disableAllHooks), because the agents edit files, run `node --test` and the loadout plugin is a hook; Codex keeps its shell and, in the loadout arm, the hooks feature. The Codex MCP server is `required = true`, as `loadout setup codex` writes it, so a failed start stops the run; the plugin install leaves it out on purpose (comment above `required = true` in src/launch.ts). Unlike B7, which records a global AGENTS.md in CODEX_HOME as identical across arms, this study refuses one: it is in the prompt of every run and steers the agent and its find_tools queries, which a token-delta baseline never notices. Both arms of a host share every other flag.');
   lines.push('UNVERIFIED offline (the pilot checks): --max-turns is not in `claude --help` 2.1.281 (B7 and C8 use it); whether the allowlist rule `Bash(node --test *)` matches the agent\'s test command (a denied command shows as a tool error on the row); whether `loadout mcp` and the plugin\'s hook see the TypeSafe key under Claude\'s MCP environment allowlist and subprocess scrub (the study requires a key file in the loadout config; whether HOME and a non-default LOADOUT_HOME reach them is untested, and a loadout run routed by keyword stops the batch); that `-c hooks.UserPromptSubmit` plus --dangerously-bypass-hook-trust registers the hook in `codex exec` 0.160.1 (discovery.rs reads `hooks` from every config layer, the session-flags layer included; the shim count proves it, and a run without the hook stops the batch); that Codex\'s stream carries no per-request usage (codex-rs exec_events.rs at rust-v0.160.1: it does not).');
   return lines;
 }

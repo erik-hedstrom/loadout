@@ -727,6 +727,20 @@ Learnings (2026-10-19):
   because both hosts put it in the prompt and a different path per run would
   break the shared cache prefix.
 
+Learnings (2026-10-20):
+- **The first Codex pilot (2026-10-20, at e9d7239) is confounded.** Codex loaded
+  `$CODEX_HOME/AGENTS.md` (Erik's global instructions, via a symlink) into every
+  run of both arms; `--ignore-user-config` and `--ignore-rules` do not skip it.
+  The loadout agent's own `find_tools` query repeated a line from it, and a
+  skill name from it appears in all four `c1-debug-13` streams. Its numbers
+  cannot be read as loadout against bare. Codex reads `AGENTS.override.md`, then
+  `AGENTS.md`, from `CODEX_HOME` and uses the first non-empty one
+  (`codex-rs/codex-home/src/instructions/mod.rs` at rust-v0.160.1); `ab.ts` now
+  refuses the study if either exists (a symlink counts), and the file has to be
+  moved aside for a run. B7 records the same file as "identical across arms"
+  (`hostState`): a token-delta baseline cancels it, so B7 is left as is, but a
+  study of what the agent does is not.
+
 Left: run the pilot (Erik's go-ahead), write the results into RESULTS and
 `report.md`, and decide whether two repeats are enough to say anything.
 

@@ -190,6 +190,23 @@ describe('plan', () => {
     expect(found.some((b) => b.includes('CLAUDE_CODE_OAUTH_TOKEN'))).toBe(true);
   });
 
+  it('refuses a global AGENTS.md or AGENTS.override.md in CODEX_HOME, a symlink included, which Codex puts in every run', () => {
+    const blocked = (home: string) => blockers({ ...options, hosts: ['codex'] }, { CODEX_HOME: home }).filter((b) => b.includes('global instructions'));
+    expect(blocked(temp('loadout-ab-codex-'))).toEqual([]);
+    for (const name of ['AGENTS.md', 'AGENTS.override.md']) {
+      const home = temp('loadout-ab-codex-');
+      writeFileSync(join(home, name), 'Load the Impeccable skill.\n');
+      expect(blocked(home)).toHaveLength(1);
+      expect(blocked(home)[0]).toContain(name);
+    }
+    const home = temp('loadout-ab-codex-');
+    const shared = join(temp('loadout-ab-shared-'), 'AGENTS.md');
+    writeFileSync(shared, 'global\n');
+    try { symlinkSync(shared, join(home, 'AGENTS.md')); } catch { return; } // Windows without the privilege to link
+    expect(blocked(home)).toHaveLength(1);
+    expect(blockers({ ...options, hosts: ['claude'] }, { CODEX_HOME: home }).some((b) => b.includes('global instructions'))).toBe(false);
+  });
+
   it('wants the key in a key file for Claude, whose MCP allowlist and hook scrub can drop the variable', () => {
     const home = temp('loadout-ab-home-');
     const keyFile = join(home, 'key');
