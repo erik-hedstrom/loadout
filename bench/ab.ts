@@ -261,6 +261,9 @@ export function redactNames(text: string, names: string[]): { text: string; coun
 
 export interface Options { hosts: Host[]; ids: string[]; repeats: number; models: Record<Host, string>; maxTurns: number; timeoutS: number; codexHook: boolean }
 
+/** Set only by the harness's stand-in test; a real study never sets it. */
+const SELF_TEST = 'LOADOUT_AB_SELF_TEST';
+
 export function blockers(o: Options, env: NodeJS.ProcessEnv = process.env): string[] {
   const out: string[] = [];
   if (o.hosts.includes('claude')) {
@@ -277,8 +280,9 @@ export function blockers(o: Options, env: NodeJS.ProcessEnv = process.env): stri
   let config;
   try { config = loadConfig(); } catch { out.push('the loadout config is invalid (loadout doctor)'); }
   // Lexical routing makes the hook stay quiet and skips the key checks below, so the loadout arm would
-  // look valid while measuring next to nothing: the study is a Jev study or it does not run.
-  if (config && config.router !== 'jev') out.push(`the loadout config sets "router": "${config.router}": the loadout arm would not route with Jev. Set "router": "jev" for the study`);
+  // look valid while measuring next to nothing: the study is a Jev study or it does not run. The one exception
+  // is this harness's own stand-in test (test/ab.test.ts), which runs the real hook and must not reach Jev's network.
+  if (config && config.router !== 'jev' && env[SELF_TEST] !== 'lexical') out.push(`the loadout config sets "router": "${config.router}": the loadout arm would not route with Jev. Set "router": "jev" for the study`);
   if (config && scanLibrary(paths.library()).length === 0) out.push(`the loadout library is empty (${redacted(paths.library())}): the hook would route over nothing`);
   if (config?.router === 'jev' && !resolveApiKey(config)) out.push('the loadout arm needs a TypeSafe key (TYPESAFE_API_KEY or `loadout init --key-file`), or it measures keyword routing');
   // Claude can strip the variable from the MCP server (its environment allowlist) and the hook (its subprocess scrub), but not a key file the config names.

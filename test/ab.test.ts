@@ -218,6 +218,9 @@ describe('plan', () => {
       writeFileSync(join(home, 'config.json'), JSON.stringify({ router: 'lexical', jev: { apiKeyFile: keyFile } }));
       expect(lexical({ ...options, hosts: ['codex'] })).toBe(true);
       expect(lexical({ ...options, hosts: ['claude'] })).toBe(true);
+      // Only the stand-in test's own variable lifts it, and only for lexical.
+      expect(blockers({ ...options, hosts: ['codex'] }, { LOADOUT_AB_SELF_TEST: 'lexical' }).some((b) => b.includes('"router"'))).toBe(false);
+      expect(lexical({ ...options, hosts: ['codex'] })).toBe(true);
       writeFileSync(join(home, 'config.json'), JSON.stringify({ router: 'jev', jev: { apiKeyFile: keyFile } }));
       expect(lexical({ ...options, hosts: ['codex'] })).toBe(false);
     } finally {
@@ -596,7 +599,8 @@ if (args.includes('--output-schema')) {
       // An absolute loader: the hook the shim runs inherits these arguments and starts in another folder.
       const child = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), 'bench/ab.ts', '--run', '--out', out, ...args], {
         cwd: repo,
-        env: { PATH: `${bin}:/usr/bin:/bin`, HOME: home, LOADOUT_HOME: loadoutHome, CLAUDE_CODE_OAUTH_TOKEN: 'oauth-secret-value', TYPESAFE_API_KEY: 'jev-secret-value', ...(tmp ? { TMPDIR: tmp } : {}) },
+        // Lexical routing keeps the real hook off Jev's network; only this test may run the harness that way.
+        env: { PATH: `${bin}:/usr/bin:/bin`, HOME: home, LOADOUT_HOME: loadoutHome, LOADOUT_AB_SELF_TEST: 'lexical', CLAUDE_CODE_OAUTH_TOKEN: 'oauth-secret-value', TYPESAFE_API_KEY: 'jev-secret-value', ...(tmp ? { TMPDIR: tmp } : {}) },
         stdio: ['ignore', 'pipe', 'pipe'],
       });
       child.stdout.on('data', (d: Buffer) => lines.push(String(d)));
