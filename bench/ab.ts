@@ -402,7 +402,9 @@ export function refuseStopped(out: string): void {
 
 async function runAll(o: Options, out: string, deps: { token?: string; print: (s: string) => void; env: NodeJS.ProcessEnv }): Promise<void> {
   // Derived from --out, not random: a resumed study then works in the same folder, and the folder is in the prefix the cache keys on.
-  const root = join(tmpdir(), `loadout-ab-${createHash('sha256').update(out).digest('hex').slice(0, 12)}`);
+  // The base is resolved once: tmpdir() can itself be a link (macOS without TMPDIR is /tmp -> /private/tmp), and assertTemporary
+  // refuses a link as the nearest existing ancestor of a root that does not exist yet. Links below the base are still refused.
+  const root = join(realpathSync(tmpdir()), `loadout-ab-${createHash('sha256').update(out).digest('hex').slice(0, 12)}`);
   assertTemporary(root);
   rmSync(root, { recursive: true, force: true });
   mkdirSync(root, { recursive: true });

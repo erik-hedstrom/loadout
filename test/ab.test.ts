@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it, vi } from 'vitest';
@@ -567,12 +567,12 @@ if (args.includes('--output-schema')) {
     writeFileSync(join(dir, 'codex.mjs'), codexScript(log));
     writeFileSync(join(bin, 'claude'), wrapper(join(dir, 'claude.mjs')), { mode: 0o755 });
     writeFileSync(join(bin, 'codex'), wrapper(join(dir, 'codex.mjs')), { mode: 0o755 });
-    const start = (args: string[]) => new Promise<{ code: number | null; text: string }>((resolve) => {
+    const start = (args: string[], tmp?: string) => new Promise<{ code: number | null; text: string }>((resolve) => {
       const lines: string[] = [];
       // An absolute loader: the hook the shim runs inherits these arguments and starts in another folder.
       const child = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), 'bench/ab.ts', '--run', '--out', out, ...args], {
         cwd: repo,
-        env: { PATH: `${bin}:/usr/bin:/bin`, HOME: home, LOADOUT_HOME: loadoutHome, CLAUDE_CODE_OAUTH_TOKEN: 'oauth-secret-value', TYPESAFE_API_KEY: 'jev-secret-value' },
+        env: { PATH: `${bin}:/usr/bin:/bin`, HOME: home, LOADOUT_HOME: loadoutHome, CLAUDE_CODE_OAUTH_TOKEN: 'oauth-secret-value', TYPESAFE_API_KEY: 'jev-secret-value', ...(tmp ? { TMPDIR: tmp } : {}) },
         stdio: ['ignore', 'pipe', 'pipe'],
       });
       child.stdout.on('data', (d: Buffer) => lines.push(String(d)));
@@ -659,6 +659,17 @@ if (args.includes('--output-schema')) {
     expect(again.code).toBe(1);
     expect(again.text).toContain('stopped this study');
     expect(rowsOf()).toHaveLength(3);
+  }, 180_000);
+
+  it('runs when the temporary base is itself a link, as /tmp is on macOS when TMPDIR is unset', async () => {
+    const { dir, start, rowsOf } = stage();
+    const real = join(dir, 'real-tmp');
+    const link = join(dir, 'link-tmp');
+    mkdirSync(real);
+    symlinkSync(real, link, 'dir');
+    const { code, text } = await start(['--hosts', 'claude', '--repeats', '1', '--ids', 'c1-web-14'], link);
+    expect(code, text).toBe(0);
+    expect(rowsOf()).toHaveLength(4);
   }, 180_000);
 
   it('resumes in the same work folder, and refuses to resume with another model before running anything', async () => {
