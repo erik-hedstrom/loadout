@@ -1,4 +1,4 @@
-# Backlog
+ review ([#51](https://github.com/erik-hedstrom/loadout/pull/51)) |undefined# Backlog
 
 The orchestrator keeps this file current. Statuses: `todo`, `in progress (PR #)`,
 `review`, `done (PR #)`, `blocked: <why>`.
