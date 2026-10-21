@@ -7,7 +7,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { report, type RunRow, type Verdict } from '../bench/ab-report.js';
+import { redact, report, type RunRow, type Verdict } from '../bench/ab-report.js';
 import { JUDGE_MAX_BYTES } from '../bench/pairwise.js';
 import { AB_MODELS, blockers, buildCommand, checkRun, copyOutputs, hiddenResult, hookFacts, main, openedSkills, planLines, promptText, provenance, redactNames, refuseOtherSettings, refuseStopped, routedByKeyword, runEnv, schedule, scrub, type Ctx, type Evidence, type Job, type Options } from '../bench/ab.js';
 import { JEV_FALLBACK_NOTE, NO_KEY_WARNING } from '../src/hook.js';
@@ -674,6 +674,12 @@ describe('public text sinks', () => {
   const shape = `sk-${'x'.repeat(24)}`;
   const jwt = 'eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ1c2VyIn0.c2lnbmF0dXJl';
   const text = `${held} ${held} ${shape} ${jwt}`;
+
+  it('redacts a token behind a tool-name prefix but leaves words that merely contain "sk-"', () => {
+    const words = 'task-specific-instructions-were-followed; risk-assessment-framework-for-teams; desk-research-and-synthesis-notes';
+    expect(redact(words, [])).toBe(words);
+    expect(redact(`mcp__loadout__${shape} and (${jwt})`, [])).toBe('mcp__loadout__<credential> and (<credential>)');
+  });
 
   it('redacts every plan and blocker print at the print sink', async () => {
     vi.stubEnv('LOADOUT_HOME', temp('loadout-ab-print-'));

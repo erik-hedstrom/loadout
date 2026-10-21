@@ -3,13 +3,17 @@ import type { Host } from './overhead.js';
 import type { Arm } from './pairwise.js';
 import type { RequestUsage, RunUsage } from './usage.js';
 
-/** Token shapes can occur in third-party skill text and parsed metadata. */
-export const CREDENTIAL_SHAPE = /\beyJ[\w-]{8,}\.[\w-]{8,}\.[\w-]{8,}|\bsk-[\w-]{20,}/;
+/**
+ * What Codex's login tokens (JWTs) and API keys look like; they can occur in third-party skill text and parsed metadata.
+ * Not preceded by a letter or digit, rather than `\b`: a parsed tool name puts `_` before an embedded token
+ * (`mcp__x__sk-…`), while words such as `task-specific-…` or `risk-…` in names and judge reasons must stay intact.
+ */
+const SHAPE = String.raw`(?<![A-Za-z0-9])(?:eyJ[\w-]{8,}\.[\w-]{8,}\.[\w-]{8,}|sk-[\w-]{20,})`;
+export const CREDENTIAL_SHAPE = new RegExp(SHAPE);
 
 export function redact(text: string, secrets: string[]): string {
   for (const secret of secrets.filter(Boolean).sort((a, b) => b.length - a.length)) text = text.split(secret).join('<credential>');
-  // Parsed tool names add word-character prefixes, which must not hide an embedded token.
-  return text.replace(new RegExp(CREDENTIAL_SHAPE.source.replaceAll('\\b', ''), 'g'), '<credential>');
+  return text.replace(new RegExp(SHAPE, 'g'), '<credential>');
 }
 
 export interface Leak { file: string; rule: 'held secret' | 'token shape' }
