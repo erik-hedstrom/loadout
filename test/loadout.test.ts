@@ -1903,6 +1903,23 @@ describe('claude hook', () => {
     expect(JSON.parse(hookOutput('x', 'w'))).toEqual({ systemMessage: 'w', hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: 'x' } });
   });
 
+  it('keeps named-skill context and the no-key warning when the state folder is under a file', async () => {
+    const blocked = join(tempDir('loadout-hook-'), 'file');
+    writeFileSync(blocked, 'not a directory');
+    const input = { session_id: 'blocked', prompt: '/webapp-testing' };
+    const deps = { library, config: DEFAULT_CONFIG, stateDir: join(blocked, 'hook') };
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const context = await promptContext(input, deps);
+      const output = JSON.parse(hookOutput(context, noKeyWarning(input, deps)));
+      expect(output.hookSpecificOutput.additionalContext).toContain('<skill name="webapp-testing" trust="third-party">');
+      expect(output.systemMessage).toBe(NO_KEY_WARNING);
+      expect(readFileSync(blocked, 'utf8')).toBe('not a directory');
+    } finally {
+      errors.mockRestore();
+    }
+  });
+
   it('writes no hook state through a linked sessions folder', async () => {
     const home = tempDir('loadout-home-');
     const target = tempDir('loadout-outside-');
@@ -1982,6 +1999,26 @@ describe('claude hook', () => {
     // The state dir itself is a file: mkdir's EEXIST is not the marker's.
     const fileDir = { ...noKey, stateDir: blocked };
     expect(noKeyWarning({ session_id: 'f', prompt: TASK }, fileDir)).toBe(NO_KEY_WARNING);
+  });
+
+  it('does not repeat the no-key warning when another hook creates the marker just before the write', () => {
+    const stateDir = tempDir('loadout-hook-');
+    const write = fs.writeFileSync;
+    const racingWrite = vi.spyOn(fs, 'writeFileSync').mockImplementation((file, data, options) => {
+      if (typeof file === 'string' && file.endsWith('.warned') && !existsSync(file)) write(file, 'other hook');
+      return write(file, data, options);
+    });
+    syncBuiltinESMExports();
+    try {
+      const deps = { config: DEFAULT_CONFIG, stateDir };
+      expect(noKeyWarning({ session_id: 'race', prompt: TASK }, deps)).toBeUndefined();
+      expect(noKeyWarning({ session_id: 'race', prompt: TASK }, deps)).toBeUndefined();
+      const [marker] = readdirSync(stateDir);
+      expect(readFileSync(join(stateDir, marker!), 'utf8')).toBe('other hook');
+    } finally {
+      racingWrite.mockRestore();
+      syncBuiltinESMExports();
+    }
   });
 
   // Root ignores the mode, and Windows has no POSIX write bit on folders.

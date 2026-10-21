@@ -685,10 +685,11 @@ Measured with [invoke.ts](invoke.ts) on requests from the sweep:
 
 A skill counts as opened when the agent invoked it (Claude's Skill tool),
 read its SKILL.md, or loaded it through `load_skill`, and the call succeeded.
+Parentheses: Wilson 95% intervals, computed from the counts.
 
 | | Claude Code | Codex |
 |---|---:|---:|
-| **Routed** (loadout's selection preloaded): opened a loaded skill | 9 of 10 | 11 of 11 |
+| **Routed** (loadout's selection preloaded): opened a loaded skill | 9 of 10 (60–98) | 11 of 11 (74–100) |
 | …and also searched the library for more | 4 of 10 | 3 of 11 |
 | **Search only** (nothing preloaded; `find_skills` attached): searched on its own | 2 of 10 | 5 of 10 |
 | …and loaded a skill the judge lists as useful | 2 of 2 | 5 of 5 |
@@ -715,9 +716,9 @@ hook, which routes the prompt and adds the skills that fit as context:
 
 | Claude Code, same 10 requests | Opened a skill the judge rates useful | Hook injected a skill's full text |
 |---|---:|---:|
-| Search tool only | 2 of 10 | no hook |
-| Search tool + prompt hook | **6 of 10** | not recorded |
-| Hook-only plugin, as users install it (2026-10-12) | **0 of 10** | 6 of 10 |
+| Search tool only | 2 of 10 (6–51) | no hook |
+| Search tool + prompt hook | **6 of 10** (31–83) | not recorded |
+| Hook-only plugin, as users install it (2026-10-12) | **0 of 10** (0–28) | 6 of 10 (31–83) |
 
 In the 4 misses the hook did offer the right skill, and Claude still did not
 open it:
@@ -922,8 +923,8 @@ specific skill exists:
 | UV-Vis calculation review | `uncertainty-and-units` | bare | loadout timed out before writing the review document |
 | Threat model for uploads | `security-threat-model` | bare | loadout timed out; bare's sample code was more realistic |
 
-**Loadout better in 4, bare in 3, 1 split. No overall quality gain shows at
-this size.**
+**Loadout better in 4, bare in 3, 1 split** (Wilson 95%: 22–78%, 14–69%,
+2–47%). **No overall quality gain shows at this size.**
 - The verdicts are consistent: 7 of 8 held in both orders.
 - The wins are where a skill encodes conventions a strong agent would not
   apply unprompted: MCP best practices, runbook safety, Obsidian specifics.

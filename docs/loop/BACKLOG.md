@@ -36,14 +36,13 @@ Each PR body's **Review state** section has the round-by-round record.
 | PR | Item | State on 2026-10-22 |
 |---|---|---|
 | [#47](https://github.com/erik-hedstrom/loadout/pull/47) | C14 A/B pilot harness; adds B10 | final review round |
-| [#28](https://github.com/erik-hedstrom/loadout/pull/28) | A1 README rewrite | #36 merged: merge main, then the gate |
 
 ## A. Adoption and ease of use
 
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
 | A2 | P0 | `loadout audit`: what your installed skills cost you | Claude | cloud | done ([PR #3](https://github.com/erik-hedstrom/loadout/pull/3)) |
-| A1 | P0 | README rewrite around the problem, 3-command quickstart, GIF | Claude | cloud | review ([#28](https://github.com/erik-hedstrom/loadout/pull/28); GIF waits on A5) |
+| A1 | P0 | README rewrite around the problem, 3-command quickstart, GIF | Claude | cloud | review ([#28](https://github.com/erik-hedstrom/loadout/pull/28); main merged, renewed gate pending; GIF waits on A5) |
 | A3 | P1 | `loadout init` wizard + starter packs | Codex | cloud | done ([#30](https://github.com/erik-hedstrom/loadout/pull/30)) |
 | A4 | P1 | npm package under an available name + release workflow | Codex | cloud + erik | blocked: npm name decision |
 | A5 | P1 | Demo recording (route, launch, hook) | Claude | local | todo (after A1) |
@@ -94,8 +93,13 @@ Acceptance:
 - Reviewed for honesty: the outcome pilot is mixed, so the README must not
   claim better results.
 
-Note (E8 find pass, 2026-10-08): README still leads with the launcher; the
-plugin appears only under "Search mid-session".
+A1 learnings: keep the scope of B1's listing-cost measurement beside the
+README headline, and use a source install until A4 settles the npm name.
+Launcher, library, hook and MCP details belong in `docs/launcher.md`,
+`docs/library.md`, `docs/hook.md` and `docs/mcp.md`; SECURITY.md and DESIGN.md
+hold the security model and router. Keep C8's hook-only plugin results
+distinct from the settings-hook-plus-search result: following injected text
+and better outcomes remain not shown.
 
 **A3. `loadout init` wizard and starter packs.**
 
@@ -815,7 +819,7 @@ Left: run the pilot (Erik's go-ahead), write the results into RESULTS and
 | D16 | P1 | Warn when the hook runs without a TypeSafe key | Claude | cloud | done ([#27](https://github.com/erik-hedstrom/loadout/pull/27)): once per session, as a `systemMessage`, which Claude Code and Codex both show |
 | D18 | P1 | The hook and `load_skill` can offer `load_skill` only, with no folder | Codex | cloud | todo |
 | D19 | P2 | `which()` honours PATHEXT on Windows | Claude | cloud | todo |
-| D20 | P2 | Hook state writes never drop context or the no-key warning | Claude | cloud | todo |
+| D20 | P2 | Hook state writes never drop context or the no-key warning | Codex | cloud | review ([#49](https://github.com/erik-hedstrom/loadout/pull/49)) |
 
 **D18. The hook and `load_skill` can offer `load_skill` only, with no folder.**
 Both currently suggest reading skill files directly, even when the host's
@@ -854,6 +858,11 @@ Erik kept both out of that PR on 2026-10-19.
   marker appears just before the create (the pattern near the
   `syncBuiltinESMExports` test in test/loadout.test.ts); expect no second
   warning.
+
+Learnings (2026-10-22): the folder check and `readdirSync` now sit inside the
+sweep's never-throw boundary, like each file's removal. The regression test
+needs a state folder outside the loadout home whose parent is a file, so that
+the directory read itself fails.
 
 **D17. MCP start-up inside Codex's grace period.** Codex leaves an optional
 MCP server out of the tool list if it is not ready about 1 s after start-up,
