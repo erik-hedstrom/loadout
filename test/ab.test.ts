@@ -1,4 +1,5 @@
-import { spawn, spawnSync } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
+import * as childProcess from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -8,6 +9,11 @@ import { AB_MODELS, blockers, buildCommand, checkRun, copyOutputs, hiddenResult,
 import { JEV_FALLBACK_NOTE, NO_KEY_WARNING } from '../src/hook.js';
 import { hookShim, toolEvents } from '../bench/stream.js';
 import { claudeUsage, codexUsage, effectiveInput } from '../bench/usage.js';
+
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:child_process')>();
+  return { ...actual, execFileSync: vi.fn(actual.execFileSync) };
+});
 
 const temps: string[] = [];
 const temp = (prefix: string) => { const dir = mkdtempSync(join(tmpdir(), prefix)); temps.push(dir); return dir; };
@@ -522,6 +528,45 @@ describe('resuming and finishing a study', () => {
     expect(() => refuseOtherSettings(dir, options, { ...prov, commit: 'other-commit' })).toThrow(/other settings \(commit\)/);
     expect(() => refuseOtherSettings(dir, options, { ...prov, library: '13 skills, 000000000000' })).toThrow(/other settings \(library\)/);
     refuseOtherSettings(join(dir, 'new'), options, prov);
+  });
+
+  it('fingerprints each tracked diff so a second dirty edit refuses resume', async () => {
+    const dir = temp('loadout-ab-git-');
+    const git = (...args: string[]) => execFileSync('git', args, { cwd: dir, encoding: 'utf8' }).trim();
+    git('init');
+    git('config', 'core.autocrlf', 'false');
+    const file = join(dir, 'tracked.txt');
+    writeFileSync(file, 'original\n');
+    git('add', 'tracked.txt');
+    git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-m', 'fixture');
+    const home = temp('loadout-ab-home-');
+    vi.stubEnv('LOADOUT_HOME', home);
+    const { execFileSync: realExec } = await vi.importActual<typeof import('node:child_process')>('node:child_process');
+    const spy = vi.spyOn(childProcess, 'execFileSync').mockImplementation(((bin: string, args: string[], opts: object) =>
+      realExec(bin, args, { ...opts, cwd: dir })) as typeof execFileSync);
+    try {
+      const clean = provenance();
+      expect(clean.commit).toBe(git('rev-parse', 'HEAD'));
+      writeFileSync(join(dir, 'untracked.txt'), 'ignored');
+      expect(provenance()).toEqual(clean);
+      writeFileSync(file, 'first edit\n');
+      const first = provenance();
+      expect(first.commit).toMatch(/\+dirty-[a-f0-9]{12}$/);
+      const out = study(rows);
+      writeFileSync(join(out, 'config.json'), JSON.stringify({ ...options, ...first }));
+      refuseOtherSettings(out, options, provenance());
+      writeFileSync(file, 'second edit\n');
+      expect(() => refuseOtherSettings(out, options, provenance())).toThrow(/other settings \(commit\)/);
+      git('add', 'tracked.txt');
+      expect(provenance().commit).not.toBe(first.commit);
+      writeFileSync(file, Buffer.from([0, 1]));
+      const binary = provenance();
+      writeFileSync(file, Buffer.from([0, 2]));
+      expect(provenance().commit).not.toBe(binary.commit);
+    } finally {
+      spy.mockRestore();
+      vi.unstubAllEnvs();
+    }
   });
 
   it('refuses a resume after a skill\'s text or description is edited without renaming it', () => {

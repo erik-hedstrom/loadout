@@ -433,11 +433,11 @@ export interface Provenance { commit: string; library: string }
 export function provenance(): Provenance {
   const git = (...args: string[]) => execFileSync('git', args, { cwd: REPO, encoding: 'utf8' }).trim();
   const head = git('rev-parse', 'HEAD');
-  const dirty = git('status', '--porcelain', '--untracked-files=no') !== '';
+  const diff = git('diff', '--no-ext-diff', '--no-textconv', 'HEAD');
   // Each capability's key, name and description, and a skill's SKILL.md text (read through readConfined), hashed and never
   // shown: editing a skill without renaming it still changes what the hook injects.
   const library = scanLibrary(paths.library()).map((c) => [capabilityKey(c), c.name, c.description, c.kind === 'skill' ? readManifest(c.source) ?? '' : ''].join('\0')).sort();
-  return { commit: dirty ? `${head}+dirty` : head, library: `${library.length} capabilities, ${createHash('sha256').update(library.join('\n')).digest('hex').slice(0, 12)}` };
+  return { commit: diff ? `${head}+dirty-${createHash('sha256').update(diff).digest('hex').slice(0, 12)}` : head, library: `${library.length} capabilities, ${createHash('sha256').update(library.join('\n')).digest('hex').slice(0, 12)}` };
 }
 
 const studySettings = (s: Options & Partial<Provenance>) => ({ hosts: s.hosts, ids: s.ids, repeats: s.repeats, models: s.models, maxTurns: s.maxTurns, timeoutS: s.timeoutS, codexHook: s.codexHook, commit: s.commit, library: s.library });
