@@ -1167,7 +1167,7 @@ Learnings (2026-10-09):
 | E9 | P0 | Security hardening from the read-only Sol review | Codex | cloud | done ([PR #4](https://github.com/erik-hedstrom/loadout/pull/4), re-measure [PR #7](https://github.com/erik-hedstrom/loadout/pull/7)) |
 | E3 | P1 | Split the test file per module | Codex | cloud | todo |
 | E5 | P1 | Changelog and release automation | Codex | cloud | todo (with A4) |
-| E6 | P2 | Architecture diagram in DESIGN.md | Claude | cloud | review ([#29](https://github.com/erik-hedstrom/loadout/pull/29)) |
+| E6 | P2 | Architecture diagram in DESIGN.md | Claude | cloud | done ([#29](https://github.com/erik-hedstrom/loadout/pull/29)) |
 | E10 | P1 | Build without optional dependencies | Codex | cloud | done ([PR #8](https://github.com/erik-hedstrom/loadout/pull/8)) |
 | E11 | P1 | Fixed-text diagnostics in the gateway and relay | Codex | cloud | done ([PR #10](https://github.com/erik-hedstrom/loadout/pull/10)) |
 | E12 | P1 | A tool-less Codex bench backend (codex-cli 0.160.1 keeps unified_exec on) | Codex | local | todo |
@@ -1410,6 +1410,21 @@ rather than start a second one.
 
 Acceptance: one SVG or Mermaid diagram of the routing pipeline and the
 integration layers, readable in both light and dark themes.
+
+Learnings (2026-10-12): the Mermaid block replaces the ASCII diagram under
+DESIGN.md "Architecture"; the launcher flags it showed stay in the
+integration table. It sets no colors, so GitHub themes it. Rendered once with
+`npx -y @mermaid-js/mermaid-cli` (with `--no-sandbox`) to check the syntax; not
+viewed on GitHub in light and dark. Mermaid ignores `direction` inside a
+subgraph that has outside edges, so the host boxes wrap. Each label was
+checked against the code on every entry path (launcher, hook, `route`, `mcp`
+stdio and `--http`) with Jev, lexical routing, no key and Jev failure.
+Round 19 kept an edge inventory (every flow in `src/` that enters or leaves a
+node, with file:line) and diffed it against the Mermaid source, because fixes
+for one finding had dropped edges added earlier: the library edges to the
+named-skill step and to `load_skill` went when five edges were folded into one.
+Labels carry only each node's role and key output; limits and conditions live
+in the prose, so they are stated once.
 
 ## Iteration log
 
