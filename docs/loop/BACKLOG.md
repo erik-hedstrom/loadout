@@ -1269,8 +1269,8 @@ all older than it.
   keep `TYPESAFE_API_KEY` in their environment by design. Record whether that
   stands.
 
-Implementation notes and verification: [E16 handoff](E16.md). Config writes
-opt into checking the home itself; cache callers still permit a linked home.
+Learnings (2026-10-22): config writes opt into checking the home itself;
+cache callers still permit a linked home.
 Argument-parser errors and failed add/token-file inputs need fixed diagnostics:
 filesystem errors can quote the same pasted credential as an unknown option.
 
