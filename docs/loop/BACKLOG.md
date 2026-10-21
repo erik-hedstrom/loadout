@@ -729,7 +729,7 @@ binary alone on `PATH`, so the `claude` judge needed no new seam.
 | D14 | P1 | Codex plugin forwards LOADOUT_HOME | Claude | cloud | done ([#36](https://github.com/erik-hedstrom/loadout/pull/36)): Codex gives a stdio MCP server only its default variables plus `env_vars`, so the plugin's `loadout mcp` ignored a custom `LOADOUT_HOME` (and a `"router": "lexical"` profile in it); now forwarded. A relative `LOADOUT_HOME` is now refused (on Windows, anything but a drive-qualified path, so no drive-relative, UNC or device path) and an empty one ignored; the `HOME` (or `USERPROFILE`) fallback must pass the same check. So the working directory or a remote share cannot become the config. An absolute value, including a mapped network drive, is trusted: a project settings `env` that sets one comes from settings that can already run their own hooks. The config the home points to cannot redirect the key (Erik, 2026-10-19): a `jev.baseUrl` other than api.typesafe.ai is refused unless `TYPESAFE_BASE_URL` names the URL. It still chooses `apiKeyFile`, whose content then reaches only that URL, which is why the home must not come from the working directory either. Checked against the Codex source only, not a live run |
 | D16 | P1 | Warn when the hook runs without a TypeSafe key | Claude | cloud | done ([#27](https://github.com/erik-hedstrom/loadout/pull/27)): once per session, as a `systemMessage`, which Claude Code and Codex both show |
 | D18 | P1 | The hook and `load_skill` can offer `load_skill` only, with no folder | Codex | cloud | todo |
-| D19 | P2 | `which()` honours PATHEXT on Windows | Claude | cloud | todo |
+| D19 | P2 | `which()` honours PATHEXT on Windows | Codex | local | implemented ([#TBD]); review pending. Native hosts spawn directly; batch hosts refuse unsupported arguments |
 | D20 | P2 | Hook state writes never drop context or the no-key warning | Claude | cloud | todo |
 
 **D18. The hook and `load_skill` can offer `load_skill` only, with no folder.**
@@ -755,6 +755,21 @@ reports it missing, and so does the launcher. Acceptance: on win32, `which()` al
 (default `.COM;.EXE;.BAT;.CMD`); the launcher spawns a `.cmd` or `.bat` result
 safely (Node refuses them without a shell since the CVE-2024-27980 fix); a test
 covers a host present only as `.exe` and only as `.cmd`.
+
+Implemented: PATH order is preserved, with PATHEXT order inside each folder
+and Windows commands preferred over an adjacent extensionless npm shell shim.
+Init detection and doctor's absolute-PATH lookup use the same discovery;
+doctor's batch version checks retain their credential-free environment.
+Learning: generic batch shims cannot preserve arbitrary prompts safely.
+Batch arguments accept only the ASCII set documented in `hostCommand`
+(`src/launch.ts`), without trailing backslashes; unsupported text (including
+multiline prompts and shell metacharacters), unsafe batch paths and command
+lines over cmd.exe's limit fail before spawning, with fixed text that echoes
+no input. Use a native `.exe` or enter the prompt inside the session instead.
+Native `.exe`/`.com` arguments pass through unchanged without a shell; npm
+shims are not parsed. Windows regression tests cover discovery, init/doctor,
+plain batch arguments, fixed refusals and native metacharacter round-trips.
+Nine guard mutations failed their targeted tests; source bytes were restored.
 
 **D20. Hook state writes never drop context.** From the reviews of #27 (D16);
 Erik kept both out of that PR on 2026-10-19.
