@@ -1,0 +1,1 @@
+Build the landing page for the product in brief.md. One file, index.html, with the CSS inline, no build step, nothing loaded from the network. I want it to look like a page someone designed for this product, not a template with the words swapped, and it has to work well on a phone. Use only the facts in the brief.
