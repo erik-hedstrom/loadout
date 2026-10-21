@@ -36,14 +36,14 @@ Each PR body's **Review state** section has the round-by-round record.
 | PR | Item | State on 2026-10-22 |
 |---|---|---|
 | [#47](https://github.com/erik-hedstrom/loadout/pull/47) | C14 A/B pilot harness; adds B10 | final review round; the clean Codex-only rerun needs a separately logged-in `CODEX_HOME` |
-| [#28](https://github.com/erik-hedstrom/loadout/pull/28) | A1 README rewrite | #36 merged: merge main, then the gate |
+| [#28](https://github.com/erik-hedstrom/loadout/pull/28) | A1 README rewrite | main merged through #49; documentation review fixes awaiting the merge gate |
 
 ## A. Adoption and ease of use
 
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
 | A2 | P0 | `loadout audit`: what your installed skills cost you | Claude | cloud | done ([PR #3](https://github.com/erik-hedstrom/loadout/pull/3)) |
-| A1 | P0 | README rewrite around the problem, 3-command quickstart, GIF | Claude | cloud | review ([#28](https://github.com/erik-hedstrom/loadout/pull/28); GIF waits on A5) |
+| A1 | P0 | README rewrite around the problem, 3-command quickstart, GIF | Claude | cloud | review ([#28](https://github.com/erik-hedstrom/loadout/pull/28); main merged, renewed gate pending; GIF waits on A5) |
 | A3 | P1 | `loadout init` wizard + starter packs | Codex | cloud | done ([#30](https://github.com/erik-hedstrom/loadout/pull/30)) |
 | A4 | P1 | npm package under an available name + release workflow | Codex | cloud + erik | blocked: npm name decision |
 | A5 | P1 | Demo recording (route, launch, hook) | Claude | local | todo (after A1) |
@@ -94,8 +94,13 @@ Acceptance:
 - Reviewed for honesty: the outcome pilot is mixed, so the README must not
   claim better results.
 
-Note (E8 find pass, 2026-10-08): README still leads with the launcher; the
-plugin appears only under "Search mid-session".
+A1 learnings: keep the scope of B1's listing-cost measurement beside the
+README headline, and use a source install until A4 settles the npm name.
+Launcher, library, hook and MCP details belong in `docs/launcher.md`,
+`docs/library.md`, `docs/hook.md` and `docs/mcp.md`; SECURITY.md and DESIGN.md
+hold the security model and router. Keep C8's hook-only plugin results
+distinct from the settings-hook-plus-search result: following injected text
+and better outcomes remain not shown.
 
 **A3. `loadout init` wizard and starter packs.**
 
