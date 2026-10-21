@@ -10,7 +10,7 @@ import { join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { parseArgs } from 'node:util';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { loadConfig, paths, resolveApiKey } from '../src/config.js';
+import { jevBaseUrl, loadConfig, paths, resolveApiKey } from '../src/config.js';
 import { cachedEmbeddings } from '../src/embed.js';
 import { hookOutput, promptContext } from '../src/hook.js';
 import { jevClient, type Answer, type SystemOneClient, type SystemOneResponse } from '../src/jev.js';
@@ -79,8 +79,8 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const rows: { id: string; ms: Partial<Record<Step, number>> }[] = [];
   const dir = join(RESULTS, `${new Date().toISOString().replace(/[:.]/g, '-')}-hook-latency`);
   mkdirSync(dir, { recursive: true });
-  const client = apiKey ? jevClient({ apiKey, baseUrl: config.jev.baseUrl, model: config.jev.model, timeoutMs: 8_000, retries: 0 }) : fakeClient();
-  const endpoint = `${config.jev.baseUrl.replace(/\/$/, '')}/v1/systemone`;
+  const client = apiKey ? jevClient({ apiKey, baseUrl: jevBaseUrl(config), model: config.jev.model, timeoutMs: 8_000, retries: 0 }) : fakeClient();
+  const endpoint = `${jevBaseUrl(config).replace(/\/$/, '')}/v1/systemone`;
   for (const request of requests) {
     const ms: Partial<Record<Step, number>> = {};
     const time = async <T>(step: Step, run: () => T | Promise<T>): Promise<T> => {

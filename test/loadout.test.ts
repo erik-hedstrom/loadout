@@ -1,13 +1,13 @@
 import fs, { chmodSync, existsSync, lutimesSync, utimesSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import crypto, { createHash } from 'node:crypto';
 import { syncBuiltinESMExports } from 'node:module';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { basename, join, relative } from 'node:path';
+import { basename, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { parse as parseToml } from 'smol-toml';
-import { DEFAULT_CONFIG, type Config } from '../src/config.js';
+import { DEFAULT_CONFIG, jevBaseUrl, loadoutHome, type Config } from '../src/config.js';
 import { jevClient, JevError, validateResponse, type Question, type SystemOneClient } from '../src/jev.js';
 import { claudeArgs, claudeHookSettings, codexArgs, escapeSkillTags, hookCommand, hostSetup, isolateConflict, launch, loaderArgs, materialize, searchServer, toToml } from '../src/launch.js';
 import { hookOutput, isFollowUp, HOOK_FAILURE_NOTE, JEV_FALLBACK_NOTE, noKeyWarning, NO_KEY_WARNING, promptContext } from '../src/hook.js';
@@ -75,10 +75,127 @@ function fakeClient(relevance: Record<string, number>, opts: { tier?: string; ne
 
 describe('E9 security', () => {
   const config = { ...DEFAULT_CONFIG, search: false, embeddings: false };
+
   const runRoute = async (library: ReturnType<typeof scanLibrary>) => {
     const { client } = fakeClient(Object.fromEntries(library.map((c) => [c.name, 0.99])));
     return route({ task: TASK, repo: REPO, library, config, client });
   };
+
+  it('ignores an empty LOADOUT_HOME and refuses a relative one or a relative home fallback, so the working directory cannot supply the config', () => {
+    try {
+      vi.stubEnv('LOADOUT_HOME', '');
+      expect(loadoutHome()).toBe(join(homedir(), '.loadout'));
+      for (const value of ['.loadout', './x', 'x/../y']) {
+        vi.stubEnv('LOADOUT_HOME', value);
+        expect(() => loadoutHome()).toThrow('absolute');
+      }
+      vi.stubEnv('LOADOUT_HOME', '');
+      for (const value of ['.', '', 'repo']) {
+        vi.stubEnv('HOME', value);
+        vi.stubEnv('USERPROFILE', value);
+        // On Windows libuv itself rejects a relative USERPROFILE (ENOENT), before our check runs; either way it throws.
+        expect(() => loadoutHome(), value).toThrow(/absolute|uv_os_homedir/);
+      }
+      vi.unstubAllEnvs();
+      const absolute = join(tmpdir(), 'loadout-home');
+      vi.stubEnv('LOADOUT_HOME', absolute);
+      expect(loadoutHome()).toBe(absolute);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('accepts only a drive-qualified LOADOUT_HOME on Windows, not a drive-relative, UNC or device path', () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')!;
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+    try {
+      for (const unsafe of ['\\loadout', '/loadout', '\\\\attacker\\share\\loadout', '//attacker/share/loadout', '\\\\?\\UNC\\attacker\\share', '\\\\.\\C:\\loadout', 'C:loadout']) {
+        vi.stubEnv('LOADOUT_HOME', unsafe);
+        expect(() => loadoutHome(), unsafe).toThrow('drive letter');
+      }
+      for (const local of ['C:\\Users\\me\\.loadout', 'd:/loadout']) {
+        vi.stubEnv('LOADOUT_HOME', local);
+        expect(loadoutHome()).toBe(local);
+      }
+    } finally {
+      Object.defineProperty(process, 'platform', platform);
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('sends the key to a config.json Jev URL only when TYPESAFE_BASE_URL names it', () => {
+    try {
+      vi.stubEnv('TYPESAFE_BASE_URL', '');
+      expect(jevBaseUrl(DEFAULT_CONFIG)).toBe('https://api.typesafe.ai');
+      const redirected = { ...DEFAULT_CONFIG, jev: { ...DEFAULT_CONFIG.jev, baseUrl: 'https://attacker.example' } };
+      expect(() => jevBaseUrl(redirected)).toThrow('TYPESAFE_BASE_URL');
+      vi.stubEnv('TYPESAFE_BASE_URL', ' https://staging.example ');
+      expect(jevBaseUrl(redirected)).toBe('https://staging.example');
+      expect(jevBaseUrl(DEFAULT_CONFIG)).toBe('https://staging.example');
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  // The end-to-end case behind the rule: a home chosen through the environment (e.g. /proc/self/cwd/.loadout)
+  // supplies a config.json that points Jev at a listener. The CLI must fail before any request carries the key.
+  it('never contacts a Jev URL that only config.json names', async () => {
+    const requests: (string | undefined)[] = [];
+    const listener = createHttpServer((req, res) => {
+      requests.push(req.headers.authorization);
+      res.writeHead(401).end();
+    });
+    await new Promise<void>((done) => listener.listen(0, '127.0.0.1', done));
+    try {
+      const url = `http://127.0.0.1:${(listener.address() as { port: number }).port}`;
+      const home = tempDir('loadout-e9-');
+      mkdirSync(join(home, 'library', 'skills', 'demo'), { recursive: true });
+      writeFileSync(join(home, 'library', 'skills', 'demo', 'SKILL.md'), '---\nname: demo\ndescription: Demo skill for testing the key rule.\n---\nBody.\n');
+      // No embeddings: the model load would dominate the run time and is not what this test checks.
+      writeFileSync(join(home, 'config.json'), JSON.stringify({ jev: { baseUrl: url }, embeddings: false }));
+      const canary = 'e9-key-canary';
+      const routeIn = (env: NodeJS.ProcessEnv) => new Promise<{ code: number | null; out: string }>((done) => {
+        const child = spawn(process.execPath, ['--import', 'tsx', join(import.meta.dirname, '../src/cli.ts'), 'route', TASK], { env });
+        let out = '';
+        child.stdout.on('data', (d) => (out += d));
+        child.stderr.on('data', (d) => (out += d));
+        child.on('close', (code) => done({ code, out }));
+      });
+      const routeWith = (extra: Record<string, string>) => routeIn({ ...process.env, LOADOUT_HOME: home, TYPESAFE_API_KEY: canary, TYPESAFE_BASE_URL: '', ...extra });
+      const refused = await routeWith({});
+      expect(refused.code).not.toBe(0);
+      expect(refused.out).toContain('TYPESAFE_BASE_URL');
+      expect(refused.out).not.toContain(canary);
+      expect(requests).toEqual([]);
+      // The hook, which runs on every prompt, must refuse too; it fails quietly (exit 0, a note on stderr).
+      // Asynchronous, so the listener can record a request while the hook runs.
+      const hook = await new Promise<string>((done) => {
+        const child = spawn(process.execPath, ['--import', 'tsx', join(import.meta.dirname, '../src/cli.ts'), 'hook', 'claude'], {
+          env: { ...process.env, LOADOUT_HOME: home, TYPESAFE_API_KEY: canary, TYPESAFE_BASE_URL: '' },
+        });
+        let out = '';
+        child.stdout.on('data', (d) => (out += d));
+        child.stderr.on('data', (d) => (out += d));
+        child.on('close', () => done(out));
+        child.stdin.end(JSON.stringify({ prompt: TASK, cwd: home, session_id: 'e9' }));
+      });
+      expect(hook).not.toContain(canary);
+      expect(requests).toEqual([]);
+      // Named outside config.json, the same URL does receive the key.
+      await routeWith({ TYPESAFE_BASE_URL: url });
+      expect(requests).toEqual([`Bearer ${canary}`]);
+      // Codex starts the plugin's server with its own baseline variables plus the plugin's env_vars only, so
+      // the URL must be among them: run with exactly that environment.
+      const plugin = JSON.parse(readFileSync(join(import.meta.dirname, '../plugins/loadout-codex/.mcp.json'), 'utf8'));
+      const shell: NodeJS.ProcessEnv = { ...process.env, LOADOUT_HOME: home, TYPESAFE_API_KEY: canary, TYPESAFE_BASE_URL: url };
+      const baseline = ['PATH', 'HOME', 'USERPROFILE', 'SYSTEMROOT', 'TEMP', 'TMP', 'TMPDIR'];
+      const keep = new Set([...baseline, ...plugin.mcpServers.loadout.env_vars].map((name: string) => name.toUpperCase()));
+      await routeIn(Object.fromEntries(Object.entries(shell).filter(([name]) => keep.has(name.toUpperCase()))));
+      expect(requests).toEqual([`Bearer ${canary}`, `Bearer ${canary}`]);
+    } finally {
+      listener.close();
+    }
+  }, 60_000);
 
   it('redacts MCP values in list JSON, route JSON and saved decisions', async () => {
     const home = tempDir('loadout-e9-');
@@ -986,7 +1103,7 @@ describe('launch', () => {
 
     const codex = materialize(decision, 'codex', DEFAULT_CONFIG, tempDir('loadout-s-'));
     const overrides = codexArgs(codex, TASK, []).filter((a) => a.startsWith('mcp_servers.'));
-    expect(overrides[0]).toMatch(/^mcp_servers\.loadout=\{ "command" = .*"env_vars" = \["TYPESAFE_API_KEY"\], "tools" = \{ "find_tools" = \{ "approval_mode" = "approve" \}, "load_skill" = \{ "approval_mode" = "approve" \} \} \}$/);
+    expect(overrides[0]).toMatch(/^mcp_servers\.loadout=\{ "command" = .*"env_vars" = \["TYPESAFE_API_KEY", "TYPESAFE_BASE_URL"\], "tools" = \{ "find_tools" = \{ "approval_mode" = "approve" \}, "load_skill" = \{ "approval_mode" = "approve" \} \} \}$/);
     expect(overrides[0]).not.toContain('call_server_tool');
     expect(codexArgs(codex, TASK, []).at(-1)).toContain('loadout find_tools tool');
 
@@ -997,13 +1114,33 @@ describe('launch', () => {
     expect(win.args!.slice(-2)).toEqual(['mcp', '--windows-paths']);
   });
 
+  // Codex does not pass WSLENV, so only the command line reaches the WSL side: without this, a Jev URL set
+  // outside config.json would never arrive and the server would refuse or use the default host.
+  it('carries LOADOUT_HOME and TYPESAFE_BASE_URL across wsl.exe in the command, never the key', () => {
+    try {
+      vi.stubEnv('LOADOUT_HOME', '/home/me/.loadout');
+      vi.stubEnv('TYPESAFE_BASE_URL', 'https://staging.example');
+      vi.stubEnv('TYPESAFE_API_KEY', 'wsl-key-canary');
+      const args = searchServer(true).args!;
+      const env = args.indexOf('/usr/bin/env');
+      expect(args.slice(env, env + 3)).toEqual(['/usr/bin/env', 'LOADOUT_HOME=/home/me/.loadout', 'TYPESAFE_BASE_URL=https://staging.example']);
+      expect(args.indexOf('--exec')).toBeLessThan(env);
+      expect(args.join(' ')).not.toContain('wsl-key-canary');
+      vi.stubEnv('LOADOUT_HOME', '');
+      vi.stubEnv('TYPESAFE_BASE_URL', '');
+      expect(searchServer(true).args).not.toContain('/usr/bin/env');
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('prints host configs that attach the search server', () => {
     const codexWsl = hostSetup('codex', true);
     const codex = codexWsl.snippet;
     expect(codexWsl.where).toContain('WSL');
     expect(codex).not.toContain('codex plugin add');
     expect(codex).toMatch(/\[mcp_servers\.loadout\]\ncommand = "wsl\.exe"\nargs = \[.*"mcp", "--windows-paths"\]/);
-    expect(codex).toContain('env_vars = ["TYPESAFE_API_KEY"]');
+    expect(codex).toContain('env_vars = ["TYPESAFE_API_KEY", "TYPESAFE_BASE_URL"]');
     // Codex waits for a required server before the first request (D17).
     expect(parseToml(codex)).toMatchObject({ mcp_servers: { loadout: { command: 'wsl.exe', required: true } } });
     expect(codex).toContain('[mcp_servers.loadout.tools.find_tools]\napproval_mode = "approve"');
@@ -1507,10 +1644,7 @@ describe('cache and state folders under the loadout home', () => {
     // Not under the home: not ours to police, however it is spelled.
     expect(isPlainFolder(outside)).toBe(true);
     expect(isPlainFolder(join(dir, '..', 'elsewhere'))).toBe(true);
-    // A relative home, and a home that is itself a link, are fine.
-    vi.stubEnv('LOADOUT_HOME', relative(process.cwd(), dir));
-    expect(isPlainFolder(join(dir, 'index'))).toBe(true);
-    expect(isPlainFolder(join(dir, 'linked'))).toBe(false);
+    // A home that is itself a link is fine. (A relative home is refused by loadoutHome, tested under E9.)
     const homeLink = join(tempDir('loadout-link-'), 'home');
     symlinkSync(dir, homeLink);
     vi.stubEnv('LOADOUT_HOME', homeLink);

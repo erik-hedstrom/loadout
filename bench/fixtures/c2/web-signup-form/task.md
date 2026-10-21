@@ -1,0 +1,3 @@
+The signup form (signup.html, signup.js) sends whatever is typed, even empty fields. Add client-side validation: a valid-looking email, a password of at least 10 characters with at least one number, the two passwords matching, and the terms box checked.
+
+Each error should show next to its field, and screen reader users need to hear it. Don't touch the fetch call in signup.js. Put the rules in validate.js as `validate({ email, password, confirm, terms })`, which returns an object with one message per failing field (keys email, password, confirm, terms) and an empty object when everything is valid, so I can test it without a browser. Add a few tests I can run with `node --test`.

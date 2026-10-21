@@ -2,7 +2,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
-import { DEFAULT_CONFIG, loadConfig, paths, resolveApiKey, writeDefaultConfig, type Config } from './config.js';
+import { DEFAULT_CONFIG, jevBaseUrl, loadConfig, paths, resolveApiKey, writeDefaultConfig, type Config } from './config.js';
 import { jevClient } from './jev.js';
 import { claudeArgs, codexArgs, hostSetup, HOSTS, isolateConflict, launch, materialize, pathTranslator, which, windowsPath, type Agent, type Host } from './launch.js';
 import { addFromGitHub, addSkills, librarySources, parseGitHub, scanLibrary, skillExcerpt, type AddResult } from './library.js';
@@ -63,7 +63,7 @@ function router(config: Config, lexical: boolean) {
   if (!apiKey && !lexical && config.router === 'jev') {
     console.error('loadout: no TypeSafe API key found; falling back to the lexical router');
   }
-  return apiKey ? jevClient({ apiKey, baseUrl: config.jev.baseUrl, model: config.jev.model }) : undefined;
+  return apiKey ? jevClient({ apiKey, baseUrl: jevBaseUrl(config), model: config.jev.model }) : undefined;
 }
 
 /** `loadout add` for each spec, printing what happened; returns how many failed. */
@@ -175,7 +175,7 @@ async function runHook(rest: string[]): Promise<number> {
     const config = loadConfig();
     const apiKey = config.router === 'jev' ? resolveApiKey(config) : undefined;
     // No retries and a short timeout: two Jev requests must fit well inside the deadline.
-    const client = apiKey ? jevClient({ apiKey, baseUrl: config.jev.baseUrl, model: config.jev.model, timeoutMs: 8_000, retries: 0 }) : undefined;
+    const client = apiKey ? jevClient({ apiKey, baseUrl: jevBaseUrl(config), model: config.jev.model, timeoutMs: 8_000, retries: 0 }) : undefined;
     const stateDir = join(paths.sessions(), 'hook');
     // Follow-ups add no context, so skip the library and embedding startup cost.
     const context = isFollowUp(prompt) ? undefined : await promptContext(input, {
@@ -381,7 +381,7 @@ async function main(): Promise<number> {
     }
 
     case 'doctor': {
-      const checks = await doctor(config, (apiKey) => jevClient({ apiKey, baseUrl: config.jev.baseUrl, model: config.jev.model, retries: 0 }));
+      const checks = await doctor(config, (apiKey) => jevClient({ apiKey, baseUrl: jevBaseUrl(config), model: config.jev.model, retries: 0 }));
       if (configError) checks.unshift({ name: 'config', ok: false, detail: configError, fix: `fix or delete ${paths.config()}; the other checks used the defaults` });
       console.log(formatDoctor(checks));
       return checks.every((c) => c.ok) ? 0 : 1;

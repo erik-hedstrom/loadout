@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 import type { FitMeasure } from './route.js';
 import type { Tier } from './types.js';
 
@@ -91,7 +91,14 @@ export const DEFAULT_CONFIG: Config = {
 };
 
 export function loadoutHome(): string {
-  return process.env.LOADOUT_HOME ?? join(homedir(), '.loadout');
+  // The fallback is checked too: homedir() returns an inherited HOME (or USERPROFILE) as is, so `HOME=.` or `HOME=` is relative.
+  const home = process.env.LOADOUT_HOME || join(homedir(), '.loadout');
+  // A relative value resolves against the working directory, which for a host-started server can be the open repo:
+  // the repo would then supply the config (including the Jev URL the key is sent to) and the skills.
+  // On Windows, isAbsolute() also accepts `\x` (relative to the current drive) and UNC or device paths (a remote share).
+  const absolute = process.platform === 'win32' ? /^[A-Za-z]:[\\/]/.test(home) : isAbsolute(home);
+  if (!absolute) throw new Error('LOADOUT_HOME, or the home directory when it is unset, must be an absolute path (on Windows, starting with a drive letter)');
+  return home;
 }
 
 export const paths = {
@@ -170,6 +177,21 @@ export function writeDefaultConfig(overrides: Partial<Config['jev']> = {}): stri
 /** The environment for a child process that needs no loadout credential. Windows matches env names in any case. */
 export function withoutKey(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   return Object.fromEntries(Object.entries(env).filter(([name]) => name.toUpperCase() !== 'TYPESAFE_API_KEY'));
+}
+
+/**
+ * Where the key may be sent. Whoever sets LOADOUT_HOME picks config.json (for a host-started server, possibly
+ * through the open repository), so config.json alone must not redirect the key: a URL other than the default
+ * has to come from TYPESAFE_BASE_URL, which the user sets outside it. A config.json URL that differs from the
+ * default is refused, not ignored, so a setup that relied on it fails loudly instead of quietly switching hosts.
+ */
+export function jevBaseUrl(config: Config): string {
+  const fromEnv = process.env.TYPESAFE_BASE_URL?.trim();
+  if (fromEnv) return fromEnv;
+  if (config.jev.baseUrl !== DEFAULT_CONFIG.jev.baseUrl) {
+    throw new Error('jev.baseUrl in config.json is not the default; the key is sent to another host only when TYPESAFE_BASE_URL names it');
+  }
+  return config.jev.baseUrl;
 }
 
 export function resolveApiKey(config: Config): string | undefined {

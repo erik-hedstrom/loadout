@@ -371,6 +371,9 @@ server, up to its start-up timeout.
 
 Tier-to-model mapping, thresholds and caps live in `~/.loadout/config.json`
 (only your overrides are stored; everything else follows the defaults).
+The key goes only to `https://api.typesafe.ai` unless `TYPESAFE_BASE_URL`
+names another URL; a different `jev.baseUrl` in `config.json` is refused, so
+a config file alone cannot send your key elsewhere.
 
 ## Development
 

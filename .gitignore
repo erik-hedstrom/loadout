@@ -2,6 +2,7 @@ node_modules/
 dist/
 .env
 *.log
+!bench/fixtures/**/*.log
 bench/data/corpus.jsonl
 bench/data/popular.jsonl
 bench/data/embeddings/

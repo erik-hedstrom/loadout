@@ -7,7 +7,7 @@
  *   npx tsx bench/handwritten.ts
  */
 import { join } from 'node:path';
-import { loadConfig, paths, resolveApiKey } from '../src/config.js';
+import { jevBaseUrl, loadConfig, paths, resolveApiKey } from '../src/config.js';
 import { jevClient } from '../src/jev.js';
 import { scanLibrary, skillExcerpt } from '../src/library.js';
 import { route } from '../src/route.js';
@@ -18,7 +18,7 @@ const cases = readJsonl<Case>(join(DATA, 'handwritten.jsonl'));
 const config = loadConfig();
 const apiKey = resolveApiKey(config);
 if (!apiKey) throw new Error('needs a TypeSafe key');
-const client = jevClient({ apiKey, baseUrl: config.jev.baseUrl, model: config.jev.model });
+const client = jevClient({ apiKey, baseUrl: jevBaseUrl(config), model: config.jev.model });
 const library = scanLibrary(paths.library());
 const repo = { name: 'app', files: [], dependencies: [], languages: {} };
 

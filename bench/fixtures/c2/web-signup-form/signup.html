@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Create your account</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 26rem; margin: 3rem auto; padding: 0 1rem; }
+    label { display: block; margin-top: 1rem; font-weight: 600; }
+    input[type=email], input[type=password] { width: 100%; padding: .5rem; box-sizing: border-box; }
+    button { margin-top: 1.5rem; padding: .6rem 1.2rem; }
+    .error { color: #b00020; font-size: .9rem; margin: .25rem 0 0; }
+  </style>
+</head>
+<body>
+  <h1>Create your account</h1>
+  <form id="signup" novalidate>
+    <label for="email">Email</label>
+    <input id="email" name="email" type="email" autocomplete="email">
+
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" autocomplete="new-password">
+
+    <label for="confirm">Confirm password</label>
+    <input id="confirm" name="confirm" type="password" autocomplete="new-password">
+
+    <label><input id="terms" name="terms" type="checkbox"> I agree to the terms of service</label>
+
+    <button type="submit">Sign up</button>
+    <p id="status" role="status"></p>
+  </form>
+  <script src="signup.js"></script>
+</body>
+</html>
