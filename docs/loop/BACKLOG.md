@@ -770,17 +770,10 @@ Erik kept both out of that PR on 2026-10-19.
   `syncBuiltinESMExports` test in test/loadout.test.ts); expect no second
   warning.
 
-Learnings (2026-10-22): `writeState` now catches directory-check and sweep
-failures as well as individual stale-file failures. The named-skill regression
-uses a state folder outside the loadout home with a file as its parent, so it
-reaches the failing directory read. It checks that both context and the no-key
-warning survive. The marker race test creates a competing marker immediately
-before the real write and checks that it is neither overwritten nor warned
-again. Both mutations fail their regression tests: removing the sweep guard
-and replacing `wx` with check-then-write. Source bytes were restored afterward.
-Windows verification: `npm test` passed (18 files, 544 tests, 17 platform
-skips); `npm run typecheck`, `npm run build` and `git diff --check` passed.
-Review and the full CI matrix remain for the orchestrator; no PR opened here.
+Learnings (2026-10-22): the folder check and `readdirSync` now sit inside the
+sweep's never-throw boundary, like each file's removal. The regression test
+needs a state folder outside the loadout home whose parent is a file, so that
+the directory read itself fails.
 
 **D17. MCP start-up inside Codex's grace period.** Codex leaves an optional
 MCP server out of the tool list if it is not ready about 1 s after start-up,
