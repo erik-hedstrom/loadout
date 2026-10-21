@@ -703,6 +703,30 @@ describe('public text sinks', () => {
   });
 });
 
+describe('subprocess stderr isolation', () => {
+  it.each(['version', 'provenance'])('captures stderr from a failed %s probe', async (probe) => {
+    const dir = temp('loadout-ab-stderr-');
+    const marker = join(dir, 'started');
+    const script = join(dir, 'fail.mjs');
+    const held = 'synthetic-held-secret';
+    writeFileSync(script, `import { writeFileSync } from 'node:fs'; writeFileSync(${JSON.stringify(marker)}, 'started'); process.stderr.write('${held}'); process.exit(1);`);
+    const { execFileSync: realExec } = await vi.importActual<typeof import('node:child_process')>('node:child_process');
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      if (probe === 'version') {
+        vi.spyOn(overhead, 'cli').mockReturnValue({ bin: process.execPath, prefix: [script] });
+        await main(['--plan', '--hosts', 'codex'], { print: () => {}, env: { CODEX_HOME: join(dir, 'codex') } });
+      } else {
+        vi.spyOn(childProcess, 'execFileSync').mockImplementation(((_bin: string, _args: string[], opts: object) =>
+          realExec(process.execPath, [script], opts)) as typeof execFileSync);
+        expect(() => provenance()).toThrow();
+      }
+      expect(readFileSync(marker, 'utf8')).toBe('started');
+      expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).not.toContain(held);
+    } finally { vi.restoreAllMocks(); vi.mocked(childProcess.execFileSync).mockImplementation(realExec); }
+  });
+});
+
 describe('credential screening before persistence', () => {
   const cases = ['warmup', 'measured'].flatMap((when) => [
     ...['binary', 'node_modules', '.env', 'path', 'stdout', 'stderr', 'hook', 'hook stderr'].map((where) => ({ when, where, kind: 'held' })),

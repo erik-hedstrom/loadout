@@ -360,7 +360,7 @@ export function planLines(o: Options, env: NodeJS.ProcessEnv = process.env, root
 
 function version(host: Host): string {
   const c = cli(host);
-  const text = execFileSync(c.bin, [...c.prefix, '--version'], { encoding: 'utf8', timeout: 30_000 }).trim();
+  const text = execFileSync(c.bin, [...c.prefix, '--version'], { encoding: 'utf8', timeout: 30_000, stdio: ['ignore', 'pipe', 'pipe'] }).trim();
   return /\d+\.\d+\.\d+\S*/.exec(text)?.[0] ?? text;
 }
 
@@ -448,7 +448,7 @@ export interface Provenance { commit: string; library: string }
 
 /** Tracked changes count as a different commit; untracked files (this study's own results) do not. */
 export function provenance(): Provenance {
-  const git = (...args: string[]) => execFileSync('git', args, { cwd: REPO, encoding: 'utf8' }).trim();
+  const git = (...args: string[]) => execFileSync('git', args, { cwd: REPO, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
   const head = git('rev-parse', 'HEAD');
   const diff = git('diff', '--no-ext-diff', '--no-textconv', 'HEAD');
   // Each capability's key, name and description, and a skill's SKILL.md text (read through readConfined), hashed and never
