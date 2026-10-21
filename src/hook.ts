@@ -69,14 +69,18 @@ const STATE_FILE = /^[0-9a-f]{32}\.(json(\.[0-9a-f-]{36}\.tmp|\.\d+\.\d+\.tmp)?|
 
 function writeState(dir: string, file: string, state: SessionState): void {
   writeCacheFile(dir, basename(file), JSON.stringify({ offered: [...state.offered], injected: [...state.injected], updatedAt: new Date().toISOString() }), 'hook state');
-  if (!isPlainFolder(dir)) return;
-  for (const f of readdirSync(dir)) {
-    const p = join(dir, f);
-    try {
-      if (STATE_FILE.test(f) && Date.now() - lstatSync(p).mtimeMs > STATE_TTL_MS) rmSync(p, { force: true });
-    } catch {
-      // Removed by another session meanwhile.
+  try {
+    if (!isPlainFolder(dir)) return;
+    for (const f of readdirSync(dir)) {
+      const p = join(dir, f);
+      try {
+        if (STATE_FILE.test(f) && Date.now() - lstatSync(p).mtimeMs > STATE_TTL_MS) rmSync(p, { force: true });
+      } catch {
+        // Removed by another session meanwhile.
+      }
     }
+  } catch {
+    // Cleanup must not discard context when the state folder is unreadable or disappears.
   }
 }
 

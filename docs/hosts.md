@@ -21,8 +21,8 @@ The columns:
   selection.
 - **Tier:** the launch also sets the model for the chosen tier. Hosts without
   a launch keep the user's model.
-- **Hook:** a prompt hook routes every prompt and adds the skills that fit as
-  context.
+- **Hook:** a prompt hook routes each substantive prompt and adds the skills
+  predicted to fit as context.
 - **Search:** `find_tools` and `load_skill` over MCP. `find_tools` covers
   the library's skills and its gateway servers.
 - **Gateway:** `server_tools` and `call_server_tool`, for library servers
@@ -34,10 +34,10 @@ Notes:
    read, the selected MCP server's tool was called, and an injected skill was
    followed ([RESULTS](../bench/RESULTS.md#end-to-end-in-the-agents)).
 2. The launch passes the tier's model (`--model`, `-m`). No recorded run
-   shows a tier choice reaching the agent, and whether Jev picks sensible
-   tiers is not shown (backlog C3).
+   shows a tier choice reaching the agent.
 3. The plugin, one `claude -p --plugin-dir` run, 2026-10-08
-   ([RESULTS](../bench/RESULTS.md#the-hook-plugin-in-the-claude-code-cli-2026-10-08)).
+   ([RESULTS](../bench/RESULTS.md#the-hook-plugin-in-the-claude-code-cli-2026-10-08)). The
+   marketplace install is untested.
    The settings-file hook ran in 10 sessions on 2026-10-07
    ([RESULTS](../bench/RESULTS.md#do-agents-use-what-they-are-given)).
 4. 10 headless sessions per host with the search server attached, 2026-10-06
@@ -55,11 +55,10 @@ Notes:
 7. The launcher attached the server with `-c mcp_servers.…` (2026-10-06,
    as in note 1). The plugin's search server was listed as enabled, without
    starting it.
-   The Codex plugin attaches search on every request; its per-request token
-   cost in Codex is not measured.
-   WSL loadout behind Windows Codex needs `loadout setup codex --windows`:
-   its TOML supplies the machine-specific `wsl.exe` wrapper the plugin's
-   fixed PATH commands cannot carry. This fallback is untested in a host.
-8. `loadout mcp --http`; see the [README](../README.md#search-mid-session-from-any-mcp-host).
+   The token cost of the Codex plugin's search server in Codex is not
+   measured.
+   For WSL behind Windows Codex: [hook plugins](hook.md#codex-cli); that
+   TOML path is untested in a host.
+8. `loadout mcp --http`; see [library search over MCP](mcp.md#chatgpt-over-http).
 
 Backlog D3 tests the desktop and IDE hosts by hand and updates this table.
