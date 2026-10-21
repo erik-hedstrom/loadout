@@ -10,7 +10,7 @@
  *
  *   npx tsx bench/agree.ts <before>/decisions.jsonl <after-1>/decisions.jsonl <after-2>/decisions.jsonl
  */
-import { readJsonl, splitOf, wilson } from './lib.js';
+import { exactSignTest, readJsonl, splitOf, wilson } from './lib.js';
 
 interface Row { id: string; loaded: { key: string }[]; warning?: string }
 
@@ -22,13 +22,6 @@ const metrics: Record<string, (r: Row) => string> = {
   'load-vs-quiet': (r) => String(r.loaded.length > 0),
 };
 
-/** Exact two-sided McNemar p-value for b and c discordant pairs. */
-function mcnemar(b: number, c: number): number {
-  const n = b + c;
-  let tail = 0;
-  for (let i = 0, coef = 1; i <= Math.min(b, c); coef = (coef * (n - i)) / (i + 1), i++) tail += coef;
-  return Math.min(1, (2 * tail) / 2 ** n);
-}
 const count = (xs: boolean[]) => {
   const k = xs.filter(Boolean).length;
   return `${k}/${xs.length} (${(100 * k / xs.length).toFixed(1)}%, ${wilson(k, xs.length)})`;
@@ -44,7 +37,7 @@ for (const split of ['test', 'dev', 'all'] as const) {
       const cross = agree(before!, after);
       const b = ids.filter((_, i) => floor[i] && !cross[i]).length;
       const c = ids.filter((_, i) => !floor[i] && cross[i]).length;
-      lines.push(`${label} ${count(cross)}, discordant ${b} vs ${c}, McNemar p = ${mcnemar(b, c).toFixed(3)}`);
+      lines.push(`${label} ${count(cross)}, discordant ${b} vs ${c}, McNemar p = ${exactSignTest(b, c).toFixed(3)}`);
     }
     console.log(`${split}, same ${name}: ${lines.join('; ')}`);
   }

@@ -186,6 +186,21 @@ export const wilson = (k: number, n: number): string => {
   return `${(100 * Math.max(0, c - h)).toFixed(0)}–${(100 * Math.min(1, c + h)).toFixed(0)}%`;
 };
 
+/** Exact two-sided sign test (McNemar on discordant pairs): p of a split at least as uneven as b vs c if both were equally likely. */
+export function exactSignTest(b: number, c: number): number {
+  const n = b + c;
+  let tail = 0;
+  for (let i = 0, coef = 1; i <= Math.min(b, c); coef = (coef * (n - i)) / (i + 1), i++) tail += coef;
+  return Math.min(1, (2 * tail) / 2 ** n);
+}
+
+/** P(a random positive scores above a random negative), ties counting half; NaN when either side is empty. */
+export function auc(pos: number[], neg: number[]): number {
+  let s = 0;
+  for (const p of pos) for (const n of neg) s += p > n ? 1 : p === n ? 0.5 : 0;
+  return pos.length && neg.length ? s / (pos.length * neg.length) : NaN;
+}
+
 let codexToolsChecked = false;
 
 export async function modelJson<T>(prompt: string, schema: z.ZodType<T>, opts: {

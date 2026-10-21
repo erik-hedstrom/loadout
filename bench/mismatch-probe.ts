@@ -12,7 +12,7 @@ import { parseArgs } from 'node:util';
 import { jevBaseUrl, loadConfig, paths, resolveApiKey } from '../src/config.js';
 import { jevClient, type Question } from '../src/jev.js';
 import { capabilityKey, scanLibrary } from '../src/library.js';
-import { pool, readJsonl } from './lib.js';
+import { auc, pool, readJsonl } from './lib.js';
 import type { SweepRow } from './sweep.js';
 
 const MISMATCH_QUESTIONS = {
@@ -61,11 +61,6 @@ await pool(rows.filter((r) => r.loaded.length), 4, async (r) => {
   });
 });
 
-const auc = (pos: number[], neg: number[]) => {
-  let s = 0;
-  for (const p of pos) for (const n of neg) s += p > n ? 1 : p === n ? 0.5 : 0;
-  return pos.length && neg.length ? s / (pos.length * neg.length) : NaN;
-};
 const lines: string[] = [`${obs.length} loads, ${tokens} tokens ($${((tokens / 1e6) * config.jev.inputPricePerMTok).toFixed(4)})`];
 for (const q of Object.keys(MISMATCH_QUESTIONS)) {
   const of = (l: Label) => obs.filter((o) => o.label === l).map((o) => o.scores[q]!);
