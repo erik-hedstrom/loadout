@@ -3,6 +3,8 @@ import type { Host } from './overhead.js';
 import type { Arm } from './pairwise.js';
 import type { RequestUsage, RunUsage } from './usage.js';
 
+export interface Leak { file: string; rule: 'held secret' | 'token shape' }
+
 export interface RunRow {
   id: string;
   host: Host;
@@ -38,8 +40,8 @@ export interface RunRow {
   hook: { invocations: number; contextChars: number; listed: string[]; injected: string[] };
   hiddenTest: { passed: boolean; tests: number; failed: number } | null;
   invalid?: string;
-  /** Set with `invalid: 'credential in output'`: the file and rule that stopped the copy, never the matched text. */
-  leak?: { file: string; rule: 'held secret' | 'token shape' };
+  /** Set with `invalid: 'credential in output'`: the source and rule that stopped persistence, never the matched text. */
+  leak?: Leak;
 }
 
 export interface Verdict {

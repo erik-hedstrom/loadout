@@ -23,7 +23,7 @@ import { loadConfig, paths, resolveApiKey } from '../src/config.js';
 import { JEV_FALLBACK_NOTE, NO_KEY_WARNING } from '../src/hook.js';
 import { hookCommand, SEARCH_SERVER, SEARCH_TOOLS, searchServer, toToml } from '../src/launch.js';
 import { capabilityKey, readManifest, scanLibrary } from '../src/library.js';
-import { report, type RunRow, type Verdict } from './ab-report.js';
+import { report, type Leak, type RunRow, type Verdict } from './ab-report.js';
 import { codexJudgeRefusal, DATA, modelJson, readJsonl, RESULTS, run } from './lib.js';
 import { CLAUDE_MANAGED_PRECONDITION, CLAUDE_SCRUB_PRECONDITION, CLAUDE_SETTINGS, CLAUDE_SWITCH_PRECONDITION, CODEX_CLOUD_PRECONDITION, childEnv, claudeEnv, envAllowlist, hostWrites, redacted, refusedFiles, resetWork } from './mcp-overhead.js';
 import { assertTemporary, claudeIsolation, cli, execute, validateFeatures, type Command, type Host } from './overhead.js';
@@ -208,9 +208,6 @@ export function scrub(text: string, folders: [string, string][]): string {
 /** Not a value the harness holds, but what Codex's login tokens (JWTs) and API keys look like. */
 const CREDENTIAL_SHAPE = /\beyJ[\w-]{8,}\.[\w-]{8,}\.[\w-]{8,}|\bsk-[\w-]{20,}/;
 const CREDENTIAL_IN_OUTPUT = 'credential in output';
-
-/** Which deliverable stopped the copy and by which rule; never the matched text. */
-export interface Leak { file: string; rule: 'held secret' | 'token shape' }
 
 /**
  * The files the judge sees (`deliverableFiles`), as text and scrubbed; binary and large ones are left out. These files become
