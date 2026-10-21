@@ -12,7 +12,7 @@
  * the cache writes to whichever arm ran first. So every host and arm starts with one recorded warm-up run (excluded from
  * the comparisons, reported as the cold start), and the measured runs alternate between the arms.
  */
-import { appendFileSync, copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
@@ -209,27 +209,39 @@ export function scrub(text: string, folders: [string, string][]): string {
 const CREDENTIAL_SHAPE = /\beyJ[\w-]{8,}\.[\w-]{8,}\.[\w-]{8,}|\bsk-[\w-]{20,}/;
 const CREDENTIAL_IN_OUTPUT = 'credential in output';
 
-/**
- * The files the judge sees (`deliverableFiles`), as text and scrubbed; binary and large ones are left out. These files become
- * public, and the other vendor's judge reads them, so nothing is copied if any holds one of `secrets` or looks like a token:
- * an agent that read a credential can write it into a deliverable. Returns the first such file then, so a shape false
- * positive can be told from a real leak after the work folder is gone; null when everything was copied.
- */
+const credentialRule = (text: string, secrets: string[]): Leak['rule'] | null =>
+  secrets.some((s) => text.includes(s)) ? 'held secret' : CREDENTIAL_SHAPE.test(text) ? 'token shape' : null;
+
+function outputLeak(work: string, secrets: string[], dir = work): Leak | null {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const p = join(dir, entry.name);
+    const file = relative(work, p).replace(/\\/g, '/');
+    const pathRule = credentialRule(file, secrets);
+    if (pathRule) return { file: '<credential-bearing path>', rule: pathRule };
+    if (entry.isDirectory()) {
+      const leak = outputLeak(work, secrets, p);
+      if (leak) return leak;
+    } else if (entry.isFile()) {
+      const buf = readFileSync(p);
+      const rule = buf.includes(0) ? null : credentialRule(buf.toString('utf8'), secrets);
+      if (rule) return { file, rule };
+    }
+  }
+  return null;
+}
+
+/** Screen the entire work tree before copying only the judge's text deliverables. */
 export function copyOutputs(work: string, dest: string, folders: [string, string][], secrets: string[]): Leak | null {
   rmSync(dest, { recursive: true, force: true });
-  const files = deliverableFiles(work).flatMap((p) => {
-    if (statSync(p).size > 200_000) return [];
+  const leak = outputLeak(work, secrets);
+  if (leak) return leak;
+  for (const p of deliverableFiles(work)) {
+    if (statSync(p).size > 200_000) continue;
     const buf = readFileSync(p);
-    return buf.includes(0) ? [] : [[p, buf.toString('utf8')] as const];
-  });
-  for (const [p, text] of files) {
-    const rule = secrets.some((s) => text.includes(s)) ? 'held secret' : CREDENTIAL_SHAPE.test(text) ? 'token shape' : null;
-    if (rule) return { file: relative(work, p).replace(/\\/g, '/'), rule };
-  }
-  for (const [p, text] of files) {
+    if (buf.includes(0)) continue;
     const to = join(dest, relative(work, p));
     mkdirSync(dirname(to), { recursive: true });
-    writeFileSync(to, scrub(text, folders));
+    writeFileSync(to, scrub(buf.toString('utf8'), folders));
   }
   mkdirSync(dest, { recursive: true });
   return null;
@@ -368,12 +380,19 @@ async function execute1(job: Job, prompt: string, spec: PromptSpec | undefined, 
   const proc = await run(command.bin, command.args, ctx.work, o.timeoutS * 1000, command.env);
   const endedAt = Date.now();
 
-  const stream = toolEvents(proc.stdout);
-  let usage: RunUsage | null = null;
-  try { usage = (job.host === 'claude' ? claudeUsage : codexUsage)(proc.stdout); } catch { /* checkRun says why */ }
-  const marks = readFileSync(marker, 'utf8').split('\n');
-  const captured = readFileSync(capture, 'utf8');
+  const folders: [string, string][] = [[ctx.work, '<work>'], [homedir(), '~'], [tmpdir(), '<tmp>']];
+  const dest = join(out, 'outputs', job.host, job.prompt, `${job.arm}-${job.repeat}`);
+  const capturedRaw = readFileSync(capture, 'utf8');
   const hookStderr = readFileSync(`${capture}.err`, 'utf8');
+  const streamRule = credentialRule([proc.stdout, proc.stderr, capturedRaw, hookStderr].join('\n'), secrets);
+  const leak: Leak | null = streamRule ? { file: '<stream>', rule: streamRule }
+    : job.warmup ? outputLeak(ctx.work, secrets) : copyOutputs(ctx.work, dest, folders, secrets);
+  const stdout = leak ? '' : proc.stdout;
+  const stream = toolEvents(stdout);
+  let usage: RunUsage | null = null;
+  try { usage = (job.host === 'claude' ? claudeUsage : codexUsage)(stdout); } catch { /* checkRun says why */ }
+  const marks = readFileSync(marker, 'utf8').split('\n');
+  const captured = leak ? '' : capturedRaw;
   const hook = { invocations: marks.filter((l) => l === 'invoked').length, ...hookFacts(captured) };
   const failedBeforeModel = job.host === 'claude' ? stream.failedBeforeModel : usage === null && !proc.timedOut;
   const broken = checkRun(job, { usage, hooks: stream.hooks, inventory: stream.inventory, failedBeforeModel, hookInvocations: hook.invocations, hookExits: marks.filter((l) => l.startsWith('exit ')).map((l) => Number(l.slice(5))), keywordRouted: routedByKeyword(captured, hookStderr, stream.events),
@@ -391,11 +410,8 @@ async function execute1(job: Job, prompt: string, spec: PromptSpec | undefined, 
     return { ...r, gapMs };
   });
   const total = sumUsage(requests);
-  const folders: [string, string][] = [[ctx.work, '<work>'], [homedir(), '~'], [tmpdir(), '<tmp>']];
-  const dest = join(out, 'outputs', job.host, job.prompt, `${job.arm}-${job.repeat}`);
-  const leak = job.warmup ? null : copyOutputs(ctx.work, dest, folders, secrets);
   const invalid = leak ? CREDENTIAL_IN_OUTPUT : broken;
-  const hiddenTest = spec?.hidden && !job.warmup ? hiddenResult(ctx.work, join(FIXTURES, spec.hidden)) : null;
+  const hiddenTest = spec?.hidden && !job.warmup && !leak ? hiddenResult(ctx.work, join(FIXTURES, spec.hidden)) : null;
   // Raw streams stay local (gitignored): they hold file contents, local paths and the hook's skill text. After a leak the
   // stream holds the credential too (the agent's own tool input), so it is not kept anywhere under bench/results.
   if (!leak) {

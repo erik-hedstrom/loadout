@@ -1,5 +1,8 @@
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import * as childProcess from 'node:child_process';
+import * as benchLib from '../bench/lib.js';
+import * as overhead from '../bench/overhead.js';
+import * as mcpOverhead from '../bench/mcp-overhead.js';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -376,6 +379,33 @@ describe('what a run shows', () => {
     }
   });
 
+  it.each([
+    ['sentinel-held-key', false], ['sentinel-held-key', true],
+    [`sk-${'a1B2'.repeat(8)}`, false], [`sk-${'a1B2'.repeat(8)}`, true],
+  ] as const)('screens credential-bearing paths without retaining them: %s, contents=%s', (secret, contentLeak) => {
+    const dir = temp('loadout-ab-path-');
+    const [work, dest] = [join(dir, 'work'), join(dir, 'dest')];
+    mkdirSync(work);
+    const file = join(work, `${secret}.md`);
+    writeFileSync(file, contentLeak ? secret : 'safe text');
+    const rule = secret.startsWith('sk-') ? 'token shape' : 'held secret';
+    const secrets = secret.startsWith('sk-') ? [] : [secret];
+    const leak = copyOutputs(work, dest, [], secrets);
+    expect(leak).toEqual({ file: '<credential-bearing path>', rule });
+    expect(JSON.stringify(leak)).not.toContain(secret);
+    expect(existsSync(dest)).toBe(false);
+  });
+
+  it.each(['.env', 'node_modules/pkg/index.js', 'dist/output.txt', 'package-lock.json', 'large.txt'])('screens excluded text files before copying deliverables: %s', (file) => {
+    const dir = temp('loadout-ab-excluded-');
+    const [work, dest] = [join(dir, 'work'), join(dir, 'dest')];
+    mkdirSync(join(work, file, '..'), { recursive: true });
+    writeFileSync(join(work, 'notes.md'), 'safe deliverable');
+    writeFileSync(join(work, file), 'x'.repeat(file === 'large.txt' ? 210_000 : 0) + 'synthetic-secret');
+    expect(copyOutputs(work, dest, [], ['synthetic-secret'])).toEqual({ file, rule: 'held secret' });
+    expect(existsSync(dest)).toBe(false);
+  });
+
   it('copies what the judge sees and nothing else: no dotfiles, dependencies or build output', () => {
     const dir = temp('loadout-ab-copy-');
     const [work, dest] = [join(dir, 'work'), join(dir, 'dest')];
@@ -616,6 +646,85 @@ describe('resuming and finishing a study', () => {
   });
 });
 
+describe('credential screening before persistence', () => {
+  it.each([
+    ['warmup', 'stdout'], ['measured', 'stdout'],
+    ['warmup', 'hook'], ['measured', 'hook'],
+    ['warmup', 'excluded content'], ['measured', 'excluded content'], ['measured code', 'excluded content'],
+    ['warmup', 'excluded path'], ['measured', 'excluded path'],
+  ])('stops a %s run with a credential in %s and saves no tainted artifact', async (when, where) => {
+    const dir = temp('loadout-ab-screen-');
+    const out = join(dir, 'out');
+    const prompt = when === 'measured code' ? 'c1-debug-13' : 'c1-web-14';
+    const home = join(dir, 'home');
+    mkdirSync(join(home, 'library', 'skills', 'sample'), { recursive: true });
+    writeFileSync(join(home, 'config.json'), JSON.stringify({ router: 'lexical', embeddings: false }));
+    writeFileSync(join(home, 'library', 'skills', 'sample', 'SKILL.md'), '---\nname: sample\ndescription: Test fixture\n---\nText');
+    const script = join(dir, 'free-cli.mjs');
+    writeFileSync(script, `if (process.argv.includes('--version')) console.log('0.160.1');
+      else for (const f of ['plugins', 'hooks', 'skill_mcp_dependency_install']) console.log(f + ' stable false');`);
+    // Simulate a POSIX run on Windows while keeping the real native path confinement check.
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')!;
+    const realAssertTemporary = overhead.assertTemporary;
+    vi.spyOn(overhead, 'assertTemporary').mockImplementation((destination) => {
+      const simulated = Object.getOwnPropertyDescriptor(process, 'platform')!;
+      Object.defineProperty(process, 'platform', platform);
+      try { realAssertTemporary(destination); }
+      finally { Object.defineProperty(process, 'platform', simulated); }
+    });
+    vi.stubEnv('LOADOUT_HOME', home);
+    vi.stubEnv('TYPESAFE_API_KEY', 'synthetic-held-secret');
+    vi.spyOn(overhead, 'cli').mockReturnValue({ bin: process.execPath, prefix: [script] });
+    vi.spyOn(mcpOverhead, 'refusedFiles').mockReturnValue([]);
+    vi.spyOn(benchLib, 'modelJson').mockRejectedValue(new Error('unexpected judging in credential test'));
+    let runs = 0;
+    vi.spyOn(benchLib, 'run').mockImplementation(async (_bin, _args, work) => {
+      const tainted = runs++ === (when === 'warmup' ? 0 : 2);
+      writeFileSync(join(work, 'notes.md'), 'safe deliverable');
+      if (tainted && where === 'excluded content') writeFileSync(join(work, '.env'), 'synthetic-held-secret');
+      if (tainted && where === 'excluded path') {
+        mkdirSync(join(work, '.synthetic-held-secret'));
+        writeFileSync(join(work, '.synthetic-held-secret', 'notes'), 'safe');
+      }
+      if (tainted && where === 'hook') {
+        const shim = join(work, '..', 'shim', 'codex');
+        const capture = when === 'warmup' ? 'codex_bare_warmup_0.invocations.out' : 'codex_loadout_c1-web-14_1.invocations.out';
+        writeFileSync(join(shim, capture), JSON.stringify({ hookSpecificOutput: { additionalContext: '<skill name="synthetic-held-secret">body</skill>' } }));
+      }
+      const stdout = tainted && where === 'stdout'
+        ? JSON.stringify({ type: 'item.completed', item: { type: 'mcp_tool_call', server: 'loadout', tool: 'synthetic-held-secret', status: 'completed' } })
+        : codexStream;
+      return { stdout, stderr: '', code: 0, timedOut: false };
+    });
+    try {
+      Object.defineProperty(process, 'platform', { value: 'darwin' });
+      const lines: string[] = [];
+      let message = '';
+      try {
+        await main(['--run', '--hosts', 'codex', '--no-codex-hook', '--ids', prompt, '--repeats', '1', '--out', out], {
+          env: { LOADOUT_AB_SELF_TEST: 'lexical', CODEX_HOME: join(dir, 'codex') }, print: (s) => lines.push(s),
+        });
+      } catch (error) { message = (error as Error).message; }
+      expect(message).toContain('credential in output');
+      const rows = readFileSync(join(out, 'rows.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l) as RunRow);
+      expect(rows).toHaveLength(when === 'warmup' ? 1 : 3);
+      const last = rows.at(-1)!;
+      expect(last.invalid).toBe('credential in output');
+      expect(last.hiddenTest).toBeNull();
+      expect(last.leak).toEqual({ file: ['stdout', 'hook'].includes(where) ? '<stream>' : where === 'excluded path' ? '<credential-bearing path>' : '.env', rule: 'held secret' });
+      const files = (readdirSync(out, { recursive: true }) as string[]).filter((f) => statSync(join(out, f)).isFile());
+      expect(files.filter((f) => f.startsWith('streams'))).toHaveLength(when === 'warmup' ? 0 : 2);
+      expect(files.some((f) => f.startsWith('outputs'))).toBe(false);
+      const persisted = files.map((f) => readFileSync(join(out, f), 'utf8')).join('\n');
+      expect([persisted, message, ...lines].join('\n')).not.toContain('synthetic-held-secret');
+    } finally {
+      Object.defineProperty(process, 'platform', platform);
+      vi.restoreAllMocks();
+      vi.unstubAllEnvs();
+    }
+  });
+});
+
 // The stand-ins are shell scripts, which Windows cannot run from PATH.
 describe.skipIf(process.platform === 'win32')('bench/ab.ts --run against stand-in CLIs', () => {
   const NODE = process.execPath;
@@ -783,10 +892,10 @@ if (args.includes('--output-schema')) {
     const args = ['--hosts', 'claude', '--repeats', '1', '--ids', 'c1-web-14'];
     const { code, text } = await start(args);
     expect(code).toBe(1);
-    expect(text).toContain('claude/loadout/c1-web-14/1: credential in output');
+    expect(text).toContain('claude/loadout/warmup/0: credential in output');
     const rows = rowsOf();
-    // Two warm-ups (not copied), then the first measured run is the loadout arm and ends the batch.
-    expect(rows.map((r) => [r.id, r.invalid])).toEqual([['claude/bare/warmup/0', undefined], ['claude/loadout/warmup/0', undefined], ['claude/loadout/c1-web-14/1', 'credential in output']]);
+    // The loadout warm-up is screened too and ends the batch before measured runs.
+    expect(rows.map((r) => [r.id, r.invalid])).toEqual([['claude/bare/warmup/0', undefined], ['claude/loadout/warmup/0', 'credential in output']]);
     expect(existsSync(join(out, 'INCOMPLETE'))).toBe(true);
     expect(existsSync(join(out, 'outputs', 'claude', 'c1-web-14', 'loadout-1'))).toBe(false);
     const everything = (readdirSync(out, { recursive: true }) as string[]).filter((f) => statSync(join(out, f)).isFile() && !/^streams[/\\]/.test(f)).map((f) => readFileSync(join(out, f), 'utf8')).join('\n');
@@ -795,7 +904,7 @@ if (args.includes('--output-schema')) {
     const again = await start(args);
     expect(again.code).toBe(1);
     expect(again.text).toContain('stopped this study');
-    expect(rowsOf()).toHaveLength(3);
+    expect(rowsOf()).toHaveLength(2);
   }, 180_000);
 
   it('runs when the temporary base is itself a link, as /tmp is on macOS when TMPDIR is unset', async () => {
