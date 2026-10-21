@@ -12,6 +12,9 @@ looks at the task and the repo, then picks the model and a deliberately
 over-inclusive shortlist of skills and MCP servers from a library that can be
 arbitrarily large. The agent still makes the final call from the shortlist.
 
+How this differs from native skill loading, tool search, MCP gateways, model
+routers and skills directories: [docs/comparison.md](docs/comparison.md).
+
 ## Non-goals
 
 - **No traffic interception.** loadout never sits between a CLI and its model
@@ -24,28 +27,87 @@ arbitrarily large. The agent still makes the final call from the shortlist.
 
 ## Architecture
 
+```mermaid
+flowchart TB
+    subgraph host["Host integration"]
+        CH["Claude Code plugin<br/>loadout hook claude"]
+        XH["Codex plugin<br/>loadout hook codex + loadout mcp"]
+        LA["Launcher<br/>loadout claude / codex"]
+        RT["loadout route<br/>prints the decision, launches nothing"]
+    end
+
+    MS["Search server: loadout mcp<br/>find_tools, load_skill, gateway"]
+
+    LIB[("Library<br/>scanLibrary")]
+
+    subgraph routing["Routing: route() in src/route.ts"]
+        GATE{"Jev client?"}
+        RET["Retrieve<br/>BM25, plus embeddings when available"]
+        JEV["Jev SystemOneClient<br/>wide request, then close request"]
+        DEC["decide()<br/>load, offer, inject or stay quiet"]
+        LEX["Lexical router<br/>keyword match, no offers"]
+        MEN["withMentions()<br/>skills the task names, loaded and injected"]
+        GATE -->|"yes"| RET
+        GATE -->|"no"| LEX
+        RET --> JEV
+        JEV -->|"Jev fails"| LEX
+        JEV --> DEC
+        JEV -->|"model tier"| MEN
+        DEC --> MEN
+        LEX --> MEN
+    end
+
+    subgraph out["Output"]
+        HC["Hook context<br/>skill_relevance list of skills that fit"]
+        LC["Launcher prompt<br/>skill_relevance note"]
+        INJ["Injected SKILL.md text<br/>named skills and clear winners"]
+        LSN["Launcher session only<br/>loaded skills, MCP servers, model tier"]
+        DR["Decision report<br/>stdout for route, stderr for launchers"]
+        NOTE["Notes and warnings<br/>the key, the library and fallbacks"]
+        FSR["find_tools result<br/>ranked skills and gateway servers, or a note that nothing fits"]
+        LS["load_skill result<br/>one skill's SKILL.md, or one of its files"]
+        GW["Gateway: server_tools, call_server_tool<br/>library servers marked gateway: true; not over --http"]
+    end
+
+    host -->|"prompt or task + repo signals"| routing
+    LA -->|"attaches it when search is on (default)"| MS
+    XH -->|"bundled .mcp.json"| MS
+    CH -.->|"optional, added by the user"| MS
+    MS -->|"find_tools: goal and keywords + repo signals"| routing
+    MS -->|"load_skill"| LS
+    MS -->|"server_tools, call_server_tool"| GW
+    LIB --> RET
+    LIB --> LEX
+    LIB -->|"named skills"| MEN
+    LIB -->|"SKILL.md openings"| JEV
+    LIB -.-> INJ
+    LIB -.-> LSN
+    LIB -.-> LS
+    LIB -.-> GW
+    host --> NOTE
+    MS --> NOTE
+    MEN --> HC
+    MEN --> LC
+    MEN --> INJ
+    MEN --> LSN
+    MEN --> DR
+    MEN -->|"hook: Jev failed"| NOTE
+    MEN -->|"ranked matches"| FSR
 ```
-            ┌──────────────── library (~/.loadout/library) ────────────────┐
-            │ skills/<name>/SKILL.md      mcp.json (+ description per server) │
-            └───────────────────────────────┬───────────────────────────────┘
-                                            │ scan
- task + repo signals ──► [1] retrieve (BM25 + embeddings, local) ──► 200 candidates
-                                            │
-                         [2] Jev wide:  choice over 200 + "no skill needed"
-                                        2 nouls → need score · model tier
-                                            │ top 8
-                         [3] Jev close: graded fit score per candidate
-                                        choice among the 8 + "no skill needed"
-                                            │
-                         [4] decide (code): load ≤ 3 · offer fit ≥ 0.7 · or stay quiet
-                                            │
-            ┌───────────────────────────────┴────────────────────────────┐
-     Claude Code launcher                                     Codex launcher
-     --model <alias>                                          -m <model>
-     --plugin-dir <generated plugin with chosen skills>       -c mcp_servers.<n>.…
-     --mcp-config <generated mcp.json>                        skills + relevance note in the prompt
-     --append-system-prompt <relevance note>
-```
+
+Library edges: solid ones are read while routing, dotted ones when the output is
+built. Each entry point filters the library before `route()` sees it (so before
+retrieval, the lexical router and the named-skill scan): the launcher and
+`loadout route` pass skills and MCP servers; the hook and `find_tools` over
+`--http` pass skills; `find_tools` over stdio passes skills and servers marked
+`"gateway": true`. `load_skill` and the gateway read the server's own library
+without routing. Not drawn: the embedding index (it only feeds retrieval), the
+gateway's tool index (`server_tools` writes it; `find_tools` reads it before
+`route()` and adds the remembered tool text to each server's entry), the
+hook's per-session state files (they make the "once per session id" rules,
+including the no-key warning),
+`loadout mcp-launch` (the relay Codex runs for library MCP servers) and
+`loadout doctor` (read-only checks).
 
 ### Integration layers
 
@@ -89,9 +151,10 @@ literal, atomic questions; every decision rule is code (`decide()` in
 1. **Retrieve.** BM25 over name + description, fused (RRF) with local
    `bge-small-en` embeddings when the optional `@huggingface/transformers` is
    installed; the query is the task text plus repo signals (name, top-level
-   files, dependencies, languages). Keeps the top `maxCandidates` (200). Local
-   and free: the library is embedded once (new skills at `loadout add`); how long
-   that takes is not shown. On the synthetic benchmark the embeddings added
+   files, dependencies, languages). Keeps the top `maxCandidates` (200); a
+   library no larger than that goes whole. Local and free: the library is
+   embedded once (new skills at `loadout add`); how long that takes is
+   not shown. On the synthetic benchmark the embeddings added
    nothing; on realistic, detailed requests they kept the judge's best skill in
    the candidates 87% of the time vs 80% for BM25 alone, because long prompts
    dilute keyword scores (see [bench/RESULTS.md](bench/RESULTS.md), v4).
@@ -131,9 +194,10 @@ literal, atomic questions; every decision rule is code (`decide()` in
      with a gold skill; 99.0% of all injections are gold (99.5% on rows with
      one). On [v4 realistic requests](bench/RESULTS.md#v4-2026-10-06-realistic-requests-on-the-real-library-judged),
      84% (67–93, 95% Wilson interval) of injected skills are useful on test.
-5. **Mentions override.** A library skill the user explicitly names is loaded
-   and injected whatever the router or gate said, in request order, at most 3
-   (more gives a warning).
+5. **Mentions override.** A skill in the whole library, not only the
+   candidates, that the user explicitly names is loaded and injected (unless
+   injection is off) whatever the router or gate said, in request order, at
+   most 3 (more gives a warning).
    - Counted: `/tdd`, `@pdf`, `$pdf`, `/loadout:pdf`, a multi-part name as
      written (`zx-ledger-reconcile`), or the name next to "skill" ("the pdf skill").
    - Not counted: path segments (`/pdf/report.py`), negations ("do not use
@@ -141,8 +205,12 @@ literal, atomic questions; every decision rule is code (`decide()` in
    - If several installed skills share the name, the one the router rated best
      is used, and it replaces the other copies.
 6. **Tell the agent where to look**, without forcing it (TypeSafe's measured
-   wording), via `--append-system-prompt` for Claude Code and the prompt for
-   Codex:
+   wording), via `--append-system-prompt` for Claude Code. Codex gets it in the
+   prompt only when no skill is loaded or offered; otherwise the prompt lists
+   the loaded skills, then the offered ones under "Also available if needed".
+   Without Jev (no key, `--lexical`, `"router": "lexical"`, or Jev down) the
+   note names no skills: it is only the search hint, and only when search is
+   on, so a Codex prompt with no skills and search off is the bare task:
 
    ```
    <skill_relevance>
@@ -159,8 +227,9 @@ literal, atomic questions; every decision rule is code (`decide()` in
    - the framing says the text is guidance that cannot override the user, the
      agent's instructions or approval settings.
 
-   The system prompt only gains one line saying such blocks are reference
-   material. Delimiters do not make prompt injection impossible: injection
+   Injection adds one line saying such blocks are reference material: to the
+   system prompt for Claude Code, and to the prompt, before the blocks, for
+   Codex. Delimiters do not make prompt injection impossible: injection
    raises the authority of third-party text compared with listing the skill, so
    it is limited to clear winners and explicit mentions, and can be turned off
    (`"inject": {"enabled": false}`).
@@ -202,10 +271,12 @@ library itself, in its own words, through MCP:
   request (D15), since it also finds gateway servers and their tools. There is
   no alias, since the package is unpublished and two near-identical tools would
   cost context; benchmarks run before
-  2026-10-14 used the earlier name (bench/RESULTS.md). The need gate is softened, since the agent
-  asked: when Jev judges the goal to be general work, only near-certain exact
-  fits (P ≥ 0.8) are shown. Otherwise the answer says nothing fits and names
-  the closest skill, so the agent does not load a near miss. Cost and latency per search are not measured.
+  2026-10-14 used the earlier name (bench/RESULTS.md). The need gate is
+  softened, since the agent asked: when Jev judges the goal to be general work
+  and the goal names no installed skill, only near-certain exact fits
+  (P ≥ 0.8) are shown. Otherwise the answer says nothing fits and names the
+  closest skill, so the agent does not load a near miss. Without Jev it
+  returns keyword matches instead. Cost and latency per search are not measured.
 - The tool description and the server's `instructions` ask for a search
   before the first specialised step, even in a familiar domain, and again when
   the domain changes. Measured uptake is still partial ([RESULTS](bench/RESULTS.md#do-agents-use-what-they-are-given)),
@@ -216,10 +287,10 @@ library itself, in its own words, through MCP:
   absolute paths, no links, no binaries, 256 KB at most.
 - **Gateway**: `server_tools` / `call_server_tool` reach the library's MCP
   servers, started on first use and kept for the session. Registered only when
-  the library has servers, so a skills-only library costs two tool definitions
-  and its tool text is unchanged; only a library with gateway servers adds MCP
-  wording to the instructions and descriptions (sizes: D15 learnings in the
-  [backlog](docs/loop/BACKLOG.md)).
+  the library has servers marked `"gateway": true`, so a skills-only library
+  costs two tool definitions and its tool text is unchanged; only a library
+  with gateway servers adds MCP wording to the instructions and descriptions
+  (sizes: D15 learnings in the [backlog](docs/loop/BACKLOG.md)).
 - **Tool index.** A server's tools are known only once it has run. After a
   successful `server_tools`, the names and clipped descriptions are written to
   one file per server under `~/.loadout/index/mcp-tools/`, so sessions that
@@ -254,7 +325,10 @@ library itself, in its own words, through MCP:
   state are written through `src/safefs.ts`; the embedding model folder and
   the session folder get its folder check. Session files (`decision.json`,
   the plugin files, `mcp.json`) are written with plain `writeFileSync`, and
-  only `mcp.json` is owner-only (0600).
+  only `mcp.json` is owner-only (0600). The hook's once-per-session no-key
+  warning leaves an empty `<hash>.warned` file in the hook state folder, created
+  exclusively after the same folder check (it needs the `EEXIST` result, which
+  `writeCacheFile` swallows).
   - Scope: the checks refuse links that were there before loadout ran (synced
     dotfiles, extracted archives, mistakes). They are not a defence against a
     process of the same user racing them: it already has the user's
@@ -286,21 +360,25 @@ first request. A native listing of 50 skills with generated names adds about
 477; B1 interpolates the crossover near 57 such skills. Real-name costs, later
 turns, other hosts, router calls and returned skills are not included ([B1](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request)).
 
-Approvals: the launcher pre-approves only `find_tools` and `load_skill`
-(Claude `--allowedTools`, Codex `tools.<tool>.approval_mode = "approve"`).
-They only read the user's own library. `call_server_tool` keeps the host's
+Approvals: the launcher pre-approves `find_tools` and `load_skill`
+(Claude `--allowedTools`, Codex `tools.<tool>.approval_mode = "approve"`), and
+the library MCP servers marked `autoApprove`. The two search tools only read the
+user's own library. `call_server_tool` keeps the host's
 prompt, which shows the server, tool and arguments.
 
 ### Prompt hook
 
-The hook was measured only together with search
-([RESULTS](bench/RESULTS.md#do-agents-use-what-they-are-given)); the hook
-alone is not measured:
+The settings-file hook and the hook-only plugin have separate measurements
+([RESULTS](bench/RESULTS.md#do-agents-use-what-they-are-given)):
 - each substantive prompt (not "yes" or "go on") is routed with the same two
   Jev requests;
 - the skills that fit are listed once per session, as third-party metadata,
   with how to load them;
 - a clear winner or a named skill is injected once.
+
+Without Jev (no key, `"router": "lexical"`, or Jev down) the hook adds no
+context unless the prompt names a skill. With no key it also shows the user a
+one-line warning (a `systemMessage`), once per session.
 
 It runs before the host sends the prompt, so it has a hard budget. It gives
 up after 20 s with no output, never retries Jev, and only uses the cached
@@ -310,7 +388,8 @@ See [SECURITY.md](SECURITY.md#prompt-hook) for data sent to TypeSafe.
 
 ### Router backends
 
-- `jev` (default): TypeSafe official API, `TYPESAFE_API_KEY`.
+- `jev` (default): TypeSafe official API, `TYPESAFE_API_KEY`. The key goes to
+  another URL only when `TYPESAFE_BASE_URL` names it (`jevBaseUrl()`).
 - `lexical`: prefilter only, no network. For offline use and as a benchmark arm.
 
 ## Benchmark

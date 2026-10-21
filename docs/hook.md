@@ -35,6 +35,11 @@ server, which the plugin's fixed commands cannot.
 
 What the hook adds, and when: [DESIGN.md](../DESIGN.md#prompt-hook).
 
+Without a key, a Jev-configured hook shows a warning once per session and
+uses keyword routing. It adds context only when the prompt names a skill.
+The same context limit applies when Jev fails; that fallback is reported on
+stderr. Neither plugin changes the agent's model tier.
+
 ## Latency
 
 Each routed prompt waits before the agent starts. On 2026-10-12,
@@ -86,6 +91,7 @@ after a network error, a timeout, a 429 or a 5xx; the hook does not retry.
 
 `loadout doctor` also makes one Jev call with fixed text, to check the key,
 but only when Jev routing is on and a key is found.
+The API destination and custom-home rules: [configuration](library.md#configuration).
 Code-level detail: [SECURITY.md](../SECURITY.md#prompt-hook).
 
 To keep prompts local, set `"router": "lexical"` in loadout's config; the hook

@@ -39,7 +39,7 @@ export function readJsonl<T>(file: string): T[] {
     .map((line) => JSON.parse(line) as T);
 }
 
-/** Rebuild a stored decision without routing again; empty arms retain only the tier. */
+/** Rebuild a stored decision without routing again. Empty arms keep the row's tier so both arms of a pair run the same model: the comparison is about skills, not tier. */
 export function decisionFor(row: SweepRow, library: Capability[], empty: boolean): RouteDecision {
   const byKey = new Map(library.map((c) => [capabilityKey(c), c]));
   const scored = (picks: SweepRow['loaded']): ScoredCapability[] =>
@@ -58,11 +58,11 @@ export function decisionFor(row: SweepRow, library: Capability[], empty: boolean
   };
 }
 
-export function run(bin: string, args: string[], cwd: string, timeoutMs: number): Promise<{ stdout: string; stderr: string; code: number | null; timedOut: boolean }> {
+export function run(bin: string, args: string[], cwd: string, timeoutMs: number, env?: NodeJS.ProcessEnv): Promise<{ stdout: string; stderr: string; code: number | null; timedOut: boolean }> {
   return new Promise((resolve) => {
     // Its own process group, so a timeout also stops what the CLI started (Codex's native
     // binary, the Windows process behind claude.exe), which would otherwise hold the pipes open.
-    const child = spawn(bin, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
+    const child = spawn(bin, args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
     let stdout = '';
     let stderr = '';
     let timedOut = false;
@@ -185,6 +185,21 @@ export const wilson = (k: number, n: number): string => {
   const c = (p + (z * z) / (2 * n)) / d, h = (z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n))) / d;
   return `${(100 * Math.max(0, c - h)).toFixed(0)}–${(100 * Math.min(1, c + h)).toFixed(0)}%`;
 };
+
+/** Exact two-sided sign test (McNemar on discordant pairs): p of a split at least as uneven as b vs c if both were equally likely. */
+export function exactSignTest(b: number, c: number): number {
+  const n = b + c;
+  let tail = 0;
+  for (let i = 0, coef = 1; i <= Math.min(b, c); coef = (coef * (n - i)) / (i + 1), i++) tail += coef;
+  return Math.min(1, (2 * tail) / 2 ** n);
+}
+
+/** P(a random positive scores above a random negative), ties counting half; NaN when either side is empty. */
+export function auc(pos: number[], neg: number[]): number {
+  let s = 0;
+  for (const p of pos) for (const n of neg) s += p > n ? 1 : p === n ? 0.5 : 0;
+  return pos.length && neg.length ? s / (pos.length * neg.length) : NaN;
+}
 
 let codexToolsChecked = false;
 

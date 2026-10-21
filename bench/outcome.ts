@@ -128,7 +128,8 @@ const SYSTEM = `You compare two AI agents' work on the same request. Judge only 
 const verdictFile = join(out, 'verdicts.jsonl');
 const judged = new Set(existsSync(verdictFile) ? readJsonl<{ id: string }>(verdictFile).map((v) => v.id) : []);
 let cost = 0;
-await pool(ids.filter((id) => !judged.has(id) && existsSync(join(out, id, 'bare.json')) && existsSync(join(out, id, 'loadout.json'))), 2, async (id) => {
+// One at a time, so the judge's system prompt stays in the cache (AGENTS.md rule 6).
+for (const id of ids.filter((id) => !judged.has(id) && existsSync(join(out, id, 'bare.json')) && existsSync(join(out, id, 'loadout.json')))) {
   const row = rows.get(id)!;
   const files = { bare: deliverables(join(out, id, 'bare')), loadout: deliverables(join(out, id, 'loadout')) };
   const ask = async (first: Arm, second: Arm) => {
@@ -145,7 +146,7 @@ await pool(ids.filter((id) => !judged.has(id) && existsSync(join(out, id, 'bare.
   const meta = (arm: Arm) => JSON.parse(readFileSync(join(out, id, `${arm}.json`), 'utf8'));
   appendFileSync(verdictFile, JSON.stringify({ id, winner, orders: [a, b], bare: meta('bare'), loadout: meta('loadout') }) + '\n');
   console.log(`${id}: ${winner} (${a.winner} / ${b.winner})`);
-});
+}
 
 const verdicts = existsSync(verdictFile) ? readJsonl<{ id: string; winner: string }>(verdictFile).filter((v) => ids.includes(v.id)) : [];
 const count = (w: string) => verdicts.filter((v) => v.winner === w).length;

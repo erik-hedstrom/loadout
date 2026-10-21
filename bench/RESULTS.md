@@ -166,6 +166,167 @@ calls. The rerun passed every guard. Spend: 16 haiku calls with rows (about
 136k input tokens) plus up to 4 probes, on the subscription. No Jev or Codex
 spend.
 
+## C13 (2026-10-16): pure-Jev baseline on main
+
+Before more Claude Code and Codex spend, the router on main (155d7ec, after
+D15 and B7) was measured with Jev alone: three identical sweeps of v4's 315
+requests and of C1's 300, and the gold-label route bench. No retuning, no new
+judging: the sweeps are scored offline against the earlier judgements
+(`judge.ts --offline`, backlog C13). Library and embeddings as in v4 and C1.
+
+**Quality, test split** (95% Wilson intervals). Offline scoring reuses the
+judge's earlier ratings; a load it never rated is "unrated", and load
+precision is given as a pair: unrated counted not useful / counted useful.
+
+Usefulness rows are lower bounds: they count only skills the judge already rated helpful.
+
+| | v4 runs 1 / 2 / 3 (121 need) | v4 control, post-E9 | C1 runs 1 / 2 / 3 (84 need) | C1 at 7d90442 |
+|---|---|---:|---|---:|
+| A useful skill loaded | 74% / 74% / 74% (65–81) | 72% | 70% / 70% / 70% (60–79) | 73% |
+| Useful loaded or offered | 85% / 86% / 87% | 85% | 80% / 80% / 80% | 80% |
+| Nothing loaded when none is needed | 82% / 82% / 82% | 82% | 75% / 75% / 75% | 74% |
+| Loaded skills that are useful | 78–82% / 80–82% / 79–82% | 80% | 65–71% / 67–70% / 67–70% | 64% |
+| Unrated loads | 7 / 4 / 5 of ~155 | — | 7 / 3 / 4 of ~115 | — |
+
+- Quality on main is within the intervals of the earlier runs on both
+  request sets. C1's precision gap against v4 is still there.
+- Misleading loads: **not shown.** Offline scoring counts only loads the
+  judge already rated misleading (1–2%), and the unrated loads could be
+  misleading too. C1's 7% at 7d90442 is not comparable until they are judged.
+- v4 is scored against the post-E9 control's ratings only. Pooling all four
+  earlier v4 judgings fails: the judge rated the same request and skill
+  differently in two of them (`integrations-04`, `cli-creator`).
+- "Missed a clearly better skill" is not shown offline.
+
+**Gold tasks** (route bench, 199 tasks × 1,000 / 5,000 / 20,000 skills,
+policy tuned on dev, reported on test): recall 93% / 92% / 90% with 5%
+needless loads at the default budget; v3 had 94% / 95% / 93% with 5%. A second
+complete run of the same bench, started 10 minutes earlier on the same
+checkout (its origin was not recorded), gave 93% / 93% / 92%, 5% needless.
+Both are within v3's pooled interval (90–96%).
+
+**Stability** (`bench/stability.ts`, test split):
+
+| | v4 (213) | C1 (201) |
+|---|---:|---:|
+| Same loaded set in all three runs | 89% (190) | 91% (183) |
+| Mean pairwise Jaccard, loaded | 0.95 | 0.95 |
+| Same loaded-or-offered set in all three runs | 83% (177) | 84% (168) |
+
+- About one request in ten gets a different loaded set on an identical rerun.
+  Single-run differences smaller than that are noise.
+- Keyword fallbacks: 1 in 1,815 decisions.
+- Latency per decision fell within the hour (test split): p50 from 2.8 s
+  (v4) and 2.0 s (C1) in the first runs to 1.0 s and 0.9 s in the last, p95
+  from 6.6 s and 5.2 s to 1.3 s and 1.1 s. Both parts fell: the Jev calls'
+  wall time (p50 2.1 → 0.9 s, v4, all rows) and the local remainder (0.57 →
+  0.10 s).
+  The machine ran other work during the first runs, and a Jev call's wall time
+  includes client-side delay, so the cause is not shown.
+- Cost per decision: $0.00122 (v4) and $0.00117 (C1).
+
+Rows: `results/2026-10-16T17-39-02-sweep/`, `18-07-05`, `18-19-29` (v4);
+`17-54-45`, `18-15-07`, `18-22-14` (C1); `18-24-39-…` and `18-14-42-…` (gold);
+`results/2026-10-16-jev-baseline/` (stability and the scripts that ran the
+burn and the scoring); the gold numbers are in each gold run's `summary.md`. Cost: Jev $2.21 for the sweeps and about
+$0.57 per gold run; scoring $0.
+
+## C12 (2026-10-19): the need gate on C1 dev
+
+A local Codex run (2026-10-13) got no skill on a task where one plainly
+applied. One case proves nothing, so the gate was audited on C1's 99 dev
+requests against the Opus blind labels (8 essential, 36 helpful, 55 none),
+by replaying `decide()` on the Jev answers stored in four C1 sweeps: the
+2026-10-08 sweep (the one the labels were made for) and the three
+2026-10-16 reruns. `bench/need-audit.ts`; no model calls, $0. The replay
+reproduces the stored loaded set in 396 of 396 rows. C1 test was not scored:
+no change was made.
+
+The gate is `need < 0.5` selects nothing, where `need` is the mean of three
+Jev answers (`needScore()`). The rule was set after the pooled sweep was
+seen and before the paired table: change the threshold only if, per request,
+more needed requests gain a useful load than lose one (exact sign test,
+p < 0.05) without a significant rise in needless loads.
+
+**The gate against the judge, dev, threshold 0.5** (95% Wilson; the four
+runs repeat the same 99 requests, so pooled intervals are optimistic):
+
+| Run | False "no skill": judge helpful or essential | Essential only | Gate says "skill": judge none |
+|---|---|---|---|
+| 1 / 2 / 3 / 4 | 20% / 16% / 16% / 16% (9 or 7 of 44) | 0 of 8 in each | 58% / 56% / 55% / 56% (of 55) |
+| pooled | **17%** (30/176, 12–23%) | 0% (0/32, 0–11%) | 56% (124/220, 50–63%) |
+
+- **The gate never silenced an essential request** (0 of 32 rows).
+- It silenced 30 of 176 helpful-or-essential rows. Seven requests (16% of
+  the 44) were quiet in all four runs, all labelled helpful, with mean `need`
+  0.34 to 0.46. Their useful skills are mostly generic ones
+  (`webapp-testing`, `frontend-ui-engineering`, `docx`/`pdf`), with some
+  specific ones among them (`supabase`, `api-and-interface-design`,
+  `property-based-testing`, `surgical-patch`, `lean-build`). Suppressing
+  generic skills is what the gate is for; it gets these wrong when the judge
+  counts a generic skill as helpful.
+- "Skill" for a none request is not a load: the fit threshold then loads
+  nothing for 76% of none rows (167/220, 70–81%). The gate passes more than
+  it loads.
+- `need` separates the judge's labels weakly: AUC 0.72 for "a skill helps".
+  Mean `need` per request, median (range): essential 0.77 (0.71–0.87),
+  helpful 0.66 (0.34–0.82), none 0.52 (0.30–0.82). 32 of 55 none requests
+  (58%, 45–70%) have a mean at or above the threshold.
+- **`need` is stable across reruns; the verdict mostly is.** Per request the
+  range over four runs has median 0.017 and max 0.117. The verdict differs
+  between runs for 5% of requests (5/99, 2–11%); 24% (24/99, 17–34%) are
+  within 0.05 of the threshold in some run. Run 1 used older code than runs
+  2–4; its replay still matches.
+
+**Threshold sweep** (pooled rows; the rest of the policy unchanged; "useful"
+= in the judge's `useful` list, so precision is a lower bound):
+
+| need ≥ | False "no skill" | Needed requests with a useful load | Loaded skills that are useful | Nothing loaded when none needed |
+|---:|---|---|---|---|
+| 0 (no gate) | 0% (0/176) | 70% (124/176, 63–77%) | 55% (152/276, 49–61%) | 75% (165/220, 69–80%) |
+| 0.4 | 3% (6/176) | 70% (124/176) | 55% (152/276) | 75% (165/220) |
+| 0.45 | 11% (20/176) | 68% (120/176) | 55% (148/271) | 75% (165/220) |
+| 0.5 (current) | 17% (30/176, 12–23%) | 65% (114/176, 57–71%) | 54% (142/263, 48–60%) | 76% (167/220, 70–81%) |
+| 0.55 | 23% (40/176) | 59% (104/176) | 57% (132/233) | 81% (179/220) |
+| 0.6 | 28% (49/176) | 55% (97/176, 48–62%) | 57% (125/219) | 83% (183/220) |
+
+Paired per request against 0.5:
+
+| need ≥ | Needed requests: gain / lose a useful load | None requests: more / fewer loads |
+|---:|---|---|
+| 0.4 (or any lower) | 4 / 0 (p = 0.125) | 1 / 0 (p = 1.0) |
+| 0.45 | 3 / 0 (p = 0.25) | 1 / 0 (p = 1.0) |
+| 0.55 | 0 / 3 (p = 0.25) | 0 / 3 (p = 0.25) |
+| 0.6 | 0 / 6 (p = 0.031) | 0 / 4 (p = 0.125) |
+
+**Decision: no change.** Lowering the threshold to 0.4 is a gain of 4
+requests of 44 with a useful load and one more needless load of 55, which
+does not clear the rule (p = 0.125). Raising it loses useful loads and, at
+0.6, 6 of 44 (p = 0.031, uncorrected over seven thresholds), for about the same drop in
+needless loads (4 of 55). The Jev question was left alone: the audit shows
+no failure on essential requests, and the misses are mostly generic skills the
+judge rated only helpful.
+
+Not shown:
+- Misleading loads at any threshold: loads the blind judge did not list are
+  not rated, so they count as not useful here, and whether they mislead is
+  not shown (as in C13).
+- The gate's effect on what is offered. A quiet decision also offers
+  nothing; this audit counts loads only.
+- Anything on C1 test, or for a library other than the 1,262-skill one.
+
+Raw: [results/2026-10-19T20-56-00-c12-need-audit](results/2026-10-19T20-56-00-c12-need-audit/report-dev.md)
+(the stored answers are the four sweeps' `decisions.jsonl`; labels in the
+2026-10-08 sweep's `judge-blind.jsonl`). Command, from the repo root, with the
+labelled sweep first:
+
+```
+npx tsx bench/need-audit.ts --labels bench/results/2026-10-08T13-13-52-sweep/judge-blind.jsonl --split dev \
+  --out bench/results/2026-10-19T20-56-00-c12-need-audit/report-dev.md \
+  bench/results/2026-10-08T13-13-52-sweep bench/results/2026-10-16T17-54-45-sweep \
+  bench/results/2026-10-16T18-15-07-sweep bench/results/2026-10-16T18-22-14-sweep
+```
+
 ## C1 (2026-10-08): new held-out requests
 
 v4's 315 requests had been used for tuning twice, so the router was measured
@@ -450,10 +611,11 @@ Claude Code (Sonnet 5.5), nothing preloaded. As after `loadout setup
 claude-code`, the session has the loadout MCP server plus the `UserPromptSubmit`
 hook, which routes the prompt and adds the skills that fit as context:
 
-| Claude Code, same 10 requests | Opened a skill the judge rates useful |
-|---|---:|
-| Search tool only | 2 of 10 (6–51) |
-| Search tool + prompt hook | **6 of 10** (31–83) |
+| Claude Code, same 10 requests | Opened a skill the judge rates useful | Hook injected a skill's full text |
+|---|---:|---:|
+| Search tool only | 2 of 10 (6–51) | no hook |
+| Search tool + prompt hook | **6 of 10** (31–83) | not recorded |
+| Hook-only plugin, as users install it (2026-10-12) | **0 of 10** (0–28) | 6 of 10 (31–83) |
 
 In the 4 misses the hook did offer the right skill, and Claude still did not
 open it:
@@ -461,6 +623,41 @@ open it:
   calling any tool;
 - on the MCP server and the threat model it used up its 8 turns or 4 minutes
   first (shell commands are not approved in these runs).
+
+**The hook-only plugin gets a skill to the agent only when it injects the
+skill's text; in these runs Claude could not open a skill it was pointed to**
+([C8](../docs/loop/BACKLOG.md), [#25](https://github.com/erik-hedstrom/loadout/pull/25)).
+`plugins/loadout` was loaded with `--plugin-dir`, with no MCP server. Every
+row passed the bench's checks: the plugin was loaded, one loadout hook ran
+(counted by the bench's own PATH shim), and no other loadout hook or plugin
+was present. The hook added `<skill_relevance>` context on all 10 prompts.
+- **In 6, it also injected one skill's full text:** `mcp-builder`,
+  `changelog-generator`, `vendor-review`, `uncertainty-and-units`,
+  `security-threat-model` and `statistical-analysis`. Whether the judge rates
+  each one useful is not shown for this arm; the hook arm above opened
+  `uncertainty-and-units` and `statistical-analysis` on the same requests.
+  Whether Claude followed the injected text is not measured.
+- **Claude opened no library skill (0 of 10).** On the other 4 requests the
+  context only pointed to a skill. It says to call `load_skill`, or to read
+  `SKILL.md` in the folder given. The plugin has no `load_skill`; that was the
+  search arm's MCP server, through which the hook arm opened skills on these
+  same 4 requests.
+- Reading the folder failed. A one-call probe on the same setup got: "Claude
+  requested permissions to read from \\\\wsl.localhost\\…\\SKILL.md, but you
+  haven't granted it yet". In a headless run nobody can grant it.
+- 7 runs used their 8 turns, mostly on shell commands that were not approved.
+  3 finished: 2 answered in text without a tool call, and 1 made one
+  successful `Skill` call, then wrote files. That tool reaches only skills
+  installed in Claude Code, not the library, so it does not count as opened.
+
+So this shows the headless case, with loadout in WSL behind Windows Claude
+Code. An interactive session would ask the user for permission to read each
+skill: not measured. The arm also differs from the two above in that the
+bench's shim is first on PATH; that changes how the hook is reached, not what
+the agent sees.
+
+Raw: [invoke-claude-plugin.jsonl](results/2026-10-06T05-40-33-sweep/invoke-claude-plugin.jsonl).
+Cost: $1.93 reported by Claude Code (Sonnet, subscription); Jev under $0.02.
 
 These are small samples (10 requests per cell, capped runs), not outcome
 measurements: they show whether the skill reaches the agent's context, not
@@ -573,6 +770,32 @@ Raw (n = 20): [main](results/2026-10-12T17-12-14-107Z-hook-latency-main/),
 [main](results/2026-10-12T17-11-00-448Z-hook-latency-main/),
 [cache](results/2026-10-12T17-11-32-851Z-hook-latency-d11/).
 Cost: about $0.13 of Jev in total.
+
+### MCP start-up under WSL (D17, 2026-10-15)
+
+**From a checkout on `/mnt/c`, `loadout mcp` took 5.9–7.0 s to answer
+`initialize`; from the Linux filesystem, 0.4–0.8 s.** Codex gives an
+optional MCP server about 1 s before it leaves the server's tools out of the
+first request. Main at `fbee5cb`, the 1,262-skill library on ext4, Node
+24.15, WSL2 on Windows 11. Time from process start to the `initialize`
+reply, three or four warm runs each:
+
+| How it runs | Reply |
+|---|---|
+| inside WSL, checkout on ext4 | 0.41 s |
+| inside WSL, checkout on `/mnt/c` | 5.9 s |
+| `wsl.exe --exec node` from Windows, ext4 | 0.54–0.79 s |
+| `wsl.exe --exec node` from Windows, `/mnt/c` | 6.0–7.0 s |
+
+- Split on `/mnt/c`: importing `dist/mcp.js` and the MCP SDK took 3.9 s,
+  the other CLI modules 0.75 s, and the cached library scan 0.04 s (0.75 s
+  cold). On ext4 the same three took 0.11, 0.03 and 0.04 s. Module loading
+  over 9P is the cost, not the scan.
+- A cold run on ext4: not shown.
+- One machine, one session. Raw results were not kept, so these numbers
+  cannot be recomputed.
+
+Cost: $0.
 
 ### Is the work better? (outcome pilot, 2026-10-07)
 

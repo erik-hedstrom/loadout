@@ -12,6 +12,12 @@ loadout audit --adopt                             # copy the skills your agents 
 loadout list --sources                            # where the skills came from, as add commands
 ```
 
+`loadout init --pack documents` adds a curated starter pack; `security` and
+`workflow` are also available, and `--pack` can be repeated. With no flags in
+an interactive terminal, `loadout init` checks for the key, asks which packs
+to add, builds the index, and prints setup instructions for detected hosts. It never edits
+host configs.
+
 `add` searches up to 8 folders deep for `SKILL.md`, skipping `node_modules`,
 `dist`, `build` and similar, and copies each skill into `skills/`. It then
 indexes new skills for retrieval (local embeddings when the optional
@@ -50,3 +56,14 @@ key file location, the router (`"jev"` or `"lexical"`), the tier-to-model
 mapping, thresholds and caps. Only
 your overrides are stored; everything else follows the defaults in
 [config.ts](../src/config.ts).
+
+`LOADOUT_HOME` must be absolute (on Windows, a drive-qualified path;
+drive-relative, UNC and device paths are refused). An empty value uses the
+home-directory fallback, which must pass the same check. The Codex plugin
+forwards `LOADOUT_HOME` to its search server, so both hook and search use the
+same config.
+
+The key goes only to `https://api.typesafe.ai` unless `TYPESAFE_BASE_URL`
+names another URL; a different `jev.baseUrl` in `config.json` is refused, so
+a config file alone cannot send your key elsewhere. The Codex plugin also
+forwards `TYPESAFE_BASE_URL` to its search server.

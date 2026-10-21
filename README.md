@@ -1,5 +1,6 @@
-[![CI](https://github.com/erik-hedstrom/loadout/actions/workflows/ci.yml/badge.svg)](https://github.com/erik-hedstrom/loadout/actions/workflows/ci.yml)
 # loadout
+
+[![CI](https://github.com/erik-hedstrom/loadout/actions/workflows/ci.yml/badge.svg)](https://github.com/erik-hedstrom/loadout/actions/workflows/ci.yml) [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 Claude Code and Codex list your installed skills in their requests, needed or
 not. In Claude Code (Haiku, isolated config), 1,232 skills under generated
@@ -28,6 +29,7 @@ npm ci && npm run build && npm link
 
 # 2. Key and library
 loadout init --key-file /path/to/typesafe-key.txt    # or export TYPESAFE_API_KEY
+# Optional starter pack: loadout init --pack documents
 loadout add https://github.com/obra/superpowers       # or `loadout audit --adopt`: copy the skills you have
 
 # 3. Plugin, for the CLI you use
@@ -74,6 +76,9 @@ All numbers, caveats and negative results: [bench/RESULTS.md](bench/RESULTS.md).
   useful-skill use in Claude Code went from 2 of 10 (6–51%) to 6 of 10
   (31–83%) sessions when the prompt hook was added from settings.json
   ([RESULTS](bench/RESULTS.md#do-agents-use-what-they-are-given)).
+  The hook-only plugin injected full skill text in 6 of 10 sessions
+  (31–83%); no library skill was opened (0–28%). Whether the injected text
+  was followed is not shown ([same study](bench/RESULTS.md#do-agents-use-what-they-are-given)).
 - **Better work: not shown.** In an 8-request, nominally blind pilot with
   Codex (gpt-6.1-sol, 6-minute cap), where the loadout arm got the judge's
   top skill, it won 4 (22–78%), lost 3 (14–69%) and split 1 (2–47%)

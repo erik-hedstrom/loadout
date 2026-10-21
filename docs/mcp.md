@@ -31,7 +31,7 @@ know-how when the work drifts away from what the session started with:
 The tool definitions cost input tokens. Measured only in the first request of
 fresh Claude Code sessions, with generated skill names and before the rename
 to `find_tools`, they cost more than a native listing of 50 skills
-([DESIGN](../DESIGN.md#search-server-loadout-mcp));
+([B1](../bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request));
 later turns and Codex are not measured. In the headless runs, agents searched
 on their own mainly for tasks that felt unfamiliar
 ([RESULTS](../bench/RESULTS.md#do-agents-use-what-they-are-given)). So the
@@ -59,6 +59,22 @@ Which of these have been checked in a real session: [hosts.md](hosts.md).
 Under WSL, Windows apps reach the server through `wsl.exe` and get Windows
 paths. Keep the TypeSafe key in the config's `jev.apiKeyFile` (environment
 variables do not cross from a Windows app into WSL).
+
+## WSL startup
+
+Under WSL, install loadout on the Linux filesystem (under `~`), not in a
+checkout on `/mnt/c`. From `/mnt/c`, Node loads loadout's many module files
+over the slow Windows file share, and `loadout mcp` took 5.9–7.0 s to answer
+instead of 0.4–0.8 s ([one machine](../bench/RESULTS.md#mcp-start-up-under-wsl-d17-2026-10-15)).
+Codex leaves out an optional MCP server that is not ready about 1 s after
+start, and adds its tools mid-session. The TOML from
+[WSL setup](hook.md#codex-cli) sets `required = true`, so Codex waits for search before the first
+request, and will not start a session if loadout fails to start (from Codex
+0.160.1's source; not yet run in a live session). The plugin does not set
+it, because users cannot turn it off for a plugin's server. To make Codex
+wait for the plugin's server too, set `mcp_optional_startup_grace_ms = 0` at
+the top of `~/.codex/config.toml`; Codex then waits for every optional MCP
+server, up to its start-up timeout.
 
 ## ChatGPT, over HTTP
 

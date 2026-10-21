@@ -10,9 +10,10 @@
  *   npx tsx bench/sweep.ts [--requests bench/data/requests.jsonl] [--limit 50] [--seed]
  */
 import { appendFileSync, mkdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import { loadConfig, paths, resolveApiKey } from '../src/config.js';
+import { jevBaseUrl, loadConfig, paths, resolveApiKey } from '../src/config.js';
 import { libraryEmbeddings } from '../src/embed.js';
 import { jevClient } from '../src/jev.js';
 import { capabilityKey, scanLibrary, skillExcerpt } from '../src/library.js';
@@ -53,7 +54,7 @@ function trimRaw({ candidates: _, ...raw }: RawRouting): Omit<RawRouting, 'candi
   return { ...raw, wide: { ...raw.wide, pick: Object.fromEntries([...raw.shortlist, NONE].map((k) => [k, raw.wide.pick[k] ?? 0])) } };
 }
 
-if (import.meta.main) {
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const { values } = parseArgs({
     options: {
       requests: { type: 'string', default: join(DATA, 'requests.jsonl') },
@@ -69,7 +70,7 @@ if (import.meta.main) {
   const config = loadConfig();
   const apiKey = resolveApiKey(config);
   if (!apiKey) throw new Error('needs a TypeSafe key (loadout init)');
-  const client = jevClient({ apiKey, baseUrl: config.jev.baseUrl, model: config.jev.model });
+  const client = jevClient({ apiKey, baseUrl: jevBaseUrl(config), model: config.jev.model });
   const library = scanLibrary(paths.library());
   const repo = { name: 'project', files: [], dependencies: [], languages: {} };
   const embeddings = config.embeddings ? await libraryEmbeddings(library, paths.embeddings(), console.log) : undefined;

@@ -30,7 +30,9 @@ or decline to execute a command suggested by a skill.
 top-level file names, dependency names and language extensions to TypeSafe,
 alongside candidate skill names/descriptions and shortlisted instruction
 excerpts. `askJev` makes two requests through `jevClient` to
-`jev.baseUrl` plus `/v1/systemone` (default endpoint: `https://api.typesafe.ai/v1/systemone`)
+`TYPESAFE_BASE_URL` if set, otherwise `https://api.typesafe.ai`, plus
+`/v1/systemone`; a different `jev.baseUrl` in `config.json` is refused
+(`jevBaseUrl`), so a config file alone cannot redirect the key
 ([cli.ts](src/cli.ts), [hook.ts](src/hook.ts), [route.ts](src/route.ts),
 [repo.ts](src/repo.ts), [jev.ts](src/jev.ts), [config.ts](src/config.ts)).
 
@@ -53,8 +55,8 @@ HTTP; remote access needs a trusted HTTPS tunnel or TLS terminator.
 ### Credentials
 
 `resolveApiKey` reads `TYPESAFE_API_KEY` first, then the configured
-`jev.apiKeyFile`; `jevClient` uses it as a bearer credential
-([config.ts](src/config.ts), [jev.ts](src/jev.ts)).
+`jev.apiKeyFile`; `jevClient` uses it as a bearer credential, sent only to
+the URL `jevBaseUrl` returns ([config.ts](src/config.ts), [jev.ts](src/jev.ts)).
 
 For Codex, library MCP env/header values stay in the library and the
 `loadout mcp-launch <key>` relay process, absent from agent argv/environment,

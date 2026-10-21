@@ -40,10 +40,11 @@ describe('Codex plugin', () => {
     expect(plugin.name).toBe('loadout-codex');
     expect(plugin.description).toContain("TypeSafe's Jev API");
     expect(JSON.parse(readFileSync(join(dir, 'hooks/hooks.json'), 'utf8'))).toEqual(claudeHookBlock('loadout hook codex'));
+    // No `required`: Codex would accept it, but users cannot override it for a plugin server (D17).
     expect(JSON.parse(readFileSync(join(dir, '.mcp.json'), 'utf8'))).toEqual({
       mcpServers: {
         loadout: {
-          command: 'loadout', args: ['mcp'], env_vars: ['TYPESAFE_API_KEY', 'LOADOUT_HOME'],
+          command: 'loadout', args: ['mcp'], env_vars: ['TYPESAFE_API_KEY', 'TYPESAFE_BASE_URL', 'LOADOUT_HOME'],
           tools: Object.fromEntries(SEARCH_TOOLS.map((tool) => [tool, { approval_mode: 'approve' }])),
         },
       },

@@ -36,7 +36,7 @@ function version(bin: string): string | undefined {
 }
 
 /** `which()` over absolute PATH entries only, so a match in the current folder neither runs nor hides a later one. */
-const onPath = (bin: string) => which(bin, absolutePath());
+export const onPath = (bin: string) => which(bin, absolutePath());
 
 /** A parsed config file, {} when it is missing, or undefined when it exists but cannot be read or parsed. */
 function readConfig(file: string, parse: (text: string) => unknown): Record<string, unknown> | undefined {
@@ -97,7 +97,7 @@ export async function doctor(config: Config, client: (apiKey: string) => SystemO
         checks.push({ name: 'Jev call', ok: true, detail: `answered in ${Date.now() - started} ms` });
       } catch (err) {
         // jevClient's errors are fixed text (E11): no key, prompt or response body.
-        checks.push({ name: 'Jev call', ok: false, detail: err instanceof Error ? err.message : 'failed', fix: 'check the key, and that the Jev API (jev.baseUrl, api.typesafe.ai by default) is reachable' });
+        checks.push({ name: 'Jev call', ok: false, detail: err instanceof Error ? err.message : 'failed', fix: 'check the key, and that the Jev API (api.typesafe.ai, or the URL in TYPESAFE_BASE_URL) is reachable' });
       }
     }
   }
