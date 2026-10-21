@@ -1251,7 +1251,7 @@ Learnings (2026-10-09):
 | E13 | P1 | Apply Engineer standards to both review paths, with a blocking necessity pass | Codex + Claude review | cloud | done ([#41](https://github.com/erik-hedstrom/loadout/pull/41)) |
 | E14 | P1 | Redact key-shaped strings before anything goes to Jev (prerequisite for the C2 loadout arm) | Codex | cloud | todo |
 | E15 | P1 | Test flakes: WSL-only `bench.test.ts` failure, Windows spawn timeouts | Claude | local | done ([#44](https://github.com/erik-hedstrom/loadout/pull/44)) |
-| E16 | P2 | Hygiene from #30's audit: control characters, `git ls-files` env, config symlink, echoed arguments | Claude | cloud | todo |
+| E16 | P2 | Hygiene from #30's audit: control characters, `git ls-files` env, config symlink, echoed arguments | Codex | local | implemented; review pending ([#TBD]) |
 | E17 | P3 | One entry-point guard for bench scripts that survives symlinked paths | Claude | cloud | todo |
 
 **E16. Terminal, config and git hygiene.** From the reviews of #30 (A3);
@@ -1268,6 +1268,11 @@ all older than it.
 - Decision for Erik, from the same audit: the spawned `claude` and `codex`
   keep `TYPESAFE_API_KEY` in their environment by design. Record whether that
   stands.
+
+Implementation notes and verification: [E16 handoff](E16.md). Config writes
+opt into checking the home itself; cache callers still permit a linked home.
+Argument-parser errors and failed add/token-file inputs need fixed diagnostics:
+filesystem errors can quote the same pasted credential as an unknown option.
 
 **E17. Bench entry-point guard.** From pr-reviewer on #45 (C13). Bench
 scripts (judge, stability, sweep, hook-latency, overhead and mcp-overhead on

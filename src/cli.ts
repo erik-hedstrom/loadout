@@ -72,16 +72,22 @@ function addSources(specs: string[]): number {
   for (const spec of specs) {
     let r: AddResult;
     try {
-      r = parseGitHub(spec) ? addFromGitHub(spec, paths.library()) : addSkills(resolve(spec), paths.library());
-    } catch (err) {
-      console.error(`${spec}: ${err instanceof Error ? err.message.split('\n')[0] : err}`);
+      if (parseGitHub(spec)) r = addFromGitHub(spec, paths.library());
+      else {
+        const source = resolve(spec);
+        if (!existsSync(source)) throw new Error('source not found');
+        r = addSkills(source, paths.library());
+      }
+    } catch {
+      // A mistyped source or an underlying filesystem/git error can contain a pasted credential.
+      console.error('loadout: could not add source; check the directory or GitHub URL and try again');
       failed++;
       continue;
     }
     const total = r.added.length + r.updated.length;
     console.log(`${spec}: ${total ? `${r.added.length} added, ${r.updated.length} updated` : 'no skills found'}`);
-    for (const { name, folder } of r.renamed) console.log(`  "${name}" already exists from another source; installed as ${folder}`);
-    for (const { path, reason } of r.skipped) console.log(`  skipped ${path}: ${reason}`);
+    for (const { name, folder } of r.renamed) console.log(`  "${name.replace(/[\x00-\x1f\x7f-\x9f]/g, '')}" already exists from another source; installed as ${folder}`);
+    for (const { path, reason } of r.skipped) console.log(`  skipped ${path.replace(/[\x00-\x1f\x7f-\x9f]/g, '')}: ${reason}`);
   }
   return failed;
 }
@@ -350,8 +356,15 @@ async function main(): Promise<number> {
       // Loaded on demand: the MCP SDK is the heaviest import, and only this command needs it.
       const { serveHttp, serveStdio } = await import('./mcp.js');
       if (values.http) {
-        const token = values['token-file'] ? readFileSync(values['token-file'], 'utf8').trim() : undefined;
-        if (values['token-file'] && !token) fail(`empty token file: ${values['token-file']}`);
+        let token: string | undefined;
+        if (values['token-file']) {
+          try {
+            token = readFileSync(values['token-file'], 'utf8').trim();
+          } catch {
+            fail('could not read token file; check the path given to --token-file');
+          }
+          if (!token) fail('empty token file');
+        }
         const { url } = await serveHttp(
           { library, config, client, repo: repoSignals(process.cwd()), embeddings: client ? embeddingsFor(library, config) : undefined },
           { port: Number(values.port), host: values.host!, token, allowedHosts: values['allowed-host'] },
@@ -395,11 +408,15 @@ async function main(): Promise<number> {
       return 0;
 
     default:
-      fail(`unknown command "${command}"\n\n${USAGE}`);
+      fail(`unknown command\n\n${USAGE}`);
   }
 }
 
 main().then(
   (code) => process.exit(code),
-  (err: unknown) => fail(err instanceof Error ? err.message : String(err)),
+  (err: unknown) => {
+    // Node's argument-parser messages quote both unknown options and unexpected values.
+    if (err instanceof Error && 'code' in err && String(err.code).startsWith('ERR_PARSE_ARGS_')) fail('invalid arguments; run loadout --help for usage');
+    fail(err instanceof Error ? err.message : String(err));
+  },
 );

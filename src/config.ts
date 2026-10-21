@@ -3,6 +3,7 @@ import { homedir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 import type { FitMeasure } from './route.js';
 import type { Tier } from './types.js';
+import { isPlainFolder } from './safefs.js';
 
 export interface Config {
   router: 'jev' | 'lexical';
@@ -167,6 +168,7 @@ export function loadConfig(): Config {
  */
 export function writeDefaultConfig(overrides: Partial<Config['jev']> = {}): string {
   const file = paths.config();
+  if (!isPlainFolder(loadoutHome(), true)) throw new Error('loadout home must be a plain folder to write config');
   mkdirSync(loadoutHome(), { recursive: true });
   const existing = existsSync(file) ? readConfigFile(file) : {};
   const config: Partial<Config> = Object.keys(overrides).length ? { ...existing, jev: { ...existing.jev, ...overrides } as Config['jev'] } : existing;
