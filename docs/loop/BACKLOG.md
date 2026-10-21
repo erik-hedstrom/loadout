@@ -730,7 +730,7 @@ binary alone on `PATH`, so the `claude` judge needed no new seam.
 | D16 | P1 | Warn when the hook runs without a TypeSafe key | Claude | cloud | done ([#27](https://github.com/erik-hedstrom/loadout/pull/27)): once per session, as a `systemMessage`, which Claude Code and Codex both show |
 | D18 | P1 | The hook and `load_skill` can offer `load_skill` only, with no folder | Codex | cloud | todo |
 | D19 | P2 | `which()` honours PATHEXT on Windows | Claude | cloud | todo |
-| D20 | P2 | Hook state writes never drop context or the no-key warning | Codex | cloud | in progress ([#TBD]): implementation and regression tests complete; review pending |
+| D20 | P2 | Hook state writes never drop context or the no-key warning | Codex | cloud | review ([#49](https://github.com/erik-hedstrom/loadout/pull/49)) |
 
 **D18. The hook and `load_skill` can offer `load_skill` only, with no folder.**
 Both currently suggest reading skill files directly, even when the host's
