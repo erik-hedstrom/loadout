@@ -122,6 +122,7 @@ describe('commands', () => {
     const mcp = (c: typeof bare) => JSON.parse(c.args[c.args.indexOf('--mcp-config') + 1]!).mcpServers;
     expect(mcp(bare)).toEqual({});
     expect(Object.keys(mcp(loadout))).toEqual(['loadout']);
+    expect(mcp(buildCommand(job('claude', 'loadout'), 'P', ctx({ TYPESAFE_BASE_URL: 'https://jev.example.invalid' }))).loadout.env.TYPESAFE_BASE_URL).toBe('https://jev.example.invalid');
     const strip = (c: typeof bare) => { const a = [...c.args]; a[a.indexOf('--mcp-config') + 1] = '{}'; return a; };
     const extras = ['--plugin-dir', loadout.args[loadout.args.indexOf('--plugin-dir') + 1]!];
     expect(without(without(strip(loadout), extras), ['mcp__loadout__find_tools', 'mcp__loadout__load_skill'])).toEqual(strip(bare));
@@ -143,6 +144,7 @@ describe('commands', () => {
     expect(loadout.args).not.toContain('hooks');
     expect(loadout.args).toEqual(expect.arrayContaining(['--dangerously-bypass-hook-trust', '--ignore-user-config', '--ephemeral']));
     expect(loadout.args.find((a) => a.startsWith('mcp_servers.loadout='))).toContain('required');
+    expect(loadout.args.find((a) => a.startsWith('mcp_servers.loadout='))).toContain('"env_vars" = ["TYPESAFE_API_KEY", "TYPESAFE_BASE_URL"]');
     expect(loadout.args.find((a) => a.startsWith('hooks.UserPromptSubmit='))).toContain('loadout hook codex');
     expect(loadout.args.at(-1)).toBe('P');
     expect(bare.args.slice(bare.args.indexOf('-m'), bare.args.indexOf('-m') + 2)).toEqual(['-m', 'gpt-6.1-sol']);
@@ -156,9 +158,13 @@ describe('commands', () => {
   });
 
   it('pass credentials by allowlist: the key reaches the loadout arm only, the subscription token neither', () => {
-    const env = { TYPESAFE_API_KEY: 'key-value', LOADOUT_HOME: '/h', ANTHROPIC_API_KEY: 'api-value', OPENAI_API_KEY: 'o-value', CLAUDE_CODE_OAUTH_TOKEN: 'token-value' };
+    const env = { TYPESAFE_API_KEY: 'key-value', TYPESAFE_BASE_URL: 'https://jev.example.invalid', LOADOUT_HOME: '/h', ANTHROPIC_API_KEY: 'api-value', OPENAI_API_KEY: 'o-value', CLAUDE_CODE_OAUTH_TOKEN: 'token-value' };
     const bare = runEnv(job('claude', 'bare'), ctx(env));
     const loadout = runEnv(job('claude', 'loadout'), ctx(env));
+    for (const host of ['claude', 'codex'] as const) {
+      expect(runEnv(job(host, 'bare'), ctx(env))).not.toHaveProperty('TYPESAFE_BASE_URL');
+      expect(runEnv(job(host, 'loadout'), ctx(env)).TYPESAFE_BASE_URL).toBe(env.TYPESAFE_BASE_URL);
+    }
     expect(Object.keys(bare)).not.toEqual(expect.arrayContaining(['TYPESAFE_API_KEY']));
     expect(loadout).toMatchObject({ TYPESAFE_API_KEY: 'key-value', LOADOUT_HOME: '/h', CLAUDE_CONFIG_DIR: '/w/home' });
     expect(JSON.stringify([bare, loadout, runEnv(job('codex', 'loadout'), ctx(env))])).not.toMatch(/api-value|o-value|token-value/);

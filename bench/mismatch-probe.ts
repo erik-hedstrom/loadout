@@ -9,10 +9,10 @@
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
-import { loadConfig, paths, resolveApiKey } from '../src/config.js';
+import { jevBaseUrl, loadConfig, paths, resolveApiKey } from '../src/config.js';
 import { jevClient, type Question } from '../src/jev.js';
 import { capabilityKey, scanLibrary } from '../src/library.js';
-import { pool, readJsonl } from './lib.js';
+import { auc, pool, readJsonl } from './lib.js';
 import type { SweepRow } from './sweep.js';
 
 const MISMATCH_QUESTIONS = {
@@ -29,7 +29,7 @@ const rows = readJsonl<SweepRow>(join(dir, 'decisions.jsonl'));
 const blind = new Map(readJsonl<{ id: string; useful: string[] }>(join(values['blind-from'] ?? dir, 'judge-blind.jsonl')).map((b) => [b.id, b]));
 const verdicts = new Map(readJsonl<{ id: string; loaded: { key: string; rating: string }[] }>(join(dir, 'judge-verdicts.jsonl')).map((v) => [v.id, v]));
 const config = loadConfig();
-const client = jevClient({ apiKey: resolveApiKey(config)!, baseUrl: config.jev.baseUrl, model: config.jev.model });
+const client = jevClient({ apiKey: resolveApiKey(config)!, baseUrl: jevBaseUrl(config), model: config.jev.model });
 const byKey = new Map(scanLibrary(paths.library()).map((c) => [capabilityKey(c), c]));
 
 type Label = 'helpful' | 'neutral' | 'misleading';
@@ -61,11 +61,6 @@ await pool(rows.filter((r) => r.loaded.length), 4, async (r) => {
   });
 });
 
-const auc = (pos: number[], neg: number[]) => {
-  let s = 0;
-  for (const p of pos) for (const n of neg) s += p > n ? 1 : p === n ? 0.5 : 0;
-  return pos.length && neg.length ? s / (pos.length * neg.length) : NaN;
-};
 const lines: string[] = [`${obs.length} loads, ${tokens} tokens ($${((tokens / 1e6) * config.jev.inputPricePerMTok).toFixed(4)})`];
 for (const q of Object.keys(MISMATCH_QUESTIONS)) {
   const of = (l: Label) => obs.filter((o) => o.label === l).map((o) => o.scores[q]!);

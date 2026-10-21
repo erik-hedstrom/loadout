@@ -1,0 +1,1 @@
+I got a merge conflict in pricing.py (volume discounts from main against sales tax from feature/sales-tax). Both changes need to survive, so resolve it properly instead of picking a side. test_pricing.py should pass afterwards (`python3 -m unittest`).

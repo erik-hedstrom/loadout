@@ -1,0 +1,21 @@
+Harbor Goods support policy (internal)
+
+Late or lost orders
+- If tracking has not moved for 5 business days, we treat the parcel as lost.
+- For a lost parcel we offer the customer a choice: a replacement shipped
+  express at our cost (2 business days from dispatch), or a full refund to the
+  original payment method. Refunds are issued within 1 business day and the
+  bank takes 3-5 business days to show them.
+- We cannot guarantee a delivery date. Express means 2 business days from
+  dispatch; dispatch happens within 1 business day of the customer's choice.
+- If an order is for a gift with a stated deadline, offer the refund first,
+  because the replacement may not arrive in time.
+
+Tone
+- Apologise once, plainly. No marketing language. Do not blame the carrier.
+- Give the customer the choice and what happens next; do not ask them to
+  contact us again.
+
+Goodwill
+- Customers with a previous problem order get a 15% code (use HARBOR15) on
+  their next order, offered once.

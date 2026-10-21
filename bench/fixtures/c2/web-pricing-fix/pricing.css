@@ -1,0 +1,54 @@
+body {
+  margin: 0;
+  font-family: Helvetica, Arial, sans-serif;
+  color: #333;
+  background: #fafafa;
+}
+
+a { color: #8aa4d6; text-decoration: none; outline: none; }
+
+.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 40px;
+  background: #fff;
+  border-bottom: 1px solid #eee;
+}
+.nav { display: flex; gap: 24px; align-items: center; }
+
+.hero { text-align: center; padding: 48px 20px 24px; }
+.hero h2 { font-size: 36px; margin: 0 0 8px; }
+.sub { color: #aaa; font-size: 16px; }
+
+.plans {
+  width: 960px;
+  margin: 24px auto;
+  border-collapse: collapse;
+  background: #fff;
+}
+.plans th, .plans td {
+  padding: 14px 18px;
+  border-bottom: 1px solid #eee;
+  text-align: left;
+  font-size: 15px;
+}
+.plans th { font-size: 18px; }
+.price { font-size: 28px; font-weight: bold; }
+.per { font-size: 12px; color: #bbb; font-weight: normal; }
+
+.btn {
+  display: inline-block;
+  padding: 10px 18px;
+  border: 1px solid #8aa4d6;
+  color: #8aa4d6;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.btn.primary { background: #8aa4d6; color: #fff; }
+.btn.small { padding: 6px 12px; }
+
+.faq { width: 960px; margin: 40px auto; }
+.faq h4 { margin-bottom: 4px; }
+.faq p { color: #999; margin-top: 0; }

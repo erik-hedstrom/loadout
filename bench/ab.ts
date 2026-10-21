@@ -44,8 +44,8 @@ const WARMUP_PROMPT = 'Reply with the single word READY and nothing else. Do not
 export const AB_MODELS: Record<Host, string> = { claude: 'sonnet', codex: 'gpt-6.1-sol' };
 /** Cross-family (AGENTS.md): Codex outputs are judged by Claude, Claude outputs by Codex. */
 const JUDGES: Record<Host, { backend: 'claude' | 'codex'; model: string }> = { claude: { backend: 'codex', model: 'gpt-6.1-sol' }, codex: { backend: 'claude', model: 'opus' } };
-/** Beyond the allowlist, only the loadout arm gets these: the hook and the MCP server read the key and the home. */
-const LOADOUT_ENV = ['TYPESAFE_API_KEY', 'LOADOUT_HOME'];
+/** Beyond the allowlist, only the loadout arm gets these: the hook and the MCP server read the key, endpoint and home. */
+const LOADOUT_ENV = ['TYPESAFE_API_KEY', 'TYPESAFE_BASE_URL', 'LOADOUT_HOME'];
 const CACHE_TTL_MS = 5 * 60_000;
 const FIXTURES = join(DATA, 'ab-fixtures');
 const REPO = resolve(DATA, '..', '..');
@@ -94,8 +94,12 @@ const ALLOWED = ['Bash(node --test)', 'Bash(node --test *)'];
 const { disableAllHooks: _hooksOff, ...CLAUDE_AB_SETTINGS } = CLAUDE_SETTINGS;
 
 /** Claude's server entry as `loadout setup claude-code` registers it; the same server for Codex plus what its plugin's .mcp.json adds. */
-const claudeServer = () => searchServer(false);
-const codexServer = () => ({ ...searchServer(false), required: true, env_vars: ['TYPESAFE_API_KEY'], tools: Object.fromEntries(SEARCH_TOOLS.map((t) => [t, { approval_mode: 'approve' }])) });
+const claudeServer = (env: NodeJS.ProcessEnv) => {
+  const server = searchServer(false);
+  if (env.TYPESAFE_BASE_URL) server.env = { ...server.env, TYPESAFE_BASE_URL: env.TYPESAFE_BASE_URL };
+  return server;
+};
+const codexServer = () => ({ ...searchServer(false), required: true, env_vars: ['TYPESAFE_API_KEY', 'TYPESAFE_BASE_URL'], tools: Object.fromEntries(SEARCH_TOOLS.map((t) => [t, { approval_mode: 'approve' }])) });
 const CODEX_HOOK = [{ hooks: [{ type: 'command', command: 'loadout hook codex', timeout: 30 }] }];
 /** Codex features off in an arm: no plugins and no skill MCP installs anywhere, and no hooks unless this is the loadout arm with its hook. */
 const featuresOff = (arm: Arm, codexHook: boolean) => ['plugins', 'skill_mcp_dependency_install', ...(arm === 'loadout' && codexHook ? [] : ['hooks'])];
@@ -115,7 +119,7 @@ export function buildCommand(job: Job, prompt: string, ctx: Ctx): Command {
   const binary = cli(job.host);
   const env = runEnv(job, ctx);
   if (job.host === 'claude') {
-    const servers = job.arm === 'loadout' ? { [SEARCH_SERVER]: claudeServer() } : {};
+    const servers = job.arm === 'loadout' ? { [SEARCH_SERVER]: claudeServer(env) } : {};
     const trusted = job.arm === 'loadout' ? SEARCH_TOOLS.map((t) => `mcp__${SEARCH_SERVER}__${t}`) : [];
     const args = [...claudeIsolation(servers, CLAUDE_AB_SETTINGS, { restricted: false, prompt }), '--include-hook-events', '--max-turns', String(ctx.maxTurns), '--model', ctx.models.claude, '--permission-mode', 'acceptEdits',
       '--allowedTools', ...ALLOWED, ...trusted, ...(job.arm === 'loadout' ? ['--plugin-dir', join(REPO, 'plugins', 'loadout')] : [])];

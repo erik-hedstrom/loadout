@@ -1,0 +1,6 @@
+GET     /health            public
+GET     /widgets           public; query: page, limit
+POST    /widgets           signed-in users; body: name, colour
+GET     /widgets/{id}      public
+PATCH   /widgets/{id}      signed-in; the widget's owner only
+DELETE  /widgets/{id}      signed-in; admins only
