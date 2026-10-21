@@ -1,6 +1,9 @@
-import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
+import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { delimiter, join, relative } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CONFIG } from '../src/config.js';
 import { doctor, onPath } from '../src/doctor.js';
@@ -35,6 +38,68 @@ it.skipIf(process.platform === 'win32')('does not apply PATHEXT on POSIX', () =>
 });
 
 describe.skipIf(process.platform !== 'win32')('Windows host commands', () => {
+  it.each(['doctor', 'launch'])('does not run cwd node.cmd through a trusted batch host (%s)', (caller) => {
+    const trusted = join(home, 'trusted');
+    const project = join(home, 'project');
+    mkdirSync(trusted);
+    mkdirSync(project);
+    copyFileSync(process.execPath, join(trusted, 'node.exe'));
+    writeFileSync(join(trusted, 'claude.cmd'), '@echo off\r\nnode "%~dp0capture.cjs" %*\r\n');
+    writeFileSync(join(trusted, 'capture.cjs'), 'require("node:fs").writeFileSync(__dirname + "/seen.json", JSON.stringify({args: process.argv.slice(2), key: process.env.TYPESAFE_API_KEY, callerEnv: process.env.LOADOUT_TEST_ENV})); console.log("trusted-node-version");');
+    writeFileSync(join(project, 'node.cmd'), '@echo off\r\necho PLANTED_NODE_RAN>planted-marker\r\necho PLANTED_NODE_RAN\r\n');
+    const module = (name: string) => JSON.stringify(pathToFileURL(join(import.meta.dirname, `../src/${name}.ts`)).href);
+    const script = caller === 'doctor'
+      ? `import {doctor} from ${module('doctor')}; import {DEFAULT_CONFIG} from ${module('config')}; console.log(JSON.stringify(await doctor({...DEFAULT_CONFIG, router: 'lexical', embeddings: false}, () => {throw new Error('unexpected Jev call')})));`
+      : `import {launch, which} from ${module('launch')}; process.exitCode = await launch(which('claude'), ['plain task'], {headless: true});`;
+    const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toLowerCase() !== 'nodefaultcurrentdirectoryinexepath'));
+    const result = spawnSync(process.execPath, ['--import', import.meta.resolve('tsx'), '--input-type=module', '-e', script], {
+      cwd: project, encoding: 'utf8', timeout: 20_000,
+      env: { ...env, PATH: trusted, PATHEXT: '.CMD;.EXE;.BAT;.COM',
+        LOADOUT_HOME: join(home, 'loadout'), CLAUDE_CONFIG_DIR: join(home, 'claude-config'), CODEX_HOME: join(home, 'codex-config'),
+        TYPESAFE_API_KEY: 'caller-key-canary', LOADOUT_TEST_ENV: 'caller-env-canary' },
+    });
+    expect(result.status, result.stderr).toBe(0);
+    expect(existsSync(join(project, 'planted-marker'))).toBe(false);
+    expect(result.stdout).toContain('trusted-node-version');
+    const seen = JSON.parse(readFileSync(join(trusted, 'seen.json'), 'utf8'));
+    expect(seen).toEqual(caller === 'doctor' ? { args: ['--version'] } : { args: ['plain task'], key: 'caller-key-canary', callerEnv: 'caller-env-canary' });
+  });
+
+  it.each([
+    ['codex', '.cmd', 'fix tests', []],
+    ['codex', '.bat', 'fix tests', []],
+    ['claude', '.cmd', 'private-canary\nnext line', []],
+    ['claude', '.bat', 'fix tests', ['--', 'private-canary&value']],
+  ] as const)('refuses predictable %s%s input before Jev or session writes (%#)', async (agent, ext, task, extra) => {
+    const loadout = join(home, 'loadout');
+    mkdirSync(loadout);
+    cpSync(join(import.meta.dirname, 'fixtures/library'), join(loadout, 'library'), { recursive: true });
+    writeFileSync(join(loadout, 'config.json'), JSON.stringify({ embeddings: false }));
+    writeFileSync(join(home, `${agent}${ext}`), '@echo off\r\nexit /b 0\r\n');
+    const fakeClient = vi.fn();
+    const server = createServer((req, res) => { fakeClient(); req.resume(); res.writeHead(400).end('fake Jev must not be called'); });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address() as { port: number };
+    try {
+      const result = await new Promise<{ code: number | null; stderr: string }>((resolve, reject) => {
+        const child = spawn(process.execPath, ['--import', 'tsx', join(import.meta.dirname, '../src/cli.ts'), agent, task, ...extra], {
+          stdio: ['ignore', 'ignore', 'pipe'], timeout: 20_000,
+          env: { ...process.env, PATH: home, PATHEXT: '.COM;.EXE;.BAT;.CMD', LOADOUT_HOME: loadout,
+            TYPESAFE_API_KEY: 'fake-jev-key', TYPESAFE_BASE_URL: `http://127.0.0.1:${address.port}` },
+        });
+        let stderr = '';
+        child.stderr!.on('data', (chunk) => { stderr += chunk; });
+        child.on('error', reject);
+        child.on('close', (code) => resolve({ code, stderr }));
+      });
+      expect(fakeClient).not.toHaveBeenCalled();
+      expect(existsSync(join(loadout, 'sessions'))).toBe(false);
+      expect(result).toEqual({ code: 1, stderr: `loadout: ${BATCH_REFUSAL}\n` });
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
+    }
+  });
+
   it.each(['.exe', '.cmd'])('finds a host installed only as %s for init and doctor', async (ext) => {
     const bin = join(home, `claude${ext}`);
     if (ext === '.exe') copyFileSync(process.execPath, bin);

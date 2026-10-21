@@ -734,7 +734,7 @@ binary alone on `PATH`, so the `claude` judge needed no new seam.
 | D14 | P1 | Codex plugin forwards LOADOUT_HOME | Claude | cloud | done ([#36](https://github.com/erik-hedstrom/loadout/pull/36)): Codex gives a stdio MCP server only its default variables plus `env_vars`, so the plugin's `loadout mcp` ignored a custom `LOADOUT_HOME` (and a `"router": "lexical"` profile in it); now forwarded. A relative `LOADOUT_HOME` is now refused (on Windows, anything but a drive-qualified path, so no drive-relative, UNC or device path) and an empty one ignored; the `HOME` (or `USERPROFILE`) fallback must pass the same check. So the working directory or a remote share cannot become the config. An absolute value, including a mapped network drive, is trusted: a project settings `env` that sets one comes from settings that can already run their own hooks. The config the home points to cannot redirect the key (Erik, 2026-10-19): a `jev.baseUrl` other than api.typesafe.ai is refused unless `TYPESAFE_BASE_URL` names the URL. It still chooses `apiKeyFile`, whose content then reaches only that URL, which is why the home must not come from the working directory either. Checked against the Codex source only, not a live run |
 | D16 | P1 | Warn when the hook runs without a TypeSafe key | Claude | cloud | done ([#27](https://github.com/erik-hedstrom/loadout/pull/27)): once per session, as a `systemMessage`, which Claude Code and Codex both show |
 | D18 | P1 | The hook and `load_skill` can offer `load_skill` only, with no folder | Codex | cloud | todo |
-| D19 | P2 | `which()` honours PATHEXT on Windows | Codex | local | review ([#52](https://github.com/erik-hedstrom/loadout/pull/52)) |
+| D19 | P2 | `which()` honours PATHEXT on Windows | Codex | local | review ([#52](https://github.com/erik-hedstrom/loadout/pull/52)); H1/M1 fixes pending re-review |
 | D20 | P2 | Hook state writes never drop context or the no-key warning | Codex | cloud | review ([#49](https://github.com/erik-hedstrom/loadout/pull/49)) |
 
 **D18. The hook and `load_skill` can offer `load_skill` only, with no folder.**
@@ -769,6 +769,12 @@ shims are not parsed. Launcher arguments usually fall outside that set
 (Codex's inline TOML server config, Claude's appended system prompt, most
 task text), so a host found only as `.cmd` or `.bat` works for `init` and
 `doctor` but rarely for the launcher: install its native `.exe`.
+Review fixes: every batch spawn sets `NoDefaultCurrentDirectoryInExePath=1`
+in the caller's child environment, so cmd.exe does not implicitly search the project
+folder for programs invoked by a trusted shim. Doctor still passes only its
+credential-free environment. Codex batch launches are refused before routing;
+Claude's task and passthrough arguments are checked there too, avoiding Jev
+calls and session writes for predictable refusals.
 
 **D20. Hook state writes never drop context.** From the reviews of #27 (D16);
 Erik kept both out of that PR on 2026-10-19.

@@ -525,12 +525,12 @@ export function codexArgs(session: Session, task: string, extra: string[], opts:
   return [...args, ...extra, codexPrompt(session, task)];
 }
 
-const BATCH_REFUSAL = "Cannot safely pass these arguments to a Windows batch host. Install the host's native .exe or enter the prompt inside the session.";
+export const BATCH_REFUSAL = "Cannot safely pass these arguments to a Windows batch host. Install the host's native .exe or enter the prompt inside the session.";
 const MAX_BATCH_COMMAND_LENGTH = 8191;
 
-/** Shared by the launcher and doctor's credential-free version check. */
-export function hostCommand(bin: string, args: string[]): { command: string; args: string[]; windowsVerbatimArguments?: boolean } {
-  if (process.platform !== 'win32' || !/\.(cmd|bat)$/i.test(bin)) return { command: bin, args };
+/** Returns spawn inputs preserving the caller's environment; unsafe batch input throws a fixed refusal. */
+export function hostCommand(bin: string, args: string[], env: NodeJS.ProcessEnv): { command: string; args: string[]; env: NodeJS.ProcessEnv; windowsVerbatimArguments?: boolean } {
+  if (process.platform !== 'win32' || !/\.(cmd|bat)$/i.test(bin)) return { command: bin, args, env };
   // Batch arguments allow only ASCII letters, digits, spaces and . _ - / \ : = + , @.
   // Quoting that set preserves spaces without admitting cmd syntax or expansions on either
   // the initial invocation or a shim's %* forwarding. A final backslash is refused because
@@ -547,13 +547,15 @@ export function hostCommand(bin: string, args: string[]): { command: string; arg
   return {
     command: shell,
     args: argv,
+    // cmd.exe otherwise searches cwd before PATH for programs invoked by a trusted shim.
+    env: { ...env, NoDefaultCurrentDirectoryInExePath: '1' },
     windowsVerbatimArguments: true,
   };
 }
 
 export function launch(bin: string, args: string[], opts: LaunchOptions = {}): Promise<number> {
   return new Promise((resolve, reject) => {
-    const { command, args: argv, ...options } = hostCommand(bin, args);
+    const { command, args: argv, ...options } = hostCommand(bin, args, process.env);
     // Headless runs get no stdin: `codex exec` otherwise waits for more prompt text on a non-TTY stdin.
     const child = spawn(command, argv, { ...options, stdio: opts.headless ? ['ignore', 'inherit', 'inherit'] : 'inherit' });
     child.on('error', reject);

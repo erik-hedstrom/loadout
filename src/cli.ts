@@ -4,7 +4,7 @@ import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { DEFAULT_CONFIG, jevBaseUrl, loadConfig, paths, resolveApiKey, writeDefaultConfig, type Config } from './config.js';
 import { jevClient } from './jev.js';
-import { claudeArgs, codexArgs, hostSetup, HOSTS, isolateConflict, launch, materialize, pathTranslator, which, windowsPath, type Agent, type Host } from './launch.js';
+import { BATCH_REFUSAL, claudeArgs, codexArgs, hostCommand, hostSetup, HOSTS, isolateConflict, launch, materialize, pathTranslator, which, windowsPath, type Agent, type Host } from './launch.js';
 import { addFromGitHub, addSkills, librarySources, parseGitHub, scanLibrary, skillExcerpt, type AddResult } from './library.js';
 import { repoSignals } from './repo.js';
 import { route } from './route.js';
@@ -313,6 +313,12 @@ async function main(): Promise<number> {
       if (conflict) fail(`--isolate refuses ${conflict} after --: it would undo the isolation`);
 
       const bin = which(agent);
+      if (bin && process.platform === 'win32' && /\.(cmd|bat)$/i.test(bin)) {
+        // Codex's generated TOML overrides cannot pass the batch allowlist. Check Claude's
+        // known inputs now, before paying for routing or writing a session directory.
+        if (agent === 'codex') fail(BATCH_REFUSAL);
+        hostCommand(bin, [task, ...passthrough], process.env);
+      }
       const toPath = pathTranslator(bin);
       const decision = await decide(task, config, Boolean(values.lexical));
       const session = materialize(decision, agent, config, paths.sessions(), toPath, Boolean(values.isolate));

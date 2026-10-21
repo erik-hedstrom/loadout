@@ -29,8 +29,8 @@ function version(bin: string): string | undefined {
   // A shim such as `#!/usr/bin/env node` resolves through PATH too: an empty or relative entry would find a planted `node`.
   if (env.PATH !== undefined) env.PATH = absolutePath().join(delimiter);
   try {
-    const { command, args, ...options } = hostCommand(bin, ['--version']);
-    return execFileSync(command, args, { ...options, encoding: 'utf8', timeout: 10_000, killSignal: 'SIGKILL', stdio: ['ignore', 'pipe', 'ignore'], env }).trim().split('\n')[0];
+    const { command, args, ...options } = hostCommand(bin, ['--version'], env);
+    return execFileSync(command, args, { ...options, encoding: 'utf8', timeout: 10_000, killSignal: 'SIGKILL', stdio: ['ignore', 'pipe', 'ignore'] }).trim().split('\n')[0];
   } catch {
     return undefined;
   }

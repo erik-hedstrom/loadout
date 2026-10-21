@@ -205,8 +205,9 @@ describe('E9 security', () => {
     const library = scanLibrary(join(home, 'library'));
     const decision = await runRoute(library);
     const session = materialize(decision, 'claude', config, tempDir('loadout-s-'));
+    // Inspect generated output independently of any host CLI installed on this machine.
     const cli = (args: string[]) => execFileSync(process.execPath, ['--import', 'tsx', join(import.meta.dirname, '../src/cli.ts'), ...args], {
-      encoding: 'utf8', env: { ...process.env, LOADOUT_HOME: home },
+      encoding: 'utf8', env: { ...process.env, PATH: '', LOADOUT_HOME: home },
     });
     const reports = [cli(['list', '--json']), cli(['route', '--json', '--lexical', TASK]), readFileSync(join(session.dir, 'decision.json'), 'utf8')];
     for (const report of reports) {
@@ -371,7 +372,7 @@ describe('E9 security', () => {
     const envFile = join(home, 'agent-env.json');
     expect(await launch(process.execPath, ['-e', "require('node:fs').writeFileSync(process.argv[1], JSON.stringify(process.env))", envFile], { headless: true })).toBe(0);
     expect(readFileSync(envFile, 'utf8')).not.toContain(secret);
-    const dryRun = execFileSync(process.execPath, ['--import', 'tsx', join(import.meta.dirname, '../src/cli.ts'), 'codex', '--dry-run', '--lexical', TASK], { encoding: 'utf8', env: { ...process.env, LOADOUT_HOME: home } });
+    const dryRun = execFileSync(process.execPath, ['--import', 'tsx', join(import.meta.dirname, '../src/cli.ts'), 'codex', '--dry-run', '--lexical', TASK], { encoding: 'utf8', env: { ...process.env, PATH: '', LOADOUT_HOME: home } });
     expect(dryRun).not.toContain(secret);
     const client = new Client({ name: 'http-relay-test', version: '0.0.1' });
     const transport = new StdioClientTransport({ command: process.execPath, args: ['--import', 'tsx', join(import.meta.dirname, '../src/cli.ts'), 'mcp-launch', 'mcp:http'], env: { LOADOUT_HOME: home }, stderr: 'pipe' });
@@ -534,7 +535,7 @@ describe('E9 security', () => {
     }
     expect(readFileSync(join(session.dir, 'decision.json'), 'utf8')).not.toMatch(/e9-(url|query|path)-secret/);
     expect(codexArgs(session, TASK, []).join(' ')).not.toMatch(/e9-(url|query|fragment)-secret/);
-    const dryRun = spawnSync(process.execPath, ['--import', 'tsx', join(import.meta.dirname, '../src/cli.ts'), 'codex', '--dry-run', '--lexical', TASK], { encoding: 'utf8', env: { ...process.env, LOADOUT_HOME: home } });
+    const dryRun = spawnSync(process.execPath, ['--import', 'tsx', join(import.meta.dirname, '../src/cli.ts'), 'codex', '--dry-run', '--lexical', TASK], { encoding: 'utf8', env: { ...process.env, PATH: '', LOADOUT_HOME: home } });
     expect(dryRun.status).toBe(0);
     expect(dryRun.stdout + dryRun.stderr).not.toMatch(/e9-(url|query|fragment)-secret/);
     if (url.includes('e9-path-secret')) expect(dryRun.stdout).toContain(url);
@@ -695,7 +696,7 @@ catch (err) { console.log(err.message); }
       writeFileSync(join(home, 'library/skills/canary/SKILL.md'), '---\nname: canary\ndescription: Playwright tests\n---\nTesting instructions.');
       const outputs = [decision.warning!, reportJson(decision)];
       for (const args of [['route', '--json', TASK], ['codex', '--dry-run', TASK], ['hook', 'claude']]) {
-        const result = spawnSync(process.execPath, ['--import', 'tsx', '--import', pathToFileURL(preload).href, join(import.meta.dirname, '../src/cli.ts'), ...args], { encoding: 'utf8', env: { ...process.env, LOADOUT_HOME: home, TYPESAFE_API_KEY: apiKey }, input: JSON.stringify({ prompt: TASK }) });
+        const result = spawnSync(process.execPath, ['--import', 'tsx', '--import', pathToFileURL(preload).href, join(import.meta.dirname, '../src/cli.ts'), ...args], { encoding: 'utf8', env: { ...process.env, PATH: '', LOADOUT_HOME: home, TYPESAFE_API_KEY: apiKey }, input: JSON.stringify({ prompt: TASK }) });
         expect(result.status, result.stderr).toBe(0);
         if (args[0] === 'route') expect(JSON.parse(result.stdout)).toMatchObject({ router: 'lexical', warning });
         else if (args[0] === 'codex') expect(result.stderr).toContain(warning);
