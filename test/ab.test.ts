@@ -7,7 +7,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { persistJson, redact, report, type RunRow, type Verdict } from '../bench/ab-report.js';
+import { CREDENTIAL_SHAPE, persistJson, redact, report, type RunRow, type Verdict } from '../bench/ab-report.js';
 import { JUDGE_MAX_BYTES } from '../bench/pairwise.js';
 import { AB_MODELS, blockers, buildCommand, checkRun, copyOutputs, hiddenResult, hookFacts, main, openedSkills, planLines, promptText, provenance, redactNames, refuseOtherSettings, refuseStopped, routedByKeyword, runEnv, schedule, scrub, type Ctx, type Evidence, type Job, type Options } from '../bench/ab.js';
 import { JEV_FALLBACK_NOTE, NO_KEY_WARNING } from '../src/hook.js';
@@ -675,10 +675,11 @@ describe('public text sinks', () => {
   const jwt = 'eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ1c2VyIn0.c2lnbmF0dXJl';
   const text = `${held} ${held} ${shape} ${jwt}`;
 
-  it('redacts a token behind a tool-name prefix but leaves words that merely contain "sk-"', () => {
-    const words = 'task-specific-instructions-were-followed; risk-assessment-framework-for-teams; desk-research-and-synthesis-notes';
-    expect(redact(words, [])).toBe(words);
-    expect(redact(`mcp__loadout__${shape} and (${jwt})`, [])).toBe('mcp__loadout__<credential> and (<credential>)');
+  it('redacts a token whatever precedes it, while the deliverable stop rule skips kebab-case identifiers', () => {
+    expect(redact(`mcp__loadout__${shape} key${shape} \\n${shape} (${jwt})`, [])).toBe('mcp__loadout__<credential> key<credential> \\n<credential> (<credential>)');
+    const css = '.mask-image-linear-gradient-overlay, .task-list-item-checkbox-wrapper { display: none }';
+    expect(CREDENTIAL_SHAPE.test(css)).toBe(false);
+    expect(CREDENTIAL_SHAPE.test(`key: ${shape}`) && CREDENTIAL_SHAPE.test(`x_${shape}`)).toBe(true);
   });
 
   it('redacts every plan and blocker print at the print sink', async () => {
@@ -710,12 +711,12 @@ describe('structured JSON persistence', () => {
     const name = prefix + shape;
     const events = toolEvents(JSON.stringify({ type: 'item.completed', item: { type: 'mcp_tool_call', server: 'loadout', tool: 'load_skill', arguments: { skill: name }, status: 'completed' } })).events;
     const hook = hookFacts(JSON.stringify({ hookSpecificOutput: { additionalContext: `<skill name="${name}">text</skill>` } }));
-    const saved = JSON.parse(persistJson({ row: row({ skillsOpened: openedSkills(events), hook: { invocations: 1, ...hook }, leak: { file: name + '.md', rule: 'held secret' } }), reason: name + prefix + held, [shape]: 7 }, [held]));
+    const saved = JSON.parse(persistJson({ row: row({ skillsOpened: openedSkills(events), hook: { invocations: 1, ...hook }, leak: { file: name + '.md', rule: 'held secret' } }), reason: name + prefix + held, [prefix + shape]: 7 }, [held]));
     expect(saved.row.skillsOpened).toEqual([prefix + '<credential>']);
     expect(saved.row.hook.injected).toEqual([prefix + '<credential>']);
     expect(saved.row.leak.file).toBe(prefix + '<credential>.md');
     expect(saved.reason).toBe(prefix + '<credential>' + prefix + '<credential>');
-    expect(saved['<credential>']).toBe(7);
+    expect(saved[prefix + '<credential>']).toBe(7);
     expect(saved.row.totals.uncached).toBe(12);
     expect(saved.row.totals.cacheRead).toBe(41000);
   });
@@ -752,9 +753,10 @@ describe('credential screening before persistence', () => {
   ]);
   cases.push({ when: 'measured code', where: '.env', kind: 'held' });
   cases.push({ when: 'measured', where: 'shaped filename', kind: 'held' });
-  const leads: Record<string, string> = { newline: '\n', tab: '\t', carriage: '\r', unicode: '\u000b', backslash: '\\', quote: '"', slash: '/', backspace: '\b', formfeed: '\f' };
+  // `nested` is JSON text inside a JSON string (an MCP result quoting JSON): a literal backslash-n before the token.
+  const leads: Record<string, string> = { newline: '\n', tab: '\t', carriage: '\r', unicode: '\u000b', backslash: '\\', quote: '"', slash: '/', backspace: '\b', formfeed: '\f', nested: '\\n', letter: 'key' };
   for (const prefix of ['carriage', 'unicode', 'backslash', 'quote', 'slash', 'backspace', 'formfeed']) cases.push({ when: 'measured', where: 'stdout', kind: 'shape', prefix });
-  for (const prefix of ['newline', 'tab']) for (const where of ['hook', 'stdout']) cases.push({ when: 'measured', where, kind: 'shape', prefix });
+  for (const prefix of ['newline', 'tab', 'nested', 'letter']) for (const where of ['hook', 'stdout']) cases.push({ when: 'measured', where, kind: 'shape', prefix });
   cases.push({ when: 'measured', where: 'model', kind: 'shape' });
   it.each(cases)('$kind credential in $where during $when ($prefix) obeys the persistence boundary', async ({ when, where, kind, prefix }) => {
     const dir = temp('loadout-ab-screen-');

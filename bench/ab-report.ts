@@ -5,19 +5,32 @@ import type { RequestUsage, RunUsage } from './usage.js';
 
 /**
  * What Codex's login tokens (JWTs) and API keys look like; they can occur in third-party skill text and parsed metadata.
- * Not preceded by a letter or digit, rather than `\b`: a parsed tool name puts `_` before an embedded token
- * (`mcp__x__sk-…`), while words such as `task-specific-…` or `risk-…` in names and judge reasons must stay intact.
+ * TOKEN_ANYWHERE has no boundary on purpose: any boundary can be defeated by what precedes a token (a letter, or a JSON
+ * escape such as `\n` or `\\n`, which ends in a letter), while escaping never changes the token's own run. It is used
+ * where a false positive is cheap: redaction at every sink (a rare kebab-case name such as `task-…` with 20+ characters
+ * after `sk-` is shown as `<credential>`) and withholding a local stream.
  */
-const SHAPE = String.raw`(?<![A-Za-z0-9])(?:eyJ[\w-]{8,}\.[\w-]{8,}\.[\w-]{8,}|sk-[\w-]{20,})`;
-export const CREDENTIAL_SHAPE = new RegExp(SHAPE);
+const TOKEN = String.raw`(?:eyJ[\w-]{8,}\.[\w-]{8,}\.[\w-]{8,}|sk-[\w-]{20,})`;
+export const TOKEN_ANYWHERE = new RegExp(TOKEN);
+/**
+ * For the one check where a false positive stops a paid study, a token shape in a deliverable: not preceded by a letter
+ * or digit, so kebab-case identifiers in agent code (`mask-image-…`, `task-list-item-…`) do not match. A token glued to a
+ * letter in a deliverable is therefore not caught; held secrets are matched exactly and are unaffected.
+ */
+export const CREDENTIAL_SHAPE = new RegExp(String.raw`(?<![A-Za-z0-9])${TOKEN}`);
 
 export function redact(text: string, secrets: string[]): string {
   for (const secret of secrets.filter(Boolean).sort((a, b) => b.length - a.length)) text = text.split(secret).join('<credential>');
-  return text.replace(new RegExp(SHAPE, 'g'), '<credential>');
+  return text.replace(new RegExp(TOKEN, 'g'), '<credential>');
 }
 
+/** Keys and string values are redacted decoded, so a held secret is matched as it was, not as JSON escaped it. */
 export function persistJson(value: unknown, secrets: string[]): string {
-  return redact(JSON.stringify(value, (_key, item: unknown) => typeof item === 'string' ? redact(item, secrets) : item), secrets);
+  const clean = (v: unknown): unknown => typeof v === 'string' ? redact(v, secrets)
+    : Array.isArray(v) ? v.map(clean)
+    : v !== null && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [redact(k, secrets), clean(x)]))
+    : v;
+  return JSON.stringify(clean(value));
 }
 
 export interface Leak { file: string; rule: 'held secret' | 'token shape' }

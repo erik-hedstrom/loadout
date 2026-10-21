@@ -23,7 +23,7 @@ import { DEFAULT_CONFIG, loadConfig, paths, resolveApiKey } from '../src/config.
 import { JEV_FALLBACK_NOTE, NO_KEY_WARNING } from '../src/hook.js';
 import { hookCommand, SEARCH_SERVER, SEARCH_TOOLS, searchServer, toToml } from '../src/launch.js';
 import { capabilityKey, readManifest, scanLibrary } from '../src/library.js';
-import { CREDENTIAL_SHAPE, persistJson, redact, report, type Leak, type RunRow, type Verdict } from './ab-report.js';
+import { CREDENTIAL_SHAPE, persistJson, redact, report, TOKEN_ANYWHERE, type Leak, type RunRow, type Verdict } from './ab-report.js';
 import { codexJudgeRefusal, DATA, modelJson, readJsonl, RESULTS, run } from './lib.js';
 import { CLAUDE_MANAGED_PRECONDITION, CLAUDE_SCRUB_PRECONDITION, CLAUDE_SETTINGS, CLAUDE_SWITCH_PRECONDITION, CODEX_CLOUD_PRECONDITION, childEnv, claudeEnv, envAllowlist, hostWrites, redacted, refusedFiles, resetWork } from './mcp-overhead.js';
 import { assertTemporary, claudeIsolation, cli, execute, validateFeatures, type Command, type Host } from './overhead.js';
@@ -364,9 +364,6 @@ function version(host: Host): string {
   return /\d+\.\d+\.\d+\S*/.exec(text)?.[0] ?? text;
 }
 
-function streamHasToken(stdout: string): boolean {
-  return CREDENTIAL_SHAPE.test(stdout.replace(/\\(?:u[0-9a-fA-F]{4}|["\\/bfnrt])/g, ' '));
-}
 
 interface Study { out: string; previous: RunRow[]; token?: string; secrets: string[]; versions: Record<string, string> }
 
@@ -418,7 +415,7 @@ async function execute1(job: Job, prompt: string, spec: PromptSpec | undefined, 
   const invalid = leak ? CREDENTIAL_IN_OUTPUT : broken;
   const hiddenTest = spec?.hidden && !job.warmup && !leak ? hiddenResult(ctx.work, join(FIXTURES, spec.hidden)) : null;
   // Skill text can contain placeholder tokens: withhold such streams without losing a valid measurement.
-  const streamWithheld = !leak && streamHasToken(proc.stdout);
+  const streamWithheld = !leak && TOKEN_ANYWHERE.test(proc.stdout);
   if (!leak && !streamWithheld) {
     mkdirSync(join(out, 'streams'), { recursive: true });
     writeFileSync(join(out, 'streams', `${id.replace(/\//g, '_')}.jsonl`), proc.stdout);
