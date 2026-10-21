@@ -237,7 +237,7 @@ native machine:
 - **Outcome evaluation:** the arms invent their own inputs, the runs inherit
   the user's Codex config, and the sample is tiny.
 - **Router precision on new requests:** lower on C1's held-out requests than
-  on v4's, with the numbers in the [README](README.md#what-is-measured) and
+  on v4's, with the numbers in
   [RESULTS](bench/RESULTS.md#c1-2026-10-08-new-held-out-requests), mostly on
   general business requests. Generic skills such as
   `frontend-ui-engineering` load on simple UI work (C4).

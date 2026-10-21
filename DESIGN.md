@@ -280,7 +280,8 @@ library itself, in its own words, through MCP:
 - The tool description and the server's `instructions` ask for a search
   before the first specialised step, even in a familiar domain, and again when
   the domain changes. Measured uptake is still partial ([RESULTS](bench/RESULTS.md#do-agents-use-what-they-are-given)),
-  which is why the launcher's upfront pick stays the main path.
+  so up-front routing (the hook or the launcher) is the main path, and search
+  is the supplement.
 - **`load_skill(skill, file?)`** returns the SKILL.md as attributed
   third-party reference material (the same framing as injection) plus a list of
   the skill's files. A file is read only inside the skill folder: no `..`, no
@@ -369,7 +370,8 @@ prompt, which shows the server, tool and arguments.
 ### Prompt hook
 
 The settings-file hook and the hook-only plugin have separate measurements
-([RESULTS](bench/RESULTS.md#do-agents-use-what-they-are-given)):
+([RESULTS](bench/RESULTS.md#do-agents-use-what-they-are-given)).
+
 - each substantive prompt (not "yes" or "go on") is routed with the same two
   Jev requests;
 - the skills that fit are listed once per session, as third-party metadata,

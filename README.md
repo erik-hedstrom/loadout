@@ -54,8 +54,8 @@ Then start `claude` or `codex` as usual. Latency and setup details:
 **Privacy:** with a key set, the hook sends the text of each prompt event
 except short follow-ups such as "yes" or "go on", in every project, to
 TypeSafe's Jev API with repository and skill details. `"router": "lexical"` in
-`~/.loadout/config.json` (under `$LOADOUT_HOME` when set) keeps prompts local; the hook then
-adds context only for prompts that name a skill. What is sent, and from where:
+`~/.loadout/config.json` (under `$LOADOUT_HOME` when set) keeps prompts local.
+What is sent, and from where:
 [privacy](docs/hook.md#privacy).
 
 ## What is measured
@@ -77,8 +77,9 @@ All numbers, caveats and negative results: [bench/RESULTS.md](bench/RESULTS.md).
   (31–83%) sessions when the prompt hook was added from settings.json
   ([RESULTS](bench/RESULTS.md#do-agents-use-what-they-are-given)).
   The hook-only plugin injected full skill text in 6 of 10 sessions
-  (31–83%); no library skill was opened (0–28%). Whether the injected text
-  was followed is not shown ([same study](bench/RESULTS.md#do-agents-use-what-they-are-given)).
+  (31–83%); no library skill was opened (0–28%; headless, WSL behind Windows,
+  where folder reads were not permitted). Whether the injected text was
+  followed is not shown ([same study](bench/RESULTS.md#do-agents-use-what-they-are-given)).
 - **Better work: not shown.** In an 8-request, nominally blind pilot with
   Codex (gpt-6.1-sol, 6-minute cap), where the loadout arm got the judge's
   top skill, it won 4 (22–78%), lost 3 (14–69%) and split 1 (2–47%)

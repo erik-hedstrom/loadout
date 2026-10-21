@@ -34,8 +34,8 @@ to `find_tools`, they cost more than a native listing of 50 skills
 ([B1](../bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request));
 later turns and Codex are not measured. In the headless runs, agents searched
 on their own mainly for tasks that felt unfamiliar
-([RESULTS](../bench/RESULTS.md#do-agents-use-what-they-are-given)). So the
-[hook plugins](hook.md) are the main path and search is the supplement.
+([RESULTS](../bench/RESULTS.md#do-agents-use-what-they-are-given)). See
+[routing and search roles](../DESIGN.md#search-server-loadout-mcp).
 
 Privacy: [what `find_tools` sends to TypeSafe](hook.md#privacy).
 

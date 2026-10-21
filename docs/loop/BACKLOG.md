@@ -36,7 +36,7 @@ Each PR body's **Review state** section has the round-by-round record.
 | PR | Item | State on 2026-10-22 |
 |---|---|---|
 | [#47](https://github.com/erik-hedstrom/loadout/pull/47) | C14 A/B pilot harness; adds B10 | final review round; the clean Codex-only rerun needs a separately logged-in `CODEX_HOME` |
-| [#28](https://github.com/erik-hedstrom/loadout/pull/28) | A1 README rewrite | main merged through #48; documentation refreshed; renewed reviews and full CI pending |
+| [#28](https://github.com/erik-hedstrom/loadout/pull/28) | A1 README rewrite | main merged through #49; documentation review fixes awaiting the merge gate |
 
 ## A. Adoption and ease of use
 
@@ -94,34 +94,13 @@ Acceptance:
 - Reviewed for honesty: the outcome pilot is mixed, so the README must not
   claim better results.
 
-A1 learnings (2026-10-12): the README now leads with B1's number, the
-plugins and a from-source install (no npm name yet, A4); launcher, library,
-hook and MCP details moved to `docs/launcher.md`, `docs/library.md`,
-`docs/hook.md` and `docs/mcp.md`, and the security model and router stay in
-SECURITY.md and DESIGN.md. The quickstart ran in a container from a fresh
-clone through `npm link` into a temp prefix, `init`, `add`, `route
---lexical`, `setup` and `doctor`, with `LOADOUT_HOME`, `CLAUDE_CONFIG_DIR`
-and `CODEX_HOME` in temp dirs. `loadout audit` was not run there; its fake-home
-tests cover it. Left: the
-GIF (A5), the plugin installs on a machine with the CLIs, and the npm
-install line once A4 picks a name.
-
-A1 merge refresh (2026-10-22): merged main through #48, retaining main's
-merged #36 code and tests unchanged. Kept the README rewrite and moved the
-newer starter-pack, isolation, Codex startup and API-destination guidance
-into the corresponding user docs. C8's hook-only plugin results now stay
-distinct from the settings-hook-plus-search result; following the injected
-text and better outcomes remain not shown. Recheck relative paths, anchors
-and UTF-8 on the complete documentation delta before each review.
-
-Refresh validation: `npm run typecheck` and `npm run build` passed;
-`npm test -- --maxWorkers=2 --testTimeout=60000 --hookTimeout=60000` passed
-542 tests, with 17 Windows skips (including the POSIX smoke tests).
-The ten-file documentation delta has 156 valid relative links/anchors,
-78 reachable external destinations, and no mojibake. An isolated, keyless
-lexical CLI smoke check covered help, init, local add, list, route and setup;
-doctor reported the expected unconfigured-host and missing-install gaps.
-No new guards or paid calls; renewed reviews and full CI remain pending.
+A1 learnings: keep the scope of B1's listing-cost measurement beside the
+README headline, and use a source install until A4 settles the npm name.
+Launcher, library, hook and MCP details belong in `docs/launcher.md`,
+`docs/library.md`, `docs/hook.md` and `docs/mcp.md`; SECURITY.md and DESIGN.md
+hold the security model and router. Keep C8's hook-only plugin results
+distinct from the settings-hook-plus-search result: following injected text
+and better outcomes remain not shown.
 
 **A3. `loadout init` wizard and starter packs.**
 
