@@ -1,4 +1,4 @@
- review ([#51](https://github.com/erik-hedstrom/loadout/pull/51)) |undefined# Backlog
+# Backlog
 
 The orchestrator keeps this file current. Statuses: `todo`, `in progress (PR #)`,
 `review`, `done (PR #)`, `blocked: <why>`.
@@ -1252,7 +1252,7 @@ Learnings (2026-10-09):
 | E14 | P1 | Redact key-shaped strings before anything goes to Jev (prerequisite for the C2 loadout arm) | Codex | cloud | todo |
 | E15 | P1 | Test flakes: WSL-only `bench.test.ts` failure, Windows spawn timeouts | Claude | local | done ([#44](https://github.com/erik-hedstrom/loadout/pull/44)) |
 | E16 | P2 | Hygiene from #30's audit: control characters, `git ls-files` env, config symlink, echoed arguments | Claude | cloud | todo |
-| E17 | P3 | One entry-point guard for bench scripts that survives symlinked paths | Codex + Claude review | cloud | review ([#TBD]); implementation verified, independent reviews pending |
+| E17 | P3 | One entry-point guard for bench scripts that survives symlinked paths | Codex + Claude review | cloud | review ([#51](https://github.com/erik-hedstrom/loadout/pull/51)) |
 
 **E16. Terminal, config and git hygiene.** From the reviews of #30 (A3);
 all older than it.
