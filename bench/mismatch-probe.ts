@@ -9,7 +9,7 @@
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
-import { loadConfig, paths, resolveApiKey } from '../src/config.js';
+import { jevBaseUrl, loadConfig, paths, resolveApiKey } from '../src/config.js';
 import { jevClient, type Question } from '../src/jev.js';
 import { capabilityKey, scanLibrary } from '../src/library.js';
 import { pool, readJsonl } from './lib.js';
@@ -29,7 +29,7 @@ const rows = readJsonl<SweepRow>(join(dir, 'decisions.jsonl'));
 const blind = new Map(readJsonl<{ id: string; useful: string[] }>(join(values['blind-from'] ?? dir, 'judge-blind.jsonl')).map((b) => [b.id, b]));
 const verdicts = new Map(readJsonl<{ id: string; loaded: { key: string; rating: string }[] }>(join(dir, 'judge-verdicts.jsonl')).map((v) => [v.id, v]));
 const config = loadConfig();
-const client = jevClient({ apiKey: resolveApiKey(config)!, baseUrl: config.jev.baseUrl, model: config.jev.model });
+const client = jevClient({ apiKey: resolveApiKey(config)!, baseUrl: jevBaseUrl(config), model: config.jev.model });
 const byKey = new Map(scanLibrary(paths.library()).map((c) => [capabilityKey(c), c]));
 
 type Label = 'helpful' | 'neutral' | 'misleading';

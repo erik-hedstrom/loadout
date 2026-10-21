@@ -97,7 +97,7 @@ export async function doctor(config: Config, client: (apiKey: string) => SystemO
         checks.push({ name: 'Jev call', ok: true, detail: `answered in ${Date.now() - started} ms` });
       } catch (err) {
         // jevClient's errors are fixed text (E11): no key, prompt or response body.
-        checks.push({ name: 'Jev call', ok: false, detail: err instanceof Error ? err.message : 'failed', fix: 'check the key, and that the Jev API (jev.baseUrl, api.typesafe.ai by default) is reachable' });
+        checks.push({ name: 'Jev call', ok: false, detail: err instanceof Error ? err.message : 'failed', fix: 'check the key, and that the Jev API (api.typesafe.ai, or the URL in TYPESAFE_BASE_URL) is reachable' });
       }
     }
   }

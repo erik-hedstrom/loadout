@@ -13,7 +13,7 @@ import { appendFileSync, mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import { loadConfig, paths, resolveApiKey } from '../src/config.js';
+import { jevBaseUrl, loadConfig, paths, resolveApiKey } from '../src/config.js';
 import { libraryEmbeddings } from '../src/embed.js';
 import { jevClient } from '../src/jev.js';
 import { capabilityKey, scanLibrary, skillExcerpt } from '../src/library.js';
@@ -70,7 +70,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const config = loadConfig();
   const apiKey = resolveApiKey(config);
   if (!apiKey) throw new Error('needs a TypeSafe key (loadout init)');
-  const client = jevClient({ apiKey, baseUrl: config.jev.baseUrl, model: config.jev.model });
+  const client = jevClient({ apiKey, baseUrl: jevBaseUrl(config), model: config.jev.model });
   const library = scanLibrary(paths.library());
   const repo = { name: 'project', files: [], dependencies: [], languages: {} };
   const embeddings = config.embeddings ? await libraryEmbeddings(library, paths.embeddings(), console.log) : undefined;
