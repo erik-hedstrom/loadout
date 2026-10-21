@@ -1252,7 +1252,7 @@ Learnings (2026-10-09):
 | E14 | P1 | Redact key-shaped strings before anything goes to Jev (prerequisite for the C2 loadout arm) | Codex | cloud | todo |
 | E15 | P1 | Test flakes: WSL-only `bench.test.ts` failure, Windows spawn timeouts | Claude | local | done ([#44](https://github.com/erik-hedstrom/loadout/pull/44)) |
 | E16 | P2 | Hygiene from #30's audit: control characters, `git ls-files` env, config symlink, echoed arguments | Claude | cloud | todo |
-| E17 | P3 | One entry-point guard for bench scripts that survives symlinked paths | Claude | cloud | todo |
+| E17 | P3 | One entry-point guard for bench scripts that survives symlinked paths | Codex + Claude review | cloud | review ([#TBD]); implementation verified, independent reviews pending |
 
 **E16. Terminal, config and git hygiene.** From the reviews of #30 (A3);
 all older than it.
@@ -1276,6 +1276,24 @@ real path, so a script started through a symlink or junction (`/tmp` on
 macOS) does nothing and exits 0. Acceptance: one `isEntry(import.meta.url)`
 in bench/lib.ts comparing real paths, and no `resolve(process.argv[1])` guard
 left under bench/, with a test that runs a script through a link.
+
+Implementation: `isEntry(moduleUrl: string): boolean` in `bench/lib.ts`
+compares `realpathSync` on both paths. All seven existing guards use it,
+including `need-audit.ts`; there is no `ab.ts` in this checkout. The regression
+suite in `test/bench-entry.test.ts` covers direct and symlinked invocation,
+equal stability reports, linked module URLs, and imports with and without
+an argv entry. Link tests skip only when creation fails with EPERM, EACCES
+or ENOTSUP, reporting the platform and error code. Learning: canonicalize
+both sides; resolving only argv leaves linked module URLs unmatched.
+
+Verified: `npm test -- --maxWorkers=2` passed on Windows (560 passed,
+17 skipped, including POSIX smoke tests) and WSL (575 passed, 2 skipped).
+All 18 new tests ran on both platforms. `npm run typecheck` passed on both;
+`npm run build` passed on Windows; `git diff --check` was clean. Eleven
+mutations were caught and restored from saved bytes. No benchmark model calls; $0
+additional spend. Run Linux verification outside the system temp directory:
+the existing `resetWork` test assumes the checkout is outside it. Remaining:
+Claude and fresh Codex reviews, PR link, full CI and Erik's merge gate.
 
 **E10. Build without optional dependencies.** src/embed.ts:24 types
 `@huggingface/transformers` with `typeof import(...)`. So `tsc` fails when npm

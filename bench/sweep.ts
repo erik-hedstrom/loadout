@@ -10,8 +10,7 @@
  *   npx tsx bench/sweep.ts [--requests bench/data/requests.jsonl] [--limit 50] [--seed]
  */
 import { appendFileSync, mkdirSync } from 'node:fs';
-import { join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { jevBaseUrl, loadConfig, paths, resolveApiKey } from '../src/config.js';
 import { libraryEmbeddings } from '../src/embed.js';
@@ -19,7 +18,7 @@ import { jevClient } from '../src/jev.js';
 import { capabilityKey, scanLibrary, skillExcerpt } from '../src/library.js';
 import { NONE, route } from '../src/route.js';
 import type { RawRouting, ScoredCapability } from '../src/types.js';
-import { DATA, pool, readJsonl, RESULTS } from './lib.js';
+import { DATA, isEntry, pool, readJsonl, RESULTS } from './lib.js';
 
 export interface SweepRequest { id: string; category: string; request: string; seed?: string }
 
@@ -54,7 +53,7 @@ function trimRaw({ candidates: _, ...raw }: RawRouting): Omit<RawRouting, 'candi
   return { ...raw, wide: { ...raw.wide, pick: Object.fromEntries([...raw.shortlist, NONE].map((k) => [k, raw.wide.pick[k] ?? 0])) } };
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isEntry(import.meta.url)) {
   const { values } = parseArgs({
     options: {
       requests: { type: 'string', default: join(DATA, 'requests.jsonl') },
