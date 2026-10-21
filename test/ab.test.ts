@@ -10,6 +10,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { CREDENTIAL_SHAPE, persistJson, redact, report, type RunRow, type Verdict } from '../bench/ab-report.js';
 import { JUDGE_MAX_BYTES } from '../bench/pairwise.js';
 import { AB_MODELS, blockers, buildCommand, checkRun, copyOutputs, hiddenResult, hookFacts, main, openedSkills, planLines, promptText, provenance, redactNames, refuseOtherSettings, refuseStopped, routedByKeyword, runEnv, schedule, scrub, type Ctx, type Evidence, type Job, type Options } from '../bench/ab.js';
+import { DEFAULT_CONFIG } from '../src/config.js';
 import { JEV_FALLBACK_NOTE, NO_KEY_WARNING } from '../src/hook.js';
 import { hookShim, toolEvents } from '../bench/stream.js';
 import { claudeUsage, codexUsage, effectiveInput } from '../bench/usage.js';
@@ -244,6 +245,24 @@ describe('plan', () => {
     try { symlinkSync(shared, join(home, 'AGENTS.md')); } catch { return; } // Windows without the privilege to link
     expect(blocked(home)).toHaveLength(1);
     expect(blockers({ ...options, hosts: ['claude'] }, { CODEX_HOME: home }).some((b) => b.includes('global instructions'))).toBe(false);
+  });
+
+  it.each([
+    { label: 'non-default without override', baseUrl: 'https://jev.example.invalid', override: undefined, ambient: 'https://ambient.example.invalid', blocked: true },
+    { label: 'non-default with override', baseUrl: 'https://jev.example.invalid', override: 'https://override.example.invalid', ambient: '', blocked: false },
+    { label: 'default', baseUrl: DEFAULT_CONFIG.jev.baseUrl, override: undefined, ambient: '', blocked: false },
+  ])('checks the Jev endpoint before spending: $label', ({ baseUrl, override, ambient, blocked }) => {
+    const home = process.env.LOADOUT_HOME!;
+    writeFileSync(join(home, 'config.json'), JSON.stringify({ router: 'jev', jev: { baseUrl } }));
+    vi.stubEnv('TYPESAFE_API_KEY', 'synthetic-key');
+    vi.stubEnv('TYPESAFE_BASE_URL', ambient);
+    const inherited = process.env;
+    const found = blockers({ ...options, hosts: ['codex'] }, { CODEX_HOME: join(home, 'codex'), TYPESAFE_BASE_URL: override })
+      .filter((b) => b.includes('jev.baseUrl'));
+    expect(found).toEqual(blocked ? ['jev.baseUrl in config.json is not the default; the key is sent to another host only when TYPESAFE_BASE_URL names it'] : []);
+    expect(found.join('\n')).not.toContain('https://jev.example.invalid');
+    expect(process.env).toBe(inherited);
+    expect(process.env.TYPESAFE_BASE_URL).toBe(ambient);
   });
 
   it('wants the key in a key file for Claude, whose MCP allowlist and hook scrub can drop the variable', () => {

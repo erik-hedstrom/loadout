@@ -19,7 +19,7 @@ import { createHash } from 'node:crypto';
 import { delimiter, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import { DEFAULT_CONFIG, loadConfig, paths, resolveApiKey } from '../src/config.js';
+import { DEFAULT_CONFIG, jevBaseUrl, loadConfig, paths, resolveApiKey } from '../src/config.js';
 import { JEV_FALLBACK_NOTE, NO_KEY_WARNING } from '../src/hook.js';
 import { hookCommand, SEARCH_SERVER, SEARCH_TOOLS, searchServer, toToml } from '../src/launch.js';
 import { capabilityKey, readManifest, scanLibrary } from '../src/library.js';
@@ -314,6 +314,14 @@ export function blockers(o: Options, env: NodeJS.ProcessEnv = process.env): stri
     if (!library.length) out.push(`the loadout library is empty (${redacted(paths.library())}): the hook would route over nothing`);
     const unblindable = library.filter((c) => TOKEN_ANYWHERE.test(c.name) || TOKEN_ANYWHERE.test(capabilityKey(c))).length;
     if (unblindable) out.push(`library capability names requiring redaction: ${unblindable}; blind judging is not possible`);
+  }
+  if (config?.router === 'jev') {
+    const inherited = process.env;
+    try {
+      process.env = env;
+      jevBaseUrl(config);
+    } catch (error) { out.push((error as Error).message); }
+    finally { process.env = inherited; }
   }
   if (config?.router === 'jev' && !resolveApiKey(config)) out.push('the loadout arm needs a TypeSafe key (TYPESAFE_API_KEY or `loadout init --key-file`), or it measures keyword routing');
   // Claude can strip the variable from the MCP server (its environment allowlist) and the hook (its subprocess scrub), but not a key file the config names.
