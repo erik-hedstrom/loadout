@@ -1224,7 +1224,7 @@ Learnings (2026-10-09):
 | E1 | P0 | GitHub Actions CI | Codex | cloud | done ([PR #2](https://github.com/erik-hedstrom/loadout/pull/2)) |
 | E2 | P0 | LICENSE, CONTRIBUTING, SECURITY.md, templates | Claude | cloud + erik | done ([PR #1](https://github.com/erik-hedstrom/loadout/pull/1)) |
 | E7 | P0 | Vendor-independent bench judges and expander | Codex | cloud | done ([PR #5](https://github.com/erik-hedstrom/loadout/pull/5)) |
-| E8 | P0 | Repo-wide simplification pass | Claude (pr-reviewer finds, worker fixes) + Codex review | cloud | in progress (merged: bench/ [#11](https://github.com/erik-hedstrom/loadout/pull/11), src/ [#12](https://github.com/erik-hedstrom/loadout/pull/12), Markdown [#15](https://github.com/erik-hedstrom/loadout/pull/15); Markdown rest in review, [#26](https://github.com/erik-hedstrom/loadout/pull/26)); the WSL-only `bench.test.ts` failure moved to E15 |
+| E8 | P0 | Repo-wide simplification pass | Claude (pr-reviewer finds, worker fixes) + Codex review | cloud | in progress (merged: bench/ [#11](https://github.com/erik-hedstrom/loadout/pull/11), src/ [#12](https://github.com/erik-hedstrom/loadout/pull/12), Markdown [#15](https://github.com/erik-hedstrom/loadout/pull/15); Markdown rest in review, [#26](https://github.com/erik-hedstrom/loadout/pull/26)); left: `docs/loop/BACKLOG.md`, `docs/loop/ORCHESTRATOR.md` and `bench/RESULTS.md`; the WSL-only `bench.test.ts` failure moved to E15 |
 | E9 | P0 | Security hardening from the read-only Sol review | Codex | cloud | done ([PR #4](https://github.com/erik-hedstrom/loadout/pull/4), re-measure [PR #7](https://github.com/erik-hedstrom/loadout/pull/7)) |
 | E3 | P1 | Split the test file per module | Codex | cloud | todo |
 | E5 | P1 | Changelog and release automation | Codex | cloud | todo (with A4) |
@@ -1427,11 +1427,25 @@ Area 2 (`src/`): done in [PR #12](https://github.com/erik-hedstrom/loadout/pull/
 tests changed only where they tested something deleted (`prefilter()`, A2's
 `toolTokens > 0`).
 
-Markdown left after [PR #15](https://github.com/erik-hedstrom/loadout/pull/15):
-`docs/loop/BACKLOG.md`, `docs/loop/ORCHESTRATOR.md`, `bench/RESULTS.md`,
-`AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md`, `SECURITY.md`,
-`.claude/agents/*.md` and `.github/pull_request_template.md`. Out of scope:
-`bench/results/**` (recorded output, kept as run) and `test/fixtures/`.
+Markdown rest (`agent/e8-markdown-rest`): `AGENTS.md`, `CLAUDE.md`,
+`CONTRIBUTING.md`, `SECURITY.md`, `.claude/agents/*.md` and
+`.github/pull_request_template.md`. `CLAUDE.md` lost the judge-concurrency and
+cost lines (`AGENTS.md` and `bench/README.md` own them) and the auto-compact
+line (`.claude/settings.json` owns it). The rule "never run judges in a cloud
+session" moved from `CLAUDE.md` to `AGENTS.md` "Environment notes", so Codex
+and cloud workers read it too (pr-reviewer caught the first draft dropping
+it). `worker.md` points to `AGENTS.md` instead of restating its hard rules and
+PR list, and its steps point to `AGENTS.md`'s bars (tests, cost, backlog,
+commits) instead of copying them (its "tests for new behavior" moved into
+`AGENTS.md`); `CLAUDE.md` lost its copy of the same bars.
+`AGENTS.md` lost two filler sentences. `CONTRIBUTING.md` and the PR
+template were checked against the code and the loop and left as they are.
+`SECURITY.md` points reporters to GitHub private vulnerability reporting,
+which was off on 2026-10-12; it is correct once Erik turns it on (HANDOFF
+decision 1).
+Left: `docs/loop/BACKLOG.md`, `docs/loop/ORCHESTRATOR.md`, `bench/RESULTS.md`.
+Out of scope: `bench/results/**` (recorded output, kept as run) and
+`test/fixtures/`.
 
 Starting points from Sol's review (2026-10-07):
 - `src/`, ≈ 40–60 lines: `prefilter()` is used only by tests
