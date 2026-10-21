@@ -756,20 +756,14 @@ reports it missing, and so does the launcher. Acceptance: on win32, `which()` al
 safely (Node refuses them without a shell since the CVE-2024-27980 fix); a test
 covers a host present only as `.exe` and only as `.cmd`.
 
-Implemented: PATH order is preserved, with PATHEXT order inside each folder
-and Windows commands preferred over an adjacent extensionless npm shell shim.
-Init detection and doctor's absolute-PATH lookup use the same discovery;
-doctor's batch version checks retain their credential-free environment.
-Learning: generic batch shims cannot preserve arbitrary prompts safely.
-Batch arguments accept only the ASCII set documented in `hostCommand`
-(`src/launch.ts`), without trailing backslashes; unsupported text (including
-multiline prompts and shell metacharacters), unsafe batch paths and command
-lines over cmd.exe's limit fail before spawning, with fixed text that echoes
-no input. Use a native `.exe` or enter the prompt inside the session instead.
-Native `.exe`/`.com` arguments pass through unchanged without a shell; npm
-shims are not parsed. Windows regression tests cover discovery, init/doctor,
-plain batch arguments, fixed refusals and native metacharacter round-trips.
-Nine guard mutations failed their targeted tests; source bytes were restored.
+Learnings (2026-10-22): a Windows batch shim cannot pass arbitrary text
+safely (newlines are cut, and plain batch files and npm shims parse `%*`
+differently). So `hostCommand` (src/launch.ts) passes only the ASCII set it
+documents and refuses anything else before spawning, with fixed text; npm
+shims are not parsed. Launcher arguments usually fall outside that set
+(Codex's inline TOML server config, Claude's appended system prompt, most
+task text), so a host found only as `.cmd` or `.bat` works for `init` and
+`doctor` but rarely for the launcher: install its native `.exe`.
 
 **D20. Hook state writes never drop context.** From the reviews of #27 (D16);
 Erik kept both out of that PR on 2026-10-19.
