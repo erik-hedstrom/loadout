@@ -171,7 +171,10 @@ nothing.
   no-key warning or Jev-fallback note, or a `find_tools` result tagged as a
   keyword match), a held TypeSafe key or Claude subscription token in any work-tree
   file (binary included), relative path, stdout, stderr, hook capture or hook-capture
-  stderr, and token shapes in deliverable paths or text about to be copied. These
+  stderr, and token shapes in deliverable paths or text about to be copied.
+  Deliverable checks skip token shapes glued after a letter or digit to avoid
+  stopping on CSS or code identifiers, so an unheld credential with that prefix
+  can be copied into `outputs/`; held secrets still match everywhere. These
   checks cover warm-ups too, except that their deliverables are not copied or
   shape-checked. A hit copies nothing, saves no stream, skips the hidden test and
   records an invalid row without matched text; a credential-bearing path is
@@ -184,6 +187,8 @@ nothing.
   never read. A loadout hook that exited non-zero or never finished also stops
   the batch (the shim records each exit status; the Claude stream's hook response
   is checked too), as do the plugin, hook, server or model checks.
+  Preflight also refuses libraries with capability names that credential redaction
+  would change, since judging could not hide their original names.
   Before any agent runs, each judge the hosts need is checked (`codex features
   list` must show `shell_tool` and `unified_exec` off): on the codex-cli
   versions seen so far (0.154.0, 0.160.1; E12) it does not, so a study with the

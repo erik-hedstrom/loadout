@@ -305,7 +305,12 @@ export function blockers(o: Options, env: NodeJS.ProcessEnv = process.env): stri
   // look valid while measuring next to nothing: the study is a Jev study or it does not run. The one exception
   // is this harness's own stand-in test (test/ab.test.ts), which runs the real hook and must not reach Jev's network.
   if (config && config.router !== 'jev' && env[SELF_TEST] !== 'lexical') out.push(`the loadout config sets "router": "${config.router}": the loadout arm would not route with Jev. Set "router": "jev" for the study`);
-  if (config && scanLibrary(paths.library()).length === 0) out.push(`the loadout library is empty (${redacted(paths.library())}): the hook would route over nothing`);
+  if (config) {
+    const library = scanLibrary(paths.library());
+    if (!library.length) out.push(`the loadout library is empty (${redacted(paths.library())}): the hook would route over nothing`);
+    const unblindable = library.filter((c) => TOKEN_ANYWHERE.test(c.name)).length;
+    if (unblindable) out.push(`library capability names requiring redaction: ${unblindable}; blind judging is not possible`);
+  }
   if (config?.router === 'jev' && !resolveApiKey(config)) out.push('the loadout arm needs a TypeSafe key (TYPESAFE_API_KEY or `loadout init --key-file`), or it measures keyword routing');
   // Claude can strip the variable from the MCP server (its environment allowlist) and the hook (its subprocess scrub), but not a key file the config names.
   if (o.hosts.includes('claude') && config?.router === 'jev' && !config.jev.apiKeyFile) out.push('the Claude loadout arm needs the key through a key file (`loadout init --key-file`): TYPESAFE_API_KEY alone may not reach its MCP server or hook, and a loadout arm that routes by keyword is invalid');
@@ -537,6 +542,7 @@ async function judgeAll(out: string, print: (s: string) => void, secrets: string
     const [bare, loadout] = ARMS.map((arm) => rows.find((r) => r.host === host && r.prompt === prompt && r.repeat === repeat && r.arm === arm));
     if (!bare || !loadout || done.some((v) => v.host === host && v.prompt === prompt && v.repeat === repeat)) continue;
     const names = [...bare.hook.listed, ...bare.hook.injected, ...loadout.hook.listed, ...loadout.hook.injected, ...bare.skillsOpened, ...loadout.skillsOpened];
+    if (names.some((name) => name.includes('<credential>'))) throw new Error('skill names were redacted: blind judging is not possible');
     const dir = (r: RunRow) => join(out, 'outputs', r.host, r.prompt, `${r.arm}-${r.repeat}`);
     const bareFiles = redactNames(deliverables(dir(bare)), names);
     const loadoutFiles = redactNames(deliverables(dir(loadout)), names);

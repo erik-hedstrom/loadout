@@ -202,6 +202,22 @@ describe('plan', () => {
     expect(found.some((b) => b.includes('CLAUDE_CODE_OAUTH_TOKEN'))).toBe(true);
   });
 
+  it('blocks library names that redaction would change before spending, without naming them', () => {
+    const home = process.env.LOADOUT_HOME!;
+    writeFileSync(join(home, 'config.json'), JSON.stringify({ router: 'lexical', embeddings: false }));
+    const skill = join(home, 'library', 'skills', 'sample', 'SKILL.md');
+    mkdirSync(join(skill, '..'), { recursive: true });
+    const check = () => blockers({ ...options, hosts: ['codex'] }, { LOADOUT_AB_SELF_TEST: 'lexical', CODEX_HOME: join(home, 'codex') })
+      .filter((b) => b.includes('library capability names requiring redaction'));
+    writeFileSync(skill, '---\nname: sample\ndescription: Test fixture\n---\nText');
+    expect(check()).toEqual([]);
+    const name = 'task-specific-instructions-for-the-application';
+    writeFileSync(skill, `---\nname: ${name}\ndescription: Test fixture\n---\nText`);
+    const found = check();
+    expect(found).toEqual(['library capability names requiring redaction: 1; blind judging is not possible']);
+    expect(found.join('\n')).not.toContain(name);
+  });
+
   it('refuses a global AGENTS.md or AGENTS.override.md in CODEX_HOME, a symlink included, which Codex puts in every run', () => {
     const blocked = (home: string) => blockers({ ...options, hosts: ['codex'] }, { CODEX_HOME: home }).filter((b) => b.includes('global instructions'));
     expect(blocked(temp('loadout-ab-codex-'))).toEqual([]);
@@ -552,6 +568,19 @@ describe('resuming and finishing a study', () => {
   };
   const rows = [row({ id: 'claude/bare/warmup/0', prompt: 'warmup', repeat: 0, warmup: true }), row({ id: 'claude/loadout/p1/1', arm: 'loadout' })];
 
+  it.each(['listed', 'injected', 'skillsOpened'] as const)('refuses judge-only when %s lost a name to redaction', async (source) => {
+    const names = ['ta<credential>'];
+    const loadout = row({ id: 'loadout', arm: 'loadout', prompt: 'c1-web-14',
+      ...(source === 'skillsOpened' ? { skillsOpened: names } : { hook: { invocations: 1, contextChars: 10, listed: [], injected: [], [source]: names } }) });
+    const dir = study([row({ id: 'bare', prompt: 'c1-web-14' }), loadout]);
+    const judge = vi.spyOn(benchLib, 'modelJson').mockResolvedValue({ output: { winner: 'first', confidence: 'high', reasons: 'fixture' }, costUsd: 0 });
+    try {
+      await expect(main(['--judge-only', dir], { print: () => {} })).rejects.toThrow('skill names were redacted: blind judging is not possible');
+      expect(judge).not.toHaveBeenCalled();
+      expect(existsSync(join(dir, 'verdicts.jsonl'))).toBe(false);
+    } finally { judge.mockRestore(); }
+  });
+
   it('refuses to resume with another model, which would pair rows measured under different ones', () => {
     const dir = study(rows);
     refuseOtherSettings(dir, options, prov, []);
@@ -830,6 +859,7 @@ describe('credential screening before persistence', () => {
         });
       } catch (error) { message = (error as Error).message; }
       if (stops) expect(message).toContain('credential in output');
+      else if (when !== 'warmup' && kind === 'shape' && ['hook', 'stdout'].includes(where)) expect(message).toBe('skill names were redacted: blind judging is not possible');
       else expect(message).toBe('');
       const rows = readFileSync(join(out, 'rows.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l) as RunRow);
       expect(rows).toHaveLength(stops ? target + 1 : 4);
