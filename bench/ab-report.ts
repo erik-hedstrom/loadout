@@ -16,6 +16,10 @@ export function redact(text: string, secrets: string[]): string {
   return text.replace(new RegExp(SHAPE, 'g'), '<credential>');
 }
 
+export function persistJson(value: unknown, secrets: string[]): string {
+  return redact(JSON.stringify(value, (_key, item: unknown) => typeof item === 'string' ? redact(item, secrets) : item), secrets);
+}
+
 export interface Leak { file: string; rule: 'held secret' | 'token shape' }
 
 export interface RunRow {
@@ -85,7 +89,7 @@ const triple = (rs: RequestUsage[]) => {
   return v.every((x) => x === null) ? 'not shown' : v.map((x) => num(x ?? 0)).join(' / ');
 };
 
-export function report(rows: RunRow[], verdicts: Verdict[], secrets: string[] = []): string {
+export function report(rows: RunRow[], verdicts: Verdict[], secrets: string[]): string {
   const hosts = [...new Set(rows.map((r) => r.host))];
   const prompts = [...new Set(measured(rows).map((r) => r.prompt))];
   const judged = (host: Host, prompt: string) => {

@@ -23,7 +23,7 @@ import { DEFAULT_CONFIG, loadConfig, paths, resolveApiKey } from '../src/config.
 import { JEV_FALLBACK_NOTE, NO_KEY_WARNING } from '../src/hook.js';
 import { hookCommand, SEARCH_SERVER, SEARCH_TOOLS, searchServer, toToml } from '../src/launch.js';
 import { capabilityKey, readManifest, scanLibrary } from '../src/library.js';
-import { CREDENTIAL_SHAPE, redact, report, type Leak, type RunRow, type Verdict } from './ab-report.js';
+import { CREDENTIAL_SHAPE, persistJson, redact, report, type Leak, type RunRow, type Verdict } from './ab-report.js';
 import { codexJudgeRefusal, DATA, modelJson, readJsonl, RESULTS, run } from './lib.js';
 import { CLAUDE_MANAGED_PRECONDITION, CLAUDE_SCRUB_PRECONDITION, CLAUDE_SETTINGS, CLAUDE_SWITCH_PRECONDITION, CODEX_CLOUD_PRECONDITION, childEnv, claudeEnv, envAllowlist, hostWrites, redacted, refusedFiles, resetWork } from './mcp-overhead.js';
 import { assertTemporary, claudeIsolation, cli, execute, validateFeatures, type Command, type Host } from './overhead.js';
@@ -364,6 +364,10 @@ function version(host: Host): string {
   return /\d+\.\d+\.\d+\S*/.exec(text)?.[0] ?? text;
 }
 
+function streamHasToken(stdout: string): boolean {
+  return CREDENTIAL_SHAPE.test(stdout.replace(/\\(?:u[0-9a-fA-F]{4}|["\\/bfnrt])/g, ' '));
+}
+
 interface Study { out: string; previous: RunRow[]; token?: string; secrets: string[]; versions: Record<string, string> }
 
 async function execute1(job: Job, prompt: string, spec: PromptSpec | undefined, ctx: Ctx, o: Options, study: Study): Promise<RunRow> {
@@ -414,7 +418,7 @@ async function execute1(job: Job, prompt: string, spec: PromptSpec | undefined, 
   const invalid = leak ? CREDENTIAL_IN_OUTPUT : broken;
   const hiddenTest = spec?.hidden && !job.warmup && !leak ? hiddenResult(ctx.work, join(FIXTURES, spec.hidden)) : null;
   // Skill text can contain placeholder tokens: withhold such streams without losing a valid measurement.
-  const streamWithheld = !leak && CREDENTIAL_SHAPE.test(proc.stdout);
+  const streamWithheld = !leak && streamHasToken(proc.stdout);
   if (!leak && !streamWithheld) {
     mkdirSync(join(out, 'streams'), { recursive: true });
     writeFileSync(join(out, 'streams', `${id.replace(/\//g, '_')}.jsonl`), proc.stdout);
@@ -460,11 +464,11 @@ export function provenance(): Provenance {
 const studySettings = (s: Options & Partial<Provenance>) => ({ hosts: s.hosts, ids: s.ids, repeats: s.repeats, models: s.models, maxTurns: s.maxTurns, timeoutS: s.timeoutS, codexHook: s.codexHook, commit: s.commit, library: s.library });
 
 /** An --out folder is one study: resuming it with other settings (another model, other code or library) would pair rows measured under different ones. */
-export function refuseOtherSettings(out: string, o: Options, p: Provenance): void {
+export function refuseOtherSettings(out: string, o: Options, p: Provenance, secrets: string[]): void {
   const file = join(out, 'config.json');
   if (!existsSync(file)) return;
   const [was, now] = [studySettings(JSON.parse(readFileSync(file, 'utf8')) as Options & Provenance), studySettings({ ...o, ...p })];
-  const differs = (Object.keys(now) as (keyof typeof now)[]).filter((k) => JSON.stringify(was[k]) !== JSON.stringify(now[k]));
+  const differs = (Object.keys(now) as (keyof typeof now)[]).filter((k) => JSON.stringify(was[k]) !== persistJson(now[k], secrets));
   if (differs.length) throw new Error(`${redacted(out)} was started with other settings (${differs.join(', ')}): resume it with the same options, or start a new --out`);
 }
 
@@ -490,7 +494,7 @@ async function runAll(o: Options, out: string, deps: { token?: string; print: (s
     const versions = Object.fromEntries(o.hosts.map((h) => [h, version(h)]));
     const secrets = deps.secrets;
     const configFile = join(out, 'config.json');
-    if (!existsSync(configFile)) writeFileSync(configFile, JSON.stringify({ ...studySettings({ ...o, ...deps.provenance }), versions, schedule: schedule(o.hosts, o.ids, o.repeats).map(jobId) }, null, 1) + '\n');
+    if (!existsSync(configFile)) writeFileSync(configFile, persistJson({ ...studySettings({ ...o, ...deps.provenance }), versions, schedule: schedule(o.hosts, o.ids, o.repeats).map(jobId) }, secrets) + '\n');
     if (o.hosts.includes('codex')) await codexPreflight(o, root);
     const shims = Object.fromEntries(o.hosts.map((h) => [h, join(root, 'shim', h)]));
     for (const dir of Object.values(shims)) mkdirSync(dir, { recursive: true });
@@ -504,7 +508,7 @@ async function runAll(o: Options, out: string, deps: { token?: string; print: (s
       const row = await execute1(job, spec ? promptText(spec) : WARMUP_PROMPT, spec, ctx, o, { out, previous, token: deps.token, secrets, versions });
       if (configDir) rmSync(configDir, { recursive: true, force: true });
       if (previous.some((r) => r.host === row.host && r.hostVersion && row.hostVersion && r.hostVersion !== row.hostVersion)) row.invalid ??= `${row.host} version changed during the study; measurement invalid`;
-      appendFileSync(rowsFile, redact(JSON.stringify(row), secrets) + '\n');
+      appendFileSync(rowsFile, persistJson(row, secrets) + '\n');
       deps.print(`${row.id}: ${row.invalid ?? (row.timedOut ? 'timed out' : row.exit === 0 ? 'ok' : `exit ${row.exit}`)}; ${row.requests.length} request(s), ${row.totals.cacheRead} cache-read tokens, ${(row.ms / 1000).toFixed(0)} s${row.coldCacheRisk ? ' (coldCacheRisk)' : ''}`);
       if (row.invalid && !UNUSABLE.includes(row.invalid)) throw new Error(`${row.id}: ${row.invalid}${row.leak ? ` (${row.leak.file}, ${row.leak.rule})` : ''}`);
     }
@@ -546,7 +550,7 @@ async function judgeAll(out: string, print: (s: string) => void, secrets: string
       return res.output;
     });
     const v: Verdict = { host, prompt, repeat, winner: verdict.winner, judge, redactions: { bare: bareFiles.count, loadout: loadoutFiles.count } };
-    appendFileSync(file, redact(JSON.stringify({ ...v, orders: verdict.orders }), secrets) + '\n');
+    appendFileSync(file, persistJson({ ...v, orders: verdict.orders }, secrets) + '\n');
     print(`${host}/${prompt}/${repeat}: ${v.winner} (${verdict.orders.map((x) => x.winner).join(' / ')}); ${judge.backend} ${judge.model}`);
   }
   return completed(file) as unknown as Verdict[];
@@ -598,7 +602,7 @@ async function mainImpl(args: string[], print: (s: string) => void, env: NodeJS.
   if (process.platform === 'win32') throw new Error('--run needs a Linux or macOS shell: the hook shim is a POSIX script (run from WSL with the Linux CLIs)');
   const out = resolve(values.out ?? join(RESULTS, `${new Date().toISOString().replace(/[:.]/g, '-')}-ab-pilot`));
   const p = provenance();
-  refuseOtherSettings(out, o, p);
+  refuseOtherSettings(out, o, p, secrets);
   refuseStopped(out);
   mkdirSync(out, { recursive: true });
   writeFileSync(join(out, 'INCOMPLETE'), 'This run did not finish: resume it with --out, or delete the folder. Its rows are not a result.\n');

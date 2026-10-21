@@ -7,7 +7,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { redact, report, type RunRow, type Verdict } from '../bench/ab-report.js';
+import { persistJson, redact, report, type RunRow, type Verdict } from '../bench/ab-report.js';
 import { JUDGE_MAX_BYTES } from '../bench/pairwise.js';
 import { AB_MODELS, blockers, buildCommand, checkRun, copyOutputs, hiddenResult, hookFacts, main, openedSkills, planLines, promptText, provenance, redactNames, refuseOtherSettings, refuseStopped, routedByKeyword, runEnv, schedule, scrub, type Ctx, type Evidence, type Job, type Options } from '../bench/ab.js';
 import { JEV_FALLBACK_NOTE, NO_KEY_WARNING } from '../src/hook.js';
@@ -504,7 +504,7 @@ describe('report', () => {
     row({ id: 'bad', repeat: 2, arm: 'loadout', invalid: 'timed out before the host reported usage' }),
   ];
   const verdicts: Verdict[] = [{ host: 'claude', prompt: 'p1', repeat: 1, winner: 'loadout', judge: { backend: 'codex', model: 'gpt-6.1-sol' }, redactions: { bare: 0, loadout: 2 } }];
-  const text = report(rows, verdicts);
+  const text = report(rows, verdicts, []);
 
   it('leaves the warm-up and invalid runs out of the comparison and shows them apart', () => {
     const table1 = text.split('## 2.')[0]!;
@@ -527,7 +527,7 @@ describe('report', () => {
   it('leaves subagent requests out of the request 1 / 2+ split, counts them apart and flags a second model', () => {
     const sub = { n: 3, at: null, model: null, uncached: 500, cacheWrite: 9000, cacheRead: 0, output: 10, cacheWrite5m: 9000, cacheWrite1h: 0, reasoning: null, subagent: true, gapMs: 100 };
     const base = row({});
-    const withSub = report([{ ...base, requests: [...base.requests, sub], modelUsage: { 'claude-sonnet-5': {}, 'claude-haiku-5': {} } }], []);
+    const withSub = report([{ ...base, requests: [...base.requests, sub], modelUsage: { 'claude-sonnet-5': {}, 'claude-haiku-5': {} } }], [], []);
     expect(withSub).toContain('| claude | p1 | bare | 10 / 1,000 / 20,000 | 2 / 100 / 21,000 | 2 | 1 |');
     expect(withSub).toContain('tokens were billed to claude-sonnet-5, claude-haiku-5');
   });
@@ -554,13 +554,13 @@ describe('resuming and finishing a study', () => {
 
   it('refuses to resume with another model, which would pair rows measured under different ones', () => {
     const dir = study(rows);
-    refuseOtherSettings(dir, options, prov);
-    expect(() => refuseOtherSettings(dir, { ...options, models: { ...AB_MODELS, claude: 'opus' } }, prov)).toThrow(/other settings \(models\)/);
-    expect(() => refuseOtherSettings(dir, { ...options, repeats: 3, maxTurns: 10 }, prov)).toThrow(/repeats, maxTurns/);
+    refuseOtherSettings(dir, options, prov, []);
+    expect(() => refuseOtherSettings(dir, { ...options, models: { ...AB_MODELS, claude: 'opus' } }, prov, [])).toThrow(/other settings \(models\)/);
+    expect(() => refuseOtherSettings(dir, { ...options, repeats: 3, maxTurns: 10 }, prov, [])).toThrow(/repeats, maxTurns/);
     // The code and the library are what is under test: a resume after a pull or a library change mixes them.
-    expect(() => refuseOtherSettings(dir, options, { ...prov, commit: 'other-commit' })).toThrow(/other settings \(commit\)/);
-    expect(() => refuseOtherSettings(dir, options, { ...prov, library: '13 skills, 000000000000' })).toThrow(/other settings \(library\)/);
-    refuseOtherSettings(join(dir, 'new'), options, prov);
+    expect(() => refuseOtherSettings(dir, options, { ...prov, commit: 'other-commit' }, [])).toThrow(/other settings \(commit\)/);
+    expect(() => refuseOtherSettings(dir, options, { ...prov, library: '13 skills, 000000000000' }, [])).toThrow(/other settings \(library\)/);
+    refuseOtherSettings(join(dir, 'new'), options, prov, []);
   });
 
   it('fingerprints each tracked diff so a second dirty edit refuses resume', async () => {
@@ -587,9 +587,9 @@ describe('resuming and finishing a study', () => {
       expect(first.commit).toMatch(/\+dirty-[a-f0-9]{12}$/);
       const out = study(rows);
       writeFileSync(join(out, 'config.json'), JSON.stringify({ ...options, ...first }));
-      refuseOtherSettings(out, options, provenance());
+      refuseOtherSettings(out, options, provenance(), []);
       writeFileSync(file, 'second edit\n');
-      expect(() => refuseOtherSettings(out, options, provenance())).toThrow(/other settings \(commit\)/);
+      expect(() => refuseOtherSettings(out, options, provenance(), [])).toThrow(/other settings \(commit\)/);
       git('add', 'tracked.txt');
       expect(provenance().commit).not.toBe(first.commit);
       writeFileSync(file, Buffer.from([0, 1]));
@@ -614,13 +614,13 @@ describe('resuming and finishing a study', () => {
       expect(provenance()).toEqual(before);
       const dir = study(rows);
       writeFileSync(join(dir, 'config.json'), JSON.stringify({ ...options, ...before, versions: {}, schedule: [] }));
-      refuseOtherSettings(dir, options, before);
+      refuseOtherSettings(dir, options, before, []);
       write('Write interface copy.', 'Keep it long.');
-      expect(() => refuseOtherSettings(dir, options, provenance())).toThrow(/other settings \(library\)/);
+      expect(() => refuseOtherSettings(dir, options, provenance(), [])).toThrow(/other settings \(library\)/);
       write('Write interface copy.', 'Keep it short.');
-      refuseOtherSettings(dir, options, provenance());
+      refuseOtherSettings(dir, options, provenance(), []);
       write('Write error pages.', 'Keep it short.');
-      expect(() => refuseOtherSettings(dir, options, provenance())).toThrow(/other settings \(library\)/);
+      expect(() => refuseOtherSettings(dir, options, provenance(), [])).toThrow(/other settings \(library\)/);
       expect(JSON.stringify(before)).not.toContain('Keep it');
     } finally {
       vi.unstubAllEnvs();
@@ -703,6 +703,24 @@ describe('public text sinks', () => {
   });
 });
 
+describe('structured JSON persistence', () => {
+  it.each(['\n', '\t'])('redacts decoded names, reasons, leak paths and keys after prefix %j', (prefix) => {
+    const shape = `sk-${'x'.repeat(24)}`;
+    const held = 'synthetic-held-secret';
+    const name = prefix + shape;
+    const events = toolEvents(JSON.stringify({ type: 'item.completed', item: { type: 'mcp_tool_call', server: 'loadout', tool: 'load_skill', arguments: { skill: name }, status: 'completed' } })).events;
+    const hook = hookFacts(JSON.stringify({ hookSpecificOutput: { additionalContext: `<skill name="${name}">text</skill>` } }));
+    const saved = JSON.parse(persistJson({ row: row({ skillsOpened: openedSkills(events), hook: { invocations: 1, ...hook }, leak: { file: name + '.md', rule: 'held secret' } }), reason: name + prefix + held, [shape]: 7 }, [held]));
+    expect(saved.row.skillsOpened).toEqual([prefix + '<credential>']);
+    expect(saved.row.hook.injected).toEqual([prefix + '<credential>']);
+    expect(saved.row.leak.file).toBe(prefix + '<credential>.md');
+    expect(saved.reason).toBe(prefix + '<credential>' + prefix + '<credential>');
+    expect(saved['<credential>']).toBe(7);
+    expect(saved.row.totals.uncached).toBe(12);
+    expect(saved.row.totals.cacheRead).toBe(41000);
+  });
+});
+
 describe('subprocess stderr isolation', () => {
   it.each(['version', 'provenance'])('captures stderr from a failed %s probe', async (probe) => {
     const dir = temp('loadout-ab-stderr-');
@@ -728,13 +746,17 @@ describe('subprocess stderr isolation', () => {
 });
 
 describe('credential screening before persistence', () => {
-  const cases = ['warmup', 'measured'].flatMap((when) => [
+  const cases: { when: string; where: string; kind: string; prefix?: string }[] = ['warmup', 'measured'].flatMap((when) => [
     ...['binary', 'node_modules', '.env', 'path', 'stdout', 'stderr', 'hook', 'hook stderr'].map((where) => ({ when, where, kind: 'held' })),
     ...['binary', 'node_modules', '.env', 'excluded path', 'stderr', 'hook', 'hook stderr', 'stdout', 'deliverable text', 'deliverable path'].map((where) => ({ when, where, kind: 'shape' })),
   ]);
   cases.push({ when: 'measured code', where: '.env', kind: 'held' });
   cases.push({ when: 'measured', where: 'shaped filename', kind: 'held' });
-  it.each(cases)('$kind credential in $where during $when obeys the persistence boundary', async ({ when, where, kind }) => {
+  const leads: Record<string, string> = { newline: '\n', tab: '\t', carriage: '\r', unicode: '\u000b', backslash: '\\', quote: '"', slash: '/', backspace: '\b', formfeed: '\f' };
+  for (const prefix of ['carriage', 'unicode', 'backslash', 'quote', 'slash', 'backspace', 'formfeed']) cases.push({ when: 'measured', where: 'stdout', kind: 'shape', prefix });
+  for (const prefix of ['newline', 'tab']) for (const where of ['hook', 'stdout']) cases.push({ when: 'measured', where, kind: 'shape', prefix });
+  cases.push({ when: 'measured', where: 'model', kind: 'shape' });
+  it.each(cases)('$kind credential in $where during $when ($prefix) obeys the persistence boundary', async ({ when, where, kind, prefix }) => {
     const dir = temp('loadout-ab-screen-');
     const out = join(dir, 'out');
     const prompt = when === 'measured code' ? 'c1-debug-13' : 'c1-web-14';
@@ -758,8 +780,10 @@ describe('credential screening before persistence', () => {
     vi.stubEnv('TYPESAFE_API_KEY', 'synthetic-held-secret');
     vi.spyOn(overhead, 'cli').mockReturnValue({ bin: process.execPath, prefix: [script] });
     vi.spyOn(mcpOverhead, 'refusedFiles').mockReturnValue([]);
-    vi.spyOn(benchLib, 'modelJson').mockResolvedValue({ output: { winner: 'first', confidence: 'high', reasons: `synthetic-held-secret sk-${'x'.repeat(24)} sk-${'x'.repeat(24)}` }, costUsd: 0 });
+    vi.spyOn(benchLib, 'modelJson').mockResolvedValue({ output: { winner: 'first', confidence: 'high', reasons: `synthetic-held-secret \nsk-${'x'.repeat(24)} \tsk-${'x'.repeat(24)}` }, costUsd: 0 });
     const secret = kind === 'held' ? 'synthetic-held-secret' : `sk-${'x'.repeat(24)}`;
+    const lead = prefix ? leads[prefix]! : '';
+    const value = lead + secret;
     const target = when === 'warmup' ? 0 : 2;
     const stops = kind === 'held' || (when !== 'warmup' && where.startsWith('deliverable'));
     let runs = 0;
@@ -782,21 +806,25 @@ describe('credential screening before persistence', () => {
           const shim = join(work, '..', 'shim', 'codex');
           const capture = when === 'warmup' ? 'codex_bare_warmup_0.invocations.out' : `codex_loadout_${prompt}_1.invocations.out`;
           writeFileSync(join(shim, capture + (where === 'hook stderr' ? '.err' : '')), where === 'hook'
-            ? JSON.stringify({ hookSpecificOutput: { additionalContext: `- "${secret}" (fit 0.9): text\n<skill name="${secret}">body</skill>` } }) : secret);
+            ? JSON.stringify({ hookSpecificOutput: { additionalContext: `- "${value}" (fit 0.9): text\n<skill name="${value}">body</skill>` } }) : secret);
         }
       }
-      const stdout = codexStream + (tainted && where === 'stdout'
+      let stdout = codexStream + (tainted && where === 'stdout'
         ? '\n' + JSON.stringify({ type: 'item.completed', item: kind === 'held'
-          ? { type: 'mcp_tool_call', server: 'loadout', tool: secret, status: 'completed' } : { type: 'mcp_tool_call', server: 'loadout', tool: 'load_skill', arguments: { skill: secret }, status: 'completed' } }) + (kind === 'shape' ? '\n' + JSON.stringify({ type: 'item.completed', item: { type: 'mcp_tool_call', server: 'loadout', tool: secret, status: 'completed' } }) : '') : '');
+          ? { type: 'mcp_tool_call', server: 'loadout', tool: secret, status: 'completed' } : { type: 'mcp_tool_call', server: 'loadout', tool: 'load_skill', arguments: { skill: value }, status: 'completed' } }) + (kind === 'shape' ? '\n' + JSON.stringify({ type: 'item.completed', item: { type: 'mcp_tool_call', server: 'loadout', tool: value, status: 'completed' } }) : '') : '');
+      if (prefix === 'slash') stdout = stdout.replaceAll('/sk-', String.raw`\/sk-`);
       return { stdout, stderr: tainted && where === 'stderr' ? secret : '', code: 0, timedOut: false };
     });
     try {
       Object.defineProperty(process, 'platform', { value: 'darwin' });
       const lines: string[] = [];
+      const model = `synthetic-held-secret \nsk-${'x'.repeat(24)}`;
+      const args = ['--run', '--hosts', 'codex', '--no-codex-hook', '--ids', prompt, '--repeats', '1', '--out', out, ...(where === 'model' ? ['--codex-model', model] : [])];
+      const env = { LOADOUT_AB_SELF_TEST: 'lexical', CODEX_HOME: join(dir, 'codex') };
       let message = '';
       try {
-        await main(['--run', '--hosts', 'codex', '--no-codex-hook', '--ids', prompt, '--repeats', '1', '--out', out], {
-          env: { LOADOUT_AB_SELF_TEST: 'lexical', CODEX_HOME: join(dir, 'codex') }, print: (s) => lines.push(s),
+        await main(args, {
+          env, print: (s) => lines.push(s),
         });
       } catch (error) { message = (error as Error).message; }
       if (stops) expect(message).toContain('credential in output');
@@ -828,12 +856,19 @@ describe('credential screening before persistence', () => {
       expect(saved).not.toContain('synthetic-held-secret');
       expect(saved).not.toContain(`sk-${'x'.repeat(24)}`);
       if (kind === 'shape' && where === 'stdout') {
-        expect(row.skillsOpened).toContain('<credential>');
-        expect(row.loadoutTools).toContain('mcp__loadout__<credential>');
+        expect(row.skillsOpened).toContain(lead + '<credential>');
+        expect(row.loadoutTools).toContain('mcp__loadout__' + lead + '<credential>');
       }
       if (kind === 'shape' && where === 'hook') {
-        expect(row.hook.listed).toContain('<credential>');
-        expect(row.hook.injected).toContain('<credential>');
+        expect(row.hook.listed).toContain(lead + '<credential>');
+        expect(row.hook.injected).toContain(lead + '<credential>');
+      }
+      if (where === 'model') {
+        const config = JSON.parse(readFileSync(join(out, 'config.json'), 'utf8'));
+        expect(config.models.codex).toBe('<credential> \n<credential>');
+        const before = readFileSync(join(out, 'rows.jsonl'), 'utf8');
+        await expect(main(args, { env, print: () => {} })).resolves.toBeUndefined();
+        expect(readFileSync(join(out, 'rows.jsonl'), 'utf8')).toBe(before);
       }
       if (stops) {
         expect(files.filter((f) => f.startsWith('streams'))).toHaveLength(target);
