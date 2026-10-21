@@ -9,7 +9,7 @@
  * deferral may be claimed) share one process with `--no-session-persistence`, so no transcript lands in ~/.claude;
  * Codex gets one `--ephemeral` request.
  */
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { homedir, tmpdir, userInfo } from 'node:os';
 import { basename, dirname, join, posix, resolve, win32 } from 'node:path';
@@ -410,7 +410,7 @@ export interface HostItem { host: Host; item: string; files: string[]; decision:
  * A "refuse" item stops its host's arms when a file exists; an "identical" item is the same in every arm of the host, so the
  * baseline delta cancels it, and its presence is saved as names only; the flags of a "neutralised" item are asserted in tests.
  */
-export function hostState(env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform, workParent: string = tmpdir()): HostItem[] {
+export function hostState(env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform, workParent: string = realpathSync(tmpdir())): HostItem[] {
   const codex = env.CODEX_HOME || join(homedir(), '.codex');
   const managed = claudeManagedDir(platform);
   const systemPaths = platform === 'win32' ? win32 : posix;
@@ -460,7 +460,7 @@ export function hostState(env: NodeJS.ProcessEnv = process.env, platform: NodeJS
 }
 export const presentFiles = (i: HostItem) => i.files.filter((f) => existsSync(f));
 /** The files of the refuse items of one host that exist: they stop that host's arms. */
-export const refusedFiles = (host: Host, env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform, workParent: string = tmpdir()) =>
+export const refusedFiles = (host: Host, env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform, workParent: string = realpathSync(tmpdir())) =>
   hostState(env, platform, workParent).filter((i) => i.host === host && i.decision === 'refuse if present').flatMap(presentFiles);
 
 export interface Deps { run?: (command: Command) => Promise<string>; inventory?: typeof codexMcpInventory; refused?: () => string[] }
