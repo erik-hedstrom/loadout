@@ -1,12 +1,13 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { join, relative } from 'node:path';
 import { deflateRawSync, inflateRawSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 
 const root = join(import.meta.dirname, '..', 'bench', 'fixtures', 'c2');
 const MAX_BYTES = 50 * 1024;
-// The protocol points the runner's scan at the same file.
-const KEY_LIKE = (JSON.parse(readFileSync(join(root, 'scan-patterns.json'), 'utf8')) as { name: string; pattern: string; flags?: string }[]).map(
+// Exercise the scanner's JSON entry point, which reads the production source of shapes.
+const KEY_LIKE = (JSON.parse(execFileSync(process.execPath, ['--import', 'tsx', join(root, 'scan-patterns.ts')], { encoding: 'utf8', timeout: 30_000 })) as { name: string; pattern: string; flags?: string }[]).map(
   (p) => ({ name: p.name, re: new RegExp(p.pattern, p.flags) }),
 );
 

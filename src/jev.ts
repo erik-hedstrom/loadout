@@ -3,6 +3,7 @@
  * Uses fetch directly so the router has no SDK dependency.
  */
 import { setTimeout as sleep } from 'node:timers/promises';
+import { redactJson } from './redact.js';
 
 /** Instructions and criteria accept plain text or JSON structure (labelled fields, lists). */
 export type Text = string | string[] | Record<string, unknown>;
@@ -21,6 +22,8 @@ export interface SystemOneResponse {
   model: string;
   answers: Record<string, Answer>;
   usage: { input_tokens: number; output_tokens: number };
+  /** Local count of replaced key shapes, once per logical request (not per retry). */
+  redactions?: number;
 }
 
 export interface SystemOneClient {
@@ -83,23 +86,35 @@ export function validateResponse(body: unknown, questions: Record<string, Questi
 }
 
 export function jevClient(opts: { apiKey: string; baseUrl: string; model: string; timeoutMs?: number; retries?: number }): SystemOneClient {
-  const once = async (state: unknown, questions: Record<string, Question>, signal?: AbortSignal) => {
+  const once = async (body: string, questions: Record<string, Question>, signal?: AbortSignal) => {
     const timeout = AbortSignal.timeout(opts.timeoutMs ?? 12_000);
     const res = await fetch(`${opts.baseUrl.replace(/\/$/, '')}/v1/systemone`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${opts.apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: opts.model, state, questions }),
+      body,
       signal: signal ? AbortSignal.any([timeout, signal]) : timeout,
     });
-    const body = await res.json().catch(() => ({}));
+    const response = await res.json().catch(() => ({}));
     if (!res.ok) throw new JevError(`Jev request failed: HTTP ${res.status}`, res.status);
-    return validateResponse(body, questions);
+    return validateResponse(response, questions);
   };
   return {
     async ask(state, questions, signal) {
+      // Every real Jev caller reaches this boundary, including callers outside route().
+      // Sanitize once so retries reuse the same body and do not inflate the count.
+      let request: ReturnType<typeof redactJson>;
+      try {
+        request = redactJson(JSON.stringify({ model: opts.model, state, questions }));
+      } catch {
+        // JSON.stringify errors can quote property names or a throwing toJSON's input.
+        throw new JevError('Jev request could not be serialized', undefined, false);
+      }
+      const { json, count } = request;
+      const safeQuestions = (JSON.parse(json) as { questions: Record<string, Question> }).questions;
+      if (count) console.error(`loadout: redacted ${count} key-shaped strings before Jev`);
       for (let attempt = 0; ; attempt++) {
         try {
-          return await once(state, questions, signal);
+          return { ...await once(json, safeQuestions, signal), redactions: count };
         } catch (err) {
           if (signal?.aborted) throw new Error('Jev request cancelled');
           if (!(err instanceof JevError)) err = new Error(err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError') ? 'Jev request timed out' : 'Jev request failed: network error');

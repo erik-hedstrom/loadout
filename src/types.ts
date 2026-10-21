@@ -1,3 +1,5 @@
+import { redactJson } from './redact.js';
+
 export type CapabilityKind = 'skill' | 'mcp';
 
 export interface Capability {
@@ -40,9 +42,9 @@ export interface McpServerConfig {
   headers?: Record<string, string>;
 }
 
-/** Reports omit server arguments and credential values. */
+/** Reports omit server credentials and key-shaped strings in third-party metadata. */
 export function reportJson(value: unknown): string {
-  return JSON.stringify(value, (key, v) => {
+  const json = JSON.stringify(value, (key, v) => {
     if (key !== 'server' || !v || typeof v !== 'object') return v;
     const server = v as McpServerConfig;
     let url: string | undefined;
@@ -61,6 +63,7 @@ export function reportJson(value: unknown): string {
       headers: Object.keys(server.headers ?? {}),
     };
   }, 2);
+  return redactJson(json).json;
 }
 
 export type Tier = 'small' | 'medium' | 'large';
@@ -127,6 +130,8 @@ export interface RouteDecision {
     librarySize: number;
     candidates: number;
     inputTokens?: number;
+    /** Replacements across both Jev requests, excluding retries. */
+    redactions?: number;
     costUsd?: number;
     ms: number;
   };

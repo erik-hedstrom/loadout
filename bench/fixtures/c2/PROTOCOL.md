@@ -224,10 +224,10 @@ limits, batch revocation and usage checks replace a gateway.
     access to home and keys, and MCP reads via `load_skill`.
     Only framed loadout controls may return its library nonce.
     This checks the pinned image and CLI, not every spelling or real key location.
-- **Layer 2, not in this PR:** loadout redacts strings that match the key
-  shapes in `scan-patterns.json` from everything it sends to Jev. BACKLOG E14
-  records it as a prerequisite for the loadout arm. Base64 or splitting defeats
-  it, so it is secondary.
+- **Layer 2:** loadout redacts strings that match the key shapes emitted by
+  `scan-patterns.ts` from everything it sends to Jev (BACKLOG E14). The script
+  reads the production patterns; see [Collection](COLLECTION.md#bounds) for
+  the JSON command. Base64 or splitting defeats it, so it is secondary.
 - **Layer 3, not adopted:** a key per task needs a service to mint keys; the
   7-day expiry bounds a leak instead.
 - **Revoked, and confirmed.** When a batch's last run (reruns included) ends,
@@ -253,7 +253,7 @@ limits, batch revocation and usage checks replace a gateway.
   and the plan stops (stopping rule).
 - **Scanned.** The runner never prints a key. The scan looks for each key's
   exact value, its base64 and hex forms, and the shapes in
-  [scan-patterns.json](scan-patterns.json), in three passes after the
+  [scan-patterns.ts](scan-patterns.ts), in three passes after the
   revocation: collected names and contents, the stream (before it is gzipped)
   and `claude` stderr, on the host; extracted text, before judging; and
   everything about to be committed. A hit stops the batch and Erik is told.
@@ -310,8 +310,9 @@ the run is rerun after the fix).
 - No key kept out of the container. The keys are files the hook and `loadout
   mcp` read, and the Anthropic key is in `claude`'s memory. The defences, and
   what the probe cannot prove, are under [Credentials and
-  spend](#credentials-and-spend); redaction before Jev (layer 2) is not built,
-  and revocation cannot undo a leak to Jev.
+  spend](#credentials-and-spend); pattern redaction before Jev (layer 2)
+  cannot catch encoded or split credentials, and revocation cannot undo a leak
+  to Jev.
 
 ## Arms
 
@@ -792,8 +793,7 @@ Needed before the run, not before the merge.
   month. Archiving cannot be undone. Say whether the runner archives them or you
   do by hand before anything is judged.
 - The Jev key is dedicated to the `small-loadout` batch, and you revoke it
-  after. Say whether Jev reports usage per key. Two loadout changes are
-  prerequisites for the loadout arm, neither in this PR: redacting key-shaped
-  strings before anything goes to Jev (BACKLOG E14), and recording each
-  decision's calls, tokens and cost. The lexical router needs no Jev key but
-  is a different product, so not the primary comparison.
+  after. Say whether Jev reports usage per key. The loadout arm needs
+  redaction before Jev (BACKLOG E14, implemented separately from the protocol)
+  and a record of each decision's calls, tokens and cost. The lexical router
+  needs no Jev key but is a different product, so not the primary comparison.

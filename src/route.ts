@@ -307,7 +307,7 @@ export async function askJev(
   shortlistSize: number,
   excerpt?: RouteInput['excerpt'],
   signal?: AbortSignal,
-): Promise<{ raw: RawRouting; keys: Map<string, Capability> }> {
+): Promise<{ raw: RawRouting; keys: Map<string, Capability>; redactions: number }> {
   const keys = optionKeys(candidates.slice(0, CHOICE_LIMIT - 1));
 
   let started = Date.now();
@@ -351,6 +351,7 @@ export async function askJev(
 
   return {
     keys,
+    redactions: (wide.redactions ?? 0) + (close.redactions ?? 0),
     raw: {
       model: wide.model,
       candidates: order,
@@ -539,6 +540,7 @@ export async function route(input: RouteInput): Promise<RouteDecision> {
       librarySize: library.length,
       candidates: keys.size,
       inputTokens,
+      redactions: asked.redactions,
       costUsd: (inputTokens / 1e6) * config.jev.inputPricePerMTok,
       ms: Date.now() - started,
     },

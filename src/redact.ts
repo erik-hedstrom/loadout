@@ -1,0 +1,29 @@
+/** Shared by the Jev boundary and C2's credential scanner. These detect shapes, not all secrets. */
+export const KEY_PATTERNS = [
+  { name: 'sk- key', pattern: '\\bsk-[A-Za-z0-9_-]{20,}' },
+  { name: 'AWS access key id', pattern: '\\bAKIA[0-9A-Z]{16}\\b' },
+  { name: 'GitHub token', pattern: '\\bgh[pousr]_[A-Za-z0-9]{20,}' },
+  { name: 'Slack token', pattern: '\\bxox[baprs]-[A-Za-z0-9-]{10,}' },
+  { name: 'Google API key', pattern: '\\bAIza[0-9A-Za-z_-]{30,}' },
+  { name: 'private key block', pattern: '-----BEGIN [A-Z ]*PRIVATE KEY-----' },
+  { name: 'JWT', pattern: '\\beyJ[A-Za-z0-9_-]{10,}\\.eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}' },
+  { name: 'bearer token', pattern: '\\bBearer [A-Za-z0-9._~+/=-]{20,}', flags: 'i' },
+];
+
+const patterns = KEY_PATTERNS.map(({ pattern, flags }) => new RegExp(pattern, `${flags ?? ''}g`));
+
+/** JSON.stringify output only. Decode each string so escapes cannot hide a match or its word boundary. */
+export function redactJson(json: string): { json: string; count: number } {
+  let count = 0;
+  const safe = json.replace(/"(?:[^"\\]|\\.)*"/g, (quoted) => {
+    let text = JSON.parse(quoted) as string;
+    for (const re of patterns) {
+      text = text.replace(re, () => {
+        count++;
+        return '[REDACTED]';
+      });
+    }
+    return JSON.stringify(text);
+  });
+  return { json: safe, count };
+}

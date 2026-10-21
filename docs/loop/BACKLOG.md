@@ -1249,7 +1249,7 @@ Learnings (2026-10-09):
 | E11 | P1 | Fixed-text diagnostics in the gateway and relay | Codex | cloud | done ([PR #10](https://github.com/erik-hedstrom/loadout/pull/10)) |
 | E12 | P1 | A tool-less Codex bench backend (codex-cli 0.160.1 keeps unified_exec on) | Codex | local | todo |
 | E13 | P1 | Apply Engineer standards to both review paths, with a blocking necessity pass | Codex + Claude review | cloud | done ([#41](https://github.com/erik-hedstrom/loadout/pull/41)) |
-| E14 | P1 | Redact key-shaped strings before anything goes to Jev (prerequisite for the C2 loadout arm) | Codex | cloud | todo |
+| E14 | P1 | Redact key-shaped strings before anything goes to Jev (prerequisite for the C2 loadout arm) | Codex | cloud | implemented; review pending [#TBD] |
 | E15 | P1 | Test flakes: WSL-only `bench.test.ts` failure, Windows spawn timeouts | Claude | local | done ([#44](https://github.com/erik-hedstrom/loadout/pull/44)) |
 | E16 | P2 | Hygiene from #30's audit: control characters, `git ls-files` env, config symlink, echoed arguments | Claude | cloud | todo |
 | E17 | P3 | One entry-point guard for bench scripts that survives symlinked paths | Claude | cloud | todo |
@@ -1352,14 +1352,45 @@ secrets into prompts too.
 
 Acceptance:
 - One place that every Jev request passes through replaces strings that match
-  the key shapes in `bench/fixtures/c2/scan-patterns.json` (or a `src/` copy the
-  bench file reads) with a fixed token, in goals, keywords and prompts.
+  the key shapes emitted by `bench/fixtures/c2/scan-patterns.ts` from the
+  production source with a fixed token, in goals, keywords and prompts.
 - Adversarial tests for each shape, and for a key inside one `keywords` entry.
 - The session log counts redactions and never records the match.
 
 Limit: base64, splitting or any other encoding defeats pattern redaction, so
 this is defence in depth. The C2 protocol's primary layer is that the agent
 cannot read the key. Prerequisite for the C2 loadout arm.
+
+Implementation: `jevClient().ask()` in `src/jev.ts` sanitizes the entire JSON
+body before fetch, covering route, hook, MCP search, doctor and direct bench
+callers. `redactJson(json)` in `src/redact.ts` replaces matches with
+`[REDACTED]`, including strings used as object keys. It decodes JSON strings
+first: an escaped newline before a key otherwise hides its word boundary.
+The eight patterns have one source, `KEY_PATTERNS`; the C2 script emits them
+as JSON. `reportJson()` uses the same sanitizer so decision logs cannot retain
+matches from library metadata.
+
+Counts: stderr records only the number of replacements, even on failure;
+`SystemOneResponse.redactions` and `RouteDecision.stats.redactions` record
+successful request and route totals. A repeated match in wide and close counts
+twice; HTTP retries reuse the sanitized body and do not increase the count.
+Authentication headers are outside the redacted body. A key split across the
+goal and keywords is out of scope, as are other splits and encodings.
+
+Validation (WSL, Node 24.15): the focused redaction and C2 fixture suites pass
+28 tests; `npm run typecheck` and `npm run build` pass. All 17 guard mutations
+were caught, then restored from saved bytes. The first `npm test` run had
+571 passes, two Windows-only skips and three failures in `bench.test.ts`:
+the seed generator exceeded its 15-second subprocess timeout, and both shell
+smoke cases rejected CRLF (`pipefail\r`). The seed case passed in isolation;
+both smoke cases passed after restoring the fixture's committed LF endings
+(no content change). Full rerun: `npm test -- --maxWorkers=2` passed all 19
+files, with 574 tests passing and two Windows-only tests skipped (277.40 s).
+Both `git diff --check` and `git diff --cached --check` pass.
+
+Remaining: independent Claude and fresh Codex reviews, the full CI matrix and
+Erik's merge gate. No paid calls, push or PR creation. Native Windows was not
+tested.
 
 **E15. Test flakes on the merge gate.** Two failures that were already on
 main made the gate noisy during the 2026-10-16 merge round (CI reruns,
