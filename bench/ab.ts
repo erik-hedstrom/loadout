@@ -19,11 +19,11 @@ import { createHash } from 'node:crypto';
 import { delimiter, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import { loadConfig, paths, resolveApiKey } from '../src/config.js';
+import { DEFAULT_CONFIG, loadConfig, paths, resolveApiKey } from '../src/config.js';
 import { JEV_FALLBACK_NOTE, NO_KEY_WARNING } from '../src/hook.js';
 import { hookCommand, SEARCH_SERVER, SEARCH_TOOLS, searchServer, toToml } from '../src/launch.js';
 import { capabilityKey, readManifest, scanLibrary } from '../src/library.js';
-import { report, type Leak, type RunRow, type Verdict } from './ab-report.js';
+import { CREDENTIAL_SHAPE, redact, report, type Leak, type RunRow, type Verdict } from './ab-report.js';
 import { codexJudgeRefusal, DATA, modelJson, readJsonl, RESULTS, run } from './lib.js';
 import { CLAUDE_MANAGED_PRECONDITION, CLAUDE_SCRUB_PRECONDITION, CLAUDE_SETTINGS, CLAUDE_SWITCH_PRECONDITION, CODEX_CLOUD_PRECONDITION, childEnv, claudeEnv, envAllowlist, hostWrites, redacted, refusedFiles, resetWork } from './mcp-overhead.js';
 import { assertTemporary, claudeIsolation, cli, execute, validateFeatures, type Command, type Host } from './overhead.js';
@@ -205,8 +205,6 @@ export function scrub(text: string, folders: [string, string][]): string {
   return folders.reduce((t, [from, to]) => t.split(from).join(to).split(from.replace(/\\/g, '/')).join(to), text);
 }
 
-/** Not a value the harness holds, but what Codex's login tokens (JWTs) and API keys look like. */
-const CREDENTIAL_SHAPE = /\beyJ[\w-]{8,}\.[\w-]{8,}\.[\w-]{8,}|\bsk-[\w-]{20,}/;
 const CREDENTIAL_IN_OUTPUT = 'credential in output';
 
 const holdsSecret = (text: string | Buffer, secrets: string[]): boolean => secrets.some((s) => text.includes(s));
@@ -392,15 +390,13 @@ async function execute1(job: Job, prompt: string, spec: PromptSpec | undefined, 
   const streamLeak = holdsSecret([proc.stdout, proc.stderr, capturedRaw, hookStderr].join('\n'), secrets);
   const leak: Leak | null = streamLeak ? { file: '<stream>', rule: 'held secret' }
     : job.warmup ? heldSecretLeak(ctx.work, secrets) : copyOutputs(ctx.work, dest, folders, secrets);
-  const stdout = leak ? '' : proc.stdout;
-  const stream = toolEvents(stdout);
+  const stream = toolEvents(proc.stdout);
   let usage: RunUsage | null = null;
-  try { usage = (job.host === 'claude' ? claudeUsage : codexUsage)(stdout); } catch { /* checkRun says why */ }
+  try { usage = (job.host === 'claude' ? claudeUsage : codexUsage)(proc.stdout); } catch { /* checkRun says why */ }
   const marks = readFileSync(marker, 'utf8').split('\n');
-  const captured = leak ? '' : capturedRaw;
-  const hook = { invocations: marks.filter((l) => l === 'invoked').length, ...hookFacts(captured) };
+  const hook = { invocations: marks.filter((l) => l === 'invoked').length, ...hookFacts(capturedRaw) };
   const failedBeforeModel = job.host === 'claude' ? stream.failedBeforeModel : usage === null && !proc.timedOut;
-  const broken = checkRun(job, { usage, hooks: stream.hooks, inventory: stream.inventory, failedBeforeModel, hookInvocations: hook.invocations, hookExits: marks.filter((l) => l.startsWith('exit ')).map((l) => Number(l.slice(5))), keywordRouted: routedByKeyword(captured, hookStderr, stream.events),
+  const broken = checkRun(job, { usage, hooks: stream.hooks, inventory: stream.inventory, failedBeforeModel, hookInvocations: hook.invocations, hookExits: marks.filter((l) => l.startsWith('exit ')).map((l) => Number(l.slice(5))), keywordRouted: routedByKeyword(capturedRaw, hookStderr, stream.events),
     uncountedContext: stream.hooks.filter((h) => h.context).length - marks.filter((l) => l === 'context').length, pluginDir: join(REPO, 'plugins', 'loadout'), codexHook: o.codexHook, requestedModel: o.models[job.host] });
 
   // Request gaps: since this host and arm last made a request (completion to completion inside a run, which counts the request's
@@ -478,7 +474,7 @@ export function refuseStopped(out: string): void {
   if (bad) throw new Error(`${bad.id} stopped this study (${bad.invalid}): delete ${redacted(out)} and start a new one`);
 }
 
-async function runAll(o: Options, out: string, deps: { token?: string; print: (s: string) => void; env: NodeJS.ProcessEnv; provenance: Provenance }): Promise<void> {
+async function runAll(o: Options, out: string, deps: { token?: string; print: (s: string) => void; env: NodeJS.ProcessEnv; provenance: Provenance; secrets: string[] }): Promise<void> {
   // Derived from --out, not random: a resumed study then works in the same folder, and the folder is in the prefix the cache keys on.
   // The base is resolved once: tmpdir() can itself be a link (macOS without TMPDIR is /tmp -> /private/tmp), and assertTemporary
   // refuses a link as the nearest existing ancestor of a root that does not exist yet. Links below the base are still refused.
@@ -492,7 +488,7 @@ async function runAll(o: Options, out: string, deps: { token?: string; print: (s
     const rowsFile = join(out, 'rows.jsonl');
     const specs = o.ids.map((id) => PILOT.find((p) => p.id === id) as PromptSpec);
     const versions = Object.fromEntries(o.hosts.map((h) => [h, version(h)]));
-    const secrets = [deps.token, resolveApiKey(loadConfig())].filter((s): s is string => !!s);
+    const secrets = deps.secrets;
     const configFile = join(out, 'config.json');
     if (!existsSync(configFile)) writeFileSync(configFile, JSON.stringify({ ...studySettings({ ...o, ...deps.provenance }), versions, schedule: schedule(o.hosts, o.ids, o.repeats).map(jobId) }, null, 1) + '\n');
     if (o.hosts.includes('codex')) await codexPreflight(o, root);
@@ -508,7 +504,7 @@ async function runAll(o: Options, out: string, deps: { token?: string; print: (s
       const row = await execute1(job, spec ? promptText(spec) : WARMUP_PROMPT, spec, ctx, o, { out, previous, token: deps.token, secrets, versions });
       if (configDir) rmSync(configDir, { recursive: true, force: true });
       if (previous.some((r) => r.host === row.host && r.hostVersion && row.hostVersion && r.hostVersion !== row.hostVersion)) row.invalid ??= `${row.host} version changed during the study; measurement invalid`;
-      appendFileSync(rowsFile, JSON.stringify(row) + '\n');
+      appendFileSync(rowsFile, redact(JSON.stringify(row), secrets) + '\n');
       deps.print(`${row.id}: ${row.invalid ?? (row.timedOut ? 'timed out' : row.exit === 0 ? 'ok' : `exit ${row.exit}`)}; ${row.requests.length} request(s), ${row.totals.cacheRead} cache-read tokens, ${(row.ms / 1000).toFixed(0)} s${row.coldCacheRisk ? ' (coldCacheRisk)' : ''}`);
       if (row.invalid && !UNUSABLE.includes(row.invalid)) throw new Error(`${row.id}: ${row.invalid}${row.leak ? ` (${row.leak.file}, ${row.leak.rule})` : ''}`);
     }
@@ -531,7 +527,7 @@ async function codexPreflight(o: Options, root: string): Promise<void> {
 
 // --- Judge --------------------------------------------------------------------------------------
 
-async function judgeAll(out: string, print: (s: string) => void): Promise<Verdict[]> {
+async function judgeAll(out: string, print: (s: string) => void, secrets: string[]): Promise<Verdict[]> {
   const rows = completed(join(out, 'rows.jsonl')).filter((r) => !r.warmup && !r.invalid);
   const file = join(out, 'verdicts.jsonl');
   const done = completed(file) as unknown as Verdict[];
@@ -550,7 +546,7 @@ async function judgeAll(out: string, print: (s: string) => void): Promise<Verdic
       return res.output;
     });
     const v: Verdict = { host, prompt, repeat, winner: verdict.winner, judge, redactions: { bare: bareFiles.count, loadout: loadoutFiles.count } };
-    appendFileSync(file, JSON.stringify({ ...v, orders: verdict.orders }) + '\n');
+    appendFileSync(file, redact(JSON.stringify({ ...v, orders: verdict.orders }), secrets) + '\n');
     print(`${host}/${prompt}/${repeat}: ${v.winner} (${verdict.orders.map((x) => x.winner).join(' / ')}); ${judge.backend} ${judge.model}`);
   }
   return completed(file) as unknown as Verdict[];
@@ -559,8 +555,20 @@ async function judgeAll(out: string, print: (s: string) => void): Promise<Verdic
 // --- CLI ----------------------------------------------------------------------------------------
 
 export async function main(args: string[], deps: { print?: (s: string) => void; env?: NodeJS.ProcessEnv } = {}): Promise<void> {
-  const print = deps.print ?? console.log;
   const env = deps.env ?? process.env;
+  const secrets = [env.CLAUDE_CODE_OAUTH_TOKEN].filter((s): s is string => !!s);
+  try {
+    let config;
+    try { config = loadConfig(); } catch { /* blockers reports an invalid config; judge-only still works from saved rows */ }
+    const key = resolveApiKey(config ?? DEFAULT_CONFIG);
+    if (key) secrets.push(key);
+    await mainImpl(args, (s) => (deps.print ?? console.log)(redact(s, secrets)), env, secrets);
+  } catch (error) {
+    throw new Error(redact(error instanceof Error ? error.message : 'ab failed', secrets));
+  }
+}
+
+async function mainImpl(args: string[], print: (s: string) => void, env: NodeJS.ProcessEnv, secrets: string[]): Promise<void> {
   const { values } = parseArgs({ args, options: { plan: { type: 'boolean' }, run: { type: 'boolean' }, 'judge-only': { type: 'string' }, hosts: { type: 'string' }, ids: { type: 'string' }, repeats: { type: 'string' }, out: { type: 'string' },
     'claude-model': { type: 'string' }, 'codex-model': { type: 'string' }, 'max-turns': { type: 'string' }, 'timeout-s': { type: 'string' }, 'no-codex-hook': { type: 'boolean' } } });
   const list = <T extends string>(text: string | undefined, allowed: readonly T[], fallback: T[]) => text?.split(',').map((x) => { if (!allowed.includes(x as T)) throw new Error(`unknown value ${x}`); return x as T; }) ?? fallback;
@@ -572,9 +580,9 @@ export async function main(args: string[], deps: { print?: (s: string) => void; 
   if (values['judge-only'] !== undefined) {
     const dir = resolve(values['judge-only']);
     refuseStopped(dir);
-    const verdicts = await judgeAll(dir, print);
+    const verdicts = await judgeAll(dir, print, secrets);
     const rows = completed(join(dir, 'rows.jsonl'));
-    writeFileSync(join(dir, 'report.md'), report(rows, verdicts));
+    writeFileSync(join(dir, 'report.md'), report(rows, verdicts, secrets));
     // Judging an unfinished study leaves it marked: the marker goes only once every scheduled run has a row.
     const scheduled: string[] = existsSync(join(dir, 'config.json')) ? JSON.parse(readFileSync(join(dir, 'config.json'), 'utf8')).schedule : [];
     if (scheduled.length && scheduled.every((id) => rows.some((r) => r.id === id))) rmSync(join(dir, 'INCOMPLETE'), { force: true });
@@ -594,9 +602,9 @@ export async function main(args: string[], deps: { print?: (s: string) => void; 
   refuseStopped(out);
   mkdirSync(out, { recursive: true });
   writeFileSync(join(out, 'INCOMPLETE'), 'This run did not finish: resume it with --out, or delete the folder. Its rows are not a result.\n');
-  await runAll(o, out, { token: env.CLAUDE_CODE_OAUTH_TOKEN, print, env, provenance: p });
-  const verdicts = await judgeAll(out, print);
-  writeFileSync(join(out, 'report.md'), report(completed(join(out, 'rows.jsonl')), verdicts));
+  await runAll(o, out, { token: env.CLAUDE_CODE_OAUTH_TOKEN, print, env, provenance: p, secrets });
+  const verdicts = await judgeAll(out, print, secrets);
+  writeFileSync(join(out, 'report.md'), report(completed(join(out, 'rows.jsonl')), verdicts, secrets));
   rmSync(join(out, 'INCOMPLETE'));
   print(`Raw rows and report: ${redacted(out)}`);
 }

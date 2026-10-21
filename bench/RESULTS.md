@@ -175,7 +175,9 @@ nothing.
   checks cover warm-ups too, except that their deliverables are not copied or
   shape-checked. A hit copies nothing, saves no stream, skips the hidden test and
   records an invalid row without matched text; a credential-bearing path is
-  recorded as `<credential-bearing path>`. Token shapes in stdout only withhold
+  recorded as `<credential-bearing path>`. A shared sink gate replaces held secrets
+  and token shapes with `<credential>` in rows, verdicts, reports, printed text and
+  public errors. Token shapes in stdout only withhold
   that run's stream (`streamWithheld: "token shape"`); usage and tools are still
   parsed in memory and the run can count. Token shapes in excluded files,
   binaries, stderr and hook captures are not checked. Codex's login token is

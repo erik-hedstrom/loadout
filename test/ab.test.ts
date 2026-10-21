@@ -6,7 +6,7 @@ import * as mcpOverhead from '../bench/mcp-overhead.js';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { report, type RunRow, type Verdict } from '../bench/ab-report.js';
 import { JUDGE_MAX_BYTES } from '../bench/pairwise.js';
 import { AB_MODELS, blockers, buildCommand, checkRun, copyOutputs, hiddenResult, hookFacts, main, openedSkills, planLines, promptText, provenance, redactNames, refuseOtherSettings, refuseStopped, routedByKeyword, runEnv, schedule, scrub, type Ctx, type Evidence, type Job, type Options } from '../bench/ab.js';
@@ -22,6 +22,8 @@ vi.mock('node:child_process', async (importOriginal) => {
 const temps: string[] = [];
 const temp = (prefix: string) => { const dir = mkdtempSync(join(tmpdir(), prefix)); temps.push(dir); return dir; };
 afterAll(() => temps.forEach((dir) => rmSync(dir, { recursive: true, force: true })));
+beforeEach(() => { vi.stubEnv('LOADOUT_HOME', temp('loadout-ab-home-')); vi.stubEnv('TYPESAFE_API_KEY', ''); });
+afterEach(() => vi.unstubAllEnvs());
 
 const repo = join(import.meta.dirname, '..');
 const claudeStream = readFileSync(join(import.meta.dirname, 'fixtures', 'ab', 'claude-loadout.jsonl'), 'utf8');
@@ -634,6 +636,26 @@ describe('resuming and finishing a study', () => {
     expect(existsSync(join(dir, 'INCOMPLETE'))).toBe(true);
   });
 
+  it('redacts legacy report text at the report sink without changing measurements', async () => {
+    const held = 'synthetic-held-secret';
+    const shape = `sk-${'x'.repeat(24)}`;
+    const home = temp('loadout-ab-report-home-');
+    vi.stubEnv('LOADOUT_HOME', home);
+    vi.stubEnv('TYPESAFE_API_KEY', held);
+    const rows = [row({ id: 'b' }), row({ id: 'l', arm: 'loadout', hook: { invocations: 1, contextChars: 123, listed: [held, shape, shape], injected: [held, shape] } })];
+    const dir = study(rows);
+    writeFileSync(join(dir, 'verdicts.jsonl'), JSON.stringify({ host: 'claude', prompt: 'p1', repeat: 1, winner: 'tie', judge: { backend: 'codex', model: 'test' }, redactions: { bare: 0, loadout: 0 } }) + '\n');
+    try {
+      await main(['--judge-only', dir], { print: () => {} });
+      const text = readFileSync(join(dir, 'report.md'), 'utf8');
+      expect(text).not.toContain(held);
+      expect(text).not.toContain(shape);
+      expect(text).toContain('<credential>');
+      expect(text).toContain('1,100');
+      expect(text).toContain('41,000');
+    } finally { vi.unstubAllEnvs(); }
+  });
+
   it('--judge-only removes the INCOMPLETE marker only when every scheduled run has a row', async () => {
     const dir = study(rows);
     await main(['--judge-only', dir], { print: () => {} });
@@ -647,12 +669,41 @@ describe('resuming and finishing a study', () => {
   });
 });
 
+describe('public text sinks', () => {
+  const held = 'synthetic-held-secret';
+  const shape = `sk-${'x'.repeat(24)}`;
+  const jwt = 'eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ1c2VyIn0.c2lnbmF0dXJl';
+  const text = `${held} ${held} ${shape} ${jwt}`;
+
+  it('redacts every plan and blocker print at the print sink', async () => {
+    vi.stubEnv('LOADOUT_HOME', temp('loadout-ab-print-'));
+    vi.stubEnv('TYPESAFE_API_KEY', held);
+    const lines: string[] = [];
+    try {
+      await main(['--plan', '--hosts', 'codex', '--codex-model', text], { print: (s) => lines.push(s), env: { CODEX_HOME: 'no-codex-home' } });
+      const printed = lines.join('\n');
+      expect(printed).toContain('<credential> <credential> <credential> <credential>');
+      expect(printed).not.toContain(held);
+      expect(printed).not.toContain(shape);
+    } finally { vi.unstubAllEnvs(); }
+  });
+
+  it('redacts thrown option errors at the public error sink', async () => {
+    vi.stubEnv('LOADOUT_HOME', temp('loadout-ab-error-'));
+    vi.stubEnv('TYPESAFE_API_KEY', held);
+    try {
+      await expect(main(['--hosts', text], { print: () => {} })).rejects.toThrow('unknown value <credential> <credential> <credential> <credential>');
+    } finally { vi.unstubAllEnvs(); }
+  });
+});
+
 describe('credential screening before persistence', () => {
   const cases = ['warmup', 'measured'].flatMap((when) => [
     ...['binary', 'node_modules', '.env', 'path', 'stdout', 'stderr', 'hook', 'hook stderr'].map((where) => ({ when, where, kind: 'held' })),
     ...['binary', 'node_modules', '.env', 'excluded path', 'stderr', 'hook', 'hook stderr', 'stdout', 'deliverable text', 'deliverable path'].map((where) => ({ when, where, kind: 'shape' })),
   ]);
   cases.push({ when: 'measured code', where: '.env', kind: 'held' });
+  cases.push({ when: 'measured', where: 'shaped filename', kind: 'held' });
   it.each(cases)('$kind credential in $where during $when obeys the persistence boundary', async ({ when, where, kind }) => {
     const dir = temp('loadout-ab-screen-');
     const out = join(dir, 'out');
@@ -677,7 +728,7 @@ describe('credential screening before persistence', () => {
     vi.stubEnv('TYPESAFE_API_KEY', 'synthetic-held-secret');
     vi.spyOn(overhead, 'cli').mockReturnValue({ bin: process.execPath, prefix: [script] });
     vi.spyOn(mcpOverhead, 'refusedFiles').mockReturnValue([]);
-    vi.spyOn(benchLib, 'modelJson').mockResolvedValue({ output: { winner: 'first', confidence: 'high', reasons: 'fixture' }, costUsd: 0 });
+    vi.spyOn(benchLib, 'modelJson').mockResolvedValue({ output: { winner: 'first', confidence: 'high', reasons: `synthetic-held-secret sk-${'x'.repeat(24)} sk-${'x'.repeat(24)}` }, costUsd: 0 });
     const secret = kind === 'held' ? 'synthetic-held-secret' : `sk-${'x'.repeat(24)}`;
     const target = when === 'warmup' ? 0 : 2;
     const stops = kind === 'held' || (when !== 'warmup' && where.startsWith('deliverable'));
@@ -691,7 +742,8 @@ describe('credential screening before persistence', () => {
           : where === 'path' ? `${secret}/notes.txt`
           : where === 'excluded path' ? `.${secret}/notes.txt`
           : where === 'deliverable path' ? `${secret}.md`
-          : where === 'deliverable text' ? 'notes.md' : null;
+          : where === 'deliverable text' ? 'notes.md'
+          : where === 'shaped filename' ? `sk-${'x'.repeat(24)}.md` : null;
         if (file) {
           mkdirSync(join(work, file, '..'), { recursive: true });
           writeFileSync(join(work, file), where === 'binary' ? Buffer.from(`before\0${secret}`) : where.includes('path') ? 'safe' : secret);
@@ -700,12 +752,12 @@ describe('credential screening before persistence', () => {
           const shim = join(work, '..', 'shim', 'codex');
           const capture = when === 'warmup' ? 'codex_bare_warmup_0.invocations.out' : `codex_loadout_${prompt}_1.invocations.out`;
           writeFileSync(join(shim, capture + (where === 'hook stderr' ? '.err' : '')), where === 'hook'
-            ? JSON.stringify({ hookSpecificOutput: { additionalContext: kind === 'held' ? `<skill name="${secret}">body</skill>` : `text ${secret}` } }) : secret);
+            ? JSON.stringify({ hookSpecificOutput: { additionalContext: `- "${secret}" (fit 0.9): text\n<skill name="${secret}">body</skill>` } }) : secret);
         }
       }
       const stdout = codexStream + (tainted && where === 'stdout'
         ? '\n' + JSON.stringify({ type: 'item.completed', item: kind === 'held'
-          ? { type: 'mcp_tool_call', server: 'loadout', tool: secret, status: 'completed' } : { type: 'agent_message', text: secret } }) : '');
+          ? { type: 'mcp_tool_call', server: 'loadout', tool: secret, status: 'completed' } : { type: 'mcp_tool_call', server: 'loadout', tool: 'load_skill', arguments: { skill: secret }, status: 'completed' } }) + (kind === 'shape' ? '\n' + JSON.stringify({ type: 'item.completed', item: { type: 'mcp_tool_call', server: 'loadout', tool: secret, status: 'completed' } }) : '') : '');
       return { stdout, stderr: tainted && where === 'stderr' ? secret : '', code: 0, timedOut: false };
     });
     try {
@@ -724,6 +776,8 @@ describe('credential screening before persistence', () => {
       const row = rows[target]!;
       expect(row.invalid).toBe(stops ? 'credential in output' : undefined);
       expect(row.hiddenTest).toBeNull();
+      expect(row.totals).toMatchObject({ uncached: 9000, cacheRead: 52000, output: 2300 });
+      if (where === 'shaped filename') expect(row.leak?.file).toBe('<credential>.md');
       expect(row.leak?.rule).toBe(stops ? kind === 'held' ? 'held secret' : 'token shape' : undefined);
       if (stops && where.includes('path')) expect(row.leak?.file).toBe('<credential-bearing path>');
       const withheld = !stops && where === 'stdout';
@@ -739,7 +793,18 @@ describe('credential screening before persistence', () => {
       if (!stops && when !== 'warmup') expect(readFileSync(join(dest, 'notes.md'), 'utf8')).toBe('safe deliverable');
       const files = (readdirSync(out, { recursive: true }) as string[]).filter((f) => statSync(join(out, f)).isFile());
       const persisted = files.map((f) => readFileSync(join(out, f), 'utf8')).join('\n');
-      expect([persisted, message, ...lines].join('\n')).not.toContain(secret);
+      const saved = [persisted, message, ...lines].join('\n');
+      expect(saved).not.toContain(secret);
+      expect(saved).not.toContain('synthetic-held-secret');
+      expect(saved).not.toContain(`sk-${'x'.repeat(24)}`);
+      if (kind === 'shape' && where === 'stdout') {
+        expect(row.skillsOpened).toContain('<credential>');
+        expect(row.loadoutTools).toContain('mcp__loadout__<credential>');
+      }
+      if (kind === 'shape' && where === 'hook') {
+        expect(row.hook.listed).toContain('<credential>');
+        expect(row.hook.injected).toContain('<credential>');
+      }
       if (stops) {
         expect(files.filter((f) => f.startsWith('streams'))).toHaveLength(target);
         expect(files.some((f) => f.startsWith('outputs'))).toBe(false);

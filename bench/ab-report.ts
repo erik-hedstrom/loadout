@@ -3,6 +3,15 @@ import type { Host } from './overhead.js';
 import type { Arm } from './pairwise.js';
 import type { RequestUsage, RunUsage } from './usage.js';
 
+/** Token shapes can occur in third-party skill text and parsed metadata. */
+export const CREDENTIAL_SHAPE = /\beyJ[\w-]{8,}\.[\w-]{8,}\.[\w-]{8,}|\bsk-[\w-]{20,}/;
+
+export function redact(text: string, secrets: string[]): string {
+  for (const secret of secrets.filter(Boolean).sort((a, b) => b.length - a.length)) text = text.split(secret).join('<credential>');
+  // Parsed tool names add word-character prefixes, which must not hide an embedded token.
+  return text.replace(new RegExp(CREDENTIAL_SHAPE.source.replaceAll('\\b', ''), 'g'), '<credential>');
+}
+
 export interface Leak { file: string; rule: 'held secret' | 'token shape' }
 
 export interface RunRow {
@@ -72,7 +81,7 @@ const triple = (rs: RequestUsage[]) => {
   return v.every((x) => x === null) ? 'not shown' : v.map((x) => num(x ?? 0)).join(' / ');
 };
 
-export function report(rows: RunRow[], verdicts: Verdict[]): string {
+export function report(rows: RunRow[], verdicts: Verdict[], secrets: string[] = []): string {
   const hosts = [...new Set(rows.map((r) => r.host))];
   const prompts = [...new Set(measured(rows).map((r) => r.prompt))];
   const judged = (host: Host, prompt: string) => {
@@ -138,5 +147,5 @@ export function report(rows: RunRow[], verdicts: Verdict[]): string {
     '- Per-request usage for Codex, its model name and its cost: `codex exec --json` gives a thread total only.',
     '- Quality beyond the blind pairwise judge and the hidden test; the judge sees file contents only, with skill names removed, so a skill\'s own template can still reveal the arm.',
     '- Anything about prompts other than these three, or about a random sample of requests.');
-  return out.join('\n') + '\n';
+  return redact(out.join('\n') + '\n', secrets);
 }
