@@ -187,8 +187,9 @@ nothing.
   never read. A loadout hook that exited non-zero or never finished also stops
   the batch (the shim records each exit status; the Claude stream's hook response
   is checked too), as do the plugin, hook, server or model checks.
-  Preflight also refuses libraries with capability names that credential redaction
-  would change, since judging could not hide their original names.
+  Preflight also refuses libraries with token-shaped capability names, and judging
+  refuses a pair whose saved skill names contain `<credential>`: in both cases the
+  judge could not be blinded to the original names.
   Before any agent runs, each judge the hosts need is checked (`codex features
   list` must show `shell_tool` and `unified_exec` off): on the codex-cli
   versions seen so far (0.154.0, 0.160.1; E12) it does not, so a study with the
