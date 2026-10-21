@@ -33,12 +33,6 @@ function linkScript(script: string, context: TestContext): string {
 }
 
 describe('bench entry points', () => {
-  it.each(scripts)('runs %s directly and rejects invalid arguments before any model calls', (script) => {
-    const result = run([join('bench', `${script}.ts`), '--unknown-entry-option']);
-    expect(result.status, result.stderr).toBe(1);
-    expect(result.stderr).toMatch(/Unknown option|usage: stability\.ts/);
-  });
-
   it.for(scripts)('runs %s through a symlink', (script, context) => {
     const link = linkScript(script, context);
     const result = run([link, '--unknown-entry-option']);
@@ -70,10 +64,42 @@ describe('bench entry points', () => {
     expect(linked.stdout).toBe(direct.stdout);
   });
 
-  it.each([false, true])('imports guarded scripts without running main (existing argv entry: %s)', (entry) => {
-    const imports = scripts.map((script) => `await import('./bench/${script}.ts');`).join('\n');
-    const argv = entry ? `process.argv[1] = ${JSON.stringify(import.meta.filename)};` : '';
-    const result = run(['--input-type=module', '-e', `${argv}\n${imports}\nconsole.log('imports completed');`]);
+  it('keeps module lookup errors strict', () => {
+    const argv = process.argv;
+    try {
+      process.argv = [process.execPath, import.meta.filename];
+      expect(() => isEntry(pathToFileURL(join(temp, 'missing-module.ts')).href)).toThrow(/ENOENT/);
+    } finally {
+      process.argv = argv;
+    }
+  });
+
+  it('propagates unexpected argv lookup errors', () => {
+    const argv = process.argv;
+    try {
+      process.argv = [process.execPath, '\0'];
+      expect(() => isEntry(import.meta.url)).toThrow(/null bytes/);
+    } finally {
+      process.argv = argv;
+    }
+  });
+
+  it.each(['none', 'existing', 'missing', 'stdin', 'not-directory', 'deleted'] as const)('imports guarded scripts without running main (entry: %s)', (entry) => {
+    const imports = scripts.map((script) => `await import(${JSON.stringify(pathToFileURL(join(root, 'bench', `${script}.ts`)).href)});`).join('\n');
+    const code = `${imports}\nconsole.log('imports completed');`;
+    let args: string[];
+    if (entry === 'deleted') {
+      const importer = join(temp, 'deleted-importer.mjs');
+      writeFileSync(importer, `import { unlinkSync } from 'node:fs';\nunlinkSync(import.meta.filename);\n${code}`);
+      args = [importer];
+    } else {
+      const entries = {
+        none: [], existing: [import.meta.filename], missing: [join(temp, 'missing-entry.ts')],
+        stdin: ['-'], 'not-directory': [join(import.meta.filename, 'child')],
+      };
+      args = ['--input-type=module', '-e', code, ...entries[entry]];
+    }
+    const result = run(args);
     expect(result.status, result.stderr).toBe(0);
     expect(result.stdout).toBe('imports completed\n');
     expect(result.stderr).toBe('');

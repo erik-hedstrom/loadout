@@ -1288,6 +1288,11 @@ folder: the existing `resetWork` test assumes the checkout is outside it.
 `bench/ab.ts` (#47) still has its own guard; whichever of the two lands second
 converts it.
 
+Review M1/L1: argv lookup ENOENT/ENOTDIR means no entry (missing path or
+non-directory parent); module lookup and unexpected argv errors stay strict.
+Import tests cover these cases, stdin and a deleted importer. Removed seven
+direct-invocation cases; the stability pair still covers direct execution.
+
 **E10. Build without optional dependencies.** src/embed.ts:24 types
 `@huggingface/transformers` with `typeof import(...)`. So `tsc` fails when npm
 skips the optional install, which happened once on Ubuntu with Node 24 in CI.
