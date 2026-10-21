@@ -42,6 +42,7 @@ export interface RunRow {
   invalid?: string;
   /** Set with `invalid: 'credential in output'`: the source and rule that stopped persistence, never the matched text. */
   leak?: Leak;
+  streamWithheld?: 'token shape';
 }
 
 export interface Verdict {

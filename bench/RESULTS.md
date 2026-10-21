@@ -169,12 +169,19 @@ nothing.
   the sample does not support a claim.
 - **What stops the batch.** A loadout arm that routed by keyword (the hook's
   no-key warning or Jev-fallback note, or a `find_tools` result tagged as a
-  keyword match), any file in a run's folder holding the TypeSafe key, the
-  Claude subscription token or something shaped like a login token or API key
-  (nothing is copied, and the value is never printed; Codex's own login token is
-  not read, so only its shape is caught), a loadout hook that exited non-zero
-  or never finished (the shim records each exit status; the Claude stream's
-  hook response is checked too), and the plugin, hook, server or model checks.
+  keyword match), a held TypeSafe key or Claude subscription token in any work-tree
+  file (binary included), relative path, stdout, stderr, hook capture or hook-capture
+  stderr, and token shapes in deliverable paths or text about to be copied. These
+  checks cover warm-ups too, except that their deliverables are not copied or
+  shape-checked. A hit copies nothing, saves no stream, skips the hidden test and
+  records an invalid row without matched text; a credential-bearing path is
+  recorded as `<credential-bearing path>`. Token shapes in stdout only withhold
+  that run's stream (`streamWithheld: "token shape"`); usage and tools are still
+  parsed in memory and the run can count. Token shapes in excluded files,
+  binaries, stderr and hook captures are not checked. Codex's login token is
+  never read. A loadout hook that exited non-zero or never finished also stops
+  the batch (the shim records each exit status; the Claude stream's hook response
+  is checked too), as do the plugin, hook, server or model checks.
   Before any agent runs, each judge the hosts need is checked (`codex features
   list` must show `shell_tool` and `unified_exec` off): on the codex-cli
   versions seen so far (0.154.0, 0.160.1; E12) it does not, so a study with the

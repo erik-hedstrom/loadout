@@ -12,7 +12,7 @@
  * the cache writes to whichever arm ran first. So every host and arm starts with one recorded warm-up run (excluded from
  * the comparisons, reported as the cold start), and the measured runs alternate between the arms.
  */
-import { appendFileSync, copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
@@ -209,39 +209,40 @@ export function scrub(text: string, folders: [string, string][]): string {
 const CREDENTIAL_SHAPE = /\beyJ[\w-]{8,}\.[\w-]{8,}\.[\w-]{8,}|\bsk-[\w-]{20,}/;
 const CREDENTIAL_IN_OUTPUT = 'credential in output';
 
-const credentialRule = (text: string, secrets: string[]): Leak['rule'] | null =>
-  secrets.some((s) => text.includes(s)) ? 'held secret' : CREDENTIAL_SHAPE.test(text) ? 'token shape' : null;
+const holdsSecret = (text: string | Buffer, secrets: string[]): boolean => secrets.some((s) => text.includes(s));
 
-function outputLeak(work: string, secrets: string[], dir = work): Leak | null {
+function heldSecretLeak(work: string, secrets: string[], dir = work): Leak | null {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const p = join(dir, entry.name);
     const file = relative(work, p).replace(/\\/g, '/');
-    const pathRule = credentialRule(file, secrets);
-    if (pathRule) return { file: '<credential-bearing path>', rule: pathRule };
+    if (holdsSecret(file, secrets)) return { file: '<credential-bearing path>', rule: 'held secret' };
     if (entry.isDirectory()) {
-      const leak = outputLeak(work, secrets, p);
+      const leak = heldSecretLeak(work, secrets, p);
       if (leak) return leak;
-    } else if (entry.isFile()) {
-      const buf = readFileSync(p);
-      const rule = buf.includes(0) ? null : credentialRule(buf.toString('utf8'), secrets);
-      if (rule) return { file, rule };
+    } else if (entry.isFile() && holdsSecret(readFileSync(p), secrets)) {
+      return { file, rule: 'held secret' };
     }
   }
   return null;
 }
 
-/** Screen the entire work tree before copying only the judge's text deliverables. */
+/** Held secrets stop any run; token shapes stop only files that would reach the judge. */
 export function copyOutputs(work: string, dest: string, folders: [string, string][], secrets: string[]): Leak | null {
   rmSync(dest, { recursive: true, force: true });
-  const leak = outputLeak(work, secrets);
+  const leak = heldSecretLeak(work, secrets);
   if (leak) return leak;
-  for (const p of deliverableFiles(work)) {
-    if (statSync(p).size > 200_000) continue;
+  const files = deliverableFiles(work).flatMap((p) => {
     const buf = readFileSync(p);
-    if (buf.includes(0)) continue;
-    const to = join(dest, relative(work, p));
+    return buf.includes(0) ? [] : [{ file: relative(work, p), text: buf.toString('utf8') }];
+  });
+  for (const { file, text } of files) {
+    const pathHit = CREDENTIAL_SHAPE.test(file);
+    if (pathHit || CREDENTIAL_SHAPE.test(text)) return { file: pathHit ? '<credential-bearing path>' : file.replace(/\\/g, '/'), rule: 'token shape' };
+  }
+  for (const { file, text } of files) {
+    const to = join(dest, file);
     mkdirSync(dirname(to), { recursive: true });
-    writeFileSync(to, scrub(buf.toString('utf8'), folders));
+    writeFileSync(to, scrub(text, folders));
   }
   mkdirSync(dest, { recursive: true });
   return null;
@@ -384,9 +385,9 @@ async function execute1(job: Job, prompt: string, spec: PromptSpec | undefined, 
   const dest = join(out, 'outputs', job.host, job.prompt, `${job.arm}-${job.repeat}`);
   const capturedRaw = readFileSync(capture, 'utf8');
   const hookStderr = readFileSync(`${capture}.err`, 'utf8');
-  const streamRule = credentialRule([proc.stdout, proc.stderr, capturedRaw, hookStderr].join('\n'), secrets);
-  const leak: Leak | null = streamRule ? { file: '<stream>', rule: streamRule }
-    : job.warmup ? outputLeak(ctx.work, secrets) : copyOutputs(ctx.work, dest, folders, secrets);
+  const streamLeak = holdsSecret([proc.stdout, proc.stderr, capturedRaw, hookStderr].join('\n'), secrets);
+  const leak: Leak | null = streamLeak ? { file: '<stream>', rule: 'held secret' }
+    : job.warmup ? heldSecretLeak(ctx.work, secrets) : copyOutputs(ctx.work, dest, folders, secrets);
   const stdout = leak ? '' : proc.stdout;
   const stream = toolEvents(stdout);
   let usage: RunUsage | null = null;
@@ -412,9 +413,9 @@ async function execute1(job: Job, prompt: string, spec: PromptSpec | undefined, 
   const total = sumUsage(requests);
   const invalid = leak ? CREDENTIAL_IN_OUTPUT : broken;
   const hiddenTest = spec?.hidden && !job.warmup && !leak ? hiddenResult(ctx.work, join(FIXTURES, spec.hidden)) : null;
-  // Raw streams stay local (gitignored): they hold file contents, local paths and the hook's skill text. After a leak the
-  // stream holds the credential too (the agent's own tool input), so it is not kept anywhere under bench/results.
-  if (!leak) {
+  // Skill text can contain placeholder tokens: withhold such streams without losing a valid measurement.
+  const streamWithheld = !leak && CREDENTIAL_SHAPE.test(proc.stdout);
+  if (!leak && !streamWithheld) {
     mkdirSync(join(out, 'streams'), { recursive: true });
     writeFileSync(join(out, 'streams', `${id.replace(/\//g, '_')}.jsonl`), proc.stdout);
   }
@@ -429,7 +430,7 @@ async function execute1(job: Job, prompt: string, spec: PromptSpec | undefined, 
     unreconciled: usage?.unreconciled ?? [], modelUsage: usage?.modelUsage ?? null,
     coldCacheRisk: requests.some((r) => (r.gapMs ?? 0) > CACHE_TTL_MS),
     toolCalls: tools.length, toolErrors: tools.filter((t) => t.endsWith('(failed)')).length, loadoutTools: [...new Set(tools.filter((t) => t.startsWith(`mcp__${SEARCH_SERVER}__`)))],
-    skillsOpened: openedSkills(stream.events), hook, hiddenTest, ...(leak ? { leak } : {}),
+    skillsOpened: openedSkills(stream.events), hook, hiddenTest, ...(leak ? { leak } : {}), ...(streamWithheld ? { streamWithheld: 'token shape' as const } : {}),
     // A Codex run that timed out reports no usage: it cannot count, but it is not a broken arm.
     ...(invalid ? { invalid } : !usage ? { invalid: proc.timedOut ? UNUSABLE[0] : UNUSABLE[1] } : {}),
   };

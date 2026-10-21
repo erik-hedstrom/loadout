@@ -396,16 +396,6 @@ describe('what a run shows', () => {
     expect(existsSync(dest)).toBe(false);
   });
 
-  it.each(['.env', 'node_modules/pkg/index.js', 'dist/output.txt', 'package-lock.json', 'large.txt'])('screens excluded text files before copying deliverables: %s', (file) => {
-    const dir = temp('loadout-ab-excluded-');
-    const [work, dest] = [join(dir, 'work'), join(dir, 'dest')];
-    mkdirSync(join(work, file, '..'), { recursive: true });
-    writeFileSync(join(work, 'notes.md'), 'safe deliverable');
-    writeFileSync(join(work, file), 'x'.repeat(file === 'large.txt' ? 210_000 : 0) + 'synthetic-secret');
-    expect(copyOutputs(work, dest, [], ['synthetic-secret'])).toEqual({ file, rule: 'held secret' });
-    expect(existsSync(dest)).toBe(false);
-  });
-
   it('copies what the judge sees and nothing else: no dotfiles, dependencies or build output', () => {
     const dir = temp('loadout-ab-copy-');
     const [work, dest] = [join(dir, 'work'), join(dir, 'dest')];
@@ -647,12 +637,12 @@ describe('resuming and finishing a study', () => {
 });
 
 describe('credential screening before persistence', () => {
-  it.each([
-    ['warmup', 'stdout'], ['measured', 'stdout'],
-    ['warmup', 'hook'], ['measured', 'hook'],
-    ['warmup', 'excluded content'], ['measured', 'excluded content'], ['measured code', 'excluded content'],
-    ['warmup', 'excluded path'], ['measured', 'excluded path'],
-  ])('stops a %s run with a credential in %s and saves no tainted artifact', async (when, where) => {
+  const cases = ['warmup', 'measured'].flatMap((when) => [
+    ...['binary', 'node_modules', '.env', 'path', 'stdout', 'stderr', 'hook', 'hook stderr'].map((where) => ({ when, where, kind: 'held' })),
+    ...['binary', 'node_modules', '.env', 'excluded path', 'stderr', 'hook', 'hook stderr', 'stdout', 'deliverable text', 'deliverable path'].map((where) => ({ when, where, kind: 'shape' })),
+  ]);
+  cases.push({ when: 'measured code', where: '.env', kind: 'held' });
+  it.each(cases)('$kind credential in $where during $when obeys the persistence boundary', async ({ when, where, kind }) => {
     const dir = temp('loadout-ab-screen-');
     const out = join(dir, 'out');
     const prompt = when === 'measured code' ? 'c1-debug-13' : 'c1-web-14';
@@ -676,25 +666,36 @@ describe('credential screening before persistence', () => {
     vi.stubEnv('TYPESAFE_API_KEY', 'synthetic-held-secret');
     vi.spyOn(overhead, 'cli').mockReturnValue({ bin: process.execPath, prefix: [script] });
     vi.spyOn(mcpOverhead, 'refusedFiles').mockReturnValue([]);
-    vi.spyOn(benchLib, 'modelJson').mockRejectedValue(new Error('unexpected judging in credential test'));
+    vi.spyOn(benchLib, 'modelJson').mockResolvedValue({ output: { winner: 'first', confidence: 'high', reasons: 'fixture' }, costUsd: 0 });
+    const secret = kind === 'held' ? 'synthetic-held-secret' : `sk-${'x'.repeat(24)}`;
+    const target = when === 'warmup' ? 0 : 2;
+    const stops = kind === 'held' || (when !== 'warmup' && where.startsWith('deliverable'));
     let runs = 0;
     vi.spyOn(benchLib, 'run').mockImplementation(async (_bin, _args, work) => {
-      const tainted = runs++ === (when === 'warmup' ? 0 : 2);
+      const tainted = runs++ === target;
       writeFileSync(join(work, 'notes.md'), 'safe deliverable');
-      if (tainted && where === 'excluded content') writeFileSync(join(work, '.env'), 'synthetic-held-secret');
-      if (tainted && where === 'excluded path') {
-        mkdirSync(join(work, '.synthetic-held-secret'));
-        writeFileSync(join(work, '.synthetic-held-secret', 'notes'), 'safe');
+      if (tainted) {
+        const file = where === '.env' ? '.env' : where === 'binary' ? 'payload.bin'
+          : where === 'node_modules' ? 'node_modules/pkg/index.js'
+          : where === 'path' ? `${secret}/notes.txt`
+          : where === 'excluded path' ? `.${secret}/notes.txt`
+          : where === 'deliverable path' ? `${secret}.md`
+          : where === 'deliverable text' ? 'notes.md' : null;
+        if (file) {
+          mkdirSync(join(work, file, '..'), { recursive: true });
+          writeFileSync(join(work, file), where === 'binary' ? Buffer.from(`before\0${secret}`) : where.includes('path') ? 'safe' : secret);
+        }
+        if (where.startsWith('hook')) {
+          const shim = join(work, '..', 'shim', 'codex');
+          const capture = when === 'warmup' ? 'codex_bare_warmup_0.invocations.out' : `codex_loadout_${prompt}_1.invocations.out`;
+          writeFileSync(join(shim, capture + (where === 'hook stderr' ? '.err' : '')), where === 'hook'
+            ? JSON.stringify({ hookSpecificOutput: { additionalContext: kind === 'held' ? `<skill name="${secret}">body</skill>` : `text ${secret}` } }) : secret);
+        }
       }
-      if (tainted && where === 'hook') {
-        const shim = join(work, '..', 'shim', 'codex');
-        const capture = when === 'warmup' ? 'codex_bare_warmup_0.invocations.out' : 'codex_loadout_c1-web-14_1.invocations.out';
-        writeFileSync(join(shim, capture), JSON.stringify({ hookSpecificOutput: { additionalContext: '<skill name="synthetic-held-secret">body</skill>' } }));
-      }
-      const stdout = tainted && where === 'stdout'
-        ? JSON.stringify({ type: 'item.completed', item: { type: 'mcp_tool_call', server: 'loadout', tool: 'synthetic-held-secret', status: 'completed' } })
-        : codexStream;
-      return { stdout, stderr: '', code: 0, timedOut: false };
+      const stdout = codexStream + (tainted && where === 'stdout'
+        ? '\n' + JSON.stringify({ type: 'item.completed', item: kind === 'held'
+          ? { type: 'mcp_tool_call', server: 'loadout', tool: secret, status: 'completed' } : { type: 'agent_message', text: secret } }) : '');
+      return { stdout, stderr: tainted && where === 'stderr' ? secret : '', code: 0, timedOut: false };
     });
     try {
       Object.defineProperty(process, 'platform', { value: 'darwin' });
@@ -705,18 +706,33 @@ describe('credential screening before persistence', () => {
           env: { LOADOUT_AB_SELF_TEST: 'lexical', CODEX_HOME: join(dir, 'codex') }, print: (s) => lines.push(s),
         });
       } catch (error) { message = (error as Error).message; }
-      expect(message).toContain('credential in output');
+      if (stops) expect(message).toContain('credential in output');
+      else expect(message).toBe('');
       const rows = readFileSync(join(out, 'rows.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l) as RunRow);
-      expect(rows).toHaveLength(when === 'warmup' ? 1 : 3);
-      const last = rows.at(-1)!;
-      expect(last.invalid).toBe('credential in output');
-      expect(last.hiddenTest).toBeNull();
-      expect(last.leak).toEqual({ file: ['stdout', 'hook'].includes(where) ? '<stream>' : where === 'excluded path' ? '<credential-bearing path>' : '.env', rule: 'held secret' });
+      expect(rows).toHaveLength(stops ? target + 1 : 4);
+      const row = rows[target]!;
+      expect(row.invalid).toBe(stops ? 'credential in output' : undefined);
+      expect(row.hiddenTest).toBeNull();
+      expect(row.leak?.rule).toBe(stops ? kind === 'held' ? 'held secret' : 'token shape' : undefined);
+      if (stops && where.includes('path')) expect(row.leak?.file).toBe('<credential-bearing path>');
+      const withheld = !stops && where === 'stdout';
+      expect(row.streamWithheld).toBe(withheld ? 'token shape' : undefined);
+      if (!stops) {
+        expect(row.totals.cacheRead).toBeGreaterThan(0);
+        expect(row.toolCalls).toBeGreaterThan(0);
+      }
+      const streamFile = join(out, 'streams', row.id.replace(/\//g, '_') + '.jsonl');
+      expect(existsSync(streamFile)).toBe(!stops && !withheld);
+      const dest = join(out, 'outputs', row.host, row.prompt, `${row.arm}-${row.repeat}`);
+      expect(existsSync(dest)).toBe(!stops && when !== 'warmup');
+      if (!stops && when !== 'warmup') expect(readFileSync(join(dest, 'notes.md'), 'utf8')).toBe('safe deliverable');
       const files = (readdirSync(out, { recursive: true }) as string[]).filter((f) => statSync(join(out, f)).isFile());
-      expect(files.filter((f) => f.startsWith('streams'))).toHaveLength(when === 'warmup' ? 0 : 2);
-      expect(files.some((f) => f.startsWith('outputs'))).toBe(false);
       const persisted = files.map((f) => readFileSync(join(out, f), 'utf8')).join('\n');
-      expect([persisted, message, ...lines].join('\n')).not.toContain('synthetic-held-secret');
+      expect([persisted, message, ...lines].join('\n')).not.toContain(secret);
+      if (stops) {
+        expect(files.filter((f) => f.startsWith('streams'))).toHaveLength(target);
+        expect(files.some((f) => f.startsWith('outputs'))).toBe(false);
+      }
     } finally {
       Object.defineProperty(process, 'platform', platform);
       vi.restoreAllMocks();
