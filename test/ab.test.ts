@@ -202,7 +202,10 @@ describe('plan', () => {
     expect(found.some((b) => b.includes('CLAUDE_CODE_OAUTH_TOKEN'))).toBe(true);
   });
 
-  it('blocks library names that redaction would change before spending, without naming them', () => {
+  it.each([
+    { name: 'task-specific-instructions-for-the-application', folder: 'sample' },
+    { name: 'Task specific instructions for apps', folder: 'task-specific-instructions-for-apps' },
+  ])('blocks library names or keys that redaction would change before spending ($folder)', ({ name, folder }) => {
     const home = process.env.LOADOUT_HOME!;
     writeFileSync(join(home, 'config.json'), JSON.stringify({ router: 'lexical', embeddings: false }));
     const skill = join(home, 'library', 'skills', 'sample', 'SKILL.md');
@@ -211,11 +214,13 @@ describe('plan', () => {
       .filter((b) => b.includes('library capability names requiring redaction'));
     writeFileSync(skill, '---\nname: sample\ndescription: Test fixture\n---\nText');
     expect(check()).toEqual([]);
-    const name = 'task-specific-instructions-for-the-application';
-    writeFileSync(skill, `---\nname: ${name}\ndescription: Test fixture\n---\nText`);
+    const target = join(home, 'library', 'skills', folder, 'SKILL.md');
+    mkdirSync(join(target, '..'), { recursive: true });
+    writeFileSync(target, `---\nname: ${name}\ndescription: Test fixture\n---\nText`);
     const found = check();
     expect(found).toEqual(['library capability names requiring redaction: 1; blind judging is not possible']);
     expect(found.join('\n')).not.toContain(name);
+    expect(found.join('\n')).not.toContain(folder);
   });
 
   it('refuses a global AGENTS.md or AGENTS.override.md in CODEX_HOME, a symlink included, which Codex puts in every run', () => {
