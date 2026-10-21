@@ -316,12 +316,7 @@ export function blockers(o: Options, env: NodeJS.ProcessEnv = process.env): stri
     if (unblindable) out.push(`library capability names requiring redaction: ${unblindable}; blind judging is not possible`);
   }
   if (config?.router === 'jev') {
-    const inherited = process.env;
-    try {
-      process.env = env;
-      jevBaseUrl(config);
-    } catch (error) { out.push((error as Error).message); }
-    finally { process.env = inherited; }
+    try { jevBaseUrl(config, env); } catch (error) { out.push((error as Error).message); }
   }
   if (config?.router === 'jev' && !resolveApiKey(config)) out.push('the loadout arm needs a TypeSafe key (TYPESAFE_API_KEY or `loadout init --key-file`), or it measures keyword routing');
   // Claude can strip the variable from the MCP server (its environment allowlist) and the hook (its subprocess scrub), but not a key file the config names.

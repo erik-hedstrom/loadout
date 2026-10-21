@@ -256,13 +256,10 @@ describe('plan', () => {
     writeFileSync(join(home, 'config.json'), JSON.stringify({ router: 'jev', jev: { baseUrl } }));
     vi.stubEnv('TYPESAFE_API_KEY', 'synthetic-key');
     vi.stubEnv('TYPESAFE_BASE_URL', ambient);
-    const inherited = process.env;
     const found = blockers({ ...options, hosts: ['codex'] }, { CODEX_HOME: join(home, 'codex'), TYPESAFE_BASE_URL: override })
       .filter((b) => b.includes('jev.baseUrl'));
     expect(found).toEqual(blocked ? ['jev.baseUrl in config.json is not the default; the key is sent to another host only when TYPESAFE_BASE_URL names it'] : []);
     expect(found.join('\n')).not.toContain('https://jev.example.invalid');
-    expect(process.env).toBe(inherited);
-    expect(process.env.TYPESAFE_BASE_URL).toBe(ambient);
   });
 
   it('wants the key in a key file for Claude, whose MCP allowlist and hook scrub can drop the variable', () => {
