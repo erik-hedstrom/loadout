@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { DEFAULT_CONFIG, jevBaseUrl, loadConfig, paths, resolveApiKey, writeDefaultConfig, type Config } from './config.js';
@@ -13,6 +13,9 @@ import { doctor, formatDoctor, onPath } from './doctor.js';
 import { detectHosts, interactive, PACKS, packSources, wizard } from './init.js';
 import { HOOK_FAILURE_NOTE, hookOutput, isFollowUp, noKeyWarning, promptContext, type HookInput } from './hook.js';
 import { reportJson, type Capability, type RouteDecision } from './types.js';
+import { systemError } from './system-error.js';
+
+const TERMINAL_CONTROLS = /[\x00-\x1f\x7f-\x9f]/g;
 
 const USAGE = `loadout — pick the model, skills and MCP servers for each agent session
 
@@ -69,25 +72,27 @@ function router(config: Config, lexical: boolean) {
 /** `loadout add` for each spec, printing what happened; returns how many failed. */
 function addSources(specs: string[]): number {
   let failed = 0;
-  for (const spec of specs) {
+  for (const [index, spec] of specs.entries()) {
     let r: AddResult;
+    const github = parseGitHub(spec);
     try {
-      if (parseGitHub(spec)) r = addFromGitHub(spec, paths.library());
+      if (github) r = addFromGitHub(spec, paths.library());
       else {
         const source = resolve(spec);
-        if (!existsSync(source)) throw new Error('source not found');
+        // addSkills treats a missing root as an empty pack; reject it with an errno reason instead.
+        statSync(source);
         r = addSkills(source, paths.library());
       }
-    } catch {
+    } catch (err) {
       // A mistyped source or an underlying filesystem/git error can contain a pasted credential.
-      console.error('loadout: could not add source; check the directory or GitHub URL and try again');
+      console.error(`loadout: source ${index + 1} of ${specs.length}: ${github ? 'GitHub import failed' : 'could not add source'}: ${systemError(err)}`);
       failed++;
       continue;
     }
     const total = r.added.length + r.updated.length;
     console.log(`${spec}: ${total ? `${r.added.length} added, ${r.updated.length} updated` : 'no skills found'}`);
-    for (const { name, folder } of r.renamed) console.log(`  "${name.replace(/[\x00-\x1f\x7f-\x9f]/g, '')}" already exists from another source; installed as ${folder}`);
-    for (const { path, reason } of r.skipped) console.log(`  skipped ${path.replace(/[\x00-\x1f\x7f-\x9f]/g, '')}: ${reason}`);
+    for (const { name, folder } of r.renamed) console.log(`  "${name.replace(TERMINAL_CONTROLS, '')}" already exists from another source; installed as ${folder}`);
+    for (const { path, reason } of r.skipped) console.log(`  skipped ${path.replace(TERMINAL_CONTROLS, '')}: ${reason}`);
   }
   return failed;
 }
@@ -417,6 +422,7 @@ main().then(
   (err: unknown) => {
     // Node's argument-parser messages quote both unknown options and unexpected values.
     if (err instanceof Error && 'code' in err && String(err.code).startsWith('ERR_PARSE_ARGS_')) fail('invalid arguments; run loadout --help for usage');
+    if (err instanceof Error && 'code' in err) fail(`command failed: ${systemError(err)}`);
     fail(err instanceof Error ? err.message : String(err));
   },
 );

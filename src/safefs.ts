@@ -7,16 +7,14 @@ import { loadoutHome } from './config.js';
 
 /**
  * False when a link, or anything but a folder, stands where a folder of the loadout home should be. The home
- * itself may be a link unless checkHome is set (config writes refuse it). Where loadout keeps its cache
- * is the user's choice, while a link below it is not something loadout created. Folders outside the home are not checked.
+ * itself may be a link: where loadout keeps its data is the user's own choice (a dotfiles repo, another
+ * disk), while a link below it is not something loadout created. Folders outside the home are not checked.
  */
-export function isPlainFolder(dir: string, checkHome = false): boolean {
+export function isPlainFolder(dir: string): boolean {
   const rel = relative(loadoutHome(), dir);
-  if (rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) return true;
+  if (rel === '' || rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) return true;
   let current = loadoutHome();
-  const parts = rel ? rel.split(sep) : [];
-  if (checkHome) parts.unshift('.');
-  for (const part of parts) {
+  for (const part of rel.split(sep)) {
     current = join(current, part);
     try {
       if (!lstatSync(current).isDirectory()) return false;

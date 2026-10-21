@@ -1,8 +1,9 @@
 import childProcess, { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import fs, { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { paths, writeDefaultConfig } from '../src/config.js';
 import { repoSignals } from '../src/repo.js';
@@ -22,8 +23,10 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
-function cli(args: string[]) {
-  return spawnSync(process.execPath, ['--import', 'tsx', join(import.meta.dirname, '../src/cli.ts'), ...args], {
+function cli(args: string[], preload?: string) {
+  const script = join(root, 'preload.mjs');
+  if (preload) writeFileSync(script, preload);
+  return spawnSync(process.execPath, [...(preload ? ['--import', pathToFileURL(script).href] : []), '--import', 'tsx', join(import.meta.dirname, '../src/cli.ts'), ...args], {
     encoding: 'utf8', input: '', timeout: 20_000,
     env: { ...process.env, HOME: root, USERPROFILE: root },
   });
@@ -80,7 +83,7 @@ describe('E16 hygiene', () => {
     expect(inherited!.E16_GIT_CANARY).toBe('retained');
   });
 
-  it.each([false, true])('refuses a linked loadout home before creating or updating config (existing: %s)', (existing) => {
+  it.each([false, true])('writes config through a user-relocated linked home (existing: %s)', (existing) => {
     const target = join(root, 'target');
     mkdirSync(target);
     const config = join(target, 'config.json');
@@ -89,9 +92,55 @@ describe('E16 hygiene', () => {
     symlinkSync(target, join(root, '.loadout'), 'junction');
     // Cache callers still allow the user to link the whole home.
     expect(isPlainFolder(paths.index())).toBe(true);
-    expect(() => writeDefaultConfig({ model: 'replacement' })).toThrow('loadout home must be a plain folder');
-    if (existing) expect(readFileSync(config, 'utf8')).toBe(original);
-    else expect(existsSync(config)).toBe(false);
+    writeDefaultConfig({ model: 'replacement' });
+    expect(JSON.parse(readFileSync(config, 'utf8'))).toEqual({ ...(existing ? { threshold: 0.25 } : {}), jev: { model: 'replacement' } });
+  });
+
+  it.each(['link', 'dangling link', 'directory'])('refuses a nonregular config before reading it (%s)', (kind) => {
+    mkdirSync(join(root, '.loadout'));
+    const target = join(root, 'outside.json');
+    if (kind !== 'dangling link') writeFileSync(target, '{"threshold":0.25}');
+    if (kind === 'directory') mkdirSync(paths.config());
+    else symlinkSync(target, paths.config(), 'file');
+    const reads = vi.spyOn(fs, 'readFileSync');
+    syncBuiltinESMExports();
+    expect(() => writeDefaultConfig()).toThrow('config.json must be a regular file');
+    expect(reads.mock.calls.some(([file]) => file === paths.config())).toBe(false);
+    reads.mockRestore();
+    syncBuiltinESMExports();
+    if (kind === 'dangling link') expect(existsSync(target)).toBe(false);
+    else expect(readFileSync(target, 'utf8')).toBe('{"threshold":0.25}');
+  });
+
+  it('rechecks config before writing if it became a link after the read', () => {
+    writeDefaultConfig();
+    const target = join(root, 'outside.json');
+    writeFileSync(target, 'untouched');
+    const read = fs.readFileSync;
+    vi.spyOn(fs, 'readFileSync').mockImplementation((...args: Parameters<typeof read>) => {
+      const result = read(...args);
+      if (args[0] === paths.config()) {
+        unlinkSync(paths.config());
+        symlinkSync(target, paths.config(), 'file');
+      }
+      return result;
+    });
+    syncBuiltinESMExports();
+    expect(() => writeDefaultConfig()).toThrow('config.json must be a regular file');
+    expect(readFileSync(target, 'utf8')).toBe('untouched');
+  });
+
+  it('propagates config inspection failures instead of treating the file as missing', () => {
+    writeDefaultConfig();
+    const denied = Object.assign(new Error('permission denied'), { code: 'EACCES' });
+    const stat = fs.lstatSync;
+    vi.spyOn(fs, 'lstatSync').mockImplementation((...args: Parameters<typeof stat>) => {
+      if (args[0] === paths.config()) throw denied;
+      return stat(...args);
+    });
+    syncBuiltinESMExports();
+    expect(() => writeDefaultConfig({ model: 'replacement' })).toThrow(denied);
+    expect(readFileSync(paths.config(), 'utf8')).toBe('{}\n');
   });
 
   it.each([
@@ -114,6 +163,81 @@ describe('E16 hygiene', () => {
     expect(result.status).toBe(1);
     expect(result.stdout + result.stderr).not.toContain(CANARY);
     expect(result.stderr).toContain('could not add source');
+  });
+
+  it('reports failed source positions and reasons while continuing the add', () => {
+    const file = join(root, `${CANARY}-file`);
+    const empty = join(root, 'empty');
+    writeFileSync(file, 'not a directory');
+    mkdirSync(empty);
+    const result = cli(['add', join(root, CANARY), file, empty]);
+    expect(result.status).toBe(1);
+    expect(result.stdout + result.stderr).not.toContain(CANARY);
+    expect(result.stderr).toContain('source 1 of 3: could not add source: not found (ENOENT)');
+    expect(result.stderr).toContain('source 2 of 3: could not add source: not a directory (ENOTDIR)');
+    expect(result.stdout).toContain(`${empty}: no skills found`);
+  });
+
+  it.each(['EACCES', CANARY])('reports only allowlisted errno for failed adds (%s)', (code) => {
+    const result = cli(['add', CANARY], `
+      import fs from 'node:fs';
+      import { syncBuiltinESMExports } from 'node:module';
+      const stat = fs.statSync;
+      fs.statSync = (file, ...args) => {
+        if (String(file).endsWith(${JSON.stringify(CANARY)})) throw Object.assign(new Error(${JSON.stringify(CANARY)}), {code: ${JSON.stringify(code)}});
+        return stat(file, ...args);
+      };
+      syncBuiltinESMExports();
+    `);
+    expect(result.status).toBe(1);
+    expect(result.stdout + result.stderr).not.toContain(CANARY);
+    expect(result.stderr).toContain(`source 1 of 1: could not add source: ${code === 'EACCES' ? 'permission denied (EACCES)' : 'operation failed'}`);
+  });
+
+  it('reports a GitHub failure by position without echoing git stderr or the spec', () => {
+    const result = cli(['add', `github:${CANARY}/repo`], `
+      import cp from 'node:child_process';
+      import { syncBuiltinESMExports } from 'node:module';
+      cp.execFileSync = () => { throw Object.assign(new Error(${JSON.stringify(CANARY)}), {status: 128, stderr: ${JSON.stringify(CANARY)}}); };
+      syncBuiltinESMExports();
+    `);
+    expect(result.status).toBe(1);
+    expect(result.stdout + result.stderr).not.toContain(CANARY);
+    expect(result.stderr).toContain('source 1 of 1: GitHub import failed: operation failed');
+  });
+
+  it.each(['EADDRINUSE', 'EACCES', 'ENOTFOUND', 'EADDRNOTAVAIL', CANARY, undefined])('classifies HTTP startup failures without echoing host or error text (%s)', (code) => {
+    const token = join(root, 'token');
+    writeFileSync(token, 'test-token');
+    const result = cli(['mcp', '--http', '--lexical', '--token-file', token, '--host', `${CANARY}\\bad`], `
+      import http from 'node:http';
+      http.Server.prototype.listen = function () {
+        this.emit('error', Object.assign(new Error(${JSON.stringify(CANARY)}), {code: ${JSON.stringify(code)}}));
+        return this;
+      };
+    `);
+    expect(result.status).toBe(1);
+    expect(result.stdout + result.stderr).not.toContain(CANARY);
+    expect(result.stderr).toContain('MCP HTTP server could not start');
+    if (code && code !== CANARY) expect(result.stderr).toContain(`(${code})`);
+    else expect(result.stderr).toContain('operation failed');
+  });
+
+  it.each(['EACCES', CANARY])('sanitizes non-parser filesystem failures in other commands (%s)', (code) => {
+    writeDefaultConfig();
+    const result = cli(['route', '--lexical', CANARY], `
+      import fs from 'node:fs';
+      import { syncBuiltinESMExports } from 'node:module';
+      const read = fs.readFileSync;
+      fs.readFileSync = (file, ...args) => {
+        if (String(file).endsWith('config.json')) throw Object.assign(new Error(${JSON.stringify(CANARY)}), {code: ${JSON.stringify(code)}});
+        return read(file, ...args);
+      };
+      syncBuiltinESMExports();
+    `);
+    expect(result.status).toBe(1);
+    expect(result.stdout + result.stderr).not.toContain(CANARY);
+    expect(result.stderr).toContain(code === 'EACCES' ? 'permission denied (EACCES)' : 'operation failed');
   });
 
   it.each([false, true])('does not echo an unreadable or empty MCP token-file argument (existing: %s)', (existing) => {

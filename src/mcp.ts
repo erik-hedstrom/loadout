@@ -27,6 +27,7 @@ import type { Config } from './config.js';
 import type { EmbeddingStore } from './embed.js';
 import type { SystemOneClient } from './jev.js';
 import { diagnostic } from './diagnostic.js';
+import { systemError } from './system-error.js';
 import { capabilityKey, hasTagText, KEY_CHARS, readConfined, skillExcerpt } from './library.js';
 import { asJson, attr, escapeSkillTags, injectionBlock, oneLine } from './launch.js';
 import { route } from './route.js';
@@ -479,10 +480,14 @@ export async function serveHttp(deps: SearchDeps, opts: HttpOptions): Promise<{ 
       if (!res.headersSent) res.writeHead(500).end(err instanceof Error ? err.message : String(err));
     }
   });
-  await new Promise<void>((resolve, reject) => {
-    http.once('error', reject);
-    http.listen(opts.port, opts.host, () => resolve());
-  });
+  try {
+    await new Promise<void>((resolve, reject) => {
+      http.once('error', reject);
+      http.listen(opts.port, opts.host, () => resolve());
+    });
+  } catch (err) {
+    throw new Error(`MCP HTTP server could not start: ${systemError(err)}`);
+  }
   const address = http.address();
   const port = typeof address === 'object' && address ? address.port : opts.port;
   allowedHosts = [`127.0.0.1:${port}`, `localhost:${port}`, `[::1]:${port}`, ...(opts.allowedHosts ?? [])];
