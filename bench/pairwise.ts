@@ -30,6 +30,9 @@ export function deliverableFiles(root: string): string[] {
   return files;
 }
 
+/** Larger files are listed to the judge but not shown; bench/ab.ts copies the same view into public outputs/. */
+export const JUDGE_MAX_BYTES = 200_000;
+
 /** The run's deliverables: text files only, from `deliverableFiles`, within a budget. */
 export function deliverables(root: string, maxChars = 60_000): string {
   const files = deliverableFiles(root);
@@ -39,7 +42,7 @@ export function deliverables(root: string, maxChars = 60_000): string {
   for (const f of files.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))) {
     const rel = relative(root, f);
     const buf = readFileSync(f);
-    if (buf.includes(0) || statSync(f).size > 200_000) {
+    if (buf.includes(0) || statSync(f).size > JUDGE_MAX_BYTES) {
       parts.push(`--- ${rel} (binary or large, ${statSync(f).size} bytes; not shown)`);
       continue;
     }

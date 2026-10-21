@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { report, type RunRow, type Verdict } from '../bench/ab-report.js';
+import { JUDGE_MAX_BYTES } from '../bench/pairwise.js';
 import { AB_MODELS, blockers, buildCommand, checkRun, copyOutputs, hiddenResult, hookFacts, main, openedSkills, planLines, promptText, provenance, redactNames, refuseOtherSettings, refuseStopped, routedByKeyword, runEnv, schedule, scrub, type Ctx, type Evidence, type Job, type Options } from '../bench/ab.js';
 import { JEV_FALLBACK_NOTE, NO_KEY_WARNING } from '../src/hook.js';
 import { hookShim, toolEvents } from '../bench/stream.js';
@@ -406,6 +407,16 @@ describe('what a run shows', () => {
     expect(copyOutputs(work, dest, [[work, '<work>']], [])).toBeNull();
     expect((readdirSync(dest, { recursive: true }) as string[]).map((f) => f.replace(/\\/g, '/')).filter((f) => f.endsWith('.js')).sort()).toEqual(['app.js', 'src/b.js']);
     expect(readFileSync(join(dest, 'app.js'), 'utf8')).toBe('<work>/app.js\n');
+  });
+
+  it('leaves out a deliverable the judge does not show for its size, and does not shape-check it', () => {
+    const dir = temp('loadout-ab-copy-');
+    const [work, dest] = [join(dir, 'work'), join(dir, 'dest')];
+    mkdirSync(work, { recursive: true });
+    writeFileSync(join(work, 'small.md'), 'ok\n');
+    writeFileSync(join(work, 'big.md'), `sk-${'x'.repeat(24)}\n${'a'.repeat(JUDGE_MAX_BYTES)}`);
+    expect(copyOutputs(work, dest, [], [])).toBeNull();
+    expect((readdirSync(dest) as string[]).sort()).toEqual(['small.md']);
   });
 
   it('removes skill names from both arms\' files and counts them', () => {

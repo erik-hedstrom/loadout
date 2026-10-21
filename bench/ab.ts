@@ -12,7 +12,7 @@
  * the cache writes to whichever arm ran first. So every host and arm starts with one recorded warm-up run (excluded from
  * the comparisons, reported as the cold start), and the measured runs alternate between the arms.
  */
-import { appendFileSync, copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
@@ -27,7 +27,7 @@ import { report, type Leak, type RunRow, type Verdict } from './ab-report.js';
 import { codexJudgeRefusal, DATA, modelJson, readJsonl, RESULTS, run } from './lib.js';
 import { CLAUDE_MANAGED_PRECONDITION, CLAUDE_SCRUB_PRECONDITION, CLAUDE_SETTINGS, CLAUDE_SWITCH_PRECONDITION, CODEX_CLOUD_PRECONDITION, childEnv, claudeEnv, envAllowlist, hostWrites, redacted, refusedFiles, resetWork } from './mcp-overhead.js';
 import { assertTemporary, claudeIsolation, cli, execute, validateFeatures, type Command, type Host } from './overhead.js';
-import { deliverableFiles, deliverables, judgePair, JUDGE_SYSTEM, NOTE, PrefSchema, type Arm } from './pairwise.js';
+import { deliverableFiles, deliverables, JUDGE_MAX_BYTES, judgePair, JUDGE_SYSTEM, NOTE, PrefSchema, type Arm } from './pairwise.js';
 import { hookShim, toolEvents, type Event, type HookExecution, type Inventory } from './stream.js';
 import { claudeUsage, codexUsage, effectiveInput, sumUsage, type RunUsage } from './usage.js';
 
@@ -226,12 +226,16 @@ function heldSecretLeak(work: string, secrets: string[], dir = work): Leak | nul
   return null;
 }
 
-/** Held secrets stop any run; token shapes stop only files that would reach the judge. */
+/**
+ * Held secrets stop any run; token shapes stop only files that would reach the judge. The copy is the judge's view
+ * (`deliverables` in pairwise.ts): binary files and files over JUDGE_MAX_BYTES are left out there, so they are here too.
+ */
 export function copyOutputs(work: string, dest: string, folders: [string, string][], secrets: string[]): Leak | null {
   rmSync(dest, { recursive: true, force: true });
   const leak = heldSecretLeak(work, secrets);
   if (leak) return leak;
   const files = deliverableFiles(work).flatMap((p) => {
+    if (statSync(p).size > JUDGE_MAX_BYTES) return [];
     const buf = readFileSync(p);
     return buf.includes(0) ? [] : [{ file: relative(work, p), text: buf.toString('utf8') }];
   });
