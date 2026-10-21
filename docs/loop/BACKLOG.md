@@ -33,21 +33,10 @@ These items' rows and detail sections arrive with their PRs, so they are
 not repeated in the tables below. Delete a line here when its PR merges.
 Each PR body's **Review state** section has the round-by-round record.
 
-| PR | Item | State on 2026-10-15 |
+| PR | Item | State on 2026-10-22 |
 |---|---|---|
-| [#41](https://github.com/erik-hedstrom/loadout/pull/41) | E13 stricter reviews with a blocking necessity pass (P1) | both reviews approve at ac6d69d; full matrix green; merge before this file's PR (needs Erik: the orchestrator's merge was blocked) |
-| [#40](https://github.com/erik-hedstrom/loadout/pull/40) | C10 bench quick fixes (P2) | both reviews clean; merge gate |
-| [#37](https://github.com/erik-hedstrom/loadout/pull/37) | C2 fixtures and protocol; adds E14 and D18 | round 15 and 16 findings fixed; both reviews approve at 0a647dc; full matrix green (one Windows timeout flake, rerun once); C2 decisions made 2026-10-19 (margin 0.05, VM, licence, full protocol); two stale Codex threads (P1 Jev key, P2 shared prompt cache) left open for Erik to resolve |
-| [#36](https://github.com/erik-hedstrom/loadout/pull/36) | D14 Codex plugin forwards `LOADOUT_HOME` (P1) | one open Codex P1 (`/proc`) waits for Erik: accept or override; merge before #28 |
-| [#35](https://github.com/erik-hedstrom/loadout/pull/35) | iteration 8 log row | superseded by the row below; close it once this file lands |
-| [#34](https://github.com/erik-hedstrom/loadout/pull/34) | B3 comparison | Codex threads resolved after the 2026-10-16 skills.sh read; merge gate |
-| [#32](https://github.com/erik-hedstrom/loadout/pull/32) | D5 `--isolate` | open Codex P1 (resume into a live session, declined from the docs) and two P2s (one documented as a gap, one disclosed): Erik accepts or overrides |
-| [#31](https://github.com/erik-hedstrom/loadout/pull/31) | B6 profile README draft | clean; merge gate |
-| [#30](https://github.com/erik-hedstrom/loadout/pull/30) | A3 init wizard | four open Codex P2 threads, three declined and one partly fixed: Erik accepts the rebuttals or overrides |
-| [#29](https://github.com/erik-hedstrom/loadout/pull/29) | E6 architecture diagram | clean; merge gate |
-| [#28](https://github.com/erik-hedstrom/loadout/pull/28) | A1 README rewrite | clean; merge after #36 |
-| [#27](https://github.com/erik-hedstrom/loadout/pull/27) | D16 no-key warning; adds C9 (host-model fallback router) | open Codex P1 (concurrent regression test) and P2 (lost warning on persistence failure), left to Erik; and Erik's questions |
-| [#26](https://github.com/erik-hedstrom/loadout/pull/26) | E8 Markdown rest | one open Codex P1 (private reporting channel): needs Erik to turn on private vulnerability reporting, or to override |
+| [#47](https://github.com/erik-hedstrom/loadout/pull/47) | C14 A/B pilot harness; adds B10 | final review round; the clean Codex-only rerun needs a separately logged-in `CODEX_HOME` |
+| [#28](https://github.com/erik-hedstrom/loadout/pull/28) | A1 README rewrite | #36 merged: merge main, then the gate |
 
 ## A. Adoption and ease of use
 
@@ -55,7 +44,7 @@ Each PR body's **Review state** section has the round-by-round record.
 |---|---|---|---|---|---|
 | A2 | P0 | `loadout audit`: what your installed skills cost you | Claude | cloud | done ([PR #3](https://github.com/erik-hedstrom/loadout/pull/3)) |
 | A1 | P0 | README rewrite around the problem, 3-command quickstart, GIF | Claude | cloud | review ([#28](https://github.com/erik-hedstrom/loadout/pull/28); GIF waits on A5) |
-| A3 | P1 | `loadout init` wizard + starter packs | Codex | cloud | review ([#30](https://github.com/erik-hedstrom/loadout/pull/30)) |
+| A3 | P1 | `loadout init` wizard + starter packs | Codex | cloud | done ([#30](https://github.com/erik-hedstrom/loadout/pull/30)) |
 | A4 | P1 | npm package under an available name + release workflow | Codex | cloud + erik | blocked: npm name decision |
 | A5 | P1 | Demo recording (route, launch, hook) | Claude | local | todo (after A1) |
 
@@ -147,7 +136,7 @@ Acceptance:
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
 | B1 | P0 | Token-waste study: measured per-request overhead of popular skill packs | Claude | local (measure) + cloud (analysis) | done ([PR #6](https://github.com/erik-hedstrom/loadout/pull/6); follow-ups under "Left" in its learnings) |
-| B3 | P1 | Fact-checked comparison with alternatives | Claude | cloud | review ([#34](https://github.com/erik-hedstrom/loadout/pull/34); [docs/comparison.md](../comparison.md)) |
+| B3 | P1 | Fact-checked comparison with alternatives | Claude | cloud | done ([#34](https://github.com/erik-hedstrom/loadout/pull/34); [docs/comparison.md](../comparison.md)) |
 | B2 | P1 | Launch kit drafts | Claude | cloud | todo (after A1, B1) |
 | B4 | P1 | Repo polish: description, topics, social preview, badges | Claude | cloud + erik | blocked: Erik applies settings and uploads the preview (drafts merged in [#33](https://github.com/erik-hedstrom/loadout/pull/33)) |
 | B6 | P2 | GitHub profile README draft | Claude | cloud | blocked: Erik fills two placeholders and publishes (draft merged in [#31](https://github.com/erik-hedstrom/loadout/pull/31)) |
@@ -423,7 +412,7 @@ Decisions for Erik:
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
 | C1 | P0 | New held-out request set + re-measure v4 | Codex (seeds, expand) + Claude (judge) | local | done ([#16](https://github.com/erik-hedstrom/loadout/pull/16)): precision falls on new requests (64% vs 82%); judged through local `claude -p`, not the API (see Learnings) |
-| C2 | P1 | Outcome eval on the small tier with fixed fixtures | Claude (design) | cloud (fixtures) + local (runs) | in progress ([#37](https://github.com/erik-hedstrom/loadout/pull/37): fixtures and protocol, decisions made 2026-10-19; Console, Jev key and E14 open before the run; runs local) |
+| C2 | P1 | Outcome eval on the small tier with fixed fixtures | Claude (design) | cloud (fixtures) + local (runs) | in progress (fixtures and protocol merged in [#37](https://github.com/erik-hedstrom/loadout/pull/37), decisions made 2026-10-19; Console, Jev key and E14 open before the run; runs local) |
 | C3 | P2 | Does Jev pick a sensible model tier? | Claude | cloud | todo (launcher only: the hook and search keep the user's model) |
 | C4 | P0 | Demote generic "fits everything" skills | Codex | cloud | todo (next: C1 shows over-loading on general business requests) |
 | C5 | P2 | Retrieval beyond 200 candidates (Jev tournament) | Codex | cloud | todo |
@@ -728,18 +717,20 @@ binary alone on `PATH`, so the `claude` judge needed no new seam.
 | D7 | P1 | `loadout doctor` | Claude | cloud | done ([#20](https://github.com/erik-hedstrom/loadout/pull/20)) |
 | D2 | P0 | Live Codex hook test | Claude | local + erik | todo (needs Erik to trust the hook in `/hooks`) |
 | D3 | P2 | Desktop and IDE hosts end to end | Claude | local | todo (generic MCP only, 2026-10-12) |
-| D5 | P2 | Isolation mode | Codex | cloud | review ([#32](https://github.com/erik-hedstrom/loadout/pull/32)). Claude MCP done; plugins and interactive Codex cannot be hidden |
+| D5 | P2 | Isolation mode | Codex | cloud | in progress: Claude MCP servers hidden ([#32](https://github.com/erik-hedstrom/loadout/pull/32), merged); plugin hooks, skills and mods disclosed for now and settings files kept (Erik, 2026-10-19); left: hiding plugins (deferred, e.g. `enabledPlugins` false for each installed plugin and `syncClaudeAiPlugins` false in the session settings), the live check, and the README's reason for not using `--setting-sources` should name the user's hooks, permission rules and settings `env` (it says permissions and model; loadout always passes `--model`); interactive Codex cannot be hidden |
 | D4 | P2 | Gateway: native tools via `tools/list_changed` | Codex | cloud | todo |
 | D6 | P2 | HTTP: cancellation reaches Jev | Claude | cloud | done ([#19](https://github.com/erik-hedstrom/loadout/pull/19)) |
 | D8 | P1 | Host capability matrix (verified vs generated) | Claude | cloud | done ([#18](https://github.com/erik-hedstrom/loadout/pull/18)) |
 | D9 | P1 | Codex parity: neutral session skill dir, tier presets | Claude | cloud | done ([#21](https://github.com/erik-hedstrom/loadout/pull/21)); Codex launch not re-run live |
 | D15 | P0 | MCP discovery: make library MCP servers findable and usable through the search server | Claude | cloud + local | in progress: code and tests merged in [#39](https://github.com/erik-hedstrom/loadout/pull/39); the live check is left |
-| D17 | P1 | `loadout mcp` ready within Codex's MCP start-up grace | Claude | local (measure) + cloud (fix) | review ([#43](https://github.com/erik-hedstrom/loadout/pull/43)): WSL install advice in the README; `required = true` in the `--windows` TOML, not in the plugin (see below); measured 2026-10-15: under 1 s from ext4, 6–7 s from `/mnt/c` |
+| D17 | P1 | `loadout mcp` ready within Codex's MCP start-up grace | Claude | local (measure) + cloud (fix) | done ([#43](https://github.com/erik-hedstrom/loadout/pull/43)): WSL install advice in the README; `required = true` in the `--windows` TOML, not in the plugin (see below); measured 2026-10-15: under 1 s from ext4, 6–7 s from `/mnt/c` |
 | D12 | P0 | Codex: install the hook and search as one step, if Codex allows it | Codex | local | done ([#23](https://github.com/erik-hedstrom/loadout/pull/23)): `plugins/loadout-codex` through `.agents/plugins/marketplace.json`; install checked offline; the hook still needs `/hooks` trust; the live run is D2 |
 | D13 | P0 | The plugin must be able to open what its hook routes to | — | cloud + local + erik | blocked: design decision (Erik) |
 | D14 | P1 | Codex plugin forwards LOADOUT_HOME | Claude | cloud | done ([#36](https://github.com/erik-hedstrom/loadout/pull/36)): Codex gives a stdio MCP server only its default variables plus `env_vars`, so the plugin's `loadout mcp` ignored a custom `LOADOUT_HOME` (and a `"router": "lexical"` profile in it); now forwarded. A relative `LOADOUT_HOME` is now refused (on Windows, anything but a drive-qualified path, so no drive-relative, UNC or device path) and an empty one ignored; the `HOME` (or `USERPROFILE`) fallback must pass the same check. So the working directory or a remote share cannot become the config. An absolute value, including a mapped network drive, is trusted: a project settings `env` that sets one comes from settings that can already run their own hooks. The config the home points to cannot redirect the key (Erik, 2026-10-19): a `jev.baseUrl` other than api.typesafe.ai is refused unless `TYPESAFE_BASE_URL` names the URL. It still chooses `apiKeyFile`, whose content then reaches only that URL, which is why the home must not come from the working directory either. Checked against the Codex source only, not a live run |
 | D16 | P1 | Warn when the hook runs without a TypeSafe key | Claude | cloud | done ([#27](https://github.com/erik-hedstrom/loadout/pull/27)): once per session, as a `systemMessage`, which Claude Code and Codex both show |
 | D18 | P1 | The hook and `load_skill` can offer `load_skill` only, with no folder | Codex | cloud | todo |
+| D19 | P2 | `which()` honours PATHEXT on Windows | Claude | cloud | todo |
+| D20 | P2 | Hook state writes never drop context or the no-key warning | Claude | cloud | todo |
 
 **D18. The hook and `load_skill` can offer `load_skill` only, with no folder.**
 Both currently suggest reading skill files directly, even when the host's
@@ -754,6 +745,30 @@ Acceptance:
   arguments.
 - C2 drops its folder-hint limit when this lands. C2 does not depend on D18:
   its file fence, OS denies and probes enforce framed loading already.
+
+**D19. `which()` and PATHEXT.** From Sol's review of #30 (A3), which Erik
+overrode for that PR on 2026-10-19 because the gap predates it. `which()` in
+src/launch.ts checks extensionless names only, so a host installed only as
+`claude.exe` or `codex.exe` (a native installer with no npm shim) is not found:
+`loadout init` prints no setup snippet for it, `loadout doctor` (`onPath`)
+reports it missing, and so does the launcher. Acceptance: on win32, `which()` also tries each `PATHEXT` extension
+(default `.COM;.EXE;.BAT;.CMD`); the launcher spawns a `.cmd` or `.bat` result
+safely (Node refuses them without a shell since the CVE-2024-27980 fix); a test
+covers a host present only as `.exe` and only as `.cmd`.
+
+**D20. Hook state writes never drop context.** From the reviews of #27 (D16);
+Erik kept both out of that PR on 2026-10-19.
+- `writeState` in src/hook.ts runs its sweep's `readdirSync` outside the try,
+  so an unwritable sessions folder makes `promptContext` throw: the prompt
+  gets the failure note instead of its context and, without a key, the
+  once-per-session warning. Give the sweep `writeCacheFile`'s never-throw
+  contract. Test: a state folder whose parent is a file, a prompt naming a
+  skill; the context must come back.
+- The `.warned` marker is created with `wx`, which is atomic, but no test
+  fails if it becomes check-then-write. Test: spy on `writeFileSync` so the
+  marker appears just before the create (the pattern near the
+  `syncBuiltinESMExports` test in test/loadout.test.ts); expect no second
+  warning.
 
 **D17. MCP start-up inside Codex's grace period.** Codex leaves an optional
 MCP server out of the tool list if it is not ready about 1 s after start-up,
@@ -965,8 +980,9 @@ pages, and openai/codex at 4a93bd2 (`exec/src/cli.rs`, `cli/src/main.rs`,
   project config layers; `--isolate` refuses them all.
 - Left: a live check on a machine with both CLIs (does a user-scope MCP server
   and a plugin server disappear, does the claude.ai connector list shrink).
-  Decision for Erik: whether `--setting-sources project,local` is acceptable
-  as the plugin story.
+  Erik decided on 2026-10-19: `--setting-sources` stays uncut (it would drop
+  the user's hooks and permission rules), and plugin hooks, skills and mods
+  stay disclosed until plugin hiding, deferred to a follow-up, lands.
 
 **D6. HTTP cancellation.**
 
@@ -1224,7 +1240,7 @@ Learnings (2026-10-09):
 | E1 | P0 | GitHub Actions CI | Codex | cloud | done ([PR #2](https://github.com/erik-hedstrom/loadout/pull/2)) |
 | E2 | P0 | LICENSE, CONTRIBUTING, SECURITY.md, templates | Claude | cloud + erik | done ([PR #1](https://github.com/erik-hedstrom/loadout/pull/1)) |
 | E7 | P0 | Vendor-independent bench judges and expander | Codex | cloud | done ([PR #5](https://github.com/erik-hedstrom/loadout/pull/5)) |
-| E8 | P0 | Repo-wide simplification pass | Claude (pr-reviewer finds, worker fixes) + Codex review | cloud | in progress (merged: bench/ [#11](https://github.com/erik-hedstrom/loadout/pull/11), src/ [#12](https://github.com/erik-hedstrom/loadout/pull/12), Markdown [#15](https://github.com/erik-hedstrom/loadout/pull/15); Markdown rest in review, [#26](https://github.com/erik-hedstrom/loadout/pull/26)); left: `docs/loop/BACKLOG.md`, `docs/loop/ORCHESTRATOR.md` and `bench/RESULTS.md`; the WSL-only `bench.test.ts` failure moved to E15 |
+| E8 | P0 | Repo-wide simplification pass | Claude (pr-reviewer finds, worker fixes) + Codex review | cloud | in progress (merged: bench/ [#11](https://github.com/erik-hedstrom/loadout/pull/11), src/ [#12](https://github.com/erik-hedstrom/loadout/pull/12), Markdown [#15](https://github.com/erik-hedstrom/loadout/pull/15), Markdown rest [#26](https://github.com/erik-hedstrom/loadout/pull/26)); left: `docs/loop/BACKLOG.md`, `docs/loop/ORCHESTRATOR.md` and `bench/RESULTS.md`; the WSL-only `bench.test.ts` failure moved to E15 |
 | E9 | P0 | Security hardening from the read-only Sol review | Codex | cloud | done ([PR #4](https://github.com/erik-hedstrom/loadout/pull/4), re-measure [PR #7](https://github.com/erik-hedstrom/loadout/pull/7)) |
 | E3 | P1 | Split the test file per module | Codex | cloud | todo |
 | E5 | P1 | Changelog and release automation | Codex | cloud | todo (with A4) |
@@ -1232,9 +1248,34 @@ Learnings (2026-10-09):
 | E10 | P1 | Build without optional dependencies | Codex | cloud | done ([PR #8](https://github.com/erik-hedstrom/loadout/pull/8)) |
 | E11 | P1 | Fixed-text diagnostics in the gateway and relay | Codex | cloud | done ([PR #10](https://github.com/erik-hedstrom/loadout/pull/10)) |
 | E12 | P1 | A tool-less Codex bench backend (codex-cli 0.160.1 keeps unified_exec on) | Codex | local | todo |
-| E13 | P1 | Apply Engineer standards to both review paths, with a blocking necessity pass | Codex + Claude review | cloud | review ([#41](https://github.com/erik-hedstrom/loadout/pull/41)) |
+| E13 | P1 | Apply Engineer standards to both review paths, with a blocking necessity pass | Codex + Claude review | cloud | done ([#41](https://github.com/erik-hedstrom/loadout/pull/41)) |
 | E14 | P1 | Redact key-shaped strings before anything goes to Jev (prerequisite for the C2 loadout arm) | Codex | cloud | todo |
-| E15 | P1 | Test flakes: WSL-only `bench.test.ts` failure, Windows spawn timeouts | Claude | local | review ([#44](https://github.com/erik-hedstrom/loadout/pull/44)) |
+| E15 | P1 | Test flakes: WSL-only `bench.test.ts` failure, Windows spawn timeouts | Claude | local | done ([#44](https://github.com/erik-hedstrom/loadout/pull/44)) |
+| E16 | P2 | Hygiene from #30's audit: control characters, `git ls-files` env, config symlink, echoed arguments | Claude | cloud | todo |
+| E17 | P3 | One entry-point guard for bench scripts that survives symlinked paths | Claude | cloud | todo |
+
+**E16. Terminal, config and git hygiene.** From the reviews of #30 (A3);
+all older than it.
+- `addSources` in src/cli.ts prints a pack skill's `name` and skipped `path`
+  raw. A SKILL.md `name` with ANSI or OSC escapes can rewrite the user's
+  terminal. Strip C0 and C1 control characters before printing, with a test.
+- src/repo.ts runs `git ls-files` with the full environment, key included.
+  Use `withoutKey()` as `addFromGitHub` does, with a test.
+- From #30's deep security audit: `writeDefaultConfig` follows a symlinked
+  `~/.loadout` (no `isPlainFolder` check before writing), and `loadout add
+  <arg>` and other commands echo a mistyped argument, which could be a pasted
+  key (only `init` uses fixed text). Fix both, with adversarial tests.
+- Decision for Erik, from the same audit: the spawned `claude` and `codex`
+  keep `TYPESAFE_API_KEY` in their environment by design. Record whether that
+  stands.
+
+**E17. Bench entry-point guard.** From pr-reviewer on #45 (C13). Bench
+scripts (judge, stability, sweep, hook-latency, overhead and mcp-overhead on
+main) run when `resolve(argv[1])` equals the module path. Node builds that path from the
+real path, so a script started through a symlink or junction (`/tmp` on
+macOS) does nothing and exits 0. Acceptance: one `isEntry(import.meta.url)`
+in bench/lib.ts comparing real paths, and no `resolve(process.argv[1])` guard
+left under bench/, with a test that runs a script through a link.
 
 **E10. Build without optional dependencies.** src/embed.ts:24 types
 `@huggingface/transformers` with `typeof import(...)`. So `tsc` fails when npm
@@ -1538,3 +1579,4 @@ in the prose, so they are stated once.
 | 2026-10-12 (iter 8, cloud) | — | Open PRs, each in pr-reviewer and `@codex review` rounds at writing: [#26](https://github.com/erik-hedstrom/loadout/pull/26) E8, [#27](https://github.com/erik-hedstrom/loadout/pull/27) D16, [#28](https://github.com/erik-hedstrom/loadout/pull/28) A1, [#29](https://github.com/erik-hedstrom/loadout/pull/29) E6, [#30](https://github.com/erik-hedstrom/loadout/pull/30) A3, [#31](https://github.com/erik-hedstrom/loadout/pull/31) B6, [#32](https://github.com/erik-hedstrom/loadout/pull/32) D5, [#33](https://github.com/erik-hedstrom/loadout/pull/33) B4, [#34](https://github.com/erik-hedstrom/loadout/pull/34) B3 | Jev $0 (no key in the cloud environment) / Claude: cloud-session credit / Codex: GitHub reviews only (ChatGPT plan) | Decisions: each PR's "What is left"; none is labelled `ci-full` yet. Merge conflicts (pairwise, at writing): README (#28 with #30, #32, #33), `src/cli.ts` (#27, #30), `test/loadout.test.ts` (#27, #32), BACKLOG (#28 with #30, #31 with #33). Learned: Codex took 4 to 12 rounds per PR, and the docs PRs as many as the security ones (#29: 12); under load from parallel sessions, run tests with `--maxWorkers=2` and 60 s timeouts (#31) |
 | 2026-10-13 to 15 (iter 9, cloud + local) | — | Cloud: new PRs [#35](https://github.com/erik-hedstrom/loadout/pull/35) log row, [#36](https://github.com/erik-hedstrom/loadout/pull/36) D14, [#37](https://github.com/erik-hedstrom/loadout/pull/37) C2, [#38](https://github.com/erik-hedstrom/loadout/pull/38) B7, [#39](https://github.com/erik-hedstrom/loadout/pull/39) D15, [#40](https://github.com/erik-hedstrom/loadout/pull/40) C10; #26–#34 driven to clean (Codex up to 20 rounds, #29). Open findings on #37 and #38 (see "In review"). Local (Erik): E13, pushed on 2026-10-15 as [#41](https://github.com/erik-hedstrom/loadout/pull/41); a Codex A/B run; the launch-readiness review | Jev $0 / Claude: cloud-session credit, subagents on plan quota (they hit the session limit on 2026-10-14, about 23:30 UTC; three runs cut off, no partial work) / Codex: GitHub reviews (ChatGPT plan); Erik's local A/B on his plan | Erik: C2's margin, VM, licence and scope; B7's account and its plugin-agent root fix; D15's race threads; #27 questions; #34 skills.sh threads; #36 `/proc` thread; stale `wip/*` branches; the items under HANDOFF decisions. Learned: fix the class, not the instance (B7's rounds 12–16 each found one more place a plugin sets Claude's agent; patching places did not converge); restore mutation checks from a saved copy, never `git checkout <file>`; two PRs both took the ID E13, so check open PRs for the next free ID |
 | 2026-10-15 (iter 10, local) | none: the orchestrator's `gh pr merge` was blocked by the session's permission classifier, so merges wait for Erik | [#41](https://github.com/erik-hedstrom/loadout/pull/41) E13 and [#39](https://github.com/erik-hedstrom/loadout/pull/39) D15: both reviews approve, full matrix green, ready to merge; [#38](https://github.com/erik-hedstrom/loadout/pull/38) B7: root fix (no ambient plugins), both reviews approve, full matrix green; [#37](https://github.com/erik-hedstrom/loadout/pull/37) C2: round 15 and 16 findings fixed, both reviews approve, waits for Erik's C2 decisions; this file's PR [#42](https://github.com/erik-hedstrom/loadout/pull/42); D17 measured ($0) | Jev $0 / Claude: subagents on plan quota / Codex: Sol tasks and local reviews on plan quota; no `claude -p` or `codex exec` | Erik: merge #41, #39 (then update B7 and C8 to `find_tools`), #38; C2's margin, VM, licence and scope. Decided today: B7 no ambient plugins, personal account, Codex writes accepted; D15 race scope accepted. Learned: a policy restated in several files drifts; three review rounds on E13 each found a copy that had (fix: state it once, link elsewhere). Deny the parent directory, not its children (C2) |
+| 2026-10-16 to 20 (iter 11, local) | [#41](https://github.com/erik-hedstrom/loadout/pull/41) E13, [#42](https://github.com/erik-hedstrom/loadout/pull/42) handoff, [#39](https://github.com/erik-hedstrom/loadout/pull/39) D15, [#38](https://github.com/erik-hedstrom/loadout/pull/38) B7 harness, [#44](https://github.com/erik-hedstrom/loadout/pull/44) E15, [#43](https://github.com/erik-hedstrom/loadout/pull/43) D17, [#31](https://github.com/erik-hedstrom/loadout/pull/31) B6, [#40](https://github.com/erik-hedstrom/loadout/pull/40) C10, [#33](https://github.com/erik-hedstrom/loadout/pull/33) B4, [#45](https://github.com/erik-hedstrom/loadout/pull/45) C13, [#25](https://github.com/erik-hedstrom/loadout/pull/25) C8, [#34](https://github.com/erik-hedstrom/loadout/pull/34) B3, [#30](https://github.com/erik-hedstrom/loadout/pull/30) A3, [#32](https://github.com/erik-hedstrom/loadout/pull/32) D5, [#27](https://github.com/erik-hedstrom/loadout/pull/27) D16 | [#36](https://github.com/erik-hedstrom/loadout/pull/36) D14, [#37](https://github.com/erik-hedstrom/loadout/pull/37) C2, [#29](https://github.com/erik-hedstrom/loadout/pull/29) E6, [#28](https://github.com/erik-hedstrom/loadout/pull/28) A1, [#26](https://github.com/erik-hedstrom/loadout/pull/26) E8, [#46](https://github.com/erik-hedstrom/loadout/pull/46) C12, [#47](https://github.com/erik-hedstrom/loadout/pull/47) C14; follow-ups D19, D20, E16, E17 | Jev: $2.21 for the C13 sweeps plus about $1.14 for two gold runs ([RESULTS](../../bench/RESULTS.md#c13-2026-10-16-pure-jev-baseline-on-main)); C12 replayed stored answers, $0. Claude and Codex: reviews only, on subscriptions | From 2026-10-20 Erik merges every PR himself (his global instructions; the orchestrator brings PRs to merge-ready). Turn on private vulnerability reporting (#26). Look at the #29 diagram on GitHub in light and dark. C2's remaining run prerequisites. `CLAUDE_CODE_OAUTH_TOKEN` for the B7 pilots |
