@@ -10,7 +10,7 @@ import { doctor, onPath } from '../src/doctor.js';
 import { detectHosts } from '../src/init.js';
 import { launch, which } from '../src/launch.js';
 
-const BATCH_REFUSAL = "Cannot safely pass these arguments to a Windows batch host. Install the host's native .exe or enter the prompt inside the session.";
+const BATCH_REFUSAL = "Cannot safely pass arguments to a Windows batch host (.cmd or .bat). Install the host's native .exe.";
 
 let home: string;
 beforeEach(() => {

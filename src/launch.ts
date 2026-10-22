@@ -525,7 +525,7 @@ export function codexArgs(session: Session, task: string, extra: string[], opts:
   return [...args, ...extra, codexPrompt(session, task)];
 }
 
-export const BATCH_REFUSAL = "Cannot safely pass these arguments to a Windows batch host. Install the host's native .exe or enter the prompt inside the session.";
+export const BATCH_REFUSAL = "Cannot safely pass arguments to a Windows batch host (.cmd or .bat). Install the host's native .exe.";
 const MAX_BATCH_COMMAND_LENGTH = 8191;
 
 /** Returns spawn inputs preserving the caller's environment; unsafe batch input throws a fixed refusal. */
