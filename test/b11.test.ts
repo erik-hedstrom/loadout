@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { blocks, rowKey, options, JevBudget, fixturePath, classifyRun } from '../bench/b11.js';
+import { blocks, rowKey, options, JevBudget, fixturePath, classifyRun, sweepTasks } from '../bench/b11.js';
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -23,6 +23,9 @@ describe('B11 study', () => {
   it('resume keys distinguish task, model, arm and repetition', () => {
     const r = { taskId: 'a', model: 'm', arm: 'bare' as const, rep: 1 };
     expect(rowKey(r)).not.toBe(rowKey({ ...r, rep: 2 }));
+  });
+  it('uses a fixed per-kind subset for size sweeps', () => {
+    expect([...sweepTasks([{ kind: 'plain', id: 'p1' }, { kind: 'skill', id: 's1' }, { kind: 'plain', id: 'p2' }], 1)]).toEqual(['p1', 's1']);
   });
   it('confines dataset repository paths and short test-fixture paths to the same root', () => {
     const root = mkdtempSync(join(tmpdir(), 'b11-path-'));

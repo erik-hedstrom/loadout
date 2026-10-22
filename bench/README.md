@@ -25,7 +25,10 @@ held-out evidence for routing quality.
 The six default arms are `bare`, `skills-all`, `mcp-all`, `all`, `gateway`
 and `preselect`. Additional size arms are `skills-50`, `skills-250`, `mcp-1`
 and `mcp-5`. Skills are listing-validated, framed `SKILL.md` text without
-bundled files. Only the B7 synthetic servers and task canaries are available;
+bundled files. Size arms use the first `--sweep-per-kind` tasks of each kind
+(default 3), fixed before any results are read. Planted skills and canary
+servers remain available in every size arm; rows record the actual counts.
+Only the B7 synthetic servers and task canaries are available;
 personal MCP configuration is never loaded. The gateway calls the same
 in-process loadout implementation as the CLI. Preselection uses `route()`
 and records the chosen names. Embeddings are disabled consistently for these

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parseEvents, parseRow, taskSchema, type B11Row } from '../bench/b11-types.js';
 
-// Counters from the scrubbed OpenCode recording in anomalyco/opencode#26855.
+// OpenCode 1.19.3 pilot row orderIndex 2, first request. All non-counter fields removed.
 const recorded = readFileSync(new URL('./fixtures/b11-events.jsonl', import.meta.url), 'utf8');
 const event = (tokens: unknown) => JSON.stringify({ type: 'step_finish', part: { tokens } });
 const tokens = { total: 36, input: 10, cache: { read: 20, write: 2 }, output: 3, reasoning: 1 };
@@ -18,9 +18,9 @@ function row(): B11Row {
 describe('B11 event projection', () => {
   it('reads recorded counters and sums uncached and cached input separately', () => {
     expect(parseEvents(recorded + '\n' + event(tokens))).toEqual({
-      steps: [{ input: 209, cacheRead: 18944, cacheWrite: 0, output: 209, reasoning: 0 },
+      steps: [{ input: 6657, cacheRead: 0, cacheWrite: 0, output: 26, reasoning: 15 },
         { input: 10, cacheRead: 20, cacheWrite: 2, output: 3, reasoning: 1 }],
-      totals: { input: 219, cacheRead: 18964, cacheWrite: 2, output: 212, reasoning: 1 }, toolCalls: [], skillsLoaded: [],
+      totals: { input: 6667, cacheRead: 20, cacheWrite: 2, output: 29, reasoning: 16 }, toolCalls: [], skillsLoaded: [],
     });
   });
   it('retains tool names/status and successful skill names without arguments, outputs, or text', () => {

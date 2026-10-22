@@ -13,9 +13,10 @@ import { route } from '../src/route.js';
 import type { Capability } from '../src/types.js';
 import { isEntry, splitOf } from './lib.js';
 import { ARMS, CORE_ARMS, DEFAULT_MODELS, parseEvents, parseRow, taskSchema, type B11Row, type B11Task } from './b11-types.js';
-import { checkFiles, confinedPath, copyTree, executeSandbox, materializeSkill, OPENCODE_CONFIG, sandboxCheck, type Sandbox } from './b11-sandbox.js';
+import { checkFiles, confinedPath, copyTree, executeSandbox, OPENCODE_CONFIG, sandboxCheck, type Sandbox } from './b11-sandbox.js';
 import { canariesSchema, endpoint, fixtureServer, fixtureTools, type Canary } from './b11-mcp.js';
 import { serverSpecs } from './mcp-fixtures.js';
+import { listingFor, prepareSkills, validateNeeds } from './b11-listing.js';
 
 export function options(args: string[]) {
   const { values: v } = parseArgs({ args, options: {
@@ -25,6 +26,7 @@ export function options(args: string[]) {
     arms: { type: 'string', default: CORE_ARMS.join(',') }, models: { type: 'string', default: DEFAULT_MODELS.join(',') },
     reps: { type: 'string', default: '1' }, 'batch-size': { type: 'string', default: '9' }, concurrency: { type: 'string', default: '2' },
     'per-kind': { type: 'string' }, timeout: { type: 'string', default: '120' },
+    'sweep-per-kind': { type: 'string', default: '3' },
     'jev-budget': { type: 'string', default: '0.10' }, out: { type: 'string' },
   } });
   const count = (s: string, max: number) => { const n = Number(s); if (!Number.isSafeInteger(n) || n < 1 || n > max) throw new Error('count out of range'); return n; };
@@ -38,6 +40,7 @@ export function options(args: string[]) {
   return { run: v.run ?? false, resume: v.resume ?? false, tasks: resolve(v.tasks!), binary: v.opencode ? realpathSync(v.opencode) : undefined,
     version: v['opencode-version']!, arms, models, reps: count(v.reps!, 100), batchSize: count(v['batch-size']!, 10000),
     concurrency: count(v.concurrency!, 16), perKind: v['per-kind'] ? count(v['per-kind'], 10000) : undefined,
+    sweepPerKind: count(v['sweep-per-kind']!, 10000),
     timeoutMs: count(v.timeout!, 3600) * 1000, budget, out: v.out ? resolve(v.out) : undefined };
 }
 
@@ -51,6 +54,11 @@ export function blocks<T>(tasks: T[], models: string[], arms: string[], reps: nu
   return result;
 }
 export const rowKey = (r: Pick<B11Row, 'taskId' | 'model' | 'arm' | 'rep'>) => JSON.stringify([r.taskId, r.model, r.arm, r.rep]);
+
+export function sweepTasks<T extends { kind: string; id: string }>(tasks: T[], perKind: number): Set<string> {
+  const counts = new Map<string, number>();
+  return new Set(tasks.filter(task => { const n = counts.get(task.kind) ?? 0; counts.set(task.kind, n + 1); return n < perKind; }).map(task => task.id));
+}
 
 /** Reserve a conservative byte-based ceiling before each request; failed requests retain their reservation. */
 export class JevBudget {
@@ -114,11 +122,6 @@ function tasksAt(file: string, perKind?: number): { tasks: B11Task[]; root: stri
   return { tasks, root, canaries };
 }
 
-function skillSources(root: string): string[] {
-  if (!existsSync(root)) return [];
-  return readdirSync(root, { withFileTypes: true }).filter(d => d.isDirectory() && !d.isSymbolicLink()).map(d => join(root, d.name)).sort();
-}
-
 export async function runCheck(task: B11Task, s: Sandbox, data: string): Promise<'pass' | 'fail' | 'sandbox-failure'> {
   if (task.check.type === 'files') {
     // The agent owns the output: absent, oversized, linked or unreadable output is a failed task.
@@ -140,7 +143,10 @@ export async function main(args: string[]) {
   if (process.platform !== 'linux') throw new Error('B11 requires Linux bubblewrap; use an LF WSL checkout');
   if (!o.binary) throw new Error('pass --opencode with the pinned binary path');
   const data = tasksAt(o.tasks, o.perKind);
-  const plan = blocks(data.tasks, o.models, o.arms, o.reps, o.batchSize);
+  const subset = sweepTasks(data.tasks, o.sweepPerKind);
+  const plan = blocks(data.tasks, o.models, o.arms, o.reps, o.batchSize).map(block => ({ ...block,
+    tasks: (CORE_ARMS as readonly string[]).includes(block.arm) ? block.tasks : block.tasks.filter(task => subset.has(task.id)),
+  }));
   const runs = plan.reduce((n, b) => n + b.tasks.length, 0);
   console.log(JSON.stringify({ mode: o.run ? 'run' : 'plan', arms: o.arms, tasks: data.tasks.length,
     taskCounts: Object.fromEntries(['plain', 'skill-needle', 'mcp-needle'].map(k => [k, data.tasks.filter(t => t.kind === k).length])),
@@ -173,15 +179,9 @@ export async function main(args: string[]) {
     const budget = new JevBudget(o.budget, config, key ? jevClient({ apiKey: key, baseUrl: jevBaseUrl(config), model: config.jev.model, retries: 0 }) : { ask: async () => { throw new Error('Jev disabled'); } });
     budget.spent = previous.reduce((n, r) => n + r.jev.costUsd, 0);
     const skillsDir = join(root, 'library-skills'); mkdirSync(skillsDir);
-    const skills: Capability[] = [];
-    // Only validated, confined manifests are copied. No real MCP configuration is loaded.
-    let rejectedSkills = 0;
-    for (const src of [...skillSources(join(paths.library(), 'skills')), ...skillSources(join(data.root, 'skills'))]) {
-      let m: ReturnType<typeof materializeSkill>;
-      try { m = materializeSkill(src, skillsDir); } catch { rejectedSkills++; continue; }
-      skills.push({ ...m, id: `skill:${m.name}`, kind: 'skill' });
-    }
-    console.log(`Confined manifest library: ${skills.length} accepted, ${rejectedSkills} rejected.`);
+    const { skills, plantedNames, rejected } = prepareSkills(join(paths.library(), 'skills'), join(data.root, 'skills'), skillsDir);
+    validateNeeds(data.tasks, skills, data.canaries);
+    console.log(`Confined manifest library: ${skills.length} accepted, ${rejected} rejected.`);
     const token = randomBytes(32).toString('hex');
     const servers: Capability[] = [];
     for (const spec of serverSpecs(20)) {
@@ -212,11 +212,8 @@ export async function main(args: string[]) {
           try {
             copyTree(fixturePath(data.root, 'workspaces', task.workspace), workspace);
             writeFileSync(join(workspace, 'AGENTS.md'), '');
-            let selectedSkills: Capability[] = [], selectedServers: Capability[] = [];
-            if (['skills-all', 'all'].includes(block.arm)) selectedSkills = skills;
-            if (block.arm.startsWith('skills-') && !block.arm.endsWith('all')) selectedSkills = skills.slice(0, Number(block.arm.slice(7)));
-            if (['mcp-all', 'all'].includes(block.arm)) selectedServers = servers;
-            if (block.arm === 'mcp-1' || block.arm === 'mcp-5') selectedServers = servers.slice(0, Number(block.arm.slice(4)));
+            const listing = listingFor(block.arm as B11Row['arm'], skills, servers, plantedNames, data.canaries);
+            let selectedSkills = listing.skills, selectedServers = listing.servers;
             if (block.arm === 'preselect') {
               const d = await route({ task: task.prompt, repo: { name: 'b11', files: [], languages: {}, dependencies: [] }, library: [...skills, ...servers], config, client: meter.client, excerpt: skillExcerpt });
               if (d.router !== 'jev' || meter.failed) throw new RoutingUnavailable();
