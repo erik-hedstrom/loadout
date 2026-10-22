@@ -1220,10 +1220,16 @@ used exit-code grading susceptible to early module exit before assertions;
 recorded pass rows are retained as observations, not verified quality evidence.
 New runs require explicit library provenance, isolated networking and expected
 hidden-test completion, and cannot silently resume these legacy protocols.
+Protocol v3 also records and checks the Node version. Hidden fixtures capture
+assertion and filesystem functions before importing generated code, and check
+children freeze shared JavaScript intrinsics. These guards do not retroactively
+verify historical grades or authenticate Node's internal test protocol; see
+the [checker limits](README.md#b11-opencode-sessions).
 
 ## B11 real-task capacity bracket (2026-10-22; quota-stopped)
 
-The 72-task dataset from `186c781` is integrated unchanged. Workspace and
+The 72-task definitions and workspaces come from `186c781`; hidden checks now
+capture grading dependencies before importing generated code. Workspace and
 hidden-check paths are repository-relative; file-check paths are workspace-relative.
 These references are confined to the corresponding task-set directory.
 Hidden checks run with the workspace as cwd; the contract matched the harness.
