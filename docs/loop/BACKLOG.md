@@ -754,7 +754,7 @@ binary alone on `PATH`, so the `claude` judge needed no new seam.
 | D18 | P1 | The hook and `load_skill` can offer `load_skill` only, with no folder | Codex | cloud | partial ([#54](https://github.com/erik-hedstrom/loadout/pull/54)): load_skill-only offer merged; C2 dropping its folder-hint limit waits on Erik |
 | D19 | P2 | `which()` honours PATHEXT on Windows | Codex | local | partial ([#52](https://github.com/erik-hedstrom/loadout/pull/52)): PATHEXT lookup merged; the launcher refuses batch hosts instead of spawning them (see learnings) |
 | D20 | P2 | Hook state writes never drop context or the no-key warning | Codex | cloud | done ([#49](https://github.com/erik-hedstrom/loadout/pull/49)) |
-| D21 | P1 | Keep loadout's request prefix cache-stable | Codex | local | in review ([#TBD]) |
+| D21 | P1 | Keep loadout's request prefix cache-stable | Codex | local | review ([#59](https://github.com/erik-hedstrom/loadout/pull/59)) |
 
 **D18. The hook and `load_skill` can offer `load_skill` only, with no folder.**
 Both currently suggest reading skill files directly, even when the host's
