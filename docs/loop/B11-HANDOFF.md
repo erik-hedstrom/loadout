@@ -102,9 +102,7 @@ Those approvals cover that historical checkpoint only.
 | R3: pooled totals lacked provenance | Linked `pilot-totals.json` from `protocol.json` with its aggregation method and split limitations; all 12 groups independently checked. |
 | R3: missing review notes | Recorded here. |
 
-Remaining Low items: Ubuntu CI may require an AppArmor user-namespace setting
-if bubblewrap reports a uid-map error; this was not observed in WSL and should
-be decided from CI evidence. A check with package imports could resolve agent
+Remaining Low items: A check with package imports could resolve agent
 files; current dataset checks use Node built-ins and relative imports (Claude
 accepted that rebuttal). The 16 MiB output cap shares timeout classification,
 top-level diagnostics are deliberately generic, and task kind/needs semantic
@@ -283,8 +281,10 @@ reachable; the README states this and the CI-only Internet-test opt-in.
 
 [Ubuntu job 119892965969](https://github.com/erik-hedstrom/loadout/actions/runs/39798716093/job/119892965969)
 at `9741dfa` showed a missing `/usr/bin/node` and pasta's missing nameserver
-warning. Node came from actions/setup-node's tool cache. That job contained no
-AppArmor denial, so the sysctl workaround was removed. CI installs `iproute2`
+warning. Node came from actions/setup-node's tool cache. That job ran with the
+sysctl workaround, so it could not show an AppArmor denial; removing it at
+`414abd1` produced `Couldn't write to /proc/self/uid_map` and `Failed RTM_NEWADDR`,
+so the workaround is back. CI installs `iproute2`
 for the private DNS fixture as well as bubblewrap and passt.
 
 `3c37b0f` adds an offline regression for the outer DNS fixture's resolver
