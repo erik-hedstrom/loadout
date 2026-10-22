@@ -1,0 +1,29 @@
+{
+  "status": "in-progress",
+  "taskFile": "bench/data/b11/tasks.jsonl",
+  "selectedTaskIds": [
+    "b11-skill-firgrove-release"
+  ],
+  "selection": "First skill-needle task in dataset order, selected before outcomes; identical task in all four diagnostics.",
+  "opencodeVersion": "1.19.3",
+  "plannedSessions": 4,
+  "arms": [
+    "skills-all",
+    "all"
+  ],
+  "models": [
+    "opencode/glm-5.3-flash-free",
+    "opencode/deepseek-v4.1-flash-free"
+  ],
+  "concurrency": 1,
+  "timeoutSeconds": 1200,
+  "modelCostUsd": 0,
+  "jevCalls": 0,
+  "jevCostUsd": 0,
+  "metadataSource": "Read-only scalar/counter projection from the active synthetic session database. No transcripts or raw database files retained.",
+  "notes": [
+    "First session completed its 20-minute ceiling with repeated compaction. Remaining sessions continue.",
+    "Per-step arrival durations exclude gaps before the next step_start. Wall time is not their sum.",
+    "Offline OpenCode model metadata is host-declared capacity, not independently verified provider capacity."
+  ]
+}
