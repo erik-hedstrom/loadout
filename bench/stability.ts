@@ -1,8 +1,7 @@
 /** Compare saved sweeps without routing or judging: npx tsx bench/stability.ts <dir> <dir> ... */
-import { join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { z } from 'zod';
-import { readJsonl, splitOf } from './lib.js';
+import { isEntry, readJsonl, splitOf } from './lib.js';
 
 const pick = z.object({ key: z.string() });
 const rowSchema = z.object({
@@ -69,4 +68,4 @@ export function stabilityReport(dirs: string[]): string {
   return lines.join('\n') + '\n';
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) console.log(stabilityReport(process.argv.slice(2)));
+if (isEntry(import.meta.url)) console.log(stabilityReport(process.argv.slice(2)));

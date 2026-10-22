@@ -18,13 +18,12 @@
  *   npx tsx bench/judge.ts <sweep dir> [--backend claude|codex|files] [--model opus] [--effort high] [--batch 10] [--blind-from <sweep dir>]
  */
 import { appendFileSync, existsSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { paths } from '../src/config.js';
 import { escapeSkillTags } from '../src/launch.js';
 import { capabilityKey, scanLibrary } from '../src/library.js';
-import { backendOf, costLabel, DATA, modelFamily, modelJson, pool, readJsonl, splitOf, wilson } from './lib.js';
+import { backendOf, costLabel, DATA, isEntry, modelFamily, modelJson, pool, readJsonl, splitOf, wilson } from './lib.js';
 import { z } from 'zod';
 import type { SweepRow } from './sweep.js';
 
@@ -340,4 +339,4 @@ Offered as optional: ${r.offered.map((p) => p.key).join(', ') || 'nothing'}`;
   console.log(`judge ${offline ? '$0 (offline)' : costLabel(backend, cost)} → ${reportFile}`);
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await judgeSweep(process.argv.slice(2));
+if (isEntry(import.meta.url)) await judgeSweep(process.argv.slice(2));

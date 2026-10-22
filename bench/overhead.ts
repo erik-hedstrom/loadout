@@ -10,7 +10,7 @@ import { createInterface } from 'node:readline';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { readConfined } from '../src/library.js';
 import { escapeSkillTags, toToml } from '../src/launch.js';
-import { codexCli } from './lib.js';
+import { codexCli, isEntry } from './lib.js';
 
 const PROMPT = 'Reply with exactly OK. Do not use tools, skills, commands, agents, or external services.';
 const CONFIGURATIONS = ['baseline', 'superpowers', 'anthropics', 'top50', 'impeccable', 'library', 'loadout'] as const;
@@ -574,6 +574,6 @@ export async function main(args: string[], deps: StudyDeps & { print?: (s: strin
     if (!values.plan) rmSync(root, { recursive: true, force: true });
   }
 }
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isEntry(import.meta.url)) {
   main(process.argv.slice(2)).catch((error: unknown) => { console.error(error instanceof Error ? error.message : 'overhead failed'); process.exitCode = 1; });
 }
