@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 import type { FitMeasure } from './route.js';
@@ -146,7 +146,7 @@ function readConfigFile(file: string): Partial<Config> {
 
 export function loadConfig(): Config {
   const file = paths.config();
-  if (!existsSync(file)) return DEFAULT_CONFIG;
+  if (!regularConfigExists(file)) return DEFAULT_CONFIG;
   const user = readConfigFile(file);
   return validateConfig({
     ...DEFAULT_CONFIG,
@@ -168,10 +168,21 @@ export function loadConfig(): Config {
 export function writeDefaultConfig(overrides: Partial<Config['jev']> = {}): string {
   const file = paths.config();
   mkdirSync(loadoutHome(), { recursive: true });
-  const existing = existsSync(file) ? readConfigFile(file) : {};
+  const existing = regularConfigExists(file) ? readConfigFile(file) : {};
   const config: Partial<Config> = Object.keys(overrides).length ? { ...existing, jev: { ...existing.jev, ...overrides } as Config['jev'] } : existing;
   writeFileSync(file, JSON.stringify(config, null, 2) + '\n');
   return file;
+}
+
+/** Refuse pre-existing config links; relocated homes are supported, same-user swaps are out of scope. */
+function regularConfigExists(file: string): boolean {
+  try {
+    if (!lstatSync(file).isFile()) throw new Error('config.json must be a regular file');
+    return true;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return false;
+    throw err;
+  }
 }
 
 /** The environment for a child process that needs no loadout credential. Windows matches env names in any case. */

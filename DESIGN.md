@@ -341,7 +341,10 @@ library itself, in its own words, through MCP:
     `models/<org>/<model>`, since transformers.js reads and writes there; the
     files inside that folder are transformers.js's own and are not checked. The
     home itself may be a link: where loadout keeps its data is the user's
-    choice, and a link below it is not something loadout made. Session files
+    choice, and a link below it is not something loadout made. A linked
+    `config.json` is refused before it is read, so the hook adds its failure
+    note to every prompt; to keep the config in a dotfiles repo, link the
+    whole home instead. Session files
     hold server credentials, so a linked `sessions/` is refused with an error
     that names it.
   - Temp files are created exclusively (a link already at the name is
