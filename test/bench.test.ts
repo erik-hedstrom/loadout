@@ -399,7 +399,7 @@ body
         child.stdin = new PassThrough(); child.stdout = new PassThrough(); child.stderr = new PassThrough();
         child.stdin.on('finish', () => {
           if (backend === 'codex') writeFileSync(args[args.indexOf('--output-last-message') + 1]!, answer);
-          else child.stdout!.emit('data', Buffer.from(answer === 'not JSON' ? answer : JSON.stringify({ structured_output: JSON.parse(answer), total_cost_usd: 0, duration_ms: 1, usage: { input_tokens: 1 } })));
+          else child.stdout!.emit('data', Buffer.from(answer === 'not JSON' ? answer : JSON.stringify({ type: 'result', structured_output: JSON.parse(answer), total_cost_usd: 0, duration_ms: 1, usage: { input_tokens: 1, cache_creation_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: 1 } })));
           queueMicrotask(() => child.emit('close', 0));
         });
         return child;
@@ -453,7 +453,7 @@ body
       child.stdin.on('data', (data) => { input += data; });
       child.stdin.on('finish', () => {
         inputs.push(input);
-        child.stdout!.emit('data', Buffer.from(JSON.stringify({ structured_output: { results: [{ id: input.includes('[a]') ? 'a' : 'c', need: 'none', useful: [], note: '' }] }, total_cost_usd: 0, duration_ms: 1, usage: { input_tokens: 1 } })));
+        child.stdout!.emit('data', Buffer.from(JSON.stringify({ type: 'result', structured_output: { results: [{ id: input.includes('[a]') ? 'a' : 'c', need: 'none', useful: [], note: '' }] }, total_cost_usd: 0, duration_ms: 1, usage: { input_tokens: 1, cache_creation_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: 1 } })));
         queueMicrotask(() => child.emit('close', 0));
       });
       return child;
