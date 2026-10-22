@@ -108,6 +108,8 @@ describe('B11 size sweep', () => {
     expect(report).toContain('not a confidence interval');
     expect(report.endsWith('\n')).toBe(true);
     expect(report.endsWith('\n\n')).toBe(false);
+    const devReport = renderReport(sweep().map(r => ({ ...r, split: 'dev' as const })));
+    expect(devReport.endsWith('\n\n')).toBe(false);
   });
 
   it('does not invent break-even evidence when gateway or shared tasks are absent', () => {
