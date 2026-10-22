@@ -28,7 +28,10 @@ const sandbox = () => {
 // systemd-resolved/WSL symlink, so mount over its existing target.
 const resolverNamespaceArgs = (resolver: string): string[] => [
   '--unshare-all', '--uid', '0', '--gid', '0', '--cap-add', 'CAP_NET_ADMIN', '--cap-add', 'CAP_NET_BIND_SERVICE',
-  '--bind', '/', '/', '--proc', '/proc', '--dev', '/dev', '--ro-bind', resolver, realpathSync('/etc/resolv.conf'),
+  // pasta maps UID 0 in a child user namespace; Linux requires this in its creator.
+  '--cap-add', 'CAP_SETFCAP',
+  '--bind', '/', '/', '--proc', '/proc', '--dev', '/dev', '--dev-bind', '/dev/net/tun', '/dev/net/tun',
+  '--ro-bind', resolver, realpathSync('/etc/resolv.conf'),
   '--clearenv', '--setenv', 'PATH', '/usr/sbin:/usr/bin:/bin', '--',
 ];
 afterEach(() => {
@@ -38,11 +41,16 @@ afterEach(() => {
 });
 
 describe.runIf(process.platform === 'linux')('B11 network dependency and preflight diagnostics', () => {
-  it('mounts the synthetic host resolver through its real path without pasta', () => {
+  it('provides the DNS fixture resolver, nested root mappings and TUN device without pasta', () => {
     const resolver = join(sandbox().home, 'host-resolv.conf');
     writeFileSync(resolver, 'nameserver 127.0.0.54\n');
-    const run = realCp.spawnSync('bwrap', [...resolverNamespaceArgs(resolver), process.execPath, '-e',
-      "process.stdout.write(require('node:fs').readFileSync('/etc/resolv.conf','utf8'))"], { timeout: 5000, encoding: 'utf8' });
+    const probe = `const fs=require('node:fs'),assert=require('node:assert/strict');
+      assert.equal(process.getuid(),0);assert.equal(process.getgid(),0);
+      for(const file of ['uid_map','gid_map'])assert.match(fs.readFileSync('/proc/self/'+file,'utf8'),/^\\s*0\\s+0\\s+1\\s*$/);
+      fs.closeSync(fs.openSync('/dev/net/tun','r+'));
+      process.stdout.write(fs.readFileSync('/etc/resolv.conf','utf8'));`;
+    const run = realCp.spawnSync('bwrap', [...resolverNamespaceArgs(resolver),
+      'unshare', '--user', '--map-root-user', '--', process.execPath, '-e', probe], { timeout: 5000, encoding: 'utf8' });
     expect(run.error, run.stderr).toBeUndefined();
     expect(run.status, run.stderr).toBe(0);
     expect(run.stdout).toBe('nameserver 127.0.0.54\n');
