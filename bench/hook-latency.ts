@@ -6,10 +6,10 @@
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { parseArgs } from 'node:util';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { pathToFileURL } from 'node:url';
 import { jevBaseUrl, loadConfig, paths, resolveApiKey } from '../src/config.js';
 import { cachedEmbeddings } from '../src/embed.js';
 import { hookOutput, promptContext } from '../src/hook.js';
@@ -17,7 +17,7 @@ import { jevClient, type Answer, type SystemOneClient, type SystemOneResponse } 
 import { scanLibrary } from '../src/library.js';
 import { repoSignals } from '../src/repo.js';
 import { NONE } from '../src/route.js';
-import { DATA, readJsonl, RESULTS, splitOf } from './lib.js';
+import { DATA, isEntry, readJsonl, RESULTS, splitOf } from './lib.js';
 
 export function percentile(samples: number[], p: number): number {
   return [...samples].sort((a, b) => a - b)[Math.ceil(samples.length * p) - 1]!;
@@ -56,7 +56,7 @@ export function replayPreload(replies: SystemOneResponse[], endpoint: string): s
   return code;
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isEntry(import.meta.url)) {
   const { values } = parseArgs({ options: { limit: { type: 'string', default: '10' } } });
   const limit = Number(values.limit);
   const dev = readJsonl<{ id: string; request: string }>(join(DATA, 'requests.jsonl')).filter((r) => splitOf(r.id) === 'dev');
