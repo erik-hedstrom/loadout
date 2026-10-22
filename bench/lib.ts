@@ -1,6 +1,6 @@
 import { execFileSync, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { pathTranslator, which } from '../src/launch.js';
@@ -12,6 +12,21 @@ import type { SweepRow } from './sweep.js';
 const BENCH = import.meta.dirname;
 export const DATA = join(BENCH, 'data');
 export const RESULTS = join(BENCH, 'results');
+
+export function isEntry(moduleUrl: string): boolean {
+  if (!process.argv[1]) return false;
+  let entryPath: string;
+  try {
+    entryPath = realpathSync(process.argv[1]);
+  } catch (error) {
+    // Eval/stdin arguments or an importer removed after startup may not name a file.
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT' || code === 'ENOTDIR') return false;
+    throw error;
+  }
+  // Node resolves module URLs through links, while argv keeps the invocation path.
+  return entryPath === realpathSync(new URL(moduleUrl));
+}
 
 export interface CorpusSkill extends Capability {
   repo: string;

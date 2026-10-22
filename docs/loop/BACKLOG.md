@@ -1277,7 +1277,7 @@ Learnings (2026-10-09):
 | E14 | P1 | Redact key-shaped strings before anything goes to Jev (prerequisite for the C2 loadout arm) | Codex | cloud | todo |
 | E15 | P1 | Test flakes: WSL-only `bench.test.ts` failure, Windows spawn timeouts | Claude | local | done ([#44](https://github.com/erik-hedstrom/loadout/pull/44)) |
 | E16 | P2 | Hygiene from #30's audit: control characters, `git ls-files` env, config symlink, echoed arguments | Claude | cloud | todo |
-| E17 | P3 | One entry-point guard for bench scripts that survives symlinked paths | Claude | cloud | todo |
+| E17 | P3 | One entry-point guard for bench scripts that survives symlinked paths | Codex + Claude review | cloud | review ([#51](https://github.com/erik-hedstrom/loadout/pull/51)) |
 
 **E16. Terminal, config and git hygiene.** From the reviews of #30 (A3);
 all older than it.
@@ -1301,6 +1301,17 @@ real path, so a script started through a symlink or junction (`/tmp` on
 macOS) does nothing and exits 0. Acceptance: one `isEntry(import.meta.url)`
 in bench/lib.ts comparing real paths, and no `resolve(process.argv[1])` guard
 left under bench/, with a test that runs a script through a link.
+
+Learnings (2026-10-22): canonicalize both sides; resolving only `argv[1]` leaves
+a linked module URL unmatched. Run the Linux suite outside the system temp
+folder: the existing `resetWork` test assumes the checkout is outside it.
+`bench/ab.ts` (#47) still has its own guard; whichever of the two lands second
+converts it.
+
+Review M1/L1: argv lookup ENOENT/ENOTDIR means no entry (missing path or
+non-directory parent); module lookup and unexpected argv errors stay strict.
+Import tests cover these cases, stdin and a deleted importer. Removed seven
+direct-invocation cases; the stability pair still covers direct execution.
 
 **E10. Build without optional dependencies.** src/embed.ts:24 types
 `@huggingface/transformers` with `typeof import(...)`. So `tsc` fails when npm
