@@ -121,6 +121,9 @@ describe('Jev key redaction', () => {
   });
 
   it('bounds restart-heavy matching for every shape', () => {
+    // Linear matching takes under 30 ms here on WSL; the quadratic JWT matcher took 3.5 s at 64 KiB, so a
+    // 1 s bound at 256 KiB still catches a regression without flaking on a slow CI worker.
+    const BOUND_MS = 1000;
     // Each prefix repeats inside the suffix class, or stops just before a required literal.
     const worst = [
       'sk-', 'AKIA', 'ghp_', 'xoxb-', 'AIza', '-----BEGIN ' + 'A'.repeat(100), 'eyJ-', 'Bearer ', 'eyJ-.eyJ-.',
@@ -131,12 +134,12 @@ describe('Jev key redaction', () => {
       const input = JSON.stringify({ value: unit.repeat(Math.ceil(256 * 1024 / unit.length)) });
       const started = performance.now();
       redactJson(input);
-      expect(performance.now() - started, unit).toBeLessThan(100);
+      expect(performance.now() - started, unit).toBeLessThan(BOUND_MS);
     }
     const privateHeader = JSON.stringify({ value: '-----BEGIN ' + 'PRIVATE KEY '.repeat(24 * 1024) });
     const started = performance.now();
     redactJson(privateHeader);
-    expect(performance.now() - started).toBeLessThan(100);
+    expect(performance.now() - started).toBeLessThan(BOUND_MS);
   });
 
   it.each(samples)('redacts every %s occurrence in goals, keywords, prompts and questions', async (_shape, secret) => {
