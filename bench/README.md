@@ -1,5 +1,131 @@
 # loadout benchmark
 
+## B11 OpenCode sessions
+
+`b11.ts` measures completed model requests and checks generated files. It
+requires Linux, bubblewrap, pasta (from passt), Node 22.12 or later, and an explicitly selected
+OpenCode binary. Only version 1.19.3 is supported by the counter parser. No user agent setup is
+edited. Only synthetic workspaces and public skill text should be supplied:
+free-model providers receive these inputs and may retain them.
+
+`--run` requires `--library` pointing to a deliberately selected library root
+with a `skills/` directory. Each distractor needs installed
+`.loadout-source.json` metadata matching a source in `bench/data/library.sh`;
+missing or other sources are rejected before materialization. Plan/protocol
+provenance records accepted/rejected distractor counts, sorted-name, content
+and source fingerprints, and source revisions when available. `corpusCommit`
+is the script's reference revision; `revision` is installed metadata and may
+be unknown. Neither field verifies an upstream download. Planted skills are
+separate from those distractor counts. An offline plan without `--library`
+reports `library: null` and never reads the ambient library.
+
+```bash
+B11_ARGS=(--arms bare,mcp-all,gateway,preselect,heavy-max,skills-50,skills-250,mcp-1,mcp-5
+  --heavy-skills 250 --heavy-servers 5 --timeout 300)
+npx tsx bench/b11.ts --plan "${B11_ARGS[@]}" --opencode "$OPENCODE_BIN" --library "$B11_LIBRARY"
+npx tsx bench/b11.ts --run "${B11_ARGS[@]}" --opencode "$OPENCODE_BIN" --library "$B11_LIBRARY" --out bench/results/approved-b11
+npx tsx bench/b11.ts --run --resume "${B11_ARGS[@]}" --opencode "$OPENCODE_BIN" --library "$B11_LIBRARY" --out bench/results/approved-b11
+npx tsx bench/b11-report.ts bench/results/approved-b11/rows.jsonl > report.md
+```
+
+The default is an offline plan: it checks the task contract and runs a
+network-disabled sandbox probe. The probe verifies that the real home,
+checkout and an outside canary cannot be read. Execution needs `--run`.
+Use `--tasks test/fixtures/b11-pilot/tasks.jsonl` for the small harness fixture
+set. These fixtures deliberately name their needed resources; they are not
+held-out evidence for routing quality.
+
+The six original arms, retained for diagnostic reproduction, are `bare`, `skills-all`, `mcp-all`, `all`, `gateway`
+and `preselect`. Additional size arms are `skills-50`, `skills-250`, `mcp-1`
+and `mcp-5`. Skills are listing-validated, framed `SKILL.md` text without
+bundled files. Size arms use the first `--sweep-per-kind` tasks of each kind
+(default 3), fixed before any results are read. Planted skills and canary
+needed by the fixed sweep subset remain available in MCP-size arms; rows
+record actual counts. Skill-size arms retain all planted skills.
+`heavy-max` requires explicit `--heavy-skills` and `--heavy-servers` limits:
+nonplanted skills and base fixture servers, with all planted skills and
+required canary servers added. Resume and reports distinguish heavy configurations.
+Selection and diagnostic evidence are in [RESULTS](RESULTS.md#b11-real-task-capacity-bracket-2026-10-22-quota-stopped).
+Only the B7 synthetic servers and task canaries are available;
+personal MCP configuration is never loaded. The gateway calls the same
+in-process loadout implementation as the CLI. Preselection uses `route()`
+and records the chosen names. Embeddings are disabled consistently for these
+two routing arms, avoiding a model download during the study. Routing policy,
+Jev model and input price are pinned to this source's `DEFAULT_CONFIG`; the
+user configuration supplies only credential resolution and the guarded
+endpoint setting. A user-selected keyword router cannot replace Jev.
+
+Each session receives a fresh writable workspace/home in bubblewrap, a
+private process namespace, read-only system executables, DNS/CA files and
+the pinned binary. The host environment is cleared. Pasta supplies a separate
+network namespace with outbound Internet; automatic port forwarding and host
+gateway mapping are disabled. Only selected fixture/gateway TCP ports are
+forwarded to session loopback. Unrelated host loopback listeners are not
+forwarded. Non-loopback host addresses, including docker0 and the Windows
+host in WSL NAT mode, remain reachable. Endpoints stay outside the sandbox; every gateway has its own
+short-lived token in the temporary home. Hidden checks are copied after the
+model exits, mounted read-only, and run without network. A separate Node test
+parent compares passed case identities with the trusted fixture inventory;
+an early module exit or printed success marker cannot substitute for cases.
+Supported fixtures use unconditional top-level literal `node:test` calls.
+Checks capture assertion functions and dependencies before importing generated
+code; check children freeze shared JavaScript intrinsics with Node's
+[experimental flag](https://github.com/nodejs/node/blob/v22.12.0/doc/api/cli.md#--frozen-intrinsics).
+This is a completion check, not authenticated grading against code designed to
+tamper with Node's internal test protocol. File checks verify only the stated
+required and forbidden strings. The running Node executable is mounted
+read-only at `/opt/node/bin/node`, and its version is recorded in the protocol.
+Temporary session files, including OpenCode logs/databases,
+are removed. Public rows contain counters, names/statuses and check outcomes,
+never transcripts, arguments, tool results or environment values. Rows also
+record launch-to-first-step and completed-step event-arrival durations, plus
+the configured deadline. These durations do not partition total wall time.
+
+Tasks run in blocks of one model/arm, with arm order rotating by batch and
+repetition. `--batch-size` defaults to 9, `--concurrency` to 2 and `--reps`
+to 1. Concurrency is within a block. Initial requests may reuse a provider
+cache from earlier sessions; the report separates each request position.
+`--timeout` bounds each session in seconds (default 300). The plan also
+prints the schedule if every session uses its deadline, retaining block
+barriers and excluding setup, routing, checks, cleanup and rate-limit waits. Rate-limit attempts are invalid
+and delay the next starts by at least 60 seconds. A persistent free usage-limit
+marker stops further launches; it does not become a task quality failure. Resume skips valid
+task/model/arm/repetition identities and retries invalid ones once per launch.
+
+`--jev-budget` defaults to $0.10. Each Jev call reserves a conservative
+byte-based input allowance before sending; successful usage replaces that
+allowance, while an unanswered request retains it. Automatic Jev retries are
+disabled. Recorded Jev cost includes invalid attempts. A resumed run includes
+earlier attempt costs in its budget. An exhausted budget invalidates routing
+rows instead of silently evaluating keyword fallback.
+
+The gateway estimate assumes one search per step at the configured 20-step
+bound, with two Jev calls per search. Several searches per step can exceed
+it; the reservation cap still applies. Plan JSON links here for these
+assumptions and the mount/write contract. Planning writes only a temporary
+manifest snapshot and preflight files, removed afterward. Runs additionally
+write rows and protocol metadata under `--out`. Resume requires matching
+library provenance, Node version and the current grading protocol; start a fresh output
+directory for legacy rows.
+
+Linux tests skip pasta-dependent cases with a reason if pasta is absent;
+they run in CI, which installs `passt`. `--run` never falls back to shared
+networking. To exercise the optional outbound HTTPS probe, set
+`B11_TEST_INTERNET=1`; CI opts in to this exception to the otherwise
+network-free `npm test`. Only that probe may skip when outbound access is absent.
+
+Reports keep the hash-based dev/test split separate, include Wilson 95%
+intervals, and reprice measured tokens under dated official price snapshots.
+Completion coverage, invalid-reason counts and observed deadlines stay visible;
+coverage under 90% carries a survivor-bias warning. Zero-valid arms read not
+usable in observed attempts. Those prices are hypothetical comparisons across different tokenizers and
+cache policies. Size comparisons use a shared task/repetition panel; gateway
+bands are observed min/max session costs. See [RESULTS](RESULTS.md) for run
+evidence and limits.
+
+Pilot status and limits are in [RESULTS](RESULTS.md#b11-real-task-pilot-2026-10-22-quota-stopped).
+The [handoff](../docs/loop/B11-HANDOFF.md) contains resume/full-study commands and review dispositions.
+
 Does the router put the skill a task needs in front of the agent, and what
 does that cost, as the library grows from 100 to 20,000 skills?
 

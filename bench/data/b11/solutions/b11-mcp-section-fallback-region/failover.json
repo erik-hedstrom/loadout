@@ -1,0 +1,4 @@
+{
+  "page": "edge-failover",
+  "fallbackRegion": "eu-north-cypress-7"
+}

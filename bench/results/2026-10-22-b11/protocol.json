@@ -1,0 +1,82 @@
+{
+  "opencodeVersion": "1.19.3",
+  "taskFile": "test/fixtures/b11-pilot/tasks.jsonl",
+  "tasksPerKind": 3,
+  "reps": 1,
+  "batchSize": 9,
+  "timeoutSeconds": 90,
+  "staticArmsInBlocks": true,
+  "sweepRun": false,
+  "fullStudyRun": false,
+  "maxJevBudgetUsd": 0.1,
+  "modelCostUsd": 0,
+  "jevCalls": 52,
+  "jevCostUsd": 0.029791062000000004,
+  "recordedAttempts": 132,
+  "unrecordedInterruptedSessions": 2,
+  "phases": [
+    {
+      "orderIndexRange": [
+        0,
+        30
+      ],
+      "concurrency": 2,
+      "checkpoint": "e08abc3",
+      "note": "Initial run interrupted for implementation updates. Two active sessions were terminated before their final rows; usage for them is unavailable. No Jev calls were active in that block."
+    },
+    {
+      "orderIndexRange": [
+        31,
+        129
+      ],
+      "concurrency": 4,
+      "checkpoint": "022f3dc",
+      "note": "Resume skipped valid identities, retried invalid ones, then completed the remaining model/arm blocks."
+    },
+    {
+      "orderIndexRange": [
+        130,
+        131
+      ],
+      "concurrency": 2,
+      "checkpoint": "159319d",
+      "note": "Final runner retried the two invalid DeepSeek preselect identities; both passed."
+    }
+  ],
+  "routingPolicyMatchesPinnedDefaults": true,
+  "rateLimitRows": 0,
+  "invalidReasons": {
+    "timeout": 73,
+    "malformed-events": 1
+  },
+  "notes": [
+    "This is a plumbing pilot, not held-out evidence for routing quality.",
+    "Only completed model-request counters are known. The first phase discarded partial usage on timeout; its invalid usage is a lower bound.",
+    "Invalid attempts stay out of quality denominators.",
+    "All recorded cache writes were zero.",
+    "Size-sweep break-even and quality retention are not shown."
+  ],
+  "pooledTotals": {
+    "path": "pilot-totals.json",
+    "source": "rows.jsonl",
+    "method": "Group all recorded attempts by model and arm; sort models lexically and arms in core-arm order (bare, skills-all, mcp-all, all, gateway, preselect). Count attempts and each result; sum steps.length and totals.input, cacheRead, cacheWrite, output and reasoning.",
+    "splitPolicy": "These operational totals pool dev and test and include completed counters from invalid attempts. Use summary.md for split-separated quality and cost analysis; never tune from these pooled totals."
+  },
+  "historicalLibrary": {
+    "selection": "Ambient configured loadout library; not an explicit --library argument.",
+    "intendedCorpus": "bench/data/library.sh",
+    "acceptedDistractors": 1234,
+    "rejectedDistractors": 28,
+    "plantedSkills": 3,
+    "acceptedNamesSha256": null,
+    "contentSha256": null,
+    "observedSourceRevisions": null,
+    "provenanceVerified": false,
+    "limitation": "Counts were retained in controlled runner logs. Per-skill origins, source revisions, exact accepted names and original content were not captured at run time; the intended public corpus cannot be verified retrospectively."
+  },
+  "historicalIsolation": {
+    "network": "Shared host network, including unrelated loopback listeners. New runs require pasta isolation.",
+    "nodeChecks": "Legacy exit-code grading could accept an early module exit before assertions. New runs require expected test-case completion evidence.",
+    "resume": "Use a fresh output directory with the new harness; legacy protocol and unknown library fingerprints cannot be resumed as equivalent."
+  }
+}

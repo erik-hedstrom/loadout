@@ -37,7 +37,6 @@ Each PR body's **Review state** section has the round-by-round record.
 |---|---|---|
 | [#47](https://github.com/erik-hedstrom/loadout/pull/47) | C14 A/B pilot harness; adds B10 | final review round; the clean Codex-only rerun needs a separately logged-in `CODEX_HOME` |
 | [#57](https://github.com/erik-hedstrom/loadout/pull/57) | B11 cached OpenCode study (draft): harness, dataset and quota-stopped pilots | in review; the full study waits on the free tier's usage cap |
-| [#59](https://github.com/erik-hedstrom/loadout/pull/59) | D21 cache-stable request prefix | in review |
 
 ## A. Adoption and ease of use
 
@@ -150,6 +149,12 @@ Acceptance:
 | B7 | P1 | MCP overhead study: what configured MCP servers cost per request, natively and through loadout | Claude | cloud (harness, done) + local (runs) | in progress: harness merged in [#38](https://github.com/erik-hedstrom/loadout/pull/38), with no ambient Claude plugins (2026-10-15 decision); live runs wait for Erik's approval of the estimate |
 | B8 | P0 | Backlog items from the launch-readiness review, 2026-10-13, MCP token cost first | Claude | local + erik | todo (the review is private, on Erik's machine) |
 | B9 | P1 | Savings from an adopted library: what a user saves after moving skills and MCP servers into loadout | Claude | local | todo (after B7) |
+| B11 | P1 | OpenCode session cost and task checks with automatic prompt caching | Codex | local | in review ([#57](https://github.com/erik-hedstrom/loadout/pull/57)): round-two fixes committed; pasta CI/re-review pending; full study unrun |
+
+**B11. OpenCode cache and outcome study.** Draft [PR #57](https://github.com/erik-hedstrom/loadout/pull/57).
+Round-two fixes are committed for grading and Ubuntu runtime failures; pasta CI/re-review remain pending and the pilot is quota-stopped.
+Evidence and limitations: [RESULTS](../../bench/RESULTS.md#b11-real-task-pilot-2026-10-22-quota-stopped).
+Commands, verification and review dispositions: [handoff](B11-HANDOFF.md).
 
 **B8. Items from the launch-readiness review.** The review (2026-10-13) is
 private ([ORCHESTRATOR](ORCHESTRATOR.md#local-the-default)).
@@ -755,7 +760,7 @@ binary alone on `PATH`, so the `claude` judge needed no new seam.
 | D18 | P1 | The hook and `load_skill` can offer `load_skill` only, with no folder | Codex | cloud | partial ([#54](https://github.com/erik-hedstrom/loadout/pull/54)): load_skill-only offer merged; C2 dropping its folder-hint limit waits on Erik |
 | D19 | P2 | `which()` honours PATHEXT on Windows | Codex | local | partial ([#52](https://github.com/erik-hedstrom/loadout/pull/52)): PATHEXT lookup merged; the launcher refuses batch hosts instead of spawning them (see learnings) |
 | D20 | P2 | Hook state writes never drop context or the no-key warning | Codex | cloud | done ([#49](https://github.com/erik-hedstrom/loadout/pull/49)) |
-| D21 | P1 | Keep loadout's request prefix cache-stable | Codex | local | review ([#59](https://github.com/erik-hedstrom/loadout/pull/59)) |
+| D21 | P1 | Keep loadout's request prefix cache-stable | Codex | local | done ([#59](https://github.com/erik-hedstrom/loadout/pull/59)) |
 
 **D18. The hook and `load_skill` can offer `load_skill` only, with no folder.**
 Both currently suggest reading skill files directly, even when the host's

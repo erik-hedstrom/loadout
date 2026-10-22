@@ -1,0 +1,4 @@
+{
+  "view": "monthly_ingest",
+  "watermarkColumn": "sealed_at_n7"
+}

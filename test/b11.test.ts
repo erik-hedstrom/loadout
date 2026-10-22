@@ -1,0 +1,119 @@
+import { describe, expect, it } from 'vitest';
+import { blocks, rowKey, options, JevBudget, classifyRun, sweepTasks, studyConfig } from '../bench/b11.js';
+import { fixturePath } from '../bench/b11-check.js';
+import { mkdtempSync, mkdirSync, realpathSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { DEFAULT_CONFIG } from '../src/config.js';
+import { OPENCODE_VERSION } from '../bench/b11-types.js';
+import { HarnessError, failureMessage } from '../bench/b11-errors.js';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+
+describe('B11 study', () => {
+  it('keeps each model/arm task batch together and rotates arms in later batches', () => {
+    const tasks = Array.from({ length: 3 }, (_, i) => ({ id: `task-${i}` }));
+    const result = blocks(tasks, ['m1', 'm2'], ['bare', 'all'], 2, 2);
+    expect(result.slice(0, 2).map(b => [b.model, b.arm, b.tasks.map(t => t.id)])).toEqual([
+      ['m1', 'bare', ['task-0', 'task-1']], ['m1', 'all', ['task-0', 'task-1']],
+    ]);
+    expect(result[4]?.arm).toBe('all');
+    expect(result.map(b => b.tasks.length).reduce((a,b) => a+b, 0)).toBe(24);
+  });
+  it('requires explicit runs, supported free models, bounded counts and a Jev budget', () => {
+    expect(options([]).run).toBe(false);
+    expect(options([]).arms).toEqual(['bare', 'mcp-all', 'gateway', 'preselect']);
+    expect(options(['--arms', 'skills-all,all']).arms).toEqual(['skills-all', 'all']);
+    for (const args of [['--concurrency', '0'], ['--arms', 'typo'], ['--models', 'paid/model'], ['--run', '--plan'], ['--jev-budget=-1']]) expect(() => options(args)).toThrow();
+    expect(() => options(['--run'])).toThrow('--library');
+    expect(options(['--run', '--resume', '--library', 'public-corpus']).resume).toBe(true);
+    expect(() => options(['--opencode-version', '2.0.0'])).toThrow();
+    expect(OPENCODE_VERSION).toBe('1.19.3');
+  });
+  it('requires explicit heavy-max limits and rejects unused or out-of-range limits', () => {
+    for (const args of [['--arms', 'heavy-max'], ['--arms', 'heavy-max', '--heavy-skills', '250'], ['--heavy-skills', '250'], ['--heavy-skills', '250', '--heavy-servers', '5'], ['--arms', 'heavy-max', '--heavy-skills', '250', '--heavy-servers', '21']]) expect(() => options(args)).toThrow();
+    expect(options(['--arms', 'heavy-max', '--heavy-skills', '250', '--heavy-servers', '5']).heavy).toEqual({ skills: 250, servers: 5 });
+    expect(rowKey({ taskId: 'a', model: 'm', arm: 'heavy-max', rep: 1, heavyConfig: { skills: 250, servers: 5 } }))
+      .not.toBe(rowKey({ taskId: 'a', model: 'm', arm: 'heavy-max', rep: 1, heavyConfig: { skills: 500, servers: 10 } }));
+  });
+  it('resume keys distinguish task, model, arm and repetition', () => {
+    const r = { taskId: 'a', model: 'm', arm: 'bare' as const, rep: 1 };
+    expect(rowKey(r)).not.toBe(rowKey({ ...r, rep: 2 }));
+  });
+  it('pins routing settings while retaining the established credential resolver input', () => {
+    const pinned = studyConfig({ ...DEFAULT_CONFIG, router: 'lexical', maxSkills: 0, shortlist: 1,
+      jev: { ...DEFAULT_CONFIG.jev, model: 'different', inputPricePerMTok: 999, apiKeyFile: '/credential-placeholder' } });
+    expect(pinned.router).toBe('jev');
+    expect(pinned.maxSkills).toBe(DEFAULT_CONFIG.maxSkills);
+    expect(pinned.shortlist).toBe(DEFAULT_CONFIG.shortlist);
+    expect(pinned.jev.model).toBe(DEFAULT_CONFIG.jev.model);
+    expect(pinned.jev.inputPricePerMTok).toBe(DEFAULT_CONFIG.jev.inputPricePerMTok);
+    expect(pinned.jev.apiKeyFile).toBe('/credential-placeholder');
+  });
+  it('prints only trusted harness diagnostics without causes or external text', () => {
+    const trusted = new HarnessError('results exist; pass --resume', { cause: new Error('PRIVATE') });
+    expect(failureMessage(trusted)).toBe('results exist; pass --resume');
+    expect(failureMessage(new HarnessError('count out of range'))).toBe('count out of range');
+    expect(failureMessage(new Error('PRIVATE library or provider content'))).not.toContain('PRIVATE');
+    expect(failureMessage('PRIVATE')).not.toContain('PRIVATE');
+  });
+  it('prints a useful fixed CLI validation error', () => {
+    const result = spawnSync(process.execPath, ['--import', 'tsx', fileURLToPath(new URL('../bench/b11.ts', import.meta.url)), '--concurrency', '0'], { encoding: 'utf8', timeout: 10000 });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('count out of range');
+  });
+  it('uses a fixed per-kind subset for size sweeps', () => {
+    expect([...sweepTasks([{ kind: 'plain', id: 'p1' }, { kind: 'skill', id: 's1' }, { kind: 'plain', id: 'p2' }], 1)]).toEqual(['p1', 's1']);
+  });
+  it('confines dataset repository paths and short test-fixture paths to the same root', () => {
+    const root = mkdtempSync(join(realpathSync(tmpdir()), 'b11-path-'));
+    mkdirSync(join(root, 'workspaces'));
+    try {
+      expect(fixturePath(root, 'workspaces', 'bench/data/b11/workspaces/plain')).toBe(join(root, 'workspaces', 'plain'));
+      expect(fixturePath(root, 'workspaces', 'plain')).toBe(join(root, 'workspaces', 'plain'));
+      expect(() => fixturePath(root, 'workspaces', 'bench/data/b11/workspaces/../../outside')).toThrow();
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+  it('reserves cost before Jev and refuses exhausted budgets without a call', async () => {
+    const budget = new JevBudget(0, DEFAULT_CONFIG, { ask: async () => { throw new Error('must not call'); } });
+    const meter = budget.meter();
+    await expect(meter.client.ask({}, {})).rejects.toThrow('budget');
+    expect(meter.usage.calls).toBe(0);
+    expect(meter.failed).toBe(true);
+  });
+  it('waits for pending Jev usage before the session can persist its ledger', async () => {
+    const budget = new JevBudget(0.1, DEFAULT_CONFIG, { ask: async () => {
+      await new Promise(resolve => setTimeout(resolve, 20));
+      return { model: 'fake', answers: {}, usage: { input_tokens: 100, output_tokens: 0 } };
+    } });
+    const meter = budget.meter();
+    const call = meter.client.ask({}, {});
+    await meter.settle();
+    expect(meter.usage.calls).toBe(1);
+    expect(meter.usage.costUsd).toBeCloseTo(100 / 1e6 * DEFAULT_CONFIG.jev.inputPricePerMTok, 10);
+    expect(budget.spent).toBeCloseTo(meter.usage.costUsd, 10);
+    await call;
+  });
+  it('classifies telemetry, timeout, sandbox and rate limits without confusing port numbers with HTTP status', () => {
+    const stdout = JSON.stringify({ type: 'step_finish', part: { tokens: { total: 15, input: 5, cache: { read: 8, write: 0 }, output: 2, reasoning: 0 } } }) + '\n';
+    const run = { stdout, stderr: 'connected http://127.0.0.1:42917', code: 0, timedOut: false };
+    expect(classifyRun(run).invalidReason).toBeUndefined();
+    expect(classifyRun({ ...run, usageLimited: true, stderr: 'HTTP status 429' }).invalidReason).toBe('usage-limit');
+    expect(classifyRun({ ...run, stdout: '{bad}\n', usageLimited: true }).invalidReason).toBe('usage-limit');
+    const interrupted = classifyRun({ ...run, stdout: '{"type":"step_start"}\n' + stdout + '{"type":"step_start"}\n', usageLimited: true, code: null });
+    expect(interrupted.invalidReason).toBe('usage-limit');
+    expect(interrupted.events.steps).toHaveLength(1);
+    expect(interrupted.events.totals).toMatchObject({ input: 5, cacheRead: 8, output: 2 });
+    const partialLine = classifyRun({ ...run, stdout: stdout + '{"type":"text","part":', usageLimited: true, code: null });
+    expect(partialLine.invalidReason).toBe('usage-limit');
+    expect(partialLine.events.steps).toHaveLength(1);
+    expect(partialLine.events.totals).toMatchObject({ input: 5, cacheRead: 8, output: 2 });
+    expect(classifyRun({ ...run, stderr: 'HTTP status 429' }).invalidReason).toBe('rate-limit');
+    expect(classifyRun({ ...run, timedOut: true }).invalidReason).toBe('timeout');
+    expect(classifyRun({ ...run, timedOut: true }).events.steps).toHaveLength(1);
+    expect(classifyRun({ ...run, stdout: '{bad}\n' }).invalidReason).toBe('malformed-events');
+    expect(classifyRun({ ...run, stdout: '', stderr: 'bwrap: mount failed', code: 1 }).invalidReason).toBe('sandbox-failure');
+    expect(classifyRun({ ...run, code: 1 }).invalidReason).toBe('provider-error');
+    expect(classifyRun(run, true).invalidReason).toBe('provider-error');
+  });
+});
