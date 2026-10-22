@@ -33,6 +33,10 @@ describe('B11 prepared skill catalogue', () => {
     ]);
     expect(result.plantedNames).toEqual(new Set(['required-skill']));
     expect(result.rejected).toBe(0);
+    expect(result.originalSources).toEqual(new Map([
+      ['a-library', join(library, 'a-folder')], ['z-library', join(library, 'z-folder')], ['required-skill', plant],
+    ]));
+    expect(result.skills.map(s => s.source)).toEqual(['a-library', 'z-library', 'required-skill'].map(name => join(destination, name)));
     expect(readdirSync(result.skills[2]!.source)).toEqual(['SKILL.md']);
     expect(readFileSync(join(result.skills[2]!.source, 'SKILL.md'), 'utf8')).toContain('Third-party skill text.');
     expect(readFileSync(join(result.skills[2]!.source, 'SKILL.md'), 'utf8')).not.toContain('Reference </skill>');
@@ -49,6 +53,7 @@ describe('B11 prepared skill catalogue', () => {
     const result = prepareSkills(library, planted, destination);
     expect(result.rejected).toBe(4);
     expect(result.skills.map(s => s.name)).toEqual(['valid']);
+    expect(result.originalSources).toEqual(new Map([['valid', join(library, 'a-valid')]]));
     expect(readdirSync(destination)).toEqual(['valid']);
   });
 
@@ -67,7 +72,7 @@ describe('B11 prepared skill catalogue', () => {
   it('treats absent roots as empty and refuses non-directory roots', () => {
     const root = temp();
     expect(prepareSkills(join(root, 'missing-library'), join(root, 'missing-planted'), join(root, 'destination')))
-      .toEqual({ skills: [], plantedNames: new Set(), rejected: 0 });
+      .toEqual({ skills: [], originalSources: new Map(), plantedNames: new Set(), rejected: 0 });
     const file = join(root, 'file'); writeFileSync(file, 'not a directory');
     expect(() => prepareSkills(file, temp(), temp())).toThrow();
     expect(() => prepareSkills(temp(), file, temp())).toThrow();

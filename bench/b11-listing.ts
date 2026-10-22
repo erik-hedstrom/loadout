@@ -7,7 +7,7 @@ import type { Canary } from './b11-mcp.js';
 import { confinedPath, materializeSkill } from './b11-sandbox.js';
 
 /** Refuse linked ancestors as well as linked roots before reading or creating directories. */
-function directoryRoot(root: string): boolean {
+export function directoryRoot(root: string): boolean {
   const absolute = resolve(root);
   let present = false;
   for (let cursor = absolute; ; cursor = dirname(cursor)) {
@@ -20,10 +20,10 @@ function directoryRoot(root: string): boolean {
   }
 }
 
-export function prepareSkills(libraryRoot: string, plantedRoot: string, destination: string): { skills: Capability[]; plantedNames: Set<string>; rejected: number } {
+export function prepareSkills(libraryRoot: string, plantedRoot: string, destination: string): { skills: Capability[]; originalSources: Map<string, string>; plantedNames: Set<string>; rejected: number } {
   directoryRoot(destination);
   mkdirSync(destination, { recursive: true });
-  const skills: Capability[] = [], plantedNames = new Set<string>();
+  const skills: Capability[] = [], originalSources = new Map<string, string>(), plantedNames = new Set<string>();
   let rejected = 0;
   for (const catalogue of [{ root: resolve(libraryRoot), planted: false }, { root: resolve(plantedRoot), planted: true }]) {
     if (!directoryRoot(catalogue.root)) continue;
@@ -35,6 +35,7 @@ export function prepareSkills(libraryRoot: string, plantedRoot: string, destinat
         confinedPath(source, 'SKILL.md');
         const skill = materializeSkill(source, destination);
         skills.push({ ...skill, id: `skill:${skill.name}`, kind: 'skill' });
+        originalSources.set(skill.name, source);
         if (catalogue.planted) plantedNames.add(skill.name);
       } catch (error) {
         if (catalogue.planted) throw new HarnessError('planted skill materialization failed', { cause: error });
@@ -45,7 +46,7 @@ export function prepareSkills(libraryRoot: string, plantedRoot: string, destinat
       }
     }
   }
-  return { skills, plantedNames, rejected };
+  return { skills, originalSources, plantedNames, rejected };
 }
 
 export function listingFor(arm: B11Row['arm'], skills: Capability[], servers: Capability[], plantedNames: Set<string>, canaries: Canary[], heavy?: { skills: number; servers: number }): { skills: Capability[]; servers: Capability[] } {

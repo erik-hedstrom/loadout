@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { prepareB11Library } from '../bench/b11-library.js';
 import { HarnessError } from '../bench/b11-errors.js';
@@ -108,6 +108,17 @@ describe('B11 public distractor corpus', () => {
     expect(f.run().provenance).toMatchObject({ accepted: 0, rejected: 1, sources: [], namesSha256: hash([]) });
   });
 
+  it('keeps the first accepted source when a later valid manifest duplicates its name', () => {
+    const f = fixture();
+    const accepted = f.add('a-accepted', 'shared-name');
+    f.add('b-duplicate', 'shared-name', source('duplicate', 'github.com/openai/skills'));
+    const result = f.run();
+    expect(result.provenance).toMatchObject({ accepted: 1, rejected: 1,
+      sources: [{ source: 'https://github.com/obra/superpowers', revision, accepted: 1 }] });
+    expect(result.originalSources).toEqual(new Map([['shared-name', accepted]]));
+    expect(result.skills[0]!.source).toBe(join(f.destination, 'shared-name'));
+  });
+
   it('bounds source metadata reads before parsing', () => {
     const f = fixture(), p = f.add('oversized', 'oversized', { ...source(), addedAt: 'x'.repeat(16 * 1024) });
     expect(readFileSync(join(p, '.loadout-source.json')).length).toBeGreaterThan(16 * 1024);
@@ -127,6 +138,14 @@ describe('B11 public distractor corpus', () => {
     expect(() => prepareB11Library(link, f.planted, f.destination)).toThrow('B11 library provenance validation failed');
     symlinkSync(join(outside.library, 'skills', 'example'), join(f.library, 'skills', 'linked'), 'junction');
     expect(() => f.run()).toThrow('B11 library provenance validation failed');
+  });
+
+  it('refuses a linked library ancestor before materializing skills', () => {
+    const f = fixture(); f.add('example');
+    const link = join(temp(), 'linked'); symlinkSync(dirname(f.library), link, 'junction');
+    const library = join(link, basename(f.library));
+    expect(() => prepareB11Library(library, f.planted, f.destination)).toThrow('B11 library provenance validation failed');
+    expect(() => readFileSync(join(f.destination, 'example', 'SKILL.md'))).toThrow();
   });
 
   it.skipIf(process.platform === 'win32')('refuses linked metadata and FIFO metadata before opening', async () => {
