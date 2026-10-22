@@ -4,6 +4,10 @@ import { mkdtempSync, mkdirSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DEFAULT_CONFIG } from '../src/config.js';
+import { OPENCODE_VERSION } from '../bench/b11-types.js';
+import { HarnessError, failureMessage } from '../bench/b11-errors.js';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 describe('B11 study', () => {
   it('keeps each model/arm task batch together and rotates arms in later batches', () => {
@@ -20,7 +24,10 @@ describe('B11 study', () => {
     expect(options([]).arms).toEqual(['bare', 'mcp-all', 'gateway', 'preselect']);
     expect(options(['--arms', 'skills-all,all']).arms).toEqual(['skills-all', 'all']);
     for (const args of [['--concurrency', '0'], ['--arms', 'typo'], ['--models', 'paid/model'], ['--run', '--plan'], ['--jev-budget=-1']]) expect(() => options(args)).toThrow();
-    expect(options(['--run', '--resume']).resume).toBe(true);
+    expect(() => options(['--run'])).toThrow('--library');
+    expect(options(['--run', '--resume', '--library', 'public-corpus']).resume).toBe(true);
+    expect(() => options(['--opencode-version', '2.0.0'])).toThrow();
+    expect(OPENCODE_VERSION).toBe('1.19.3');
   });
   it('requires explicit heavy-max limits and rejects unused or out-of-range limits', () => {
     for (const args of [['--arms', 'heavy-max'], ['--arms', 'heavy-max', '--heavy-skills', '250'], ['--heavy-skills', '250'], ['--heavy-skills', '250', '--heavy-servers', '5'], ['--arms', 'heavy-max', '--heavy-skills', '250', '--heavy-servers', '21']]) expect(() => options(args)).toThrow();
@@ -41,6 +48,18 @@ describe('B11 study', () => {
     expect(pinned.jev.model).toBe(DEFAULT_CONFIG.jev.model);
     expect(pinned.jev.inputPricePerMTok).toBe(DEFAULT_CONFIG.jev.inputPricePerMTok);
     expect(pinned.jev.apiKeyFile).toBe('/credential-placeholder');
+  });
+  it('prints only trusted harness diagnostics without causes or external text', () => {
+    const trusted = new HarnessError('results exist; pass --resume', { cause: new Error('PRIVATE') });
+    expect(failureMessage(trusted)).toBe('results exist; pass --resume');
+    expect(failureMessage(new HarnessError('count out of range'))).toBe('count out of range');
+    expect(failureMessage(new Error('PRIVATE library or provider content'))).not.toContain('PRIVATE');
+    expect(failureMessage('PRIVATE')).not.toContain('PRIVATE');
+  });
+  it('prints a useful fixed CLI validation error', () => {
+    const result = spawnSync(process.execPath, ['--import', 'tsx', fileURLToPath(new URL('../bench/b11.ts', import.meta.url)), '--concurrency', '0'], { encoding: 'utf8', timeout: 10000 });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('count out of range');
   });
   it('uses a fixed per-kind subset for size sweeps', () => {
     expect([...sweepTasks([{ kind: 'plain', id: 'p1' }, { kind: 'skill', id: 's1' }, { kind: 'plain', id: 'p2' }], 1)]).toEqual(['p1', 's1']);

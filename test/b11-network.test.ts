@@ -1,0 +1,175 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import * as cp from 'node:child_process';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { connect, createServer, type Server } from 'node:net';
+import { createSocket } from 'node:dgram';
+import { setTimeout as delay } from 'node:timers/promises';
+import { HarnessError } from '../bench/b11-errors.js';
+import { executeSandbox, requireNetwork, sandboxCheck } from '../bench/b11-sandbox.js';
+
+vi.mock('node:child_process', async importOriginal => {
+  const actual = await importOriginal<typeof cp>();
+  return { ...actual, spawn: vi.fn(actual.spawn), spawnSync: vi.fn(actual.spawnSync) };
+});
+const realCp = await vi.importActual<typeof cp>('node:child_process');
+const pastaMissing = process.platform === 'linux' && (realCp.spawnSync('pasta', ['--version'], { env: { PATH: '/usr/bin:/bin' }, stdio: 'ignore' }).error as NodeJS.ErrnoException | undefined)?.code === 'ENOENT';
+const MISSING_PASTA = 'pasta (passt) not installed; CI installs passt';
+
+const roots: string[] = [];
+const sandbox = () => {
+  const root = mkdtempSync(join(tmpdir(), 'b11-network-')); roots.push(root);
+  const home = join(root, 'home'), workspace = join(root, 'work');
+  mkdirSync(home); mkdirSync(workspace);
+  return { home, workspace, binary: '/usr/bin/true' };
+};
+afterEach(() => {
+  vi.mocked(cp.spawn).mockReset().mockImplementation(realCp.spawn);
+  vi.mocked(cp.spawnSync).mockReset().mockImplementation(realCp.spawnSync);
+  roots.splice(0).forEach(p => rmSync(p, { recursive: true, force: true }));
+});
+
+describe.runIf(process.platform === 'linux')('B11 network dependency and preflight diagnostics', () => {
+  it('requires pasta without falling back to the host network', async () => {
+    vi.mocked(cp.spawnSync).mockReturnValue({ status: null, error: Object.assign(new Error('missing'), { code: 'ENOENT' }), pid: 0, output: [], stdout: '', stderr: '', signal: null });
+    expect(() => requireNetwork()).toThrow(/pasta.*passt.*required/i);
+    expect(() => requireNetwork()).toThrow(HarnessError);
+    vi.mocked(cp.spawn).mockImplementation((...args: Parameters<typeof cp.spawn>) => realCp.spawn('b11-deliberately-missing-pasta', args[1], args[2]));
+    await expect(executeSandbox(sandbox(), ['/usr/bin/true'], 5000)).rejects.toThrow(/pasta.*passt.*required/i);
+    await expect(executeSandbox(sandbox(), ['/usr/bin/true'], 5000)).rejects.toBeInstanceOf(HarnessError);
+  });
+
+  it('rejects a pasta installation that cannot execute', () => {
+    vi.mocked(cp.spawnSync).mockReturnValue({ status: 1, pid: 0, output: [], stdout: '', stderr: '', signal: null });
+    expect(() => requireNetwork()).toThrow(/pasta.*passt.*required/i);
+  });
+
+  it('reports trusted bubblewrap startup stderr', async () => {
+    vi.mocked(cp.spawn).mockImplementation(() => realCp.spawn(process.execPath, ['-e', 'console.error("bwrap: uid map failed: Operation not permitted");process.exit(1)']));
+    const failed = sandboxCheck('/usr/bin/true');
+    await expect(failed).rejects.toBeInstanceOf(HarnessError);
+    await expect(failed).rejects.toThrow('bwrap: uid map failed: Operation not permitted');
+  });
+
+  it('does not promote command stderr after the preflight script starts', async () => {
+    vi.mocked(cp.spawn).mockImplementation(() => realCp.spawn(process.execPath, ['-e', 'console.log("B11_PREFLIGHT_STARTED");console.error("untrusted command text");process.exit(1)']));
+    try { await sandboxCheck('/usr/bin/true'); throw new Error('expected preflight failure'); }
+    catch (error) {
+      expect((error as Error).message).toContain('sandbox preflight failed');
+      expect((error as Error).message).not.toContain('untrusted command text');
+    }
+  });
+});
+
+const listen = async (server: Server, port = 0): Promise<number> => {
+  await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', resolve); });
+  return (server.address() as { port: number }).port;
+};
+const close = (server: Server) => new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+
+describe.runIf(process.platform === 'linux')('B11 real pasta namespace', () => {
+  it('forwards only allowed host loopback ports', async ctx => {
+    if (pastaMissing) { ctx.skip(MISSING_PASTA); return; }
+    const fixture = createServer(socket => socket.end('fixture'));
+    const unrelated = createServer(socket => socket.end('unrelated'));
+    const fixturePort = await listen(fixture), unrelatedPort = await listen(unrelated);
+    const udp = createSocket('udp4');
+    udp.on('message', (_, remote) => udp.send('unrelated-udp', remote.port, remote.address));
+    await new Promise<void>(resolve => udp.bind(unrelatedPort, '127.0.0.1', resolve));
+    try {
+      const s = sandbox();
+      const script = `const net=require('node:net'),fs=require('node:fs'),dgram=require('node:dgram');
+        const read=(port,host='127.0.0.1')=>new Promise(resolve=>{let text='';const c=net.connect({port,host});c.setTimeout(1000,()=>c.destroy());c.on('data',b=>text+=b);c.on('error',()=>{});c.on('close',()=>resolve(text));});
+        const readUdp=()=>new Promise(resolve=>{const c=dgram.createSocket('udp4');const timer=setTimeout(()=>{c.close();resolve('')},500);c.on('message',b=>{clearTimeout(timer);c.close();resolve(b.toString())});c.send('probe',${unrelatedPort},'127.0.0.1')});
+        (async()=>{const route=fs.readFileSync('/proc/net/route','utf8').split('\\n').slice(1).map(l=>l.trim().split(/\\s+/)).find(r=>r[1]==='00000000');
+        if(!route)throw Error('missing namespace default route');const gateway=route[2].match(/../g).reverse().map(h=>parseInt(h,16)).join('.');
+        const allowed=await read(${fixturePort});const blocked=await read(${unrelatedPort});const v6=await read(${unrelatedPort},'::1');const alias=await read(${unrelatedPort},'127.0.0.2');const gatewayResult=await read(${unrelatedPort},gateway);const udpResult=await readUdp();
+        console.log(JSON.stringify({allowed,blocked,v6,alias,gatewayResult,udpResult}));if(allowed!=='fixture'||blocked||v6||alias||gatewayResult||udpResult)process.exit(1)})()`;
+      const run = await executeSandbox({ ...s, ports: [fixturePort] }, ['/usr/bin/node', '-e', script], 10000);
+      expect(run.stderr).not.toContain('Failed');
+      expect(run.code, run.stderr).toBe(0);
+      expect(JSON.parse(run.stdout)).toEqual({ allowed: 'fixture', blocked: '', v6: '', alias: '', gatewayResult: '', udpResult: '' });
+      // No explicit ports must not trigger pasta's default automatic forwarding.
+      const empty = await executeSandbox(s, ['/usr/bin/node', '-e', script], 10000);
+      expect(empty.code, empty.stderr).toBe(1);
+      expect(JSON.parse(empty.stdout).allowed).toBe('');
+    } finally { udp.close(); await Promise.all([close(fixture), close(unrelated)]); }
+  }, 25000);
+
+  it('does not automatically publish namespace TCP or UDP listeners to the host', async ctx => {
+    if (pastaMissing) { ctx.skip(MISSING_PASTA); return; }
+    const reservation = createServer();
+    let port = 0;
+    // pasta does not automatically publish ephemeral ports. Reserve a free
+    // ordinary port so removing the explicit 'none' flags exposes the listener.
+    for (let i = 0; i < 32 && !port; i++) {
+      try { port = await listen(reservation, 20000 + Math.floor(Math.random() * 10000)); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EADDRINUSE') throw error; }
+    }
+    expect(port).toBeGreaterThan(0); await close(reservation);
+    const s = sandbox();
+    const script = `const net=require('node:net'),dgram=require('node:dgram'),fs=require('node:fs');
+      const tcp=net.createServer(c=>c.end('namespace-only')),udp=dgram.createSocket('udp4');
+      udp.on('message',(_,r)=>udp.send('namespace-only',r.port,r.address));
+      tcp.listen(${port},'127.0.0.1',()=>udp.bind(${port},'127.0.0.1',()=>fs.writeFileSync('/work/ready','yes')));
+      setInterval(()=>{if(fs.existsSync('/work/done'))process.exit(0)},50);`;
+    const pending = executeSandbox(s, ['/usr/bin/node', '-e', script], 10000);
+    try {
+      for (let i = 0; i < 75 && !existsSync(join(s.workspace, 'ready')); i++) await delay(20);
+      expect(existsSync(join(s.workspace, 'ready'))).toBe(true);
+      // pasta's automatic forwarding scans periodically, so allow a scan first.
+      await delay(1500);
+      const tcp = await new Promise<string>(resolve => {
+        let text = ''; const c = connect(port, '127.0.0.1');
+        c.setTimeout(300, () => c.destroy()); c.on('data', b => text += b); c.on('error', () => {}); c.on('close', () => resolve(text));
+      });
+      const udp = await new Promise<string>(resolve => {
+        const c = createSocket('udp4'), timer = setTimeout(() => { c.close(); resolve(''); }, 300);
+        c.on('message', b => { clearTimeout(timer); c.close(); resolve(b.toString()); });
+        c.send('probe', port, '127.0.0.1');
+      });
+      expect(tcp).toBe(''); expect(udp).toBe('');
+      for (const protocol of ['tcp', 'tcp6', 'udp', 'udp6']) {
+        const listeners = readFileSync(`/proc/net/${protocol}`, 'utf8').split('\n').slice(1);
+        expect(listeners.some(line => parseInt(line.trim().split(/\s+/)[1]?.split(':')[1] ?? '', 16) === port), protocol).toBe(false);
+      }
+    } finally { writeFileSync(join(s.workspace, 'done'), 'yes'); await pending; }
+  }, 15000);
+
+  it('rejects invalid forwarding ports before starting a namespace', async () => {
+    for (const port of [0, -1, 65536, 1.5, NaN]) {
+      await expect(executeSandbox({ ...sandbox(), ports: [port] }, ['/usr/bin/true'], 5000)).rejects.toThrow('invalid sandbox port');
+    }
+  });
+
+  it('preserves command exit status, timeout cleanup and usage-limit termination', async ctx => {
+    if (pastaMissing) { ctx.skip(MISSING_PASTA); return; }
+    const s = sandbox();
+    const exited = await executeSandbox(s, ['/usr/bin/node', '-e', 'process.exit(23)'], 5000);
+    expect(exited.code, exited.stderr).toBe(23);
+    const timeout = await executeSandbox(s, ['/usr/bin/node', '-e', 'setInterval(()=>{},1000)'], 300);
+    expect(timeout.timedOut).toBe(true);
+    const quota = await executeSandbox(s, ['/usr/bin/node', '-e', 'console.error("AI_APICallError: free usage limit reached");setInterval(()=>{},1000)'], 5000, true, true);
+    expect(quota.usageLimited).toBe(true); expect(quota.timedOut).toBe(false);
+  }, 15000);
+
+  it('keeps offline commands independent of pasta', async () => {
+    vi.mocked(cp.spawn).mockImplementation((...args: Parameters<typeof cp.spawn>) => {
+      if (args[0] === 'pasta') throw new Error('offline command attempted pasta');
+      return realCp.spawn(...args);
+    });
+    const run = await executeSandbox(sandbox(), ['/usr/bin/true'], 5000, false);
+    expect(run.code, run.stderr).toBe(0);
+  });
+
+  it('permits outbound Internet when the host has outbound connectivity', async ctx => {
+    if (pastaMissing) { ctx.skip(MISSING_PASTA); return; }
+    if (process.env.B11_TEST_INTERNET !== '1') { ctx.skip('set B11_TEST_INTERNET=1 to enable the Internet-only probe'); return; }
+    const script = 'fetch("https://example.com",{signal:AbortSignal.timeout(5000)}).then(r=>{if(!r.ok)process.exit(1);console.log("outbound-ok")}).catch(()=>process.exit(2))';
+    const host = cp.spawnSync(process.execPath, ['-e', script], { timeout: 7000, encoding: 'utf8' });
+    if (host.status !== 0) { ctx.skip('host outbound HTTPS is unavailable'); return; }
+    const run = await executeSandbox(sandbox(), ['/usr/bin/node', '-e', script], 10000);
+    expect(run.code, run.stderr).toBe(0); expect(run.stdout).toContain('outbound-ok');
+  }, 20000);
+});

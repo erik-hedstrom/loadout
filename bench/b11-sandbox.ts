@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { isAbsolute, join, posix, relative, resolve } from 'node:path';
@@ -6,9 +6,18 @@ import { stringify } from 'yaml';
 import { escapeSkillTags } from '../src/launch.js';
 import { parseFrontmatter, readConfined } from '../src/library.js';
 import { isUsageLimit } from './b11-types.js';
+import { HarnessError } from './b11-errors.js';
 
-export interface Sandbox { workspace: string; home: string; binary: string }
+export interface Sandbox {
+  workspace: string; home: string; binary: string; ports?: number[];
+  readonlyMounts?: { source: string; destination: string }[];
+}
 const within = (root: string, p: string) => p === root || p.startsWith(root + '/');
+const NETWORK_REQUIRED = 'pasta (passt) is required for network-enabled sandboxes; install passt before --run';
+
+export function requireNetwork(): void {
+  if (spawnSync('pasta', ['--version'], { env: { PATH: '/usr/bin:/bin' }, stdio: 'ignore' }).status !== 0) throw new HarnessError(NETWORK_REQUIRED);
+}
 
 /** Call after the namespace exits: repair only our directory modes, without following agent-created links. */
 export function removeSession(root: string): void {
@@ -23,7 +32,7 @@ export function removeSession(root: string): void {
 
 /** Fixed destinations keep the model prefix stable across sessions. No host environment is inherited. */
 export function sandboxArgs(s: Sandbox, command: string[], network = true): string[] {
-  for (const p of [s.workspace, s.home, s.binary]) {
+  for (const p of [s.workspace, s.home, s.binary, ...(s.readonlyMounts ?? []).flatMap(m => [m.source, m.destination])]) {
     if (!posix.isAbsolute(p) || posix.resolve(p) !== p) throw new Error('sandbox paths must be absolute and normalized');
   }
   if ([s.workspace, s.home].some(p => p.split('/').length < 4 || within('/usr', p) || within('/etc', p)) || within(s.workspace, s.home) || within(s.home, s.workspace)) throw new Error('unsafe sandbox mounts');
@@ -31,7 +40,13 @@ export function sandboxArgs(s: Sandbox, command: string[], network = true): stri
   for (const dir of ['/usr', '/bin', '/sbin', '/lib', '/lib64']) if (existsSync(dir)) args.push('--ro-bind', dir, dir);
   for (const file of ['/etc/resolv.conf', '/etc/hosts', '/etc/nsswitch.conf', '/etc/ssl/certs']) if (existsSync(file)) args.push('--ro-bind', file, file);
   args.push('--proc', '/proc', '--dev', '/dev', '--tmpfs', '/tmp', '--dir', '/home', '--dir', '/opt',
-    '--bind', s.workspace, '/work', '--bind', s.home, '/home/bench', '--ro-bind', s.binary, '/opt/opencode',
+    '--bind', s.workspace, '/work', '--bind', s.home, '/home/bench', '--ro-bind', s.binary, '/opt/opencode');
+  for (const { source, destination } of s.readonlyMounts ?? []) {
+    const checksOverlay = source === `${s.workspace}/.b11-checks` && destination === '/work/.b11-checks';
+    if (!checksOverlay && [s.workspace, s.home].some(root => within(root, source))) throw new Error('readonly runner source is agent-writable');
+    args.push('--ro-bind', source, destination);
+  }
+  args.push(
     '--setenv', 'HOME', '/home/bench', '--setenv', 'PATH', '/usr/bin:/bin', '--setenv', 'LANG', 'C.UTF-8',
     '--setenv', 'XDG_CONFIG_HOME', '/home/bench/config', '--setenv', 'XDG_DATA_HOME', '/home/bench/data',
     '--setenv', 'XDG_CACHE_HOME', '/home/bench/cache', '--setenv', 'XDG_STATE_HOME', '/home/bench/state',
@@ -68,7 +83,16 @@ export function eventClock() {
 
 export function executeSandbox(s: Sandbox, command: string[], timeoutMs: number, network = true, stopOnUsageLimit = false): Promise<{ stdout: string; stderr: string; code: number | null; timedOut: boolean; usageLimited: boolean; clock: ReturnType<typeof eventClock> }> {
   return new Promise((resolvePromise, reject) => {
-    const child = spawn('bwrap', sandboxArgs(s, command, network), { env: { PATH: '/usr/bin:/bin' }, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
+    const args = sandboxArgs(s, command, network);
+    const ports = s.ports ?? [];
+    if (network && ports.some(p => !Number.isInteger(p) || p < 1 || p > 65535)) throw new HarnessError('invalid sandbox port');
+    // --share-net retains pasta's private network, never the host's. Disable
+    // automatic forwarding in both directions; -T forwards namespace loopback.
+    // Contract: passt(1), "pasta-specific options" and "Handling of local traffic".
+    const child = spawn(network ? 'pasta' : 'bwrap', network ? [
+      '--foreground', '--config-net', '--no-map-gw', '-t', 'none', '-u', 'none',
+      '-T', ports.length ? ports.join(',') : 'none', '-U', 'none', '--', 'bwrap', ...args,
+    ] : args, { env: { PATH: '/usr/bin:/bin' }, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
     const started = performance.now(), clock = eventClock();
     let stdout = '', stderr = '', timedOut = false, usageLimited = false;
     const kill = () => { if (child.pid) { try { process.kill(-child.pid, 'SIGKILL'); } catch (e) { if ((e as NodeJS.ErrnoException).code !== 'ESRCH') reject(new Error('sandbox cleanup failed')); } } };
@@ -80,7 +104,10 @@ export function executeSandbox(s: Sandbox, command: string[], timeoutMs: number,
       // Only model runs opt in. Hidden checks may print arbitrary model-owned text.
       if (stopOnUsageLimit && /\bAI_(?:APICall|Retry)Error\b/.test(stderr) && isUsageLimit(stderr)) { usageLimited = true; kill(); }
     });
-    child.on('error', () => { clearTimeout(timer); reject(new Error('sandbox could not start')); });
+    child.on('error', error => {
+      clearTimeout(timer);
+      reject(network && (error as NodeJS.ErrnoException).code === 'ENOENT' ? new HarnessError(NETWORK_REQUIRED) : new Error('sandbox could not start'));
+    });
     child.on('close', code => { clearTimeout(timer); resolvePromise({ stdout, stderr, code, timedOut, usageLimited, clock }); });
   });
 }
@@ -90,9 +117,14 @@ export async function sandboxCheck(binary: string): Promise<void> {
   const workspace = join(root, 'work'), home = join(root, 'home'), canary = join(root, 'outside-canary');
   mkdirSync(workspace); mkdirSync(home); writeFileSync(canary, 'synthetic outside canary');
   try {
-    const script = 'const f=require("fs");for(const p of process.argv.slice(1)){try{f.readdirSync(p);process.exit(1)}catch(e){if(!["ENOENT","EACCES","ENOTDIR"].includes(e.code))throw e}try{f.readFileSync(p);process.exit(1)}catch(e){if(!["ENOENT","EACCES","EISDIR"].includes(e.code))throw e}}';
+    const script = 'process.stdout.write("B11_PREFLIGHT_STARTED\\n");const f=require("fs");for(const p of process.argv.slice(1)){try{f.readdirSync(p);process.exit(1)}catch(e){if(!["ENOENT","EACCES","ENOTDIR"].includes(e.code))throw e}try{f.readFileSync(p);process.exit(1)}catch(e){if(!["ENOENT","EACCES","EISDIR"].includes(e.code))throw e}}';
     const r = await executeSandbox({ workspace, home, binary }, ['/usr/bin/node', '-e', script, homedir(), canary, process.cwd()], 15000, false);
-    if (r.code !== 0 || r.timedOut) throw new Error('sandbox preflight failed: real home, checkout or outside canary is visible, or bubblewrap failed');
+    if (r.code !== 0 || r.timedOut) {
+      // This probe runs only trusted Node code offline. Once it starts, stderr
+      // belongs to the command rather than bubblewrap's namespace startup.
+      const diagnostic = !r.stdout.startsWith('B11_PREFLIGHT_STARTED\n') && r.stderr.trim() ? `: ${r.stderr.trim()}` : '';
+      throw new HarnessError(`sandbox preflight failed: real home, checkout or outside canary is visible, or bubblewrap failed${diagnostic}`);
+    }
   } finally { rmSync(root, { recursive: true, force: true }); }
 }
 

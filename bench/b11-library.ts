@@ -14,7 +14,7 @@ export interface B11LibraryProvenance {
   namesSha256: string;
   contentSha256: string;
   sourcesSha256: string;
-  sources: { source: string; revision: string | null; accepted: number }[];
+  sources: { source: string; revision: string | null; corpusCommit: string | null; accepted: number }[];
 }
 
 const sha256 = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
@@ -47,15 +47,15 @@ export function prepareB11Library(
   plantedRoot: string,
   destination: string,
 ): ReturnType<typeof prepareSkills> & { provenance: B11LibraryProvenance } {
-  const candidates: { name?: unknown; source: string; path: string; revision: string | null }[] = [];
+  const candidates: { name?: unknown; source: string; path: string; revision: string | null; corpusCommit: string | null }[] = [];
   let skillsRoot: string;
   try {
     skillsRoot = directory(join(directory(libraryRoot), 'skills'));
     // This repository file is policy, never shell input. Keep its Composio subpath restrictions.
     const corpus = readFileSync(new URL('./data/library.sh', import.meta.url), 'utf8');
-    const allowed = [...corpus.matchAll(/^loadout add (https:\/\/github\.com\/\S+)/gm)].map(match => {
+    const allowed = [...corpus.matchAll(/^loadout add (https:\/\/github\.com\/\S+)([^\n]*)/gm)].map(match => {
       const spec = match[1]!, gh = parseGitHub(spec)!;
-      return { spec, origin: `github.com/${gh.owner}/${gh.repo}`, path: gh.subpath };
+      return { spec, origin: `github.com/${gh.owner}/${gh.repo}`, path: gh.subpath, corpusCommit: match[2]?.match(/@ ([a-f0-9]{12,64})\b/)?.[1] ?? null };
     });
     const folders = readdirSync(skillsRoot, { withFileTypes: true })
       .filter(entry => entry.isDirectory() || entry.isSymbolicLink()).map(entry => entry.name).sort();
@@ -63,7 +63,7 @@ export function prepareB11Library(
       const skillRoot = directory(confinedPath(skillsRoot, folder));
       const metadata = sourceSchema.parse(JSON.parse(regularFile(skillRoot, '.loadout-source.json', 16 * 1024).toString('utf8')));
       const publicSource = allowed.find(entry => entry.origin === metadata.origin &&
-        (entry.path === undefined || metadata.path === entry.path || metadata.path.startsWith(`${entry.path}/`)))?.spec;
+        (entry.path === undefined || metadata.path === entry.path || metadata.path.startsWith(`${entry.path}/`)));
       if (!publicSource) throw new Error('source outside public corpus');
       const manifestStat = lstatSync(join(skillRoot, 'SKILL.md'), { throwIfNoEntry: false });
       const body = manifestStat?.isFile() && manifestStat.size <= 256 * 1024
@@ -71,7 +71,7 @@ export function prepareB11Library(
       const listing = body ? parseFrontmatter(body.toString('utf8')) : {};
       // Match materializeSkill's description requirement when a rejected manifest reuses a name.
       candidates.push({ name: typeof listing.description === 'string' && listing.description.trim() ? listing.name : undefined,
-        source: publicSource, path: metadata.path, revision: metadata.revision?.toLowerCase() ?? null });
+        source: publicSource.spec, path: metadata.path, revision: metadata.revision?.toLowerCase() ?? null, corpusCommit: publicSource.corpusCommit });
     }
   } catch {
     // Filesystem errors and metadata can contain host paths or private skill names.
@@ -83,13 +83,13 @@ export function prepareB11Library(
   const accepted = distractors.map(skill => {
     // prepareSkills accepts the first valid manifest with a given name in folder order.
     const candidate = candidates.find(entry => entry.name === skill.name)!;
-    return { name: skill.name, source: candidate.source, path: candidate.path, revision: candidate.revision,
+    return { name: skill.name, source: candidate.source, path: candidate.path, revision: candidate.revision, corpusCommit: candidate.corpusCommit,
       textSha256: sha256(readConfined(skill.source, 'SKILL.md', 512 * 1024)) };
   }).sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
   const groups = new Map<string, B11LibraryProvenance['sources'][number]>();
   for (const entry of accepted) {
     const key = JSON.stringify([entry.source, entry.revision]);
-    const group = groups.get(key) ?? { source: entry.source, revision: entry.revision, accepted: 0 };
+    const group = groups.get(key) ?? { source: entry.source, revision: entry.revision, corpusCommit: entry.corpusCommit, accepted: 0 };
     group.accepted++;
     groups.set(key, group);
   }
@@ -97,7 +97,7 @@ export function prepareB11Library(
     corpus: 'bench/data/library.sh', accepted: accepted.length, rejected: prepared.rejected,
     namesSha256: hash(accepted.map(entry => entry.name)),
     contentSha256: hash(accepted.map(entry => [entry.name, entry.textSha256])),
-    sourcesSha256: hash(accepted.map(entry => [entry.name, entry.source, entry.path, entry.revision])),
+    sourcesSha256: hash(accepted.map(entry => [entry.name, entry.source, entry.path, entry.revision, entry.corpusCommit])),
     sources: [...groups.entries()].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([, group]) => group),
   } };
 }

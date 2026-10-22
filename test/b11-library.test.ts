@@ -37,7 +37,7 @@ describe('B11 public distractor corpus', () => {
     expect(result.provenance).toMatchObject({
       corpus: 'bench/data/library.sh', accepted: 2, rejected: 1,
       namesSha256: hash(['a-reference', 'z-reference']),
-      sources: [{ source: 'https://github.com/obra/superpowers', revision, accepted: 2 }],
+      sources: [{ source: 'https://github.com/obra/superpowers', revision, corpusCommit: '8ca22dba9a94', accepted: 2 }],
     });
     const text = JSON.stringify(result.provenance);
     for (const privateValue of [f.library, f.destination, 'a-reference', 'z-reference', 'planted-reference', 'skills/example']) expect(text).not.toContain(privateValue);

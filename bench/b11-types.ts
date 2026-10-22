@@ -4,6 +4,7 @@ import { MAX_SERVERS } from './mcp-fixtures.js';
 export const CORE_ARMS = ['bare', 'skills-all', 'mcp-all', 'all', 'gateway', 'preselect'] as const;
 export const ARMS = [...CORE_ARMS, 'skills-50', 'skills-250', 'mcp-1', 'mcp-5', 'heavy-max'] as const;
 export const DEFAULT_MODELS = ['opencode/glm-5.3-flash-free', 'opencode/deepseek-v4.1-flash-free'] as const;
+export const OPENCODE_VERSION = '1.19.3';
 
 const count = z.number().int().nonnegative();
 const name = z.string().regex(/^[\w./:@-]{1,200}$/);

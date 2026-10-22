@@ -1,3 +1,4 @@
+import { HarnessError } from './b11-errors.js';
 import { lstatSync, mkdirSync, readdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import type { Capability } from '../src/types.js';
@@ -11,7 +12,7 @@ function directoryRoot(root: string): boolean {
   let present = false;
   for (let cursor = absolute; ; cursor = dirname(cursor)) {
     const stat = lstatSync(cursor, { throwIfNoEntry: false });
-    if (stat?.isSymbolicLink()) throw new Error('linked skill root');
+    if (stat?.isSymbolicLink()) throw new HarnessError('linked skill root');
     if (cursor === absolute) {
       present = stat !== undefined;
     }
@@ -36,7 +37,7 @@ export function prepareSkills(libraryRoot: string, plantedRoot: string, destinat
         skills.push({ ...skill, id: `skill:${skill.name}`, kind: 'skill' });
         if (catalogue.planted) plantedNames.add(skill.name);
       } catch (error) {
-        if (catalogue.planted) throw new Error('planted skill materialization failed', { cause: error });
+        if (catalogue.planted) throw new HarnessError('planted skill materialization failed', { cause: error });
         // Validation/read errors from materializeSkill are fixed diagnostics. Raw filesystem
         // failures during its writes must stop the run rather than change the measured library.
         if ((error as NodeJS.ErrnoException).code !== undefined) throw error;
@@ -57,7 +58,7 @@ export function listingFor(arm: B11Row['arm'], skills: Capability[], servers: Ca
     case 'mcp-1':
     case 'mcp-5':
     case 'heavy-max': {
-      if (arm === 'heavy-max' && !heavy) throw new Error('heavy-max requires a configuration');
+      if (arm === 'heavy-max' && !heavy) throw new HarnessError('heavy-max requires a configuration');
       const skillCount = arm === 'heavy-max' ? heavy!.skills : arm === 'skills-50' ? 50 : arm === 'skills-250' ? 250 : 0;
       const serverCount = arm === 'heavy-max' ? heavy!.servers : arm === 'mcp-1' ? 1 : arm === 'mcp-5' ? 5 : 0;
       // Sizes count distractors; task references stay available and can increase the actual listing.
@@ -77,9 +78,9 @@ export function listingFor(arm: B11Row['arm'], skills: Capability[], servers: Ca
 export function validateNeeds(tasks: B11Task[], skills: Capability[], canaries: Canary[]): void {
   const names = new Set(skills.map(skill => skill.name));
   for (const task of tasks) {
-    if (task.needs.skill && !names.has(task.needs.skill)) throw new Error('task requires an unavailable skill');
+    if (task.needs.skill && !names.has(task.needs.skill)) throw new HarnessError('task requires an unavailable skill');
     if ((task.needs.server || task.needs.tool) && !canaries.some(canary => canary.server === task.needs.server && canary.tool === task.needs.tool)) {
-      throw new Error('task requires an unavailable planted server/tool pair');
+      throw new HarnessError('task requires an unavailable planted server/tool pair');
     }
   }
 }

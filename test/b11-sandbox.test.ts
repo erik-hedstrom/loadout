@@ -45,6 +45,40 @@ describe('B11 sandbox', () => {
     expect(() => sandboxArgs({ workspace: 'relative', home: '/var/tmp/run/home', binary: '/opt/oc' }, ['true'])).toThrow();
     expect(() => sandboxArgs({ workspace: '/var/tmp/../work', home: '/var/tmp/run/home', binary: '/opt/oc' }, ['true'])).toThrow();
   });
+  it('overlays trusted checks read-only after workspace mounts and rejects writable runner sources', () => {
+    const s = { workspace: '/var/tmp/run/work', home: '/var/tmp/run/home', binary: '/usr/bin/true' };
+    const args = sandboxArgs({ ...s, readonlyMounts: [
+      { source: '/var/tmp/run/work/.b11-checks', destination: '/work/.b11-checks' },
+      { source: '/var/tmp/trusted/runner.cjs', destination: '/b11-check-runner.cjs' },
+    ] }, ['/usr/bin/node', '/b11-check-runner.cjs'], false);
+    const work = args.indexOf(s.workspace), checks = args.indexOf('/var/tmp/run/work/.b11-checks');
+    expect(checks).toBeGreaterThan(work);
+    expect(args.slice(checks - 1, checks + 2)).toEqual(['--ro-bind', '/var/tmp/run/work/.b11-checks', '/work/.b11-checks']);
+    const runner = args.indexOf('/var/tmp/trusted/runner.cjs');
+    expect(args.slice(runner - 1, runner + 2)).toEqual(['--ro-bind', '/var/tmp/trusted/runner.cjs', '/b11-check-runner.cjs']);
+    for (const source of ['/var/tmp/run/work/runner.cjs', '/var/tmp/run/home/runner.cjs', '/var/tmp/run/work/.b11-checks']) {
+      expect(() => sandboxArgs({ ...s, readonlyMounts: [{ source, destination: '/b11-check-runner.cjs' }] }, ['true'], false)).toThrow('agent-writable');
+    }
+    for (const source of ['/var/tmp/run/home/.b11-checks', '/var/tmp/run/work/runner.cjs']) {
+      expect(() => sandboxArgs({ ...s, readonlyMounts: [{ source, destination: '/work/.b11-checks' }] }, ['true'], false)).toThrow('agent-writable');
+    }
+    expect(() => sandboxArgs({ ...s, readonlyMounts: [{ source: '/var/tmp/trusted/runner.cjs', destination: '/work/../runner.cjs' }] }, ['true'], false)).toThrow('normalized');
+  });
+  it.runIf(process.platform === 'linux')('runs the external trusted runner and keeps its checks and code read-only offline', async () => {
+    const root = temp(), workspace = join(root, 'work'), home = join(root, 'home'), trusted = temp();
+    mkdirSync(workspace); mkdirSync(home); mkdirSync(join(workspace, '.b11-checks'));
+    const checks = join(workspace, '.b11-checks'), runner = join(trusted, 'runner.cjs');
+    writeFileSync(join(checks, 'case.txt'), 'trusted assertion');
+    writeFileSync(runner, `const f=require('node:fs'),a=require('node:assert/strict');
+      a.equal(f.readFileSync('/work/.b11-checks/case.txt','utf8'),'trusted assertion');
+      for(const p of ['/work/.b11-checks/case.txt','/b11-check-runner.cjs'])a.throws(()=>f.writeFileSync(p,'tampered'),{code:'EROFS'});
+      f.writeFileSync('/work/answer.txt','yes');console.log('trusted-runner-ok');`);
+    const run = await executeSandbox({ workspace, home, binary: '/usr/bin/true', readonlyMounts: [
+      { source: checks, destination: '/work/.b11-checks' }, { source: runner, destination: '/b11-check-runner.cjs' },
+    ] }, ['/usr/bin/node', '/b11-check-runner.cjs'], 5000, false);
+    expect(run.code, run.stderr).toBe(0); expect(run.stdout).toContain('trusted-runner-ok');
+    expect(checkFiles(workspace, { type: 'files', path: 'answer.txt', all: ['yes'], none: [] })).toBe(true);
+  });
   it('refuses traversal and linked output checks', () => {
     const root = temp(); const outside = temp(); writeFileSync(join(outside, 'answer'), 'secret');
     expect(() => confinedPath(root, '../answer')).toThrow();
@@ -95,7 +129,7 @@ describe('B11 sandbox', () => {
     const root = temp(), workspace = join(root, 'work'), home = join(root, 'home'), data = temp();
     mkdirSync(workspace); mkdirSync(home);
     mkdirSync(join(data, 'checks', 'plain'), { recursive: true });
-    writeFileSync(join(data, 'checks', 'plain', 'answer.test.mjs'), "import { readFileSync } from 'node:fs'; import assert from 'node:assert/strict'; assert.equal(readFileSync('answer.txt','utf8'), 'yes');");
+    writeFileSync(join(data, 'checks', 'plain', 'answer.test.mjs'), "import { test } from 'node:test'; import { readFileSync } from 'node:fs'; import assert from 'node:assert/strict'; test('answer contains the expected value', () => assert.equal(readFileSync('answer.txt','utf8'), 'yes'));");
     writeFileSync(join(workspace, 'answer.txt'), 'yes');
     const s = { workspace, home, binary: '/usr/bin/true' };
     const task = { id: 'plain', kind: 'plain' as const, prompt: 'synthetic', workspace: 'unused', check: { type: 'node-test' as const, tests: 'plain' }, needs: {} };

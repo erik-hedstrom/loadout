@@ -19,10 +19,10 @@ it.runIf(process.platform === 'linux')('consumes real dataset paths without expo
       const workspace = join(root, task.id), home = join(root, task.id + '-home');
       mkdirSync(home); copyTree(source, workspace);
       for (const name of ['solutions', 'checks', 'decoys', '.b11-checks']) expect(existsSync(join(workspace, name))).toBe(false);
+      if (task.check.type === 'node-test') expect(await runCheck(task, { workspace, home, binary: '/usr/bin/true' }, data)).toBe('fail');
     }
     const plain = tasks.find(task => task.kind === 'plain')!;
-    const workspace = join(root, plain.id), home = join(root, plain.id + '-home');
-    expect(await runCheck(plain, { workspace, home, binary: '/usr/bin/true' }, data)).toBe('fail');
+    const workspace = join(root, plain.id);
     expect(existsSync(join(workspace, '.b11-checks'))).toBe(true);
     expect(existsSync(join(workspace, 'solutions'))).toBe(false);
   } finally { rmSync(root, { recursive: true, force: true }); }
