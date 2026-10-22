@@ -751,7 +751,7 @@ binary alone on `PATH`, so the `claude` judge needed no new seam.
 | D13 | P0 | The plugin must be able to open what its hook routes to | — | cloud + local + erik | blocked: design decision (Erik) |
 | D14 | P1 | Codex plugin forwards LOADOUT_HOME | Claude | cloud | done ([#36](https://github.com/erik-hedstrom/loadout/pull/36)): Codex gives a stdio MCP server only its default variables plus `env_vars`, so the plugin's `loadout mcp` ignored a custom `LOADOUT_HOME` (and a `"router": "lexical"` profile in it); now forwarded. A relative `LOADOUT_HOME` is now refused (on Windows, anything but a drive-qualified path, so no drive-relative, UNC or device path) and an empty one ignored; the `HOME` (or `USERPROFILE`) fallback must pass the same check. So the working directory or a remote share cannot become the config. An absolute value, including a mapped network drive, is trusted: a project settings `env` that sets one comes from settings that can already run their own hooks. The config the home points to cannot redirect the key (Erik, 2026-10-19): a `jev.baseUrl` other than api.typesafe.ai is refused unless `TYPESAFE_BASE_URL` names the URL. It still chooses `apiKeyFile`, whose content then reaches only that URL, which is why the home must not come from the working directory either. Checked against the Codex source only, not a live run |
 | D16 | P1 | Warn when the hook runs without a TypeSafe key | Claude | cloud | done ([#27](https://github.com/erik-hedstrom/loadout/pull/27)): once per session, as a `systemMessage`, which Claude Code and Codex both show |
-| D18 | P1 | The hook and `load_skill` can offer `load_skill` only, with no folder | Codex | cloud | todo |
+| D18 | P1 | The hook and `load_skill` can offer `load_skill` only, with no folder | Codex | cloud | review ([#54](https://github.com/erik-hedstrom/loadout/pull/54)) |
 | D19 | P2 | `which()` honours PATHEXT on Windows | Codex | local | review ([#52](https://github.com/erik-hedstrom/loadout/pull/52)); native-host gate pending re-review |
 | D20 | P2 | Hook state writes never drop context or the no-key warning | Codex | cloud | review ([#49](https://github.com/erik-hedstrom/loadout/pull/49)) |
 
@@ -768,6 +768,15 @@ Acceptance:
   arguments.
 - C2 drops its folder-hint limit when this lands. C2 does not depend on D18:
   its file fence, OS denies and probes enforce framed loading already.
+
+Learnings: `skillFolders` (default `true`) is an option, not the default,
+because `load_skill` returns text files only and a user's host can read the
+folder for binary assets; C2's fenced host is the consumer for `false`. It
+changes generated guidance only, not paths inside skill text or host
+permissions. The benchmark cleanup test assumes its checkout is outside the
+OS temp root, so run the Linux suite from a checkout elsewhere.
+C2 adopting `skillFolders: false` changes its frozen protocol, so Erik decides;
+until then C2 keeps its folder-hint limit.
 
 **D19. `which()` and PATHEXT.** From Sol's review of #30 (A3), which Erik
 overrode for that PR on 2026-10-19 because the gap predates it. `which()` in
@@ -1291,7 +1300,7 @@ Learnings (2026-10-09):
 | E11 | P1 | Fixed-text diagnostics in the gateway and relay | Codex | cloud | done ([PR #10](https://github.com/erik-hedstrom/loadout/pull/10)) |
 | E12 | P1 | A tool-less Codex bench backend (codex-cli 0.160.1 keeps unified_exec on) | Codex | local | todo |
 | E13 | P1 | Apply Engineer standards to both review paths, with a blocking necessity pass | Codex + Claude review | cloud | done ([#41](https://github.com/erik-hedstrom/loadout/pull/41)) |
-| E14 | P1 | Redact key-shaped strings before anything goes to Jev (prerequisite for the C2 loadout arm) | Codex | cloud | todo |
+| E14 | P1 | Redact key-shaped strings before anything goes to Jev (prerequisite for the C2 loadout arm) | Codex | cloud | review ([#53](https://github.com/erik-hedstrom/loadout/pull/53)) |
 | E15 | P1 | Test flakes: WSL-only `bench.test.ts` failure, Windows spawn timeouts | Claude | local | done ([#44](https://github.com/erik-hedstrom/loadout/pull/44)) |
 | E16 | P2 | Hygiene from #30's audit: control characters, `git ls-files` env, config symlink, echoed arguments | Codex | local | review ([#50](https://github.com/erik-hedstrom/loadout/pull/50)) |
 | E17 | P3 | One entry-point guard for bench scripts that survives symlinked paths | Codex + Claude review | cloud | review ([#51](https://github.com/erik-hedstrom/loadout/pull/51)) |
@@ -1432,6 +1441,18 @@ Acceptance:
 Limit: base64, splitting or any other encoding defeats pattern redaction, so
 this is defence in depth. The C2 protocol's primary layer is that the agent
 cannot read the key. Prerequisite for the C2 loadout arm.
+
+Learnings (2026-10-22, M1–M4): every Jev caller reaches `jevClient().ask()`;
+it redacts the whole JSON body once, so retries reuse it. `redactJson` decodes
+JSON strings first, preserving word boundaries after escapes. C2 keeps its
+frozen `scan-patterns.json`; a deep-equality test checks production patterns
+against it. JWT matching scans disjoint base64url segments to avoid quadratic
+restarts. Routing aliases names that redaction would change, then restores
+answer identities before selection. Stderr records counts, never matches.
+`reportJson` preserves property keys and redacts only string values; this also
+applies to `route --json` and `list --json`. Out of scope: encoded or split keys
+(including across goal and keywords), and keys glued to a preceding word
+character (the patterns' word boundary).
 
 **E15. Test flakes on the merge gate.** Two failures that were already on
 main made the gate noisy during the 2026-10-16 merge round (CI reruns,

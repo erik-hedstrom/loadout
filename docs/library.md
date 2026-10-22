@@ -57,6 +57,13 @@ mapping, thresholds and caps. Only
 your overrides are stored; everything else follows the defaults in
 [config.ts](../src/config.ts).
 
+`skillFolders` defaults to `true`: the hook and `load_skill` show skill
+folders for direct access, including binary assets. For a host whose file
+fence denies the library, set `"skillFolders": false`. These outputs then
+offer only `load_skill` for instructions and referenced text files. Binary
+files remain unavailable through `load_skill`; this setting changes guidance,
+not filesystem permissions, and does not remove paths in third-party skill text.
+
 `LOADOUT_HOME` must be absolute (on Windows, a drive-qualified path;
 drive-relative, UNC and device paths are refused). An empty value uses the
 home-directory fallback, which must pass the same check. The Codex plugin

@@ -1,0 +1,37 @@
+{
+  "date": "2026-10-22",
+  "node": "24.15.0",
+  "platform": "Linux (WSL2)",
+  "source_sha256": "9e34f2f69fab30b9e188493cee863345c011b23605a0e00947de569b1cffcd42",
+  "method": "Single observations of redactJson on JSON.stringify({value: input}); input construction excluded. Cases match test/jev-redaction.test.ts. JWT scaling runs precede the case matrix in one process.",
+  "baseline_commit": "0b49b6b",
+  "baseline_jwt_ms": {
+    "16KiB": 107.77,
+    "32KiB": 392.08
+  },
+  "jwt_ms": {
+    "16KiB": 0.76,
+    "32KiB": 0.62,
+    "64KiB": 0.83,
+    "256KiB": 4.01
+  },
+  "cases_256KiB_ms": {
+    "sk": 2.55,
+    "AWS": 1.74,
+    "GitHub": 1.57,
+    "Slack": 1.13,
+    "Google": 1.14,
+    "private": 2.98,
+    "JWT": 1.67,
+    "bearer": 16.73,
+    "dotted JWT": 29.73,
+    "sk near miss": 4.27,
+    "AWS near miss": 4.22,
+    "GitHub near miss": 3.98,
+    "Slack near miss": 4.33,
+    "Google near miss": 3.11,
+    "bearer near miss": 5.53
+  },
+  "private_header_288KiB_ms": 10.44,
+  "paid_cost_usd": 0
+}
