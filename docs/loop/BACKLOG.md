@@ -1361,36 +1361,15 @@ Limit: base64, splitting or any other encoding defeats pattern redaction, so
 this is defence in depth. The C2 protocol's primary layer is that the agent
 cannot read the key. Prerequisite for the C2 loadout arm.
 
-Implementation: `jevClient().ask()` in `src/jev.ts` sanitizes the entire JSON
-body before fetch, covering route, hook, MCP search, doctor and direct bench
-callers. `redactJson(json)` in `src/redact.ts` replaces matches with
-`[REDACTED]`, including strings used as object keys. It decodes JSON strings
-first: an escaped newline before a key otherwise hides its word boundary.
-The eight patterns have one source, `KEY_PATTERNS`; the C2 script emits them
-as JSON. `reportJson()` uses the same sanitizer so decision logs cannot retain
-matches from library metadata.
-
-Counts: stderr records only the number of replacements, even on failure;
-`SystemOneResponse.redactions` and `RouteDecision.stats.redactions` record
-successful request and route totals. A repeated match in wide and close counts
-twice; HTTP retries reuse the sanitized body and do not increase the count.
-Authentication headers are outside the redacted body. A key split across the
-goal and keywords is out of scope, as are other splits and encodings.
-
-Validation (WSL, Node 24.15): the focused redaction and C2 fixture suites pass
-28 tests; `npm run typecheck` and `npm run build` pass. All 17 guard mutations
-were caught, then restored from saved bytes. The first `npm test` run had
-571 passes, two Windows-only skips and three failures in `bench.test.ts`:
-the seed generator exceeded its 15-second subprocess timeout, and both shell
-smoke cases rejected CRLF (`pipefail\r`). The seed case passed in isolation;
-both smoke cases passed after restoring the fixture's committed LF endings
-(no content change). Full rerun: `npm test -- --maxWorkers=2` passed all 19
-files, with 574 tests passing and two Windows-only tests skipped (277.40 s).
-Both `git diff --check` and `git diff --cached --check` pass.
-
-Remaining: independent Claude and fresh Codex reviews, the full CI matrix and
-Erik's merge gate. No paid calls, push or PR creation. Native Windows was not
-tested.
+Learnings (2026-10-22): the one boundary is `jevClient().ask()` (src/jev.ts),
+which every Jev caller reaches; it redacts the whole JSON body once, so retries
+reuse it. `redactJson` (src/redact.ts) decodes each JSON string before matching,
+because an escaped newline before a key hides its word boundary. The patterns
+have one source, `KEY_PATTERNS`; C2's scanner reads them through
+`scan-patterns.ts`, unchanged from the pre-registered list. Only counts are
+recorded (stderr and `stats.redactions`), never the match. Out of scope: keys
+split across fields, encoded keys, and a key glued to a preceding letter or
+digit (the patterns' word boundary).
 
 **E15. Test flakes on the merge gate.** Two failures that were already on
 main made the gate noisy during the 2026-10-16 merge round (CI reruns,
