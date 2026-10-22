@@ -620,14 +620,14 @@ raw results, from the host's own usage report (no proxy, AGENTS.md rule 1),
 with a test on a recorded fixture.
 Learnings (2026-10-22; partial):
 - `exec --json` in Codex CLI 0.163.0 reports turn totals, not per-request
-  usage. Outcome runs retain these totals and preserve deliverables, metadata
-  and raw stdout even when usage JSONL is truncated. Raw stdout lives beside
-  arm metadata, outside the judge-visible deliverable folders.
+  usage. Outcome runs retain these totals and preserve deliverables and
+  metadata even when usage JSONL is truncated. Host stdout is not persisted
+  because command output and messages can contain private data.
 - Claude Code 2.1.306's `result.usage.iterations` describes sampling within
   the last request, not all session requests. Judge calls retain only
   `result.usage` totals. Missing or invalid usage records a contents-free
-  `usageError` without rejecting a valid answer. Both hosts' request rows
-  remain null. See [capture provenance](../../test/fixtures/request-usage/README.md).
+  `usageError` without rejecting a valid answer. Usage stores only token
+  totals or null. See [capture provenance](../../test/fixtures/request-usage/README.md).
 - Rollout discovery is deferred: `materialize()` creates loadout session
   files, not a Codex home; `codexArgs()` sets no home; `outcome.ts` calls
   `run()` without an environment override, inheriting `CODEX_HOME`. Reading

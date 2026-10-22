@@ -1,14 +1,8 @@
-interface TokenUsage {
+export interface TokenUsage {
   /** Input includes cache creation and cache reads for Claude. */
   inputTokens: number;
   cachedInputTokens: number;
   outputTokens: number;
-}
-
-export interface RequestUsage {
-  /** Neither result.usage nor exec --json exposes a list of model requests. */
-  requests: null;
-  totals: TokenUsage | null;
 }
 
 export function events(stdout: string): any[] {
@@ -20,7 +14,7 @@ export function counter(value: unknown, name: string): number {
   return value as number;
 }
 
-export function requestUsage(host: 'claude' | 'codex', records: any[]): RequestUsage {
+export function tokenUsage(host: 'claude' | 'codex', records: any[]): TokenUsage {
   const results = records.filter((e) => e?.type === (host === 'claude' ? 'result' : 'turn.completed'));
   if (results.length !== 1) throw new Error('missing or multiple host usage totals');
   const u = results[0].usage;
@@ -29,5 +23,5 @@ export function requestUsage(host: 'claude' | 'codex', records: any[]): RequestU
     + (host === 'claude' ? counter(u?.cache_creation_input_tokens, 'cache creation') + cachedInputTokens : 0);
   if (cachedInputTokens > inputTokens) throw new Error('host usage cached input exceeds input');
   // Claude's iterations describe sampling within the last request, not the session's requests.
-  return { requests: null, totals: { inputTokens, cachedInputTokens, outputTokens: counter(u?.output_tokens, 'output tokens') } };
+  return { inputTokens, cachedInputTokens, outputTokens: counter(u?.output_tokens, 'output tokens') };
 }

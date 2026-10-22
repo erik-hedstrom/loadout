@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
@@ -63,8 +63,7 @@ describe.skipIf(process.platform === 'win32')('bench/outcome.ts judging', () => 
     expect(readFileSync(verdicts, 'utf8').trim().split('\n')).toHaveLength(ids.length);
     const row = JSON.parse(readFileSync(verdicts, 'utf8').trim().split('\n')[0]!);
     expect(row.orders.map((order: { usage: unknown }) => order.usage)).toEqual(Array(2).fill({
-      requests: null,
-      totals: { inputTokens: 1, cachedInputTokens: 0, outputTokens: 1 },
+      inputTokens: 1, cachedInputTokens: 0, outputTokens: 1,
     }));
   }, 60_000);
 
@@ -74,14 +73,13 @@ describe.skipIf(process.platform === 'win32')('bench/outcome.ts judging', () => 
     const row = JSON.parse(readFileSync(verdicts, 'utf8').trim().split('\n')[0]!);
     for (const arm of ['bare', 'loadout']) {
       expect(row[arm].code).toBe(0);
-      expect(row[arm].usage).toEqual({ requests: null,
-        totals: { inputTokens: 10135, cachedInputTokens: 7936, outputTokens: 5 } });
+      expect(row[arm].usage).toEqual({ inputTokens: 10135, cachedInputTokens: 7936, outputTokens: 5 });
       expect(readFileSync(join(output, arm, 'deliverable.txt'), 'utf8')).toBe(codexHome);
       expect(existsSync(codexHome)).toBe(false);
     }
   }, 60_000);
 
-  it('preserves paid deliverables, metadata and recoverable stdout when Codex JSONL is truncated', async () => {
+  it('preserves paid deliverables and metadata when Codex JSONL is truncated', async () => {
     const { code, verdicts, output, codexHome, promptLog } = await judge(0o755, 'truncated');
     expect(code).toBe(0);
     const row = JSON.parse(readFileSync(verdicts, 'utf8').trim().split('\n')[0]!);
@@ -91,10 +89,20 @@ describe.skipIf(process.platform === 'win32')('bench/outcome.ts judging', () => 
       expect(meta.usageError).not.toContain('truncated-private');
       expect(row[arm]).toEqual(meta);
       expect(readFileSync(join(output, arm, 'deliverable.txt'), 'utf8')).toBe(codexHome);
-      expect(readFileSync(join(output, `${arm}.stdout.jsonl`), 'utf8')).toBe('{"type":"turn.completed","private":"truncated-private');
-      expect(existsSync(join(output, arm, `${arm}.stdout.jsonl`))).toBe(false);
     }
     expect(readFileSync(promptLog, 'utf8')).not.toContain('truncated-private');
+  }, 60_000);
+
+  it.each(['valid', 'truncated'] as const)('writes only expected deliverables and metadata, with no raw stdout: %s', async (mode) => {
+    const { code, output } = await judge(0o755, mode);
+    expect(code).toBe(0);
+    const root = join(output, '..');
+    const files = readdirSync(root, { recursive: true, encoding: 'utf8' }).filter((name) => statSync(join(root, name)).isFile());
+    expect(files.sort()).toEqual([
+      'verdicts.jsonl',
+      ...ids.flatMap((id) => [join(id, 'bare.json'), join(id, 'loadout.json')]),
+      join('a', 'bare', 'deliverable.txt'), join('a', 'loadout', 'deliverable.txt'),
+    ].sort());
   }, 60_000);
 
   it('fails, and calls nothing else, when the stand-in cannot run', async () => {

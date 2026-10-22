@@ -8,7 +8,7 @@ import { capabilityKey } from '../src/library.js';
 import { z } from 'zod';
 import type { Capability, RawRouting, RepoSignals, RouteDecision, ScoredCapability } from '../src/types.js';
 import type { SweepRow } from './sweep.js';
-import { requestUsage, type RequestUsage } from './usage.js';
+import { tokenUsage, type TokenUsage } from './usage.js';
 
 const BENCH = import.meta.dirname;
 export const DATA = join(BENCH, 'data');
@@ -177,7 +177,7 @@ export interface ClaudeResult<T> {
   output: T;
   costUsd: number;
   ms: number;
-  usage: RequestUsage;
+  usage: TokenUsage | null;
   usageError?: string;
 }
 
@@ -332,9 +332,9 @@ export function claudeJson<T>(prompt: string, schema: object, opts: { model: str
         } | undefined;
         if (!res) throw new Error('no Claude result');
         if (res.is_error || res.structured_output === undefined) throw new Error(res.result ?? 'no structured output');
-        let usage: RequestUsage = { requests: null, totals: null };
+        let usage: TokenUsage | null = null;
         let usageError: string | undefined;
-        try { usage = requestUsage('claude', [res]); }
+        try { usage = tokenUsage('claude', [res]); }
         catch { usageError = 'Claude usage unavailable (contents suppressed)'; }
         resolve({
           output: res.structured_output,

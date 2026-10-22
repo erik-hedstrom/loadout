@@ -25,7 +25,7 @@ import { capabilityKey, scanLibrary } from '../src/library.js';
 import { codexArgs, materialize, which } from '../src/launch.js';
 import { claudeJson, decisionFor, pool, readJsonl, run } from './lib.js';
 import type { SweepRow } from './sweep.js';
-import { events, requestUsage, type RequestUsage } from './usage.js';
+import { events, tokenUsage, type TokenUsage } from './usage.js';
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
@@ -108,11 +108,9 @@ if (!values['judge-only']) {
     mkdirSync(target, { recursive: true });
     cpSync(cwd, target, { recursive: true, filter: (src) => !/[/\\](node_modules|\.git|\.venv|venv|__pycache__)([/\\]|$)/.test(src) });
     const metadata = { arm, model: session.model, skills: session.skills.map((c) => capabilityKey(c)), injected: session.injected.length, code: res.code, timedOut: res.timedOut, ms: Date.now() - started,
-      usage: null as RequestUsage | null, usageError: undefined as string | undefined };
-    // Preserve paid work before interpreting a stream that SIGKILL may have truncated.
-    writeFileSync(meta, JSON.stringify(metadata));
-    writeFileSync(join(out, id, `${arm}.stdout.jsonl`), res.stdout, { mode: 0o600 });
-    try { metadata.usage = requestUsage('codex', events(res.stdout)); }
+      usage: null as TokenUsage | null, usageError: undefined as string | undefined };
+    // A truncated stream must not prevent saving paid deliverables and metadata.
+    try { metadata.usage = tokenUsage('codex', events(res.stdout)); }
     catch { metadata.usageError = 'Codex usage unavailable (contents suppressed)'; }
     writeFileSync(meta, JSON.stringify(metadata));
     rmSync(cwd, { recursive: true, force: true });

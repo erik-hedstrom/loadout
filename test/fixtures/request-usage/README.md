@@ -10,7 +10,7 @@ Do not use tools.` No loadout plugin or hook was active.
   `turn.completed` carries usage. Its `usage` has `input_tokens`,
   `cached_input_tokens`, `cache_write_input_tokens`, `output_tokens` and
   `reasoning_output_tokens`. No per-model-request counters were emitted in
-  `exec --json`; turn totals are retained, and request usage is null.
+  `exec --json`; only turn totals are retained.
 - Claude Code 2.1.306, `haiku`: `-p --output-format stream-json --verbose`,
   with tools, setting sources and slash commands disabled, strict MCP config
   and no session persistence. Init reported no tools, MCP servers or skills;
@@ -33,11 +33,11 @@ that they cannot be misinterpreted as session request counters.
 
 Normalized input includes cache creation and cache reads for Claude; Codex
 already includes cached tokens in input. Totals come from the host and are
-not reconstructed from request rows. Missing usage is null, never zero;
+stored directly as `usage: { inputTokens, cachedInputTokens, outputTokens }`.
+Missing usage is null, never zero;
 malformed events or counters produce a contents-free `usageError`. Valid
-paid answers and deliverables survive usage parsing failures. Raw Codex
-stdout is saved as `<arm>.stdout.jsonl` beside metadata, outside deliverable
-folders; unlike these fixtures, it can contain private task text.
+paid answers and deliverables survive usage parsing failures. Host stdout
+is not persisted; it can contain private command output and messages.
 
 Cost: $0 Jev; two tiny subscription runs. Claude reported $0.0001258;
 Codex reported 10,135 input tokens (7,936 cached), 5 output tokens and no
