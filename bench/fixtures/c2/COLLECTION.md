@@ -43,16 +43,13 @@ the run as `output rejected` (collect) or fails that check or extraction
 
 | Step | Where | Bound |
 |---|---|---|
-| Credential scan, pass one | host, on the validated copy | streams each file, constant memory. The patterns emitted by [scan-patterns.ts](scan-patterns.ts) must be linear time (no nested quantifier, and two quantified runs only with a literal between them that the first cannot match); the runner refuses a pattern that is not |
+| Credential scan, pass one | host, on the validated copy | streams each file, constant memory. The patterns in [scan-patterns.json](scan-patterns.json) must be linear time (no nested quantifier, and two quantified runs only with a literal between them that the first cannot match); the runner refuses a pattern that is not |
 | Office files (zip) | extraction stage | reads entries in memory, never writes an entry to disk by name. At most 200 entries; 16 MiB inflated per entry and 64 MiB in all; inflation stops at the limit whatever the header says; a nested archive is not opened; a part holding `<!DOCTYPE` or `<!ENTITY` is not parsed |
 | PDF, SQLite, CSV | extraction and check stages | 200 pages; databases opened read-only; the limits in the next row |
 | Extraction and checks, as processes | second sandbox | 60 s CPU and 1 GiB memory per file or check, 10 minutes per run, no network. Over the limit, the extraction or check fails and is counted. The host reads at most 1 MiB of stdout from each and 8 MiB per run, kills the sandbox past either, and counts the extractions it skipped |
 | Judge input | host | extracted text cut at 256 KiB per output, the cut counted and reported; the same text rules for both arms; redaction runs on that text |
 | Stream JSON | host | read line by line with no whole-file parse. A line over 4 MiB (`claude` itself cuts tool output near 30 KB) is skipped, not parsed, and counted. Only the top-level events `system` (init, and the hook events `--include-hook-events` adds), `assistant` and `result` are parsed, after a prefix test and a nesting-depth scan (64 at most); tool results are never parsed. Numbers are taken from named fields and must be finite and not negative. The stream is cut at 128 MiB, stderr and the final message at 1 MiB each. An out-of-order event or a second or missing `result` is counted (see [Evidence](PROTOCOL.md#evidence)) |
 | Commit scans | host | streamed through the scans in constant memory. A run is at most about 170 MiB (32 MiB files, 128 MiB stream, 8 MiB extracted text); the runner stops if free disk is below that |
-
-`npx tsx bench/fixtures/c2/scan-patterns.ts` emits the scanner's JSON patterns
-from `src/redact.ts`, the same source used before Jev requests.
 
 The collector, the host's tar parser and its stream parser have tests on
 made-up inputs before the smoke run, as the check script does. Collector: one

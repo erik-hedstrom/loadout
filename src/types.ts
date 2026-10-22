@@ -1,4 +1,4 @@
-import { redactJson } from './redact.js';
+import { redactText } from './redact.js';
 
 export type CapabilityKind = 'skill' | 'mcp';
 
@@ -42,9 +42,10 @@ export interface McpServerConfig {
   headers?: Record<string, string>;
 }
 
-/** Reports omit server credentials and key-shaped strings in third-party metadata. */
+/** Reports redact string values, preserving option keys so stored probabilities keep their identities. */
 export function reportJson(value: unknown): string {
-  const json = JSON.stringify(value, (key, v) => {
+  return JSON.stringify(value, (key, v) => {
+    if (typeof v === 'string') return redactText(v).text;
     if (key !== 'server' || !v || typeof v !== 'object') return v;
     const server = v as McpServerConfig;
     let url: string | undefined;
@@ -63,7 +64,6 @@ export function reportJson(value: unknown): string {
       headers: Object.keys(server.headers ?? {}),
     };
   }, 2);
-  return redactJson(json).json;
 }
 
 export type Tier = 'small' | 'medium' | 'large';

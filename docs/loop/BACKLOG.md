@@ -1373,8 +1373,8 @@ secrets into prompts too.
 
 Acceptance:
 - One place that every Jev request passes through replaces strings that match
-  the key shapes emitted by `bench/fixtures/c2/scan-patterns.ts` from the
-  production source with a fixed token, in goals, keywords and prompts.
+  the key shapes in `bench/fixtures/c2/scan-patterns.json` (or a `src/` copy the
+  bench file reads) with a fixed token, in goals, keywords and prompts.
 - Adversarial tests for each shape, and for a key inside one `keywords` entry.
 - The session log counts redactions and never records the match.
 
@@ -1382,15 +1382,17 @@ Limit: base64, splitting or any other encoding defeats pattern redaction, so
 this is defence in depth. The C2 protocol's primary layer is that the agent
 cannot read the key. Prerequisite for the C2 loadout arm.
 
-Learnings (2026-10-22): the one boundary is `jevClient().ask()` (src/jev.ts),
-which every Jev caller reaches; it redacts the whole JSON body once, so retries
-reuse it. `redactJson` (src/redact.ts) decodes each JSON string before matching,
-because an escaped newline before a key hides its word boundary. The patterns
-have one source, `KEY_PATTERNS`; C2's scanner reads them through
-`scan-patterns.ts`, unchanged from the pre-registered list. Only counts are
-recorded (stderr and `stats.redactions`), never the match. Out of scope: keys
-split across fields, encoded keys, and a key glued to a preceding letter or
-digit (the patterns' word boundary).
+Learnings (2026-10-22, M1–M4): every Jev caller reaches `jevClient().ask()`;
+it redacts the whole JSON body once, so retries reuse it. `redactJson` decodes
+JSON strings first, preserving word boundaries after escapes. C2 keeps its
+frozen `scan-patterns.json`; a deep-equality test checks production patterns
+against it. JWT matching scans disjoint base64url segments to avoid quadratic
+restarts. Routing aliases names that redaction would change, then restores
+answer identities before selection. Stderr records counts, never matches.
+`reportJson` preserves property keys and redacts only string values; this also
+applies to `route --json` and `list --json`. Out of scope: encoded or split keys
+(including across goal and keywords), and keys glued to a preceding word
+character (the patterns' word boundary).
 
 **E15. Test flakes on the merge gate.** Two failures that were already on
 main made the gate noisy during the 2026-10-16 merge round (CI reruns,

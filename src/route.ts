@@ -5,6 +5,7 @@ import { repoQueryText } from './repo.js';
 import { bm25 } from './prefilter.js';
 import { hybridRank } from './retrieve.js';
 import { escapeSkillTags } from './launch.js';
+import { redactText } from './redact.js';
 import {
   TIERS,
   toolsText,
@@ -309,12 +310,27 @@ export async function askJev(
   signal?: AbortSignal,
 ): Promise<{ raw: RawRouting; keys: Map<string, Capability>; redactions: number }> {
   const keys = optionKeys(candidates.slice(0, CHOICE_LIMIT - 1));
+  // Redaction changes data, but option keys are identities. Reserve original keys
+  // before allocating aliases so a real skill named redacted-option-1 cannot collide.
+  const used = new Set(keys.keys());
+  const aliases = new Map<string, string>();
+  let aliasNumber = 0;
+  const wireKeys = new Map([...keys].map(([key, capability]) => {
+    if (!redactText(key).count) return [key, capability] as const;
+    let alias: string;
+    do { alias = `redacted-option-${++aliasNumber}`; } while (used.has(alias));
+    used.add(alias);
+    aliases.set(key, alias);
+    return [alias, capability] as const;
+  }));
+  const originals = new Map([...aliases].map(([key, alias]) => [alias, key]));
+  const restore = (probabilities: Record<string, number>) => Object.fromEntries(Object.entries(probabilities).map(([key, value]) => [originals.get(key) ?? key, value]));
 
   let started = Date.now();
-  const wide = await client.ask(state, wideQuestions(keys), signal);
+  const wide = await client.ask(state, wideQuestions(wireKeys), signal);
   const wideMs = Date.now() - started;
   const pickAnswer = wide.answers.pick;
-  const pick = pickAnswer?.type === 'choice' ? pickAnswer.probabilities : {};
+  const pick = restore(pickAnswer?.type === 'choice' ? pickAnswer.probabilities : {});
   const tierAnswer = wide.answers.model_tier;
   const need = Object.fromEntries(
     Object.keys(NEED_QUESTIONS).map((id) => {
@@ -332,7 +348,7 @@ export async function askJev(
     .map((s) => s.key);
 
   started = Date.now();
-  const close = await client.ask(state, closeQuestions(shortlist.map((k) => [k, keys.get(k)!]), excerpt), signal);
+  const close = await client.ask(state, closeQuestions(shortlist.map((k) => [aliases.get(k) ?? k, keys.get(k)!]), excerpt), signal);
   const closeMs = Date.now() - started;
   const closePick = close.answers.pick;
   // Keys are capability names; fromEntries defines own properties, so "__proto__" cannot corrupt these.
@@ -365,7 +381,7 @@ export async function askJev(
       shortlist,
       sources: Object.fromEntries(shortlist.map((k) => [k, keys.get(k)!.id])),
       close: {
-        pick: closePick?.type === 'choice' ? closePick.probabilities : {},
+        pick: restore(closePick?.type === 'choice' ? closePick.probabilities : {}),
         fit,
         specific,
         inputTokens: close.usage.input_tokens,

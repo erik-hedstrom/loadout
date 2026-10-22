@@ -7,7 +7,8 @@ import { promptContext } from '../src/hook.js';
 import { jevClient, type Question, type SystemOneClient } from '../src/jev.js';
 import { materialize } from '../src/launch.js';
 import { findTools } from '../src/mcp.js';
-import { route } from '../src/route.js';
+import { askJev, decide, policyFrom, route } from '../src/route.js';
+import { KEY_PATTERNS, redactJson } from '../src/redact.js';
 import { reportJson, type Capability } from '../src/types.js';
 
 // Synthetic strings, assembled so repository scans do not mistake them for credentials.
@@ -60,6 +61,84 @@ function upstream() {
 }
 
 describe('Jev key redaction', () => {
+  it('preserves two token-shaped option identities and skips aliases already in use', async () => {
+    const names = [samples[0]![1]!, 'sk-' + 'b'.repeat(24), 'redacted-option-1'];
+    const capabilities = names.map((name, i) => ({ ...library[0]!, id: `skill:${i}`, name }));
+    const { client, bodies } = upstream();
+    vi.mocked(fetch).mockImplementation(async (_url, init) => {
+      bodies.push(String(init!.body));
+      const { state, questions } = JSON.parse(bodies.at(-1)!);
+      const answer = await fakeClient.ask(state, questions);
+      const options = Object.keys(questions.pick.criteria);
+      answer.answers.pick = { type: 'choice', choice: options[0]!, confidence: 1, probabilities: { [options[0]!]: 0.4, [options[1]!]: 0.6 } };
+      return new Response(JSON.stringify(answer));
+    });
+    const { raw, keys } = await askJev(client, {}, capabilities, 3);
+    const decision = decide(raw, keys, policyFrom(config));
+    expect(raw.wide.pick).toEqual({ [names[0]!]: 0.4, [names[1]!]: 0.6 });
+    expect(raw.close.pick).toEqual({ [names[1]!]: 0.4, [names[0]!]: 0.6 });
+    expect(decision.selected.map((s) => [s.capability.name, s.share])).toEqual([[names[0], 0.6], [names[1], 0.4]]);
+    const sent = JSON.parse(bodies[0]!).questions.pick.criteria;
+    expect(Object.keys(sent)).toEqual(['redacted-option-2', 'redacted-option-3', 'redacted-option-1', 'no_skill_needed']);
+    for (const name of names.slice(0, 2)) expect(bodies.join('')).not.toContain(name!);
+  });
+
+  it('preserves distinct token-shaped report keys and probabilities while redacting values', () => {
+    const first = samples[0]![1]!;
+    const second = 'sk-' + 'b'.repeat(24);
+    const report = JSON.parse(reportJson({ pick: { [first]: 0.4, [second]: 0.6 }, task: first }));
+    expect(report).toEqual({ pick: { [first]: 0.4, [second]: 0.6 }, task: '[REDACTED]' });
+  });
+
+  it('matches the frozen regexes on normal and adversarial strings', () => {
+    const corpus = ['ordinary prose', 'quoted " text\\path\n', ...samples.map(([, text]) => text!), ...samples.map(([, text]) => `before ${text} after ${text}`)];
+    const jwt = samples[6]![1]!;
+    corpus.push(`x${jwt}`, `-${jwt}`, `_${jwt}`, `${jwt}.${jwt}.${jwt}`, 'eyJ-'.repeat(100), `${'eyJ-'.repeat(100)}.${jwt}`, `${jwt}..${jwt}`);
+    for (const [, sample] of samples) for (const prefix of ['', 'x', '_', '-', '.', 'é', '\\', '"\n']) corpus.push(prefix + sample);
+    for (let n = 0; n < 16; n++) corpus.push(`eyJ${'a'.repeat(n)}.eyJ${'b'.repeat(n)}.${'c'.repeat(n)}`);
+    const segment = 'eyJ' + 'a'.repeat(12);
+    corpus.push(Array.from({ length: 9 }, () => segment).join('.'));
+    for (const first of [segment, 'a'.repeat(15), `_${segment}`, 'eyJ' + 'a'.repeat(9)]) {
+      for (const second of [segment, 'a'.repeat(13), 'eyJ' + 'b'.repeat(9)]) {
+        for (const third of ['c'.repeat(9), 'c'.repeat(10)]) corpus.push(`${first}.${second}.${third}`);
+      }
+    }
+    for (const separator of [' ', '..', '. ', '\n', '!']) corpus.push(`${segment}${separator}${segment}.${segment}`, `${segment}.${segment}${separator}${segment}`);
+    let seed = 42;
+    const atoms = ['eyJ', '-', '_', '.', 'a'.repeat(10), 'sk-', 'Bearer ', 'AKIA', 'PRIVATE KEY-----', ' ', '\n'];
+    for (let row = 0; row < 300; row++) {
+      let text = '';
+      for (let col = 0; col < 30; col++) { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; text += atoms[seed % atoms.length]; }
+      corpus.push(text);
+    }
+    for (const text of corpus) {
+      let expected = text;
+      let count = 0;
+      for (const { pattern, flags } of KEY_PATTERNS) expected = expected.replace(new RegExp(pattern, `${flags ?? ''}g`), () => { count++; return '[REDACTED]'; });
+      const result = redactJson(JSON.stringify({ value: text }));
+      expect({ value: JSON.parse(result.json).value, count: result.count }, text).toEqual({ value: expected, count });
+    }
+  });
+
+  it('bounds restart-heavy matching for every shape', () => {
+    // Each prefix repeats inside the suffix class, or stops just before a required literal.
+    const worst = [
+      'sk-', 'AKIA', 'ghp_', 'xoxb-', 'AIza', '-----BEGIN ' + 'A'.repeat(100), 'eyJ-', 'Bearer ', 'eyJ-.eyJ-.',
+      'sk-' + 'a'.repeat(19) + '!', 'AKIA' + 'A'.repeat(15) + '!', 'ghp_' + 'a'.repeat(19) + '!',
+      'xoxb-' + 'a'.repeat(9) + '!', 'AIza' + 'a'.repeat(29) + '!', 'Bearer ' + 'a'.repeat(19) + '!',
+    ];
+    for (const unit of worst) {
+      const input = JSON.stringify({ value: unit.repeat(Math.ceil(256 * 1024 / unit.length)) });
+      const started = performance.now();
+      redactJson(input);
+      expect(performance.now() - started, unit).toBeLessThan(100);
+    }
+    const privateHeader = JSON.stringify({ value: '-----BEGIN ' + 'PRIVATE KEY '.repeat(24 * 1024) });
+    const started = performance.now();
+    redactJson(privateHeader);
+    expect(performance.now() - started).toBeLessThan(100);
+  });
+
   it.each(samples)('redacts every %s occurrence in goals, keywords, prompts and questions', async (_shape, secret) => {
     const { bodies, diagnostics, client } = upstream();
     const state = { goal: `Keep context\n${secret}`, keywords: ['debug', `before ${secret} middle ${secret} after`], prompt: secret };
