@@ -1266,10 +1266,10 @@ describe('mcp server', () => {
     writeFileSync(join(outside, 'secret.txt'), 'secret');
     symlinkSync(join(outside, 'secret.txt'), join(dir, 'link.txt'));
     symlinkSync(outside, join(dir, 'linked-dir'));
-    expect(readSkillFile(dir, 'notes.md')).toBe('hello');
-    expect(() => readSkillFile(dir, 'blob.bin')).toThrow(/binary/);
-    expect(() => readSkillFile(dir, 'link.txt')).toThrow();
-    expect(() => readSkillFile(dir, 'linked-dir/secret.txt')).toThrow(/leaves the skill folder/);
+    expect(readSkillFile(dir, 'notes.md', true)).toBe('hello');
+    expect(() => readSkillFile(dir, 'blob.bin', true)).toThrow(/binary/);
+    expect(() => readSkillFile(dir, 'link.txt', true)).toThrow();
+    expect(() => readSkillFile(dir, 'linked-dir/secret.txt', true)).toThrow(/leaves the skill folder/);
 
     // Neither a file's text nor its name can close the wrapper it is returned in.
     const skillDir = join(tempDir('loadout-lib-'), 'evil');

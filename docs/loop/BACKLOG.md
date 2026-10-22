@@ -733,7 +733,7 @@ binary alone on `PATH`, so the `claude` judge needed no new seam.
 | D13 | P0 | The plugin must be able to open what its hook routes to | — | cloud + local + erik | blocked: design decision (Erik) |
 | D14 | P1 | Codex plugin forwards LOADOUT_HOME | Claude | cloud | done ([#36](https://github.com/erik-hedstrom/loadout/pull/36)): Codex gives a stdio MCP server only its default variables plus `env_vars`, so the plugin's `loadout mcp` ignored a custom `LOADOUT_HOME` (and a `"router": "lexical"` profile in it); now forwarded. A relative `LOADOUT_HOME` is now refused (on Windows, anything but a drive-qualified path, so no drive-relative, UNC or device path) and an empty one ignored; the `HOME` (or `USERPROFILE`) fallback must pass the same check. So the working directory or a remote share cannot become the config. An absolute value, including a mapped network drive, is trusted: a project settings `env` that sets one comes from settings that can already run their own hooks. The config the home points to cannot redirect the key (Erik, 2026-10-19): a `jev.baseUrl` other than api.typesafe.ai is refused unless `TYPESAFE_BASE_URL` names the URL. It still chooses `apiKeyFile`, whose content then reaches only that URL, which is why the home must not come from the working directory either. Checked against the Codex source only, not a live run |
 | D16 | P1 | Warn when the hook runs without a TypeSafe key | Claude | cloud | done ([#27](https://github.com/erik-hedstrom/loadout/pull/27)): once per session, as a `systemMessage`, which Claude Code and Codex both show |
-| D18 | P1 | The hook and `load_skill` can offer `load_skill` only, with no folder | Codex | cloud | todo |
+| D18 | P1 | The hook and `load_skill` can offer `load_skill` only, with no folder | Codex | cloud | review ([#54](https://github.com/erik-hedstrom/loadout/pull/54)) |
 | D19 | P2 | `which()` honours PATHEXT on Windows | Codex | local | review ([#52](https://github.com/erik-hedstrom/loadout/pull/52)); native-host gate pending re-review |
 | D20 | P2 | Hook state writes never drop context or the no-key warning | Codex | cloud | review ([#49](https://github.com/erik-hedstrom/loadout/pull/49)) |
 
@@ -750,6 +750,15 @@ Acceptance:
   arguments.
 - C2 drops its folder-hint limit when this lands. C2 does not depend on D18:
   its file fence, OS denies and probes enforce framed loading already.
+
+Learnings: `skillFolders` (default `true`) is an option, not the default,
+because `load_skill` returns text files only and a user's host can read the
+folder for binary assets; C2's fenced host is the consumer for `false`. It
+changes generated guidance only, not paths inside skill text or host
+permissions. The benchmark cleanup test assumes its checkout is outside the
+OS temp root, so run the Linux suite from a checkout elsewhere.
+C2 adopting `skillFolders: false` changes its frozen protocol, so Erik decides;
+until then C2 keeps its folder-hint limit.
 
 **D19. `which()` and PATHEXT.** From Sol's review of #30 (A3), which Erik
 overrode for that PR on 2026-10-19 because the gap predates it. `which()` in

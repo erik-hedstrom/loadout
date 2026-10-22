@@ -142,7 +142,7 @@ export function skillFiles(dir: string, max = LIST_MAX_FILES): string[] {
  * final symlink) and checked through the open descriptor, so swapping a path
  * component between the check and the read cannot redirect it.
  */
-export function readSkillFile(dir: string, file: string): string {
+export function readSkillFile(dir: string, file: string, skillFolders: boolean): string {
   let buf: Buffer;
   try {
     buf = readConfined(dir, file, FILE_MAX_BYTES);
@@ -151,7 +151,7 @@ export function readSkillFile(dir: string, file: string): string {
     if (err instanceof Error && 'code' in err) throw new Error('could not read skill file');
     throw err;
   }
-  if (buf.includes(0)) throw new Error('binary file; use it from the skill folder directly');
+  if (buf.includes(0)) throw new Error(skillFolders ? 'binary file; use it from the skill folder directly' : 'binary file; load_skill returns text files only');
   return buf.toString('utf8');
 }
 
@@ -167,15 +167,15 @@ export function loadSkill(deps: SearchDeps, skill: string, file?: string): strin
   };
   const key = capabilityKey(c);
   if (file) {
-    const text = escapeSkillTags(readSkillFile(c.source, file));
+    const text = escapeSkillTags(readSkillFile(c.source, file, deps.config.skillFolders));
     return `<skill_file skill="${attr(key)}" path="${attr(file)}" trust="third-party">\n${text}\n</skill_file>`;
   }
-  const block = injectionBlock(c, 'requested', toPath(c.source), key, LOAD_MAX_CHARS);
+  const block = injectionBlock(c, 'requested', deps.config.skillFolders ? toPath(c.source) : undefined, key, LOAD_MAX_CHARS);
   if (!block) throw new Error(`could not read ${key}/SKILL.md`);
   const files = skillFiles(c.source);
   if (!files.length) return block;
   // File names come from the skill too, so they stay inside its third-party block.
-  const listing = `Files in this skill (read one with load_skill and \`file\`, or directly from ${escapeSkillTags(toPath(c.source))}):\n${files
+  const listing = `Files in this skill (read one with load_skill and \`file\`${deps.config.skillFolders ? `, or directly from ${escapeSkillTags(toPath(c.source))}` : ''}):\n${files
     .map((f) => `- ${escapeSkillTags(f)}`)
     .join('\n')}${files.length >= LIST_MAX_FILES ? '\n- …' : ''}`;
   // A callback, so `$&` and friends in file names stay literal.
