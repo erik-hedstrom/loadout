@@ -98,7 +98,7 @@ export function sizeSweep(rows: readonly B11Row[], sheet: PriceSheet) {
         const native = valid.filter((r) => new RegExp(`^${family}-(?:\\d+|all)$`).test(r.arm));
         const listingSize = (r: B11Row) => r.listing[family === 'skills' ? 'skills' : 'tools'];
         const configurations = [...new Map(native.map((r) => [JSON.stringify([r.arm, listingSize(r)]), { arm: r.arm, size: listingSize(r) }])).values()];
-        if (!configurations.length) continue;
+        if (new Set(configurations.map(c => c.size)).size < 2) continue;
         // A common panel prevents a different task mix from appearing to be a listing-size effect.
         const shared = new Set(gatewayRows.map(sessionKey).filter((key) => configurations.every((c) => native.some((r) => r.arm === c.arm && listingSize(r) === c.size && sessionKey(r) === key))));
         if (!shared.size) continue;
@@ -170,7 +170,7 @@ export function renderReport(rows: readonly B11Row[]): string {
     }
     if (!shown) lines.push('not shown: no common valid gateway/size-sweep panel.');
   }
-  return lines.join('\n') + '\n';
+  return lines.join('\n').trimEnd() + '\n';
 }
 
 export function reportFiles(paths: readonly string[]): string {

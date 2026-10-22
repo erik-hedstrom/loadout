@@ -78,6 +78,12 @@ describe('B11 size sweep', () => {
     ...([50, 250] as const).flatMap((size) => [0, 1].map((rep) => row({ arm: `skills-${size}`, rep, listing: { skills: size + 3, servers: 0, tools: 0 }, totals: tokens(size, 0) }))),
   ];
 
+  it('does not infer a size sweep from a single measured listing size', () => {
+    const oneSize = [row({ arm: 'gateway' }), row({ arm: 'mcp-all', listing: { skills: 0, servers: 20, tools: 488 } })];
+    expect(sizeSweep(oneSize, PRICE_SHEETS[0]!)).toEqual([]);
+    expect(sizeSweep([...oneSize, row({ arm: 'mcp-5', listing: { skills: 0, servers: 20, tools: 488 } })], PRICE_SHEETS[0]!)).toEqual([]);
+  });
+
   it('compares matching task/repetition sets and uses recorded listing sizes with horizontal gateway bounds', () => {
     const points = sizeSweep([...sweep(), row({ taskId: 'unpaired', arm: 'skills-50', listing: { skills: 53, servers: 0, tools: 0 }, totals: tokens(1000000, 0) })], PRICE_SHEETS[0]!);
     expect(points).toHaveLength(1);
@@ -100,6 +106,8 @@ describe('B11 size sweep', () => {
     expect(report).toContain('line [0.000045000, 0.000045000]');
     expect(report).toContain('First measured size at/above gateway: 253');
     expect(report).toContain('not a confidence interval');
+    expect(report.endsWith('\n')).toBe(true);
+    expect(report.endsWith('\n\n')).toBe(false);
   });
 
   it('does not invent break-even evidence when gateway or shared tasks are absent', () => {
