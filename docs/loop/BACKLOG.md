@@ -149,7 +149,7 @@ Acceptance:
 | B7 | P1 | MCP overhead study: what configured MCP servers cost per request, natively and through loadout | Claude | cloud (harness, done) + local (runs) | in progress: harness merged in [#38](https://github.com/erik-hedstrom/loadout/pull/38), with no ambient Claude plugins (2026-10-15 decision); live runs wait for Erik's approval of the estimate |
 | B8 | P0 | Backlog items from the launch-readiness review, 2026-10-13, MCP token cost first | Claude | local + erik | todo (the review is private, on Erik's machine) |
 | B9 | P1 | Savings from an adopted library: what a user saves after moving skills and MCP servers into loadout | Claude | local | todo (after B7) |
-| B11 | P1 | OpenCode session cost and task checks with automatic prompt caching | Codex | local | in progress ([#TBD]): harness and synthetic pilot; full dataset and study pending |
+| B11 | P1 | OpenCode session cost and task checks with automatic prompt caching | Codex | local | in review ([#TBD]): harness and pilot committed; combine the separate dataset and review before the full study |
 
 **B11. OpenCode cache and outcome study.**
 
@@ -165,6 +165,10 @@ benchmark uses an authenticated loopback endpoint around `createServer()`
 to exercise the gateway. Fixture servers also run outside the sandbox.
 The dataset uses repository-relative workspace/check paths; the loader confines
 those references to the corresponding task-set directory.
+The pilot recorded 132 attempts and 52 Jev calls ($0.029791). Native
+skill-heavy sessions reached the 90-second deadline; retained quality and
+size-sweep break-even are not shown. See [B11 results](../../bench/RESULTS.md#b11-pilot-2026-10-22-cached-opencode-sessions)
+and [handoff](B11-HANDOFF.md). The full study has not run.
 
 **B8. Items from the launch-readiness review.** The review (2026-10-13) is
 private ([ORCHESTRATOR](ORCHESTRATOR.md#local-the-default)).

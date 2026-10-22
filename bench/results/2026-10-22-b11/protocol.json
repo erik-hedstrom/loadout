@@ -1,0 +1,59 @@
+{
+  "opencodeVersion": "1.19.3",
+  "taskFile": "test/fixtures/b11-pilot/tasks.jsonl",
+  "tasksPerKind": 3,
+  "reps": 1,
+  "batchSize": 9,
+  "timeoutSeconds": 90,
+  "staticArmsInBlocks": true,
+  "sweepRun": false,
+  "fullStudyRun": false,
+  "maxJevBudgetUsd": 0.1,
+  "modelCostUsd": 0,
+  "jevCalls": 52,
+  "jevCostUsd": 0.029791062000000004,
+  "recordedAttempts": 132,
+  "unrecordedInterruptedSessions": 2,
+  "phases": [
+    {
+      "orderIndexRange": [
+        0,
+        30
+      ],
+      "concurrency": 2,
+      "checkpoint": "e08abc3",
+      "note": "Initial run interrupted for implementation updates. Two active sessions were terminated before their final rows; usage for them is unavailable. No Jev calls were active in that block."
+    },
+    {
+      "orderIndexRange": [
+        31,
+        129
+      ],
+      "concurrency": 4,
+      "checkpoint": "022f3dc",
+      "note": "Resume skipped valid identities, retried invalid ones, then completed the remaining model/arm blocks."
+    },
+    {
+      "orderIndexRange": [
+        130,
+        131
+      ],
+      "concurrency": 2,
+      "checkpoint": "159319d",
+      "note": "Final runner retried the two invalid DeepSeek preselect identities; both passed."
+    }
+  ],
+  "routingPolicyMatchesPinnedDefaults": true,
+  "rateLimitRows": 0,
+  "invalidReasons": {
+    "timeout": 73,
+    "malformed-events": 1
+  },
+  "notes": [
+    "This is a plumbing pilot, not held-out evidence for routing quality.",
+    "Only completed model-request counters are known. The first phase discarded partial usage on timeout; its invalid usage is a lower bound.",
+    "Invalid attempts stay out of quality denominators.",
+    "All recorded cache writes were zero.",
+    "Size-sweep break-even and quality retention are not shown."
+  ]
+}

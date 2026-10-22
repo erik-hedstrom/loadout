@@ -1149,6 +1149,61 @@ repo-specific skills 97%, general 93% (threshold 0.8).
 4. **End-to-end pilot** (does the routed agent actually finish more tasks, for
    less?), possibly on `claude plugin eval`.
 
+## B11 pilot (2026-10-22): cached OpenCode sessions
+
+This is a harness pilot on nine synthetic fixture tasks, not held-out evidence
+for routing quality. The 108 task/model/arm identities produced 132 recorded
+attempts across an interrupted launch, resume and two final retries.
+[Raw rows](results/2026-10-22-b11/rows.jsonl),
+[protocol and limits](results/2026-10-22-b11/protocol.json), and
+[the reproducible report](results/2026-10-22-b11/summary.md) are committed.
+The report keeps test and dev rows separate, with Wilson 95% intervals for
+valid check outcomes, first-request versus later-request cache ratios, and
+dated official price snapshots. The fixtures deliberately name resources;
+they do not measure routing on ordinary requests.
+
+OpenCode was pinned to 1.19.3. The library copy accepted 1,237 manifests and
+rejected 28; native MCP arms configured 20 B7 fixture servers and three
+planted tools (488 tools total). Models saw only synthetic workspaces and
+text-only skill manifests. Free providers receive these inputs and may
+retain them. The agent's process namespace, home and workspace were isolated
+with bubblewrap; preflight proved the real home, checkout and outside canary
+unreadable. Fixture/gateway processes and the Jev credential stayed outside.
+
+Sessions ran in model/arm blocks. This gives a static configuration an
+opportunity to reuse its prefix across tasks; preselection can change its
+listing by task. The full runner rotates arm order between batches and
+repetitions. The nine-task pilot used one batch, so its arm order was fixed.
+Concurrency was 2 initially, 4 after resume, and 2 for the final two retries;
+the deadline was 90 seconds throughout. This operational pilot does not
+support a causal arm comparison. Two in-flight sessions were terminated at
+restart without final rows. Their usage is unavailable. Early timed-out
+attempts also discarded partial usage, so invalid-attempt token totals are
+lower bounds. Later attempts retain completed request counters on timeout.
+
+There were 74 recorded invalid attempts: 73 timeouts and one malformed event
+stream. Invalid attempts do not enter quality denominators. Both final
+DeepSeek preselection retries passed. No explicit 429/rate-limit event was
+recorded; free-tier throughput limits remain unestablished. The native
+skill-heavy arms read cached tokens and reached the deadline. Their completed
+session cost and quality are **not shown**. Quality retention and size-sweep
+break-even are **not shown**; the full study was not run.
+
+All 319 retained request-counter events passed the input/read/write/output/
+reasoning total cross-check; cache writes were zero. Hypothetical paid costs
+in the report use disjoint input/read/write buckets and separately priced
+output plus reasoning, following the pinned host's normalization. They do
+not predict another provider's tokenization, quality or billing.
+
+Cost: free-model spend $0; 52 Jev calls, $0.029791 calculated input cost,
+within the $0.10 pilot cap. No frontier CLI or judge runs were made.
+
+Reproduce the report offline:
+
+```bash
+npx tsx bench/b11-report.ts bench/results/2026-10-22-b11/rows.jsonl > report.md
+```
+
 ## E14 matching-time regression (2026-10-22)
 
 Local synthetic check on Node 24.15.0 in WSL2; [raw observations](results/2026-10-22-e14-redaction/timing.json).
