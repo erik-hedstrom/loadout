@@ -542,7 +542,7 @@ Learnings (cloud half): [fixtures and protocol](../../bench/fixtures/c2/PROTOCOL
   margin; a licence check of the loaded skills before any push; the shared prompt
   cache accepted as a limit. Still open before the run: the Anthropic Console organization and
   workspaces (and who archives them), the dedicated Jev key and whether Jev
-  reports usage per key, and E14
+  reports usage per key (E14 is done, #53)
   ([Decided by Erik](../../bench/fixtures/c2/PROTOCOL.md#decided-by-erik-2026-10-19)).
 
 **C3. Tier choice.**
