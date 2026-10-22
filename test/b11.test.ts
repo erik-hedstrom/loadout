@@ -84,6 +84,10 @@ describe('B11 study', () => {
     expect(interrupted.invalidReason).toBe('usage-limit');
     expect(interrupted.events.steps).toHaveLength(1);
     expect(interrupted.events.totals).toMatchObject({ input: 5, cacheRead: 8, output: 2 });
+    const partialLine = classifyRun({ ...run, stdout: stdout + '{"type":"text","part":', usageLimited: true, code: null });
+    expect(partialLine.invalidReason).toBe('usage-limit');
+    expect(partialLine.events.steps).toHaveLength(1);
+    expect(partialLine.events.totals).toMatchObject({ input: 5, cacheRead: 8, output: 2 });
     expect(classifyRun({ ...run, stderr: 'HTTP status 429' }).invalidReason).toBe('rate-limit');
     expect(classifyRun({ ...run, timedOut: true }).invalidReason).toBe('timeout');
     expect(classifyRun({ ...run, timedOut: true }).events.steps).toHaveLength(1);

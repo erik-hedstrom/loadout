@@ -101,7 +101,7 @@ export class JevBudget {
 export function classifyRun(run: { stdout: string; stderr: string; code: number | null; timedOut: boolean; usageLimited?: boolean }, routingFailed = false) {
   let events: ReturnType<typeof parseEvents> = { steps: [], totals: { input: 0, cacheRead: 0, cacheWrite: 0, output: 0, reasoning: 0 }, toolCalls: [], skillsLoaded: [] };
   let invalidReason: B11Row['invalidReason'];
-  const complete = run.timedOut && !run.stdout.endsWith('\n') ? run.stdout.slice(0, run.stdout.lastIndexOf('\n') + 1) : run.stdout;
+  const complete = (run.timedOut || run.usageLimited) && !run.stdout.endsWith('\n') ? run.stdout.slice(0, run.stdout.lastIndexOf('\n') + 1) : run.stdout;
   try { events = parseEvents(complete, run.usageLimited ? 'usage-limit' : run.timedOut ? 'timeout' : undefined); invalidReason = events.invalidReason; }
   catch { invalidReason = 'malformed-events'; }
   if (routingFailed || (run.code !== 0 && !run.timedOut && invalidReason === undefined)) invalidReason = 'provider-error';
@@ -217,6 +217,7 @@ export async function main(args: string[]) {
         while (!stopped && next < queue.length) {
           const task = queue[next++]!;
           if (Date.now() < rateLimitedUntil) await delay(rateLimitedUntil - Date.now());
+          if (stopped) break;
           const index = orderIndex++, startedAt = new Date().toISOString(), start = Date.now();
           const sessionRoot = mkdtempSync(join(root, 'session-')), home = join(sessionRoot, 'home'), workspace = join(sessionRoot, 'work');
           mkdirSync(home); mkdirSync(workspace);
@@ -253,17 +254,22 @@ export async function main(args: string[]) {
             if (Object.keys(mcp).length) writeFileSync(join(home, 'mcp-token'), token, { mode: 0o600 });
             row.listing = { skills: selectedSkills.length, servers: selectedServers.length, tools: selectedServers.reduce((n, c) => n + (c.tools?.length ?? 0), 0) };
             writeFileSync(join(workspace, 'opencode.json'), JSON.stringify({ ...OPENCODE_CONFIG, mcp }));
-            const run = await executeSandbox(s, ['/opt/opencode', 'run', '--pure', '--print-logs', '--log-level', 'ERROR', '-m', block.model, '--format', 'json', task.prompt], o.timeoutMs, true, true);
-            const classified = classifyRun(run, meter.failed); Object.assign(row, classified.events);
-            row.latency = run.clock.snapshot(row.steps.length);
-            row.invalidReason = classified.invalidReason;
-            if (row.invalidReason === 'usage-limit') { stopped = true; stopReason = 'free usage limit reached'; }
-            if (!row.invalidReason) {
-              const checked = await runCheck(task, s, data.root);
-              if (checked === 'sandbox-failure') row.invalidReason = checked;
-              else { row.result = checked; delete row.invalidReason; }
+            // Another worker may stop the run while routing or gateway setup awaits.
+            if (stopped) {
+              row.invalidReason = stopReason === 'free usage limit reached' ? 'usage-limit' : stopReason === 'budget exhausted' ? 'budget-exhausted' : 'provider-error';
+            } else {
+              const run = await executeSandbox(s, ['/opt/opencode', 'run', '--pure', '--print-logs', '--log-level', 'ERROR', '-m', block.model, '--format', 'json', task.prompt], o.timeoutMs, true, true);
+              const classified = classifyRun(run, meter.failed); Object.assign(row, classified.events);
+              row.latency = run.clock.snapshot(row.steps.length);
+              row.invalidReason = classified.invalidReason;
+              if (row.invalidReason === 'usage-limit') { stopped = true; stopReason = 'free usage limit reached'; }
+              if (!row.invalidReason) {
+                const checked = await runCheck(task, s, data.root);
+                if (checked === 'sandbox-failure') row.invalidReason = checked;
+                else { row.result = checked; delete row.invalidReason; }
+              }
+              if (row.invalidReason === 'rate-limit') rateLimitedUntil = Date.now() + 60000;
             }
-            if (row.invalidReason === 'rate-limit') rateLimitedUntil = Date.now() + 60000;
           } catch (error) {
             if (!(error instanceof RoutingUnavailable)) { stopped = true; throw error; }
           }

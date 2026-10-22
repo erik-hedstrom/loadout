@@ -6,6 +6,9 @@ import * as config from '../src/config.js';
 import * as jev from '../src/jev.js';
 import { main } from '../bench/b11.js';
 
+// Keep the real cooldown ordering without waiting a minute in offline lifecycle tests.
+vi.mock('node:timers/promises', () => ({ setTimeout: async () => new Promise(resolve => setTimeout(resolve, 600)) }));
+
 describe.runIf(process.platform === 'linux')('B11 runner lifecycle without provider calls', () => {
   let root: string, data: string, binary: string, out: string;
   beforeEach(() => {
@@ -17,6 +20,8 @@ describe.runIf(process.platform === 'linux')('B11 runner lifecycle without provi
     writeFileSync(binary, `#!/bin/sh
 if [ "$1" = "--version" ]; then printf '1.19.3\\n'; exit 0; fi
 case "$*" in *expects-token*) [ -f "$HOME/mcp-token" ] || exit 3;; *) [ ! -e "$HOME/mcp-token" ] || exit 3;; esac
+case "$*" in *rate-first*) printf '%s\\n' '{"type":"error","error":{"name":"APIError","data":{"statusCode":429,"message":"rate limit exceeded"}}}'; exit 1;; esac
+case "$*" in *quota-delayed*) sleep 0.2; printf '%s\\n' 'AI_APICallError: Free usage limit reached PRIVATE' >&2; sleep 3; exit 9;; esac
 case "$*" in *quota-stop*) printf '%s\\n' 'AI_APICallError: Free usage limit reached PRIVATE' >&2; sleep 3; exit 9;; esac
 case "$*" in *quota-quote*) printf '%s\\n' 'Free usage limit reached PRIVATE' >&2;; esac
 case "$*" in *slow*) sleep 0.4;; esac
@@ -55,6 +60,26 @@ printf '%s\\n' '{"type":"step_finish","part":{"tokens":{"total":12,"input":10,"o
     expect(rows(out)).toHaveLength(1);
     expect(JSON.stringify(rows(out))).not.toContain('PRIVATE');
     expect(vi.mocked(console.log).mock.calls.at(-1)![0]).toContain('free usage limit reached');
+  });
+  it('does not launch a cooldown sleeper after a sibling reaches the persistent usage cap', async () => {
+    await main(args('bare', [task('rate-first', 'rate-first'), task('quota-delayed', 'quota-delayed'), task('not-started')], '0', '2'));
+    expect(rows(out).map(row => [row.taskId, row.invalidReason])).toEqual([
+      ['rate-first', 'rate-limit'], ['quota-delayed', 'usage-limit'],
+    ]);
+  });
+  it('records routing usage without launching when a sibling reaches the cap during preselection', async () => {
+    let release!: () => void;
+    const routedAfterStop = new Promise<void>(resolve => { release = resolve; });
+    vi.mocked(console.log).mockImplementation(value => { if (String(value).includes('limited: invalid (usage-limit)')) release(); });
+    vi.mocked(jev.jevClient).mockReturnValue({ ask: async state => {
+      if (JSON.stringify(state).includes('late-route')) await routedAfterStop;
+      return { model: 'jev-test', answers: {}, usage: { input_tokens: 1000, output_tokens: 0 } };
+    } });
+    await main(args('preselect', [task('limited', 'quota-stop'), task('routed', 'late-route')], '0.10', '2'));
+    const routed = rows(out).find(row => row.taskId === 'routed');
+    expect(routed).toMatchObject({ result: 'invalid', invalidReason: 'usage-limit', steps: [], jev: { calls: 2 } });
+    expect(routed.jev.costUsd).toBeGreaterThan(0);
+    expect(routed.latency).toBeUndefined();
   });
   it('does not treat a quoted quota phrase without an API error as a persistent provider cap', async () => {
     await main(args('bare', [task('quoted', 'quota-quote')], '0'));
