@@ -41,6 +41,8 @@ export interface Config {
   embeddings: boolean;
   /** Attach `loadout mcp` to launched sessions so the agent can search the library mid-session. */
   search: boolean;
+  /** Offer direct skill-folder access in hook and MCP guidance; disable for file-fenced hosts. */
+  skillFolders: boolean;
   /**
    * Model (and optionally reasoning effort) per tier, per CLI. A bare string is a model.
    * Presets: whether each fits the work Jev assigns to its tier is unmeasured (C3).
@@ -80,6 +82,7 @@ export const DEFAULT_CONFIG: Config = {
   // candidates 87% of the time vs 80% for keywords alone (bench/RESULTS.md, v4).
   embeddings: true,
   search: true,
+  skillFolders: true,
   tiers: {
     claude: { small: 'haiku', medium: 'sonnet', large: { model: 'opus', effort: 'high' } },
     codex: {
@@ -123,6 +126,7 @@ export function validateConfig(c: Config): Config {
   for (const k of ['share', 'fit'] as const) unit(`winner.${k}`, c.winner?.[k]);
   if (typeof c.inject?.enabled !== 'boolean') problems.push('inject.enabled must be true or false');
   if (typeof c.search !== 'boolean') problems.push('search must be true or false');
+  if (typeof c.skillFolders !== 'boolean') problems.push('skillFolders must be true or false');
   if (typeof c.embeddings !== 'boolean') problems.push('embeddings must be true or false');
   count('maxCandidates', c.maxCandidates, 254);
   count('shortlist', c.shortlist, 64);
