@@ -332,7 +332,8 @@ describe('E11 diagnostics', () => {
       expect(keys(text(await call('find_tools', { goal: 'write meeting notes', keywords: ['notes'] })))).toEqual(['notes']);
       expect(keys(text(await call('find_tools', { goal: 'file an issue in the tracker', keywords: ['tracker'] })))).toEqual(['mcp:tracker']);
       const { tools } = await call.client.listTools();
-      expect(tools.find((t) => t.name === 'server_tools')?.description).toContain('MCP server from the library: "tracker".');
+      // D21: the description is constant, so no server name, safe or not, reaches it.
+      expect(tools.find((t) => t.name === 'server_tools')?.description).not.toMatch(/tracker|<|>/i);
     });
 
     it('are left out of the scan when a server name would share a key or be refused as empty or too long', () => {
