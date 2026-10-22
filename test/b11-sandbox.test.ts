@@ -72,6 +72,8 @@ describe('B11 sandbox', () => {
     expect(await runCheck(task, s, data)).toBe('pass');
     expect(await runCheck(task, s, data)).toBe('fail');
     rmSync(join(workspace, '.b11-checks'), { recursive: true });
+    expect(await runCheck(task, { ...s, binary: join(root, 'missing-opencode') }, data)).toBe('sandbox-failure');
+    rmSync(join(workspace, '.b11-checks'), { recursive: true });
     writeFileSync(join(workspace, 'answer.txt'), 'wrong');
     expect(await runCheck(task, s, data)).toBe('fail');
   });

@@ -32,12 +32,16 @@ Only the B7 synthetic servers and task canaries are available;
 personal MCP configuration is never loaded. The gateway calls the same
 in-process loadout implementation as the CLI. Preselection uses `route()`
 and records the chosen names. Embeddings are disabled consistently for these
-two routing arms, avoiding a model download during the study.
+two routing arms, avoiding a model download during the study. Routing policy,
+Jev model and input price are pinned to this source's `DEFAULT_CONFIG`; the
+user configuration supplies only credential resolution and the guarded
+endpoint setting. A user-selected keyword router cannot replace Jev.
 
 Each session receives a fresh writable workspace/home in bubblewrap, a
 private process namespace, read-only system executables, DNS/CA files and
-the pinned binary. The host environment is cleared. Network is available
-during the session. Authenticated fixture and gateway endpoints stay outside
+the pinned binary. The host environment is cleared. The host network,
+including loopback services, is reachable during the session. Authenticated
+fixture and gateway endpoints stay outside
 the sandbox; their short-lived token is a private file in the temporary
 home. Hidden checks are copied in after the model process stops and run
 without network. Temporary session files, including OpenCode logs/databases,

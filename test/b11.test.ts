@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { blocks, rowKey, options, JevBudget, fixturePath, classifyRun, sweepTasks } from '../bench/b11.js';
+import { blocks, rowKey, options, JevBudget, fixturePath, classifyRun, sweepTasks, studyConfig } from '../bench/b11.js';
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -23,6 +23,16 @@ describe('B11 study', () => {
   it('resume keys distinguish task, model, arm and repetition', () => {
     const r = { taskId: 'a', model: 'm', arm: 'bare' as const, rep: 1 };
     expect(rowKey(r)).not.toBe(rowKey({ ...r, rep: 2 }));
+  });
+  it('pins routing settings while retaining the established credential resolver input', () => {
+    const pinned = studyConfig({ ...DEFAULT_CONFIG, router: 'lexical', maxSkills: 0, shortlist: 1,
+      jev: { ...DEFAULT_CONFIG.jev, model: 'different', inputPricePerMTok: 999, apiKeyFile: '/credential-placeholder' } });
+    expect(pinned.router).toBe('jev');
+    expect(pinned.maxSkills).toBe(DEFAULT_CONFIG.maxSkills);
+    expect(pinned.shortlist).toBe(DEFAULT_CONFIG.shortlist);
+    expect(pinned.jev.model).toBe(DEFAULT_CONFIG.jev.model);
+    expect(pinned.jev.inputPricePerMTok).toBe(DEFAULT_CONFIG.jev.inputPricePerMTok);
+    expect(pinned.jev.apiKeyFile).toBe('/credential-placeholder');
   });
   it('uses a fixed per-kind subset for size sweeps', () => {
     expect([...sweepTasks([{ kind: 'plain', id: 'p1' }, { kind: 'skill', id: 's1' }, { kind: 'plain', id: 'p2' }], 1)]).toEqual(['p1', 's1']);

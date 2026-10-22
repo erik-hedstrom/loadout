@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { parseArgs } from 'node:util';
 import { setTimeout as delay } from 'node:timers/promises';
-import { jevBaseUrl, loadConfig, paths, resolveApiKey, type Config } from '../src/config.js';
+import { DEFAULT_CONFIG, jevBaseUrl, loadConfig, paths, resolveApiKey, type Config } from '../src/config.js';
 import { jevClient, type SystemOneClient } from '../src/jev.js';
 import { readConfined, skillExcerpt } from '../src/library.js';
 import { createServer } from '../src/mcp.js';
@@ -55,6 +55,12 @@ export function blocks<T>(tasks: T[], models: string[], arms: string[], reps: nu
 }
 export const rowKey = (r: Pick<B11Row, 'taskId' | 'model' | 'arm' | 'rep'>) => JSON.stringify([r.taskId, r.model, r.arm, r.rep]);
 
+/** Pin routing policy; only the established credential/endpoint settings come from the user. */
+export function studyConfig(user: Config): Config {
+  return { ...DEFAULT_CONFIG, router: 'jev', embeddings: false, skillFolders: false,
+    jev: { ...DEFAULT_CONFIG.jev, baseUrl: user.jev.baseUrl, apiKeyFile: user.jev.apiKeyFile } };
+}
+
 export function sweepTasks<T extends { kind: string; id: string }>(tasks: T[], perKind: number): Set<string> {
   const counts = new Map<string, number>();
   return new Set(tasks.filter(task => { const n = counts.get(task.kind) ?? 0; counts.set(task.kind, n + 1); return n < perKind; }).map(task => task.id));
@@ -94,7 +100,7 @@ export function classifyRun(run: { stdout: string; stderr: string; code: number 
   const complete = run.timedOut && !run.stdout.endsWith('\n') ? run.stdout.slice(0, run.stdout.lastIndexOf('\n') + 1) : run.stdout;
   try { events = parseEvents(complete, run.timedOut ? 'timeout' : undefined); invalidReason = events.invalidReason; }
   catch { invalidReason = 'malformed-events'; }
-  if (routingFailed || (run.code !== 0 && !run.timedOut && !events.invalidReason)) invalidReason = 'provider-error';
+  if (routingFailed || (run.code !== 0 && !run.timedOut && invalidReason === undefined)) invalidReason = 'provider-error';
   if (/^bwrap:/m.test(run.stderr)) invalidReason = 'sandbox-failure';
   if (/\b(?:HTTP(?:\s+status)?|status(?:Code)?)\s*[:=]?\s*429\b|rate[ -]?limit(?:ed| exceeded)|too many requests/i.test(run.stderr) || events.invalidReason === 'rate-limit') invalidReason = 'rate-limit';
   return { events, invalidReason };
@@ -172,7 +178,7 @@ export async function main(args: string[]) {
     if (previous.length && !o.resume) throw new Error('results exist; pass --resume');
     if (previous.some(r => r.opencodeVersion !== o.version)) throw new Error('resume OpenCode version mismatch');
     const done = new Set(previous.filter(r => r.result !== 'invalid').map(rowKey));
-    const config = { ...loadConfig(), embeddings: false, skillFolders: false };
+    const config = studyConfig(loadConfig());
     const needsJev = o.arms.some(a => a === 'gateway' || a === 'preselect');
     const key = needsJev ? resolveApiKey(config) : undefined;
     if (needsJev && !key) throw new Error('Jev arms require a key resolved by loadout');
