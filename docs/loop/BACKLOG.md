@@ -1286,46 +1286,17 @@ Learnings (2026-10-09):
 | E15 | P1 | Test flakes: WSL-only `bench.test.ts` failure, Windows spawn timeouts | Claude | local | done ([#44](https://github.com/erik-hedstrom/loadout/pull/44)) |
 | E16 | P2 | Hygiene from #30's audit: control characters, `git ls-files` env, config symlink, echoed arguments | Codex | local | review ([#50](https://github.com/erik-hedstrom/loadout/pull/50)) |
 | E17 | P3 | One entry-point guard for bench scripts that survives symlinked paths | Codex + Claude review | cloud | review ([#51](https://github.com/erik-hedstrom/loadout/pull/51)) |
-| E18 | P1 | Patch the Vite advisory in the development dependency lockfile | Codex | cloud | review ([#TBD]; local commit, not pushed) |
+| E18 | P1 | Patch the Vite advisories in the development lockfile | Codex | cloud | todo |
 
-**E18. npm advisory.**
+**E18. npm advisories.** `npm audit` on main reported six advisories against
+Vite 8.3.2 (GHSA-698v-4r3x-3vcv, GHSA-r825-w8mm-5pxw, GHSA-587h-7wmj-h5pm,
+GHSA-9jrq-w75r-8gcw, GHSA-rq7h-c2jc-7f22, GHSA-vfpm-58rq-9qcg); 8.3.3 fixes them.
 
-`npm audit --json` on main reported Vite 8.3.2 with six advisories, including
-High [GHSA-587h-7wmj-h5pm](https://github.com/vitejs/launch-editor/security/advisories/GHSA-587h-7wmj-h5pm).
-The bundled `launch-editor` could pass a crafted Windows path through its
-existence check into a shell command, combined with the percent-escaping bug.
-Vite 8.3.3 is patched.
-
-Learnings (2026-10-22): `npm ls vite` traces both development-only paths:
-`loadout -> vitest -> vite` and `vitest -> @vitest/mocker -> vite`.
-The lockfile marks Vite `dev: true`; it is neither a published runtime
-dependency nor part of optional `@huggingface/transformers`.
-`npm audit --omit=dev` was already clean. Source searches found no Vite,
-`launch-editor`, `launchEditor`, `openInEditor` or `__open-in-editor` calls
-in runtime code. The vulnerable function belongs to Vite's
-`/__open-in-editor` development middleware; this project runs `vitest run`
-and builds with `tsc`, with no application call to that middleware.
-
-Only Vite's lockfile version, tarball URL and integrity change, from 8.3.2
-to 8.3.3, within Vitest's existing peer range. Registry metadata confirms
-unchanged dependency ranges and platform requirements. No override or new
-dependency is needed. The audit is the regression check for this upstream fix;
-no application guard or test-only dependency assertion was added.
-
-Verification: `npm ci`, `npm audit` (zero vulnerabilities),
-`npm run typecheck`, `npm test` and `npm run build` passed on Windows
-(Node 24.16.0, npm 11.13.0) and WSL (Node 24.15.0, npm 12.0.2), using an
-LF checkout outside the system temp folder. Windows: 22 files, 652 passed,
-18 skipped (including POSIX smoke tests). WSL: 22 files, 623 passed,
-48 skipped (Windows-only cases). WSL npm's
-default policy blocked install scripts for esbuild, onnxruntime-node and
-protobufjs; the suite and build passed under that policy.
-CI's `npm ci --omit=optional`, `npm run build`, `npm run typecheck` sequence
-also passed on both platforms. `git diff --check` passed. An extra all-files
-LF check rejected two historical CSV artifacts already committed as CRLF;
-the checkout preserves Git's line endings, including LF source and scripts.
-Cost: $0; no new guards, zero mutations. Coordinator reviews, the full CI
-matrix and publication of the branch remain outstanding.
+Learnings (2026-10-22): Vite is development-only here (`vitest -> vite` and
+`vitest -> @vitest/mocker -> vite`, `dev: true` in the lockfile), and
+`npm audit --omit=dev` was already clean, so published users were never
+exposed. Only Vite's lockfile entry changes, within Vitest's peer range; no
+override is needed. The audit itself is the regression check.
 
 **E16. Terminal, config and git hygiene.** From the reviews of #30 (A3);
 all older than it.
