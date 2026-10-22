@@ -2,10 +2,11 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { deflateRawSync, inflateRawSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
+import { KEY_PATTERNS } from '../src/redact.js';
 
 const root = join(import.meta.dirname, '..', 'bench', 'fixtures', 'c2');
 const MAX_BYTES = 50 * 1024;
-// The protocol points the runner's scan at the same file.
+// The protocol freezes this file; production changes must update the agreement test explicitly.
 const KEY_LIKE = (JSON.parse(readFileSync(join(root, 'scan-patterns.json'), 'utf8')) as { name: string; pattern: string; flags?: string }[]).map(
   (p) => ({ name: p.name, re: new RegExp(p.pattern, p.flags) }),
 );
@@ -43,6 +44,10 @@ const taskDirs = readdirSync(root, { withFileTypes: true })
   .map((e) => e.name);
 
 describe('C2 fixtures', () => {
+  it('keeps production key shapes equal to the frozen C2 scan', () => {
+    expect(KEY_PATTERNS).toEqual(JSON.parse(readFileSync(join(root, 'scan-patterns.json'), 'utf8')));
+  });
+
   it('lists exactly 18 tasks, each with a directory, 4 of them controls', () => {
     const ids = index.map((t) => t.id);
     expect(ids.length).toBe(18);

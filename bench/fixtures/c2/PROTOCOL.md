@@ -224,10 +224,9 @@ limits, batch revocation and usage checks replace a gateway.
     access to home and keys, and MCP reads via `load_skill`.
     Only framed loadout controls may return its library nonce.
     This checks the pinned image and CLI, not every spelling or real key location.
-- **Layer 2, not in this PR:** loadout redacts strings that match the key
-  shapes in `scan-patterns.json` from everything it sends to Jev. BACKLOG E14
-  records it as a prerequisite for the loadout arm. Base64 or splitting defeats
-  it, so it is secondary.
+- **Layer 2:** loadout now redacts the key shapes in `scan-patterns.json`
+  before sending data to Jev (BACKLOG E14). Encoded or split keys evade it,
+  so it remains secondary.
 - **Layer 3, not adopted:** a key per task needs a service to mint keys; the
   7-day expiry bounds a leak instead.
 - **Revoked, and confirmed.** When a batch's last run (reruns included) ends,

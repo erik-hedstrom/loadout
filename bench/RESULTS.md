@@ -1148,3 +1148,15 @@ repo-specific skills 97%, general 93% (threshold 0.8).
 3. **Hand-written tasks** (~30) as a check against the vocabulary bias.
 4. **End-to-end pilot** (does the routed agent actually finish more tasks, for
    less?), possibly on `claude plugin eval`.
+
+## E14 matching-time regression (2026-10-22)
+
+Local synthetic check on Node 24.15.0 in WSL2; [raw observations](results/2026-10-22-e14-redaction/timing.json).
+The original JWT matcher took 107.77/392.08 ms for 16/32 KiB of repeated
+`eyJ-`. The segment scan took 0.76/0.62/0.83/4.01 ms at 16/32/64/256 KiB.
+The 256 KiB case matrix covers all eight shapes, boundary near misses and
+dense dotted JWT input: 1.13 to 29.73 ms per case. A 288 KiB private-header
+near miss took 10.44 ms. These are single observations, dependent on this
+machine and process warmup. `test/jev-redaction.test.ts` compares normal and
+adversarial strings with the frozen regexes and bounds each timing case below
+100 ms. Cost: $0; no Jev or agent calls.

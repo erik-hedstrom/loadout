@@ -1,3 +1,5 @@
+import { redactText } from './redact.js';
+
 export type CapabilityKind = 'skill' | 'mcp';
 
 export interface Capability {
@@ -40,9 +42,10 @@ export interface McpServerConfig {
   headers?: Record<string, string>;
 }
 
-/** Reports omit server arguments and credential values. */
+/** Reports redact string values, preserving option keys so stored probabilities keep their identities. */
 export function reportJson(value: unknown): string {
   return JSON.stringify(value, (key, v) => {
+    if (typeof v === 'string') return redactText(v).text;
     if (key !== 'server' || !v || typeof v !== 'object') return v;
     const server = v as McpServerConfig;
     let url: string | undefined;
@@ -127,6 +130,8 @@ export interface RouteDecision {
     librarySize: number;
     candidates: number;
     inputTokens?: number;
+    /** Replacements across both Jev requests, excluding retries. */
+    redactions?: number;
     costUsd?: number;
     ms: number;
   };
