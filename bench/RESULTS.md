@@ -1210,6 +1210,17 @@ B11 measures cost at retained quality, not router difficulty. The dataset has
 now been integrated; the real-task diagnostic and pilot below were stopped at
 a persistent free usage cap.
 
+The historical pilots used an ambient configured library intended to match
+`bench/data/library.sh`: controlled logs record 1,234 accepted distractors and
+28 rejections, plus the relevant plants. Exact accepted-name/content hashes
+and installed source revisions were not recorded; public-corpus provenance
+cannot be verified retrospectively. Their protocols retain those unknowns.
+Historical model sessions also shared the host network. Their Node checks
+used exit-code grading susceptible to early module exit before assertions;
+recorded pass rows are retained as observations, not verified quality evidence.
+New runs require explicit library provenance, isolated networking and expected
+hidden-test completion, and cannot silently resume these legacy protocols.
+
 ## B11 real-task capacity bracket (2026-10-22; quota-stopped)
 
 The 72-task dataset from `186c781` is integrated unchanged. Workspace and

@@ -67,7 +67,7 @@ stops the run; a resumed run includes all previous Jev attempt costs.
 ```bash
 B11_RESULTS="bench/results/$(date -u +%Y-%m-%dT%H-%M-%SZ)-b11"
 npx tsx bench/b11.ts --run --tasks bench/data/b11/tasks.jsonl \
-  --opencode "$OPENCODE_BIN" --opencode-version 1.19.3 \
+  --opencode "$OPENCODE_BIN" --library "$B11_LIBRARY" \
   --arms bare,mcp-all,gateway,preselect,heavy-max,skills-50,skills-250,mcp-1,mcp-5 \
   --heavy-skills 250 --heavy-servers 5 \
   --reps 1 --batch-size 9 --sweep-per-kind 3 --concurrency 2 \
@@ -113,7 +113,7 @@ against official sources by the report implementer and independent Codex.
 No additional behavior was added for these Low follow-ups.
 
 Before merge, the orchestrator still owns the required `pr-reviewer` pass,
-`ci-full` matrix and PR placeholder replacement. Dataset integration is complete. The full
+`ci-full` matrix and review of PR #57. Dataset integration is complete. The full
 study remains unrun; neither quality retention nor size break-even is shown.
 
 
@@ -147,21 +147,25 @@ was three, not evidence that concurrency 3 or 4 is safe. See
 
 Combined B11 cost remains 52 Jev calls / $0.029791062; real-task runs used
 no Jev calls and $0 free-model billing. No further provider calls were made
-after detecting the cap. Once provider availability returns, the
-orchestrator can resume the same pilot with its original arm order:
+after detecting the cap. The revised harness cannot resume legacy rows with
+unknown provenance and exit-code grading. Once provider availability returns,
+the orchestrator starts a replacement pilot in a fresh output directory:
 
 ```bash
-npx tsx bench/b11.ts --run --resume --tasks bench/data/b11/tasks.jsonl \
-  --opencode "$OPENCODE_BIN" --opencode-version 1.19.3 \
+B11_PILOT="bench/results/$(date -u +%Y-%m-%dT%H-%M-%SZ)-pilot-b11"
+npx tsx bench/b11.ts --run --tasks bench/data/b11/tasks.jsonl \
+  --opencode "$OPENCODE_BIN" --library "$B11_LIBRARY" \
   --models opencode/glm-5.3-flash-free,opencode/deepseek-v4.1-flash-free \
   --arms bare,mcp-all,heavy-max,gateway,preselect \
   --heavy-skills 250 --heavy-servers 5 \
   --per-kind 3 --reps 1 --batch-size 9 --concurrency 2 \
   --timeout 300 --jev-budget 0.065 \
-  --out bench/results/2026-10-22T11-13-00Z-pilot-b11
+  --out "$B11_PILOT"
 ```
 
-Resume skips valid identities and retries invalid ones. The $0.065 Jev cap
+For later launches against this replacement output, add `--resume`: it skips
+valid identities and retries invalid ones only when library fingerprints and
+the grading protocol match. The $0.065 Jev cap
 plus prior spend is $0.094791062, within the pilot's $0.10 allowance. A full
 study requires a completed usable pilot and available quota; its exact
 nine-arm command is above. The offline plan verifies 792 sessions and 448
@@ -181,7 +185,71 @@ Fresh Codex approved `22956a4` after fixes for cooldown/prelaunch racing
 and partial quota JSONL. Claude R6 approved `2cbe345`; its Low partial-line
 finding was fixed in `22956a4`. The required final Claude R7 review could
 not run because Claude reported an API rate limit; it was not retried.
-That latest cross-model review, `ci-full`, public PR placeholder replacement
-and Erik's merge approval remain pending. Earlier approvals above apply
+PR #57 now has changes requested from both reviewers and Ubuntu CI is red.
+Re-review, `ci-full` and Erik's merge approval remain pending. Earlier approvals above apply
 only to their named checkpoints. No full study or quality-retention claim
 is complete.
+
+
+## PR #57 review round 1
+
+Local fixes retain the original rows and do not run providers. `runCheck()`
+is now in `bench/b11-check.ts`, re-exported by `b11.ts`. Its trusted Node
+parent uses a literal top-level fixture inventory and read-only mounts;
+early exit, stdout markers, missing, skipped and TODO cases cannot satisfy it.
+The supported fixture declaration forms are covered by regression tests.
+
+`Sandbox.ports` lists the only host TCP ports forwarded by pasta;
+`readonlyMounts` protects checks and the trusted runner. `requireNetwork()`
+fails `--run` clearly without passt. Network tests skip only on an absent
+executable; installed-but-broken pasta fails. Outbound HTTPS is enabled in CI,
+with a skip only when that host probe cannot connect. The Ubuntu CI-only
+namespace setting follows the official Ubuntu 24.04 release notes; suppressed
+startup stderr prevented proving the exact prior CI failure locally.
+
+`prepareB11Library()` requires an explicit public-corpus root. Plan/protocol
+metadata records distractor counts, name/content/source hashes, corpus
+reference commits and known installed revisions. Unknowns remain explicit;
+installed metadata is not independent verification of upstream content.
+Protocol v2 refuses incompatible legacy resumes or changed provenance.
+
+Gateway endpoints have separate credentials. `HarnessError` allows fixed
+harness diagnostics while suppressing library/provider/filesystem details.
+Task panels and size sweeps share `sweepTasks()`. OpenCode is a constant
+1.19.3 pin; there is no version override. Plan JSON links to the README for
+prose. BACKLOG is a short status linked to #57, RESULTS and this handoff.
+Historical protocols document exact metadata/quota projection methods and
+unknown library fingerprints. The foreign-Host regression uses a real HTTP
+request because fetch normalizes that header.
+
+Source checkpoints: `4a4e9c0` (explicit corpus) and `37fb513` (checker,
+network, runner and CI). No push or provider run was made. PR #57 remains
+at its previous remote head until the orchestrator pushes these fixes.
+
+Fresh LF WSL clone verification at `/var/tmp` (local bundle, same locked
+dependencies): `npm test -- --maxWorkers=2` passed 937, skipped 66, in 35 files;
+`npm run typecheck` and `npm run build` passed. Eighteen skips are the missing
+pasta checks below; 48 are pre-existing platform skips. Native Windows B11
+checks passed 257, skipped 53 POSIX cases; typecheck passed. The five reports
+remain byte-identical, protocol projection methods/JSON validate, and CI YAML
+parses. All 24 real hidden-check inventories were exercised on their untouched
+workspaces and failed as expected, without sandbox-failure results.
+
+Mutation evidence this round: 57 successful checks (17 corpus, 20 final
+network-sweep variants, 16 checker/CLI/Host guards, 4 runner bookkeeping).
+The runner bookkeeping checks used real offline bubblewrap with fake OpenCode
+and Jev plus a test-only transport substitution; they do not verify pasta.
+Saved bytes were restored after every mutation. Historical successful-check
+count is 265 including the earlier 208; these are executions, not a count of
+unique source conditions. One UDP automatic-publishing mutation survived a
+network sweep; its fixture lifetime was corrected and the final real-network
+rerun remains pending, so it is excluded from the 57.
+
+Remaining local runtime checks: 14 pasta-backed runner cases and four real
+network cases: selected forwarding/unrelated-loopback blocking, no automatic
+TCP/UDP publishing, process exit/timeout/quota lifecycle, and outbound HTTPS.
+They skip explicitly only when pasta is absent. CI installs passt and enables
+`B11_TEST_INTERNET=1`; installed-but-broken pasta is a failure, not a skip.
+The Ubuntu namespace workaround and final pasta path need the orchestrator's
+CI rerun, followed by WSL verification after passt is installed. Reviewers have
+not reviewed these new commits yet. No full study or provider retry was run.

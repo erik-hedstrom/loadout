@@ -121,5 +121,32 @@
     "The new real-task runs spent no Jev credit. Combined B11 spend remains 52 Jev calls and USD 0.029791062 from the earlier synthetic pilot.",
     "The pilot ran before the subsequent quota-stop runner fixes; sourceCommit identifies the launch source. Reports were regenerated offline from the final reporting source."
   ],
-  "sourceCommit": "e0eaefd"
+  "sourceCommit": "e0eaefd",
+  "historicalLibrary": {
+    "selection": "Ambient configured loadout library; not an explicit --library argument.",
+    "intendedCorpus": "bench/data/library.sh",
+    "acceptedDistractors": 1234,
+    "rejectedDistractors": 28,
+    "plantedSkills": 24,
+    "acceptedNamesSha256": null,
+    "contentSha256": null,
+    "observedSourceRevisions": null,
+    "provenanceVerified": false,
+    "limitation": "Counts were retained in controlled runner logs. Per-skill origins, source revisions, exact accepted names and original content were not captured at run time; the intended public corpus cannot be verified retrospectively."
+  },
+  "historicalIsolation": {
+    "network": "Shared host network, including unrelated loopback listeners. New runs require pasta isolation.",
+    "nodeChecks": "Legacy exit-code grading could accept an early module exit before assertions. New runs require expected test-case completion evidence.",
+    "resume": "Use a fresh output directory with the new harness; legacy protocol and unknown library fingerprints cannot be resumed as equivalent."
+  },
+  "quotaEvidenceMethod": {
+    "identification": "Match OpenCode processes by ancestry to the owned benchmark runner, its cwd and requested output directory. Match the namespace home inode/device to the owned session home.",
+    "input": "Read each owned session data/opencode/log/*.log in memory, taking only its final 1000000 characters. No log text persisted.",
+    "markerRegex": "free\\s+usage\\s+limit (case-insensitive)",
+    "errorClassRegex": "AI_(?:APICall|Retry)Error",
+    "retryCountRegex": "Failed after (\\d+) attempts (case-insensitive)",
+    "counterSql": "select json_extract(data,'$.type'),count(*) from part group by 1",
+    "projection": "Persist only marker booleans, recognized constant error classes, integer internal retry counts and step/compaction counts, with UTC observation time. No HTTP status or reset time was inferred.",
+    "stop": "After validating the usage marker for the owned sessions, freeze both schedulers, terminate them, and verify sandbox descendants exited before cleanup. Interrupted rows were not reconstructed."
+  }
 }

@@ -130,5 +130,29 @@
   "selectedHeavyMax": {
     "skills": 250,
     "servers": 5
+  },
+  "historicalLibrary": {
+    "selection": "Ambient configured loadout library; not an explicit --library argument.",
+    "intendedCorpus": "bench/data/library.sh",
+    "acceptedDistractors": 1234,
+    "rejectedDistractors": 28,
+    "plantedSkills": 24,
+    "acceptedNamesSha256": null,
+    "contentSha256": null,
+    "observedSourceRevisions": null,
+    "provenanceVerified": false,
+    "limitation": "Counts were retained in controlled runner logs. Per-skill origins, source revisions, exact accepted names and original content were not captured at run time; the intended public corpus cannot be verified retrospectively."
+  },
+  "historicalIsolation": {
+    "network": "Shared host network, including unrelated loopback listeners. New runs require pasta isolation.",
+    "nodeChecks": "Legacy exit-code grading could accept an early module exit before assertions. New runs require expected test-case completion evidence.",
+    "resume": "Use a fresh output directory with the new harness; legacy protocol and unknown library fingerprints cannot be resumed as equivalent."
+  },
+  "compactionSamplingMethod": {
+    "database": "Only session databases newly created below the bracket-owned runner root, opened SQLite mode=ro. More than one active candidate database is an error.",
+    "sql": "select count(*) from part where json_extract(data,'$.type')='compaction'",
+    "cadenceSeconds": 1,
+    "action": "At the first nonzero count, stop only the one OpenCode descendant of the candidate runner; record stoppedForCompaction=true and the maximum observed count. An invalid completion also stops candidate growth.",
+    "initialization": "SQLite OperationalError while the schema initialized was retried on the next one-second sample."
   }
 }

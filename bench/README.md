@@ -3,17 +3,28 @@
 ## B11 OpenCode sessions
 
 `b11.ts` measures completed model requests and checks generated files. It
-requires Linux, bubblewrap, Node 22.12 or later, and an explicitly selected
-OpenCode binary. Version 1.19.3 is pinned by default. No user agent setup is
+requires Linux, bubblewrap, pasta (from passt), Node 22.12 or later, and an explicitly selected
+OpenCode binary. Only version 1.19.3 is supported by the counter parser. No user agent setup is
 edited. Only synthetic workspaces and public skill text should be supplied:
 free-model providers receive these inputs and may retain them.
+
+`--run` requires `--library` pointing to a deliberately selected library root
+with a `skills/` directory. Each distractor needs installed
+`.loadout-source.json` metadata matching a source in `bench/data/library.sh`;
+missing or other sources are rejected before materialization. Plan/protocol
+provenance records accepted/rejected distractor counts, sorted-name, content
+and source fingerprints, and source revisions when available. `corpusCommit`
+is the script's reference revision; `revision` is installed metadata and may
+be unknown. Neither field verifies an upstream download. Planted skills are
+separate from those distractor counts. An offline plan without `--library`
+reports `library: null` and never reads the ambient library.
 
 ```bash
 B11_ARGS=(--arms bare,mcp-all,gateway,preselect,heavy-max,skills-50,skills-250,mcp-1,mcp-5
   --heavy-skills 250 --heavy-servers 5 --timeout 300)
-npx tsx bench/b11.ts --plan "${B11_ARGS[@]}" --opencode "$OPENCODE_BIN"
-npx tsx bench/b11.ts --run "${B11_ARGS[@]}" --opencode "$OPENCODE_BIN" --out bench/results/approved-b11
-npx tsx bench/b11.ts --run --resume "${B11_ARGS[@]}" --opencode "$OPENCODE_BIN" --out bench/results/approved-b11
+npx tsx bench/b11.ts --plan "${B11_ARGS[@]}" --opencode "$OPENCODE_BIN" --library "$B11_LIBRARY"
+npx tsx bench/b11.ts --run "${B11_ARGS[@]}" --opencode "$OPENCODE_BIN" --library "$B11_LIBRARY" --out bench/results/approved-b11
+npx tsx bench/b11.ts --run --resume "${B11_ARGS[@]}" --opencode "$OPENCODE_BIN" --library "$B11_LIBRARY" --out bench/results/approved-b11
 npx tsx bench/b11-report.ts bench/results/approved-b11/rows.jsonl > report.md
 ```
 
@@ -33,13 +44,8 @@ needed by the fixed sweep subset remain available in MCP-size arms; rows
 record actual counts. Skill-size arms retain all planted skills.
 `heavy-max` requires explicit `--heavy-skills` and `--heavy-servers` limits:
 nonplanted skills and base fixture servers, with all planted skills and
-required canary servers added. The bracket selected 250/5, which is actually
-274 skills, 20 servers and 509 tools for this dataset. All 20 servers carry
-required targets, so the fixed full-task comparator retains them. A different
-heavy configuration cannot be silently resumed or pooled into a report.
-The GLM full-library diagnostics repeatedly compacted; the current study command
-excludes them but keeps their diagnostic rows. Bracketing evidence and the
-quota-stopped real-task pilot are recorded in RESULTS.
+required canary servers added. Resume and reports distinguish heavy configurations.
+Selection and diagnostic evidence are in [RESULTS](RESULTS.md#b11-real-task-capacity-bracket-2026-10-22-quota-stopped).
 Only the B7 synthetic servers and task canaries are available;
 personal MCP configuration is never loaded. The gateway calls the same
 in-process loadout implementation as the CLI. Preselection uses `route()`
@@ -51,12 +57,17 @@ endpoint setting. A user-selected keyword router cannot replace Jev.
 
 Each session receives a fresh writable workspace/home in bubblewrap, a
 private process namespace, read-only system executables, DNS/CA files and
-the pinned binary. The host environment is cleared. The host network,
-including loopback services, is reachable during the session. Authenticated
-fixture and gateway endpoints stay outside
-the sandbox; their short-lived token is a private file in the temporary
-home. Hidden checks are copied in after the model process stops and run
-without network. Temporary session files, including OpenCode logs/databases,
+the pinned binary. The host environment is cleared. Pasta supplies a separate
+network namespace with outbound Internet; automatic port forwarding and host
+gateway mapping are disabled. Only selected fixture/gateway TCP ports are
+forwarded to session loopback. Unrelated host loopback listeners are not
+forwarded. Endpoints stay outside the sandbox; every gateway has its own
+short-lived token in the temporary home. Hidden checks are copied after the
+model exits, mounted read-only, and run without network. A separate Node test
+parent compares passed case identities with the trusted fixture inventory;
+an early module exit or printed success marker cannot substitute for cases.
+Supported fixtures use unconditional top-level literal `node:test` calls.
+Temporary session files, including OpenCode logs/databases,
 are removed. Public rows contain counters, names/statuses and check outcomes,
 never transcripts, arguments, tool results or environment values. Rows also
 record launch-to-first-step and completed-step event-arrival durations, plus
@@ -80,6 +91,20 @@ disabled. Recorded Jev cost includes invalid attempts. A resumed run includes
 earlier attempt costs in its budget. An exhausted budget invalidates routing
 rows instead of silently evaluating keyword fallback.
 
+The gateway estimate assumes one search per step at the configured 20-step
+bound, with two Jev calls per search. Several searches per step can exceed
+it; the reservation cap still applies. Plan JSON links here for these
+assumptions and the mount/write contract. Planning writes only a temporary
+manifest snapshot and preflight files, removed afterward. Runs additionally
+write rows and protocol metadata under `--out`. Resume requires matching
+library provenance and the current grading protocol; start a fresh output
+directory for legacy rows.
+
+Linux tests skip pasta-dependent cases with a reason if pasta is absent;
+they run in CI, which installs `passt`. `--run` never falls back to shared
+networking. To exercise the optional outbound HTTPS probe, set
+`B11_TEST_INTERNET=1`; only that probe may skip when outbound access is absent.
+
 Reports keep the hash-based dev/test split separate, include Wilson 95%
 intervals, and reprice measured tokens under dated official price snapshots.
 Completion coverage, invalid-reason counts and observed deadlines stay visible;
@@ -89,19 +114,8 @@ cache policies. Size comparisons use a shared task/repetition panel; gateway
 bands are observed min/max session costs. See [RESULTS](RESULTS.md) for run
 evidence and limits.
 
-The real-task pilot is quota-stopped: 15/90 planned final rows, two sessions
-interrupted without rows and 73 unstarted. Other arms and all DeepSeek cells
-remain unmeasured; unknown interrupted usage is not reconstructed. No
-numeric quota or reset time was established. All provider calls stopped.
-The selected heavy comparator completed only a four-case screen, not a
-broad reliability evaluation. See [RESULTS](RESULTS.md#b11-real-task-pilot-2026-10-22-quota-stopped).
-
-The [handoff](../docs/loop/B11-HANDOFF.md#quota-stopped-real-task-follow-up)
-contains the exact resume command with the original pilot arm order and
-$0.065 Jev cap. It also records the exact nine-arm full-study command
-(792 sessions, concurrency 2, 300-second deadline), gated on a completed
-usable pilot and available quota. Its 37 h 20 min all-deadline schedule is
-not an expected runtime; no full study has run.
+Pilot status and limits are in [RESULTS](RESULTS.md#b11-real-task-pilot-2026-10-22-quota-stopped).
+The [handoff](../docs/loop/B11-HANDOFF.md) contains resume/full-study commands and review dispositions.
 
 Does the router put the skill a task needs in front of the agent, and what
 does that cost, as the library grows from 100 to 20,000 skills?
