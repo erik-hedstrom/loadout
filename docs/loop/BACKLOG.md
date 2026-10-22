@@ -1280,8 +1280,9 @@ all older than it.
   stands.
 
 Learnings (2026-10-22, #50 review): relocating the home through a link is the
-user's documented choice; a link at `config.json` is not. Check the file before
-both reading and writing. HTTP startup and filesystem errors can echo arguments
+user's documented choice; a link at `config.json` is not. All config reads use
+the same file check; same-user swaps after inspection remain out of scope.
+HTTP startup and filesystem errors can echo arguments
 just like parser errors: print fixed categories and allowlisted errno codes.
 Failed adds identify the source by position and retain a safe failure reason.
 Swept `init`, `add`, `list`, `audit`, `route`, `claude`, `codex`, `mcp`,

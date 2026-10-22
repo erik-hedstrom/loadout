@@ -1,11 +1,11 @@
 import childProcess, { spawnSync } from 'node:child_process';
-import fs, { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
+import fs, { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { paths, writeDefaultConfig } from '../src/config.js';
+import { loadConfig, paths, writeDefaultConfig } from '../src/config.js';
 import { repoSignals } from '../src/repo.js';
 import { isPlainFolder } from '../src/safefs.js';
 
@@ -94,6 +94,7 @@ describe('E16 hygiene', () => {
     expect(isPlainFolder(paths.index())).toBe(true);
     writeDefaultConfig({ model: 'replacement' });
     expect(JSON.parse(readFileSync(config, 'utf8'))).toEqual({ ...(existing ? { threshold: 0.25 } : {}), jev: { model: 'replacement' } });
+    expect(loadConfig().jev.model).toBe('replacement');
   });
 
   it.each(['link', 'dangling link', 'directory'])('refuses a nonregular config before reading it (%s)', (kind) => {
@@ -112,22 +113,28 @@ describe('E16 hygiene', () => {
     else expect(readFileSync(target, 'utf8')).toBe('{"threshold":0.25}');
   });
 
-  it('rechecks config before writing if it became a link after the read', () => {
-    writeDefaultConfig();
+  it.each([['init'], ['route', '--lexical', 'test task']].map((args) => [args]))('refuses linked config before the CLI reads its target: %j', (args) => {
+    mkdirSync(join(root, '.loadout'));
     const target = join(root, 'outside.json');
-    writeFileSync(target, 'untouched');
-    const read = fs.readFileSync;
-    vi.spyOn(fs, 'readFileSync').mockImplementation((...args: Parameters<typeof read>) => {
-      const result = read(...args);
-      if (args[0] === paths.config()) {
-        unlinkSync(paths.config());
-        symlinkSync(target, paths.config(), 'file');
-      }
-      return result;
-    });
-    syncBuiltinESMExports();
-    expect(() => writeDefaultConfig()).toThrow('config.json must be a regular file');
-    expect(readFileSync(target, 'utf8')).toBe('untouched');
+    const content = `invalid JSON ${CANARY}`;
+    writeFileSync(target, content);
+    symlinkSync(target, paths.config(), 'file');
+    const reads = join(root, 'config-read');
+    const result = cli(args, `
+      import fs from 'node:fs';
+      import { syncBuiltinESMExports } from 'node:module';
+      const read = fs.readFileSync;
+      fs.readFileSync = (file, ...args) => {
+        if (String(file) === ${JSON.stringify(paths.config())} || String(file) === ${JSON.stringify(target)}) fs.appendFileSync(${JSON.stringify(reads)}, 'read');
+        return read(file, ...args);
+      };
+      syncBuiltinESMExports();
+    `);
+    expect(result.status).toBe(1);
+    expect(existsSync(reads)).toBe(false);
+    expect(result.stderr).toContain('config.json must be a regular file');
+    expect(result.stdout + result.stderr).not.toContain(CANARY);
+    expect(readFileSync(target, 'utf8')).toBe(content);
   });
 
   it('propagates config inspection failures instead of treating the file as missing', () => {

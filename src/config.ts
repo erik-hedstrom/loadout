@@ -146,7 +146,7 @@ function readConfigFile(file: string): Partial<Config> {
 
 export function loadConfig(): Config {
   const file = paths.config();
-  if (!existsSync(file)) return DEFAULT_CONFIG;
+  if (!regularConfigExists(file)) return DEFAULT_CONFIG;
   const user = readConfigFile(file);
   return validateConfig({
     ...DEFAULT_CONFIG,
@@ -170,12 +170,11 @@ export function writeDefaultConfig(overrides: Partial<Config['jev']> = {}): stri
   mkdirSync(loadoutHome(), { recursive: true });
   const existing = regularConfigExists(file) ? readConfigFile(file) : {};
   const config: Partial<Config> = Object.keys(overrides).length ? { ...existing, jev: { ...existing.jev, ...overrides } as Config['jev'] } : existing;
-  regularConfigExists(file);
   writeFileSync(file, JSON.stringify(config, null, 2) + '\n');
   return file;
 }
 
-/** A relocated home is supported, but a link at config.json must never redirect its read or write. */
+/** Refuse pre-existing config links; relocated homes are supported, same-user swaps are out of scope. */
 function regularConfigExists(file: string): boolean {
   try {
     if (!lstatSync(file).isFile()) throw new Error('config.json must be a regular file');
