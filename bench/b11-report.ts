@@ -38,6 +38,17 @@ function add(sum: Tokens, tokens: Tokens): void {
   for (const key of Object.keys(sum) as (keyof Tokens)[]) sum[key] += tokens[key];
 }
 const sessionKey = (row: B11Row) => JSON.stringify([row.taskId, row.rep]);
+const MIN_VALID_COMPLETION = 0.9;
+
+function durationSummary(values: (number | null | undefined)[]) {
+  const known = values.filter((value): value is number => value !== null && value !== undefined).sort((a, b) => a - b);
+  return {
+    samples: known.length,
+    meanMs: known.length ? known.reduce((sum, value) => sum + value, 0) / known.length : null,
+    medianMs: known.length ? (known[Math.floor((known.length - 1) / 2)]! + known[Math.floor(known.length / 2)]!) / 2 : null,
+    maxMs: known.at(-1) ?? null,
+  };
+}
 
 export function summarizeRows(rows: readonly B11Row[]) {
   const groups = new Map<string, B11Row[]>();
@@ -56,6 +67,7 @@ export function summarizeRows(rows: readonly B11Row[]) {
   return [...groups.values()].map((attempts) => {
     const first = attempts[0]!;
     const valid = attempts.filter((row) => row.result !== 'invalid');
+    const completionRate = valid.length / attempts.length;
     const pass = valid.filter((row) => row.result === 'pass').length;
     const totals = zero(), invalidTotals = zero();
     const steps: Tokens[] = [], counts: number[] = [];
@@ -71,11 +83,19 @@ export function summarizeRows(rows: readonly B11Row[]) {
     return {
       split: first.split, model: first.model, arm: first.arm, pass, fail: valid.length - pass,
       invalid: attempts.length - valid.length, valid: valid.length,
+      attempts: attempts.length, completionRate, belowCompletionThreshold: completionRate < MIN_VALID_COMPLETION,
       successInterval: valid.length ? wilson(pass, valid.length) : 'not shown', totals, invalidTotals,
       steps: valid.reduce((sum, row) => sum + row.steps.length, 0),
       invalidSteps: attempts.filter((row) => row.result === 'invalid').reduce((sum, row) => sum + row.steps.length, 0),
       jev: { calls: attempts.reduce((sum, row) => sum + row.jev.calls, 0), costUsd: attempts.reduce((sum, row) => sum + row.jev.costUsd, 0) },
       validJevUsd: valid.reduce((sum, row) => sum + row.jev.costUsd, 0),
+      timing: {
+        wall: durationSummary(attempts.map(row => row.wallMs)),
+        startup: durationSummary(attempts.map(row => row.latency?.startupMs)),
+        steps: Array.from({ length: attempts.reduce((max, row) => Math.max(max, row.steps.length), 0) }, (_, index) => ({
+          step: index + 1, ...durationSummary(attempts.map(row => row.latency?.stepsMs[index])),
+        })),
+      },
       cache: steps.map((tokens, index) => {
         const prompt = tokens.input + tokens.cacheRead + tokens.cacheWrite;
         return { step: index + 1, requests: counts[index]!, input: tokens.input, cacheRead: tokens.cacheRead, cacheWrite: tokens.cacheWrite, hitRatio: prompt ? tokens.cacheRead / prompt : null };
@@ -118,15 +138,28 @@ export function sizeSweep(rows: readonly B11Row[], sheet: PriceSheet) {
 const cell = (text: string) => text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('|', '&#124;').replaceAll('`', '&#96;').replace(/[\r\n]/g, ' ');
 const usd = (value: number) => `$${value.toFixed(6)}`;
 const ratio = (value: number | null) => value === null ? 'not shown' : `${(100 * value).toFixed(2)}%`;
+const completionStatus = (valid: number, rate: number) => valid === 0 ? 'UNDER 90%: not usable in observed attempts' : rate < MIN_VALID_COMPLETION ? 'UNDER 90%' : 'at least 90%';
+const ms = (value: number | null) => value === null ? 'not shown' : value.toFixed(2);
 
 export function renderReport(rows: readonly B11Row[]): string {
   if (!rows.length) throw new Error('no rows in B11 input');
   const groups = summarizeRows(rows);
+  const pooled = new Map<string, { valid: number; attempts: number }>();
+  for (const group of groups) {
+    const count = pooled.get(group.arm) ?? { valid: 0, attempts: 0 };
+    count.valid += group.valid;
+    count.attempts += group.attempts;
+    pooled.set(group.arm, count);
+  }
   const lines = [
     '# B11 cache-aware session report', '',
     'Test rows are the evaluation result. Dev rows appear separately and are the only rows eligible for tuning. Invalid attempts are counted separately, never as quality failures. Wilson 95% intervals describe observed valid sessions; repeated tasks are not independent evidence of population-wide quality.', '',
     'Token columns sum valid sessions. Input, cache read and cache write are disjoint prompt buckets ([OpenCode 1.19.3 usage normalization](https://github.com/anomalyco/opencode/blob/v1.19.3/packages/opencode/src/session/session.ts#L321-L383)). Output excludes the separately recorded reasoning counter. First requests can already hit a cross-session cache; they are not assumed cold. Cache ratios pool tokens within each request position; later positions include only sessions that reached them.', '',
     'Hypothetical paid costs reprice these measured tokens under each named sheet; tokenizers and cache policies differ across providers, so this does not predict their quality or actual billed usage. Weighted input = input + read × read/input price + write × write/input price. Session cost adds output and reasoning at the output rate, plus recorded Jev cost. Free model spend is $0; Jev spend includes invalid attempts in the attempts table.', '',
+    '## Valid completion by arm', '',
+    'Valid completion = (pass + fail) / all recorded attempts; retries remain separate attempts. This operational table pools models and dev/test splits; quality and cost remain split-separated below. Timeouts are invalid attempts, never quality failures. Any arm under 90% valid completion risks survivor bias: its surviving sessions may not represent quality or cost across all attempts.', '',
+    '| Arm | Valid sessions | Attempts | Valid completion | Assessment |', '|---|---:|---:|---:|---|',
+    ...[...pooled].sort(([a], [b]) => a.localeCompare(b)).map(([arm, count]) => `| ${cell(arm)} | ${count.valid} | ${count.attempts} | ${ratio(count.valid / count.attempts)} | ${completionStatus(count.valid, count.valid / count.attempts)} |`), '',
     '## Price snapshots', '',
     'USD per million tokens. GLM and DeepSeek have no extra storage/write charge; newly written prompt tokens retain their ordinary input processing cost. Anthropic uses 5-minute writes and OpenAI uses 30-minute writes. No batch, geography, long-context, or promotional adjustment is inferred.', '',
     '| Sheet | Input | Cache read | Cache write | Output | Read/input | Retrieved | Source |',
@@ -137,9 +170,9 @@ export function renderReport(rows: readonly B11Row[]): string {
     const selected = groups.filter((g) => g.split === split);
     lines.push('', `## ${split === 'test' ? 'Test' : 'Dev'} split`, '');
     if (!selected.length) { lines.push('not shown: no rows.'); continue; }
-    lines.push('| Model | Arm | Pass | Fail | Invalid attempts | Success (Wilson 95%) | Steps | Uncached input | Cache read | Cache write | Output | Reasoning |', '|---|---|---:|---:|---:|---|---:|---:|---:|---:|---:|---:|');
+    lines.push('| Model | Arm | Pass | Fail | Invalid attempts | Valid completion | Assessment | Success among valid (Wilson 95%) | Steps | Uncached input | Cache read | Cache write | Output | Reasoning |', '|---|---|---:|---:|---:|---:|---|---|---:|---:|---:|---:|---:|---:|');
     for (const g of selected) {
-      lines.push(`| ${cell(g.model)} | ${cell(g.arm)} | ${g.pass} | ${g.fail} | ${g.invalid} | ${g.valid ? `${ratio(g.pass / g.valid)} (${g.successInterval})` : 'not shown'} | ${g.steps} | ${g.totals.input} | ${g.totals.cacheRead} | ${g.totals.cacheWrite} | ${g.totals.output} | ${g.totals.reasoning} |`);
+      lines.push(`| ${cell(g.model)} | ${cell(g.arm)} | ${g.pass} | ${g.fail} | ${g.invalid} | ${ratio(g.completionRate)} | ${completionStatus(g.valid, g.completionRate)} | ${g.valid ? `${ratio(g.pass / g.valid)} (${g.successInterval})` : 'not usable in observed attempts'} | ${g.steps} | ${g.totals.input} | ${g.totals.cacheRead} | ${g.totals.cacheWrite} | ${g.totals.output} | ${g.totals.reasoning} |`);
     }
     lines.push('', '### Invalid usage and all-attempt Jev spend', '', '| Model | Arm | Invalid steps | Invalid uncached | Invalid cache read | Invalid cache write | Invalid output | Invalid reasoning | Jev calls | Jev USD |', '|---|---|---:|---:|---:|---:|---:|---:|---:|---:|');
     for (const g of selected) lines.push(`| ${cell(g.model)} | ${cell(g.arm)} | ${g.invalidSteps} | ${g.invalidTotals.input} | ${g.invalidTotals.cacheRead} | ${g.invalidTotals.cacheWrite} | ${g.invalidTotals.output} | ${g.invalidTotals.reasoning} | ${g.jev.calls} | ${usd(g.jev.costUsd)} |`);
@@ -147,7 +180,17 @@ export function renderReport(rows: readonly B11Row[]): string {
     for (const g of selected) {
       for (const c of g.cache) lines.push(`| ${cell(g.model)} | ${cell(g.arm)} | ${c.step === 1 ? '1 (first / cross-session)' : `${c.step} (later)`} | ${c.requests} | ${c.input} | ${c.cacheRead} | ${c.cacheWrite} | ${ratio(c.hitRatio)} |`);
     }
-    lines.push('', '### Hypothetical paid cost per valid session', '', '| Model | Arm | Sheet | Mean steps | Mean weighted input | Mean input USD | Mean output/reasoning USD | Mean Jev USD | Mean total USD |', '|---|---|---|---:|---:|---:|---:|---:|---:|');
+    lines.push('', '### Timing from event-arrival timestamps', '',
+      'Startup is process launch to first step_start; each step is step_start to step_finish, measured at event arrival. Startup is not proof of MCP discovery latency and may include provider/network time. Samples include known startup and completed-step durations from valid and invalid attempts. Historical missing latency and null durations are not shown; unfinished steps have no duration sample. Session wall time covers all attempts, including unfinished timeout waits.', '',
+      '| Model | Arm | Phase | Samples | Mean ms | Median ms | Max ms |', '|---|---|---|---:|---:|---:|---:|');
+    for (const g of selected) {
+      const timing = [{ phase: 'Session wall', ...g.timing.wall }, { phase: 'Startup', ...g.timing.startup }, ...g.timing.steps.map(step => ({ phase: `Step ${step.step}`, ...step }))];
+      for (const duration of timing) lines.push(`| ${cell(g.model)} | ${cell(g.arm)} | ${duration.phase} | ${duration.samples} | ${ms(duration.meanMs)} | ${ms(duration.medianMs)} | ${ms(duration.maxMs)} |`);
+    }
+    lines.push('', '### Hypothetical paid cost per valid session', '');
+    const limited = selected.filter(g => g.belowCompletionThreshold);
+    if (limited.length) lines.push(`**Caution: survivor bias in quality and cost.** Under 90% valid completion: ${limited.map(g => `${cell(g.model)} / ${cell(g.arm)}`).join('; ')}. These costs describe surviving valid sessions, not the cost of all attempted work; zero-valid arms are not usable in observed attempts.`, '');
+    lines.push('| Model | Arm | Sheet | Mean steps | Mean weighted input | Mean input USD | Mean output/reasoning USD | Mean Jev USD | Mean total USD |', '|---|---|---|---:|---:|---:|---:|---:|---:|');
     for (const g of selected) {
       for (const p of PRICE_SHEETS) {
         const cost = pricedUsage(g.totals, p);

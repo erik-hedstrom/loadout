@@ -30,6 +30,7 @@ const rowSchema = z.strictObject({
   listing: z.strictObject({ skills: count, servers: count, tools: count }),
   result: z.enum(['pass', 'fail', 'invalid']), invalidReason: invalidReason.optional(),
   wallMs: z.number().nonnegative(), jev: z.strictObject({ calls: count, costUsd: z.number().nonnegative() }),
+  timeoutMs: count.optional(),
   latency: z.strictObject({ startupMs: z.number().nonnegative().nullable(), stepsMs: z.array(z.number().nonnegative().nullable()) }).optional(),
   selection: z.strictObject({ skills: z.array(name), servers: z.array(name) }).optional(),
 });

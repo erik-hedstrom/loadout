@@ -6,6 +6,19 @@ Token columns sum valid sessions. Input, cache read and cache write are disjoint
 
 Hypothetical paid costs reprice these measured tokens under each named sheet; tokenizers and cache policies differ across providers, so this does not predict their quality or actual billed usage. Weighted input = input + read × read/input price + write × write/input price. Session cost adds output and reasoning at the output rate, plus recorded Jev cost. Free model spend is $0; Jev spend includes invalid attempts in the attempts table.
 
+## Valid completion by arm
+
+Valid completion = (pass + fail) / all recorded attempts; retries remain separate attempts. This operational table pools models and dev/test splits; quality and cost remain split-separated below. Timeouts are invalid attempts, never quality failures. Any arm under 90% valid completion risks survivor bias: its surviving sessions may not represent quality or cost across all attempts.
+
+| Arm | Valid sessions | Attempts | Valid completion | Assessment |
+|---|---:|---:|---:|---|
+| all | 0 | 22 | 0.00% | UNDER 90%: not usable in observed attempts |
+| bare | 13 | 23 | 56.52% | UNDER 90% |
+| gateway | 15 | 18 | 83.33% | UNDER 90% |
+| mcp-all | 12 | 22 | 54.55% | UNDER 90% |
+| preselect | 18 | 20 | 90.00% | at least 90% |
+| skills-all | 0 | 27 | 0.00% | UNDER 90%: not usable in observed attempts |
+
 ## Price snapshots
 
 USD per million tokens. GLM and DeepSeek have no extra storage/write charge; newly written prompt tokens retain their ordinary input processing cost. Anthropic uses 5-minute writes and OpenAI uses 30-minute writes. No batch, geography, long-context, or promotional adjustment is inferred.
@@ -20,20 +33,20 @@ USD per million tokens. GLM and DeepSeek have no extra storage/write charge; new
 
 ## Test split
 
-| Model | Arm | Pass | Fail | Invalid attempts | Success (Wilson 95%) | Steps | Uncached input | Cache read | Cache write | Output | Reasoning |
-|---|---|---:|---:|---:|---|---:|---:|---:|---:|---:|---:|
-| opencode/deepseek-v4.1-flash-free | all | 0 | 0 | 6 | not shown | 0 | 0 | 0 | 0 | 0 | 0 |
-| opencode/deepseek-v4.1-flash-free | bare | 3 | 0 | 3 | 100.00% (44–100%) | 7 | 650 | 48512 | 0 | 248 | 74 |
-| opencode/deepseek-v4.1-flash-free | gateway | 5 | 0 | 1 | 100.00% (57–100%) | 16 | 22206 | 108928 | 0 | 968 | 211 |
-| opencode/deepseek-v4.1-flash-free | mcp-all | 4 | 0 | 2 | 100.00% (51–100%) | 9 | 100121 | 805632 | 0 | 329 | 21 |
-| opencode/deepseek-v4.1-flash-free | preselect | 5 | 1 | 1 | 83.33% (44–97%) | 18 | 7829 | 121472 | 0 | 824 | 500 |
-| opencode/deepseek-v4.1-flash-free | skills-all | 0 | 0 | 6 | not shown | 0 | 0 | 0 | 0 | 0 | 0 |
-| opencode/glm-5.3-flash-free | all | 0 | 0 | 9 | not shown | 0 | 0 | 0 | 0 | 0 | 0 |
-| opencode/glm-5.3-flash-free | bare | 3 | 3 | 2 | 50.00% (19–81%) | 20 | 73296 | 69056 | 0 | 1023 | 1360 |
-| opencode/glm-5.3-flash-free | gateway | 6 | 0 | 0 | 100.00% (61–100%) | 18 | 77897 | 60800 | 0 | 468 | 122 |
-| opencode/glm-5.3-flash-free | mcp-all | 4 | 0 | 4 | 100.00% (51–100%) | 9 | 686135 | 198976 | 0 | 178 | 221 |
-| opencode/glm-5.3-flash-free | preselect | 5 | 1 | 0 | 83.33% (44–97%) | 15 | 68308 | 34112 | 0 | 442 | 569 |
-| opencode/glm-5.3-flash-free | skills-all | 0 | 0 | 12 | not shown | 0 | 0 | 0 | 0 | 0 | 0 |
+| Model | Arm | Pass | Fail | Invalid attempts | Valid completion | Assessment | Success among valid (Wilson 95%) | Steps | Uncached input | Cache read | Cache write | Output | Reasoning |
+|---|---|---:|---:|---:|---:|---|---|---:|---:|---:|---:|---:|---:|
+| opencode/deepseek-v4.1-flash-free | all | 0 | 0 | 6 | 0.00% | UNDER 90%: not usable in observed attempts | not usable in observed attempts | 0 | 0 | 0 | 0 | 0 | 0 |
+| opencode/deepseek-v4.1-flash-free | bare | 3 | 0 | 3 | 50.00% | UNDER 90% | 100.00% (44–100%) | 7 | 650 | 48512 | 0 | 248 | 74 |
+| opencode/deepseek-v4.1-flash-free | gateway | 5 | 0 | 1 | 83.33% | UNDER 90% | 100.00% (57–100%) | 16 | 22206 | 108928 | 0 | 968 | 211 |
+| opencode/deepseek-v4.1-flash-free | mcp-all | 4 | 0 | 2 | 66.67% | UNDER 90% | 100.00% (51–100%) | 9 | 100121 | 805632 | 0 | 329 | 21 |
+| opencode/deepseek-v4.1-flash-free | preselect | 5 | 1 | 1 | 85.71% | UNDER 90% | 83.33% (44–97%) | 18 | 7829 | 121472 | 0 | 824 | 500 |
+| opencode/deepseek-v4.1-flash-free | skills-all | 0 | 0 | 6 | 0.00% | UNDER 90%: not usable in observed attempts | not usable in observed attempts | 0 | 0 | 0 | 0 | 0 | 0 |
+| opencode/glm-5.3-flash-free | all | 0 | 0 | 9 | 0.00% | UNDER 90%: not usable in observed attempts | not usable in observed attempts | 0 | 0 | 0 | 0 | 0 | 0 |
+| opencode/glm-5.3-flash-free | bare | 3 | 3 | 2 | 75.00% | UNDER 90% | 50.00% (19–81%) | 20 | 73296 | 69056 | 0 | 1023 | 1360 |
+| opencode/glm-5.3-flash-free | gateway | 6 | 0 | 0 | 100.00% | at least 90% | 100.00% (61–100%) | 18 | 77897 | 60800 | 0 | 468 | 122 |
+| opencode/glm-5.3-flash-free | mcp-all | 4 | 0 | 4 | 50.00% | UNDER 90% | 100.00% (51–100%) | 9 | 686135 | 198976 | 0 | 178 | 221 |
+| opencode/glm-5.3-flash-free | preselect | 5 | 1 | 0 | 100.00% | at least 90% | 83.33% (44–97%) | 15 | 68308 | 34112 | 0 | 442 | 569 |
+| opencode/glm-5.3-flash-free | skills-all | 0 | 0 | 12 | 0.00% | UNDER 90%: not usable in observed attempts | not usable in observed attempts | 0 | 0 | 0 | 0 | 0 | 0 |
 
 ### Invalid usage and all-attempt Jev spend
 
@@ -87,7 +100,94 @@ USD per million tokens. GLM and DeepSeek have no extra storage/write charge; new
 | opencode/glm-5.3-flash-free | preselect | 2 (later) | 6 | 33412 | 7616 | 0 | 18.56% |
 | opencode/glm-5.3-flash-free | preselect | 3 (later) | 3 | 1163 | 19968 | 0 | 94.50% |
 
+### Timing from event-arrival timestamps
+
+Startup is process launch to first step_start; each step is step_start to step_finish, measured at event arrival. Startup is not proof of MCP discovery latency and may include provider/network time. Samples include known startup and completed-step durations from valid and invalid attempts. Historical missing latency and null durations are not shown; unfinished steps have no duration sample. Session wall time covers all attempts, including unfinished timeout waits.
+
+| Model | Arm | Phase | Samples | Mean ms | Median ms | Max ms |
+|---|---|---|---:|---:|---:|---:|
+| opencode/deepseek-v4.1-flash-free | all | Session wall | 6 | 90354.67 | 90240.00 | 91005.00 |
+| opencode/deepseek-v4.1-flash-free | all | Startup | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | all | Step 1 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | all | Step 2 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | all | Step 3 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | all | Step 4 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | all | Step 5 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | bare | Session wall | 6 | 72755.00 | 85160.50 | 90112.00 |
+| opencode/deepseek-v4.1-flash-free | bare | Startup | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | bare | Step 1 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | bare | Step 2 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | bare | Step 3 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | bare | Step 4 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | bare | Step 5 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | gateway | Session wall | 6 | 47297.33 | 45300.50 | 90061.00 |
+| opencode/deepseek-v4.1-flash-free | gateway | Startup | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | gateway | Step 1 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | gateway | Step 2 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | gateway | Step 3 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | gateway | Step 4 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | mcp-all | Session wall | 6 | 64080.50 | 59576.00 | 90135.00 |
+| opencode/deepseek-v4.1-flash-free | mcp-all | Startup | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | mcp-all | Step 1 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | mcp-all | Step 2 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | mcp-all | Step 3 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | mcp-all | Step 4 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | mcp-all | Step 5 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | mcp-all | Step 6 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | mcp-all | Step 7 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | mcp-all | Step 8 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | preselect | Session wall | 7 | 39107.29 | 32381.00 | 74791.00 |
+| opencode/deepseek-v4.1-flash-free | preselect | Startup | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | preselect | Step 1 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | preselect | Step 2 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | preselect | Step 3 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | preselect | Step 4 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | skills-all | Session wall | 6 | 90304.83 | 90216.50 | 90615.00 |
+| opencode/deepseek-v4.1-flash-free | skills-all | Startup | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | skills-all | Step 1 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | skills-all | Step 2 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | skills-all | Step 3 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | all | Session wall | 9 | 90281.11 | 90211.00 | 90645.00 |
+| opencode/glm-5.3-flash-free | all | Startup | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | all | Step 1 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | all | Step 2 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | all | Step 3 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | all | Step 4 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | all | Step 5 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | bare | Session wall | 8 | 65103.88 | 60354.00 | 90069.00 |
+| opencode/glm-5.3-flash-free | bare | Startup | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | bare | Step 1 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | bare | Step 2 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | bare | Step 3 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | bare | Step 4 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | bare | Step 5 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | bare | Step 6 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | gateway | Session wall | 6 | 62310.00 | 57604.50 | 83041.00 |
+| opencode/glm-5.3-flash-free | gateway | Startup | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | gateway | Step 1 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | gateway | Step 2 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | gateway | Step 3 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | gateway | Step 4 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | mcp-all | Session wall | 8 | 77006.75 | 83003.50 | 90208.00 |
+| opencode/glm-5.3-flash-free | mcp-all | Startup | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | mcp-all | Step 1 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | mcp-all | Step 2 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | mcp-all | Step 3 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | preselect | Session wall | 6 | 47367.17 | 45941.00 | 69969.00 |
+| opencode/glm-5.3-flash-free | preselect | Startup | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | preselect | Step 1 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | preselect | Step 2 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | preselect | Step 3 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | skills-all | Session wall | 12 | 90515.33 | 90276.50 | 91601.00 |
+| opencode/glm-5.3-flash-free | skills-all | Startup | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | skills-all | Step 1 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | skills-all | Step 2 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | skills-all | Step 3 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | skills-all | Step 4 | 0 | not shown | not shown | not shown |
+
 ### Hypothetical paid cost per valid session
+
+**Caution: survivor bias in quality and cost.** Under 90% valid completion: opencode/deepseek-v4.1-flash-free / all; opencode/deepseek-v4.1-flash-free / bare; opencode/deepseek-v4.1-flash-free / gateway; opencode/deepseek-v4.1-flash-free / mcp-all; opencode/deepseek-v4.1-flash-free / preselect; opencode/deepseek-v4.1-flash-free / skills-all; opencode/glm-5.3-flash-free / all; opencode/glm-5.3-flash-free / bare; opencode/glm-5.3-flash-free / mcp-all; opencode/glm-5.3-flash-free / skills-all. These costs describe surviving valid sessions, not the cost of all attempted work; zero-valid arms are not usable in observed attempts.
 
 | Model | Arm | Sheet | Mean steps | Mean weighted input | Mean input USD | Mean output/reasoning USD | Mean Jev USD | Mean total USD |
 |---|---|---|---:|---:|---:|---:|---:|---:|
@@ -160,20 +260,20 @@ not shown: no common valid gateway/size-sweep panel.
 
 ## Dev split
 
-| Model | Arm | Pass | Fail | Invalid attempts | Success (Wilson 95%) | Steps | Uncached input | Cache read | Cache write | Output | Reasoning |
-|---|---|---:|---:|---:|---|---:|---:|---:|---:|---:|---:|
-| opencode/deepseek-v4.1-flash-free | all | 0 | 0 | 3 | not shown | 0 | 0 | 0 | 0 | 0 | 0 |
-| opencode/deepseek-v4.1-flash-free | bare | 0 | 1 | 2 | 0.00% (0–79%) | 1 | 819 | 6144 | 0 | 58 | 158 |
-| opencode/deepseek-v4.1-flash-free | gateway | 3 | 0 | 0 | 100.00% (44–100%) | 12 | 12231 | 91008 | 0 | 669 | 101 |
-| opencode/deepseek-v4.1-flash-free | mcp-all | 2 | 0 | 1 | 100.00% (34–100%) | 6 | 99173 | 503936 | 0 | 274 | 13 |
-| opencode/deepseek-v4.1-flash-free | preselect | 1 | 2 | 1 | 33.33% (6–79%) | 10 | 11069 | 62464 | 0 | 768 | 821 |
-| opencode/deepseek-v4.1-flash-free | skills-all | 0 | 0 | 3 | not shown | 0 | 0 | 0 | 0 | 0 | 0 |
-| opencode/glm-5.3-flash-free | all | 0 | 0 | 4 | not shown | 0 | 0 | 0 | 0 | 0 | 0 |
-| opencode/glm-5.3-flash-free | bare | 0 | 3 | 3 | 0.00% (0–56%) | 9 | 23338 | 40768 | 0 | 597 | 1028 |
-| opencode/glm-5.3-flash-free | gateway | 1 | 0 | 2 | 100.00% (21–100%) | 4 | 9402 | 21760 | 0 | 116 | 55 |
-| opencode/glm-5.3-flash-free | mcp-all | 2 | 0 | 3 | 100.00% (34–100%) | 7 | 201097 | 487680 | 0 | 157 | 190 |
-| opencode/glm-5.3-flash-free | preselect | 1 | 2 | 0 | 33.33% (6–79%) | 18 | 67510 | 98752 | 0 | 1043 | 1509 |
-| opencode/glm-5.3-flash-free | skills-all | 0 | 0 | 6 | not shown | 0 | 0 | 0 | 0 | 0 | 0 |
+| Model | Arm | Pass | Fail | Invalid attempts | Valid completion | Assessment | Success among valid (Wilson 95%) | Steps | Uncached input | Cache read | Cache write | Output | Reasoning |
+|---|---|---:|---:|---:|---:|---|---|---:|---:|---:|---:|---:|---:|
+| opencode/deepseek-v4.1-flash-free | all | 0 | 0 | 3 | 0.00% | UNDER 90%: not usable in observed attempts | not usable in observed attempts | 0 | 0 | 0 | 0 | 0 | 0 |
+| opencode/deepseek-v4.1-flash-free | bare | 0 | 1 | 2 | 33.33% | UNDER 90% | 0.00% (0–79%) | 1 | 819 | 6144 | 0 | 58 | 158 |
+| opencode/deepseek-v4.1-flash-free | gateway | 3 | 0 | 0 | 100.00% | at least 90% | 100.00% (44–100%) | 12 | 12231 | 91008 | 0 | 669 | 101 |
+| opencode/deepseek-v4.1-flash-free | mcp-all | 2 | 0 | 1 | 66.67% | UNDER 90% | 100.00% (34–100%) | 6 | 99173 | 503936 | 0 | 274 | 13 |
+| opencode/deepseek-v4.1-flash-free | preselect | 1 | 2 | 1 | 75.00% | UNDER 90% | 33.33% (6–79%) | 10 | 11069 | 62464 | 0 | 768 | 821 |
+| opencode/deepseek-v4.1-flash-free | skills-all | 0 | 0 | 3 | 0.00% | UNDER 90%: not usable in observed attempts | not usable in observed attempts | 0 | 0 | 0 | 0 | 0 | 0 |
+| opencode/glm-5.3-flash-free | all | 0 | 0 | 4 | 0.00% | UNDER 90%: not usable in observed attempts | not usable in observed attempts | 0 | 0 | 0 | 0 | 0 | 0 |
+| opencode/glm-5.3-flash-free | bare | 0 | 3 | 3 | 50.00% | UNDER 90% | 0.00% (0–56%) | 9 | 23338 | 40768 | 0 | 597 | 1028 |
+| opencode/glm-5.3-flash-free | gateway | 1 | 0 | 2 | 33.33% | UNDER 90% | 100.00% (21–100%) | 4 | 9402 | 21760 | 0 | 116 | 55 |
+| opencode/glm-5.3-flash-free | mcp-all | 2 | 0 | 3 | 40.00% | UNDER 90% | 100.00% (34–100%) | 7 | 201097 | 487680 | 0 | 157 | 190 |
+| opencode/glm-5.3-flash-free | preselect | 1 | 2 | 0 | 100.00% | at least 90% | 33.33% (6–79%) | 18 | 67510 | 98752 | 0 | 1043 | 1509 |
+| opencode/glm-5.3-flash-free | skills-all | 0 | 0 | 6 | 0.00% | UNDER 90%: not usable in observed attempts | not usable in observed attempts | 0 | 0 | 0 | 0 | 0 | 0 |
 
 ### Invalid usage and all-attempt Jev spend
 
@@ -233,7 +333,104 @@ not shown: no common valid gateway/size-sweep panel.
 | opencode/glm-5.3-flash-free | preselect | 10 (later) | 1 | 11572 | 10496 | 0 | 47.56% |
 | opencode/glm-5.3-flash-free | preselect | 11 (later) | 1 | 21453 | 1088 | 0 | 4.83% |
 
+### Timing from event-arrival timestamps
+
+Startup is process launch to first step_start; each step is step_start to step_finish, measured at event arrival. Startup is not proof of MCP discovery latency and may include provider/network time. Samples include known startup and completed-step durations from valid and invalid attempts. Historical missing latency and null durations are not shown; unfinished steps have no duration sample. Session wall time covers all attempts, including unfinished timeout waits.
+
+| Model | Arm | Phase | Samples | Mean ms | Median ms | Max ms |
+|---|---|---|---:|---:|---:|---:|
+| opencode/deepseek-v4.1-flash-free | all | Session wall | 3 | 90429.67 | 90265.00 | 90840.00 |
+| opencode/deepseek-v4.1-flash-free | all | Startup | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | all | Step 1 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | all | Step 2 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | all | Step 3 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | bare | Session wall | 3 | 67679.00 | 90090.00 | 90100.00 |
+| opencode/deepseek-v4.1-flash-free | bare | Startup | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | bare | Step 1 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | bare | Step 2 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | bare | Step 3 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | bare | Step 4 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | bare | Step 5 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | bare | Step 6 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | bare | Step 7 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | bare | Step 8 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | bare | Step 9 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | bare | Step 10 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | bare | Step 11 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | bare | Step 12 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | gateway | Session wall | 3 | 37694.00 | 37764.00 | 52683.00 |
+| opencode/deepseek-v4.1-flash-free | gateway | Startup | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | gateway | Step 1 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | gateway | Step 2 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | gateway | Step 3 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | gateway | Step 4 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | mcp-all | Session wall | 3 | 80510.33 | 83555.00 | 90072.00 |
+| opencode/deepseek-v4.1-flash-free | mcp-all | Startup | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | mcp-all | Step 1 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | mcp-all | Step 2 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | mcp-all | Step 3 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | mcp-all | Step 4 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | mcp-all | Step 5 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | mcp-all | Step 6 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | mcp-all | Step 7 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | preselect | Session wall | 4 | 56281.25 | 52457.50 | 90822.00 |
+| opencode/deepseek-v4.1-flash-free | preselect | Startup | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | preselect | Step 1 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | preselect | Step 2 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | preselect | Step 3 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | preselect | Step 4 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | skills-all | Session wall | 3 | 90236.33 | 90218.00 | 90304.00 |
+| opencode/deepseek-v4.1-flash-free | skills-all | Startup | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | skills-all | Step 1 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | skills-all | Step 2 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | skills-all | Step 3 | 0 | not shown | not shown | not shown |
+| opencode/deepseek-v4.1-flash-free | skills-all | Step 4 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | all | Session wall | 4 | 90259.00 | 90254.50 | 90341.00 |
+| opencode/glm-5.3-flash-free | all | Startup | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | all | Step 1 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | all | Step 2 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | all | Step 3 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | bare | Session wall | 6 | 65704.33 | 71982.50 | 90144.00 |
+| opencode/glm-5.3-flash-free | bare | Startup | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | bare | Step 1 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | bare | Step 2 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | bare | Step 3 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | bare | Step 4 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | bare | Step 5 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | gateway | Session wall | 3 | 89909.33 | 90071.00 | 90100.00 |
+| opencode/glm-5.3-flash-free | gateway | Startup | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | gateway | Step 1 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | gateway | Step 2 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | gateway | Step 3 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | gateway | Step 4 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | mcp-all | Session wall | 5 | 81785.80 | 90065.00 | 90069.00 |
+| opencode/glm-5.3-flash-free | mcp-all | Startup | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | mcp-all | Step 1 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | mcp-all | Step 2 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | mcp-all | Step 3 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | mcp-all | Step 4 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | preselect | Session wall | 3 | 52906.67 | 42187.00 | 76997.00 |
+| opencode/glm-5.3-flash-free | preselect | Startup | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | preselect | Step 1 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | preselect | Step 2 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | preselect | Step 3 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | preselect | Step 4 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | preselect | Step 5 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | preselect | Step 6 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | preselect | Step 7 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | preselect | Step 8 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | preselect | Step 9 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | preselect | Step 10 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | preselect | Step 11 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | skills-all | Session wall | 6 | 90560.67 | 90400.50 | 91069.00 |
+| opencode/glm-5.3-flash-free | skills-all | Startup | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | skills-all | Step 1 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | skills-all | Step 2 | 0 | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | skills-all | Step 3 | 0 | not shown | not shown | not shown |
+
 ### Hypothetical paid cost per valid session
+
+**Caution: survivor bias in quality and cost.** Under 90% valid completion: opencode/deepseek-v4.1-flash-free / all; opencode/deepseek-v4.1-flash-free / bare; opencode/deepseek-v4.1-flash-free / mcp-all; opencode/deepseek-v4.1-flash-free / preselect; opencode/deepseek-v4.1-flash-free / skills-all; opencode/glm-5.3-flash-free / all; opencode/glm-5.3-flash-free / bare; opencode/glm-5.3-flash-free / gateway; opencode/glm-5.3-flash-free / mcp-all; opencode/glm-5.3-flash-free / skills-all. These costs describe surviving valid sessions, not the cost of all attempted work; zero-valid arms are not usable in observed attempts.
 
 | Model | Arm | Sheet | Mean steps | Mean weighted input | Mean input USD | Mean output/reasoning USD | Mean Jev USD | Mean total USD |
 |---|---|---|---:|---:|---:|---:|---:|---:|

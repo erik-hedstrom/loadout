@@ -18,6 +18,14 @@ const row = (overrides: Partial<B11Row> = {}): B11Row => ({
 });
 
 describe('B11 report math', () => {
+  it('counts valid completion per attempt, with 90% inclusive and timeouts outside quality failures', () => {
+    const rows = Array.from({ length: 10 }, (_, rep) => row({ rep, result: rep < 8 ? 'pass' : rep === 8 ? 'fail' : 'invalid', ...(rep === 9 ? { invalidReason: 'timeout' as const } : {}) }));
+    expect(summarizeRows(rows)[0]).toMatchObject({ attempts: 10, valid: 9, pass: 8, fail: 1, invalid: 1, completionRate: 0.9, belowCompletionThreshold: false });
+    const retry = row({ result: 'invalid', invalidReason: 'timeout' });
+    expect(summarizeRows([retry, retry, row()])[0]).toMatchObject({ attempts: 3, valid: 1, fail: 0, completionRate: 1 / 3, belowCompletionThreshold: true });
+    expect(summarizeRows([retry])[0]).toMatchObject({ attempts: 1, valid: 0, pass: 0, fail: 0, completionRate: 0, belowCompletionThreshold: true });
+  });
+
   it('reports Wilson 95% intervals for valid outcomes and leaves all-invalid quality undefined', () => {
     const rows = Array.from({ length: 10 }, (_, rep) => row({ rep, result: rep < 5 ? 'pass' : 'fail' }));
     const [group] = summarizeRows(rows);
@@ -68,6 +76,41 @@ describe('B11 report math', () => {
     expect(pricedUsage(usage, PRICE_SHEETS[2]!).weightedInput).toBe(320);
     expect(pricedUsage(usage, PRICE_SHEETS[3]!).weightedInput).toBe(175);
     expect(pricedUsage(usage, PRICE_SHEETS[4]!).weightedInput).toBe(175);
+  });
+});
+
+describe('B11 event-arrival timing', () => {
+  it('aggregates known startup and per-step samples from valid and invalid attempts without zero-filling unknowns', () => {
+    const twoSteps = [tokens(), tokens()];
+    const totals = { input: 200, cacheRead: 1800, cacheWrite: 0, output: 40, reasoning: 10 };
+    const summary = summarizeRows([
+      row({ steps: twoSteps, totals, wallMs: 1000, latency: { startupMs: 0, stepsMs: [10, null] } }),
+      row({ rep: 1, result: 'fail', steps: twoSteps, totals, wallMs: 2000, latency: { startupMs: 100, stepsMs: [30, 50] } }),
+      row({ rep: 2, result: 'invalid', invalidReason: 'timeout', wallMs: 9000, latency: { startupMs: 200, stepsMs: [20] } }),
+      row({ rep: 3, wallMs: 4000 }),
+    ])[0]!;
+    expect(summary.timing).toEqual({
+      wall: { samples: 4, meanMs: 4000, medianMs: 3000, maxMs: 9000 },
+      startup: { samples: 3, meanMs: 100, medianMs: 100, maxMs: 200 },
+      steps: [{ step: 1, samples: 3, meanMs: 20, medianMs: 20, maxMs: 30 }, { step: 2, samples: 1, meanMs: 50, medianMs: 50, maxMs: 50 }],
+    });
+  });
+
+  it('leaves historical and explicitly unknown timing unmeasured, and retains real zero durations', () => {
+    const unknown = summarizeRows([row(), row({ rep: 1, latency: { startupMs: null, stepsMs: [null] } })])[0]!;
+    expect(unknown.timing).toEqual({ wall: { samples: 2, meanMs: 100, medianMs: 100, maxMs: 100 }, startup: { samples: 0, meanMs: null, medianMs: null, maxMs: null }, steps: [{ step: 1, samples: 0, meanMs: null, medianMs: null, maxMs: null }] });
+    expect(summarizeRows([row({ latency: { startupMs: 0, stepsMs: [0] } })])[0]!.timing)
+      .toEqual({ wall: { samples: 1, meanMs: 100, medianMs: 100, maxMs: 100 }, startup: { samples: 1, meanMs: 0, medianMs: 0, maxMs: 0 }, steps: [{ step: 1, samples: 1, meanMs: 0, medianMs: 0, maxMs: 0 }] });
+    const report = renderReport([row()]);
+    expect(report).toContain('| Startup | 0 | not shown | not shown |');
+    expect(report).toContain('| Step 1 | 0 | not shown | not shown |');
+    expect(report).toContain('event-arrival');
+    expect(report).toContain('first step_start');
+    expect(report).toContain('not proof of MCP discovery');
+    expect(report).toContain('unfinished');
+    const invalid = renderReport([row({ result: 'invalid', invalidReason: 'timeout', wallMs: 9000, latency: { startupMs: 25, stepsMs: [10] } })]);
+    expect(invalid).toContain('| Session wall | 1 | 9000.00 | 9000.00 | 9000.00 |');
+    expect(invalid).toContain('| Step 1 | 1 | 10.00 | 10.00 | 10.00 |');
   });
 });
 
@@ -131,6 +174,25 @@ describe('B11 size sweep', () => {
 });
 
 describe('B11 report input/output', () => {
+  it('shows pooled operational completion and separate split flags, including unusable arms and survivor-bias caveats', () => {
+    const rows = [
+      ...Array.from({ length: 9 }, (_, rep) => row({ rep })),
+      row({ rep: 9, result: 'invalid', invalidReason: 'timeout' }),
+      row({ arm: 'all', result: 'invalid', invalidReason: 'timeout' }),
+      row({ arm: 'all', model: 'opencode/deepseek-v4.1-flash-free', split: 'dev', taskId: 'dev-task' }),
+    ];
+    const report = renderReport(rows);
+    const pooled = report.split('## Price snapshots')[0]!;
+    expect(pooled).toContain('| bare | 9 | 10 | 90.00% | at least 90% |');
+    expect(pooled).toContain('| all | 1 | 2 | 50.00% | UNDER 90% |');
+    const test = report.split('## Test split')[1]!.split('## Dev split')[0]!;
+    expect(test).toContain('| all | 0 | 0 | 1 | 0.00% | UNDER 90%: not usable in observed attempts |');
+    expect(test).toContain('survivor bias');
+    expect(test).toContain('quality and cost');
+    expect(report).toContain('Timeouts are invalid attempts, never quality failures');
+    expect(report).toContain('retries remain separate attempts');
+  });
+
   it('renders independent test/dev sections, first/later cache tables, official sources and hypothetical cost labels', () => {
     const report = renderReport([row(), row({ split: 'dev', taskId: 'dev-task', result: 'fail' })]);
     expect(report).toContain('## Test split');
@@ -168,11 +230,14 @@ describe('B11 report input/output', () => {
 
   it('runs the real CLI offline against raw JSONL and emits reproducible Markdown', () => {
     const path = join(temp(), 'rows.jsonl');
-    writeFileSync(path, JSON.stringify(row()) + '\n');
+    const timed = row({ latency: { startupMs: 12, stepsMs: [34] } });
+    writeFileSync(path, JSON.stringify(timed) + '\n');
     const expected = reportFiles([path]);
     const result = spawnSync(process.execPath, ['--import', 'tsx', join(import.meta.dirname, '../bench/b11-report.ts'), path], { encoding: 'utf8', timeout: 30000 });
     expect(result.status, result.stderr).toBe(0);
     expect(result.stdout).toBe(expected);
-    expect(readFileSync(path, 'utf8')).toBe(JSON.stringify(row()) + '\n');
+    expect(result.stdout).toContain('| Startup | 1 | 12.00 | 12.00 |');
+    expect(result.stdout).toContain('| Step 1 | 1 | 34.00 | 34.00 |');
+    expect(readFileSync(path, 'utf8')).toBe(JSON.stringify(timed) + '\n');
   });
 });

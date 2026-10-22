@@ -158,7 +158,9 @@ export async function main(args: string[]) {
     taskCounts: Object.fromEntries(['plain', 'skill-needle', 'mcp-needle'].map(k => [k, data.tasks.filter(t => t.kind === k).length])),
     runs, expectedJevCalls: { preselect: data.tasks.length * o.models.length * o.reps * (o.arms.includes('preselect') ? 2 : 0), gatewayAtOneSearchPerStep: data.tasks.length * o.models.length * o.reps * (o.arms.includes('gateway') ? 40 : 0) },
     gatewayEstimateAssumption: 'One search per model step. Several searches in a step can exceed this estimate; the Jev reservation budget still applies.',
-    jevBudgetUsd: o.run ? o.budget : 0, requestedRunBudgetUsd: o.budget, expectedJevCostUsd: { plan: 0, runRange: [0, o.budget], note: 'Usage-dependent; hard reservation cap, no paid calls in plan mode.' }, modelCostUsd: 0, concurrency: o.concurrency,
+    jevBudgetUsd: o.run ? o.budget : 0, requestedRunBudgetUsd: o.budget, expectedJevCostUsd: { plan: 0, runRange: [0, o.budget], note: 'Usage-dependent; hard reservation cap, no paid calls in plan mode.' }, modelCostUsd: 0, concurrency: o.concurrency, timeoutSeconds: o.timeoutMs / 1000,
+    sessionDeadlineScheduleSeconds: plan.reduce((seconds, block) => seconds + Math.ceil(block.tasks.length / o.concurrency) * o.timeoutMs / 1000, 0),
+    deadlineScheduleAssumption: 'Every planned session consumes its deadline; block barriers retained. Excludes setup, Jev, checks, cleanup and rate-limit backoff. Not a hard wall-time bound.',
     mounts: ['system executables/libraries and DNS/CA files: read-only', 'pinned binary: read-only /opt/opencode', 'session workspace: rw /work', 'session home: rw /home/bench', 'private /proc, /dev, /tmp; shared host network including loopback during model sessions'],
     hostWrites: ['temporary preflight canary and sandbox homes/workspaces (removed)', 'result rows under --out (run only)'],
     sandboxCheck: 'real home, checkout and planted outside canary must be unreadable; no network',
@@ -214,7 +216,7 @@ export async function main(args: string[]) {
           const meter = budget.meter();
           let gateway: Awaited<ReturnType<typeof endpoint>> | undefined;
           const row: B11Row = { taskId: task.id, kind: task.kind, split: splitOf(task.id), model: block.model as B11Row['model'], arm: block.arm as B11Row['arm'], rep: block.rep, orderIndex: index, startedAt, opencodeVersion: o.version,
-            steps: [], totals: { input: 0, cacheRead: 0, cacheWrite: 0, output: 0, reasoning: 0 }, toolCalls: [], skillsLoaded: [], result: 'invalid', invalidReason: 'provider-error', wallMs: 0, jev: meter.usage, listing: { skills: 0, servers: 0, tools: 0 } };
+            timeoutMs: o.timeoutMs, steps: [], totals: { input: 0, cacheRead: 0, cacheWrite: 0, output: 0, reasoning: 0 }, toolCalls: [], skillsLoaded: [], result: 'invalid', invalidReason: 'provider-error', wallMs: 0, jev: meter.usage, listing: { skills: 0, servers: 0, tools: 0 } };
           if (block.arm === 'preselect') row.selection = { skills: [], servers: [] };
           try {
             copyTree(fixturePath(data.root, 'workspaces', task.workspace), workspace);

@@ -38,6 +38,13 @@ printf '%s\\n' '{"type":"step_finish","part":{"tokens":{"total":12,"input":10,"o
     return ['--run', '--tasks', file, '--opencode', binary, '--models', 'opencode/glm-5.3-flash-free', '--arms', arm, '--jev-budget', budget, '--concurrency', concurrency, '--timeout', '5', '--out', out];
   }
   const rows = (directory: string) => readFileSync(join(directory, 'rows.jsonl'), 'utf8').trim().split('\n').map(line => JSON.parse(line));
+  it('prints the session-deadline schedule with concurrency and block barriers', async () => {
+    const a = args('bare', [task('first'), task('second'), task('third')], '0', '2');
+    a[a.indexOf('--run')] = '--plan';
+    await main(a);
+    const plan = JSON.parse(vi.mocked(console.log).mock.calls[0]![0]);
+    expect(plan).toMatchObject({ runs: 3, concurrency: 2, timeoutSeconds: 5, sessionDeadlineScheduleSeconds: 10 });
+  });
   it('persists budget exhaustion and stops before the next session', async () => {
     await main(args('preselect', [task('first'), task('second')], '0'));
     expect(rows(out)).toMatchObject([{ taskId: 'first', result: 'invalid', invalidReason: 'budget-exhausted', jev: { calls: 0, costUsd: 0 }, selection: { skills: [], servers: [] } }]);
@@ -45,6 +52,7 @@ printf '%s\\n' '{"type":"step_finish","part":{"tokens":{"total":12,"input":10,"o
   it('materializes an endpoint token only for sessions configured with MCP', async () => {
     await main(args('mcp-all', [task('mcp', 'expects-token: write yes to answer.txt')], '0'));
     expect(rows(out)).toMatchObject([{ taskId: 'mcp', result: 'pass' }]);
+    expect(rows(out)[0].timeoutMs).toBe(5000);
     expect(rows(out)[0].latency.startupMs).toBeGreaterThanOrEqual(0);
     expect(rows(out)[0].latency.stepsMs).toHaveLength(1);
     expect(rows(out)[0].latency.stepsMs[0]).toBeGreaterThan(0);

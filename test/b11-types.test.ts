@@ -19,6 +19,8 @@ describe('B11 event projection', () => {
   it('accepts optional scrubbed timing and rejects mismatched or negative durations', () => {
     const value = row();
     value.latency = { startupMs: 20, stepsMs: [50] };
+    expect(() => parseRow({ ...value, timeoutMs: -1 })).toThrow();
+    expect(parseRow({ ...value, timeoutMs: 1200000 }).timeoutMs).toBe(1200000);
     expect(parseRow(value).latency).toEqual(value.latency);
     expect(() => parseRow({ ...value, latency: { startupMs: 20, stepsMs: [] } })).toThrow('timings');
     expect(() => parseRow({ ...value, latency: { startupMs: -1, stepsMs: [50] } })).toThrow();
