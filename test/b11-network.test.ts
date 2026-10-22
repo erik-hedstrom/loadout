@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as cp from 'node:child_process';
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { connect, createServer, type Server } from 'node:net';
@@ -24,6 +24,13 @@ const sandbox = () => {
   mkdirSync(home); mkdirSync(workspace);
   return { home, workspace, binary: '/usr/bin/true' };
 };
+// The outer namespace keeps the host filesystem, including resolv.conf's
+// systemd-resolved/WSL symlink, so mount over its existing target.
+const resolverNamespaceArgs = (resolver: string): string[] => [
+  '--unshare-all', '--uid', '0', '--gid', '0', '--cap-add', 'CAP_NET_ADMIN', '--cap-add', 'CAP_NET_BIND_SERVICE',
+  '--bind', '/', '/', '--proc', '/proc', '--dev', '/dev', '--ro-bind', resolver, realpathSync('/etc/resolv.conf'),
+  '--clearenv', '--setenv', 'PATH', '/usr/sbin:/usr/bin:/bin', '--',
+];
 afterEach(() => {
   vi.mocked(cp.spawn).mockReset().mockImplementation(realCp.spawn);
   vi.mocked(cp.spawnSync).mockReset().mockImplementation(realCp.spawnSync);
@@ -31,6 +38,15 @@ afterEach(() => {
 });
 
 describe.runIf(process.platform === 'linux')('B11 network dependency and preflight diagnostics', () => {
+  it('mounts the synthetic host resolver through its real path without pasta', () => {
+    const resolver = join(sandbox().home, 'host-resolv.conf');
+    writeFileSync(resolver, 'nameserver 127.0.0.54\n');
+    const run = realCp.spawnSync('bwrap', [...resolverNamespaceArgs(resolver), process.execPath, '-e',
+      "process.stdout.write(require('node:fs').readFileSync('/etc/resolv.conf','utf8'))"], { timeout: 5000, encoding: 'utf8' });
+    expect(run.error, run.stderr).toBeUndefined();
+    expect(run.status, run.stderr).toBe(0);
+    expect(run.stdout).toBe('nameserver 127.0.0.54\n');
+  });
   it('pairs DNS-only forwarding with a read-only resolver file and removes it after exit', async () => {
     let resolver = '';
     vi.mocked(cp.spawn).mockImplementation((...args: Parameters<typeof cp.spawn>) => {
@@ -118,9 +134,7 @@ describe.runIf(process.platform === 'linux')('B11 real pasta namespace', () => {
     // DNS needs privileged port 53. Give the trusted fixture that capability
     // only in its own user/network namespace, with no host network or sysctl edits.
     const run = realCp.spawnSync('bwrap', [
-      '--unshare-all', '--uid', '0', '--gid', '0', '--cap-add', 'CAP_NET_ADMIN', '--cap-add', 'CAP_NET_BIND_SERVICE',
-      '--bind', '/', '/', '--proc', '/proc', '--dev', '/dev', '--ro-bind', resolver, '/etc/resolv.conf',
-      '--clearenv', '--setenv', 'PATH', '/usr/sbin:/usr/bin:/bin', '--', process.execPath,
+      ...resolverNamespaceArgs(resolver), process.execPath,
       '--import', import.meta.resolve('tsx'), '--input-type=module', '-e', fixture,
     ], { timeout: 12000, encoding: 'utf8' });
     expect(run.error, run.stderr).toBeUndefined();
