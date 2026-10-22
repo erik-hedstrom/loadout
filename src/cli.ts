@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { DEFAULT_CONFIG, jevBaseUrl, loadConfig, paths, resolveApiKey, writeDefaultConfig, type Config } from './config.js';
@@ -13,6 +13,9 @@ import { doctor, formatDoctor, onPath } from './doctor.js';
 import { detectHosts, interactive, PACKS, packSources, wizard } from './init.js';
 import { HOOK_FAILURE_NOTE, hookOutput, isFollowUp, noKeyWarning, promptContext, type HookInput } from './hook.js';
 import { reportJson, type Capability, type RouteDecision } from './types.js';
+import { systemError } from './system-error.js';
+
+const TERMINAL_CONTROLS = /[\x00-\x1f\x7f-\x9f]/g;
 
 const USAGE = `loadout — pick the model, skills and MCP servers for each agent session
 
@@ -69,19 +72,27 @@ function router(config: Config, lexical: boolean) {
 /** `loadout add` for each spec, printing what happened; returns how many failed. */
 function addSources(specs: string[]): number {
   let failed = 0;
-  for (const spec of specs) {
+  for (const [index, spec] of specs.entries()) {
     let r: AddResult;
+    const github = parseGitHub(spec);
     try {
-      r = parseGitHub(spec) ? addFromGitHub(spec, paths.library()) : addSkills(resolve(spec), paths.library());
+      if (github) r = addFromGitHub(spec, paths.library());
+      else {
+        const source = resolve(spec);
+        // addSkills treats a missing root as an empty pack; reject it with an errno reason instead.
+        statSync(source);
+        r = addSkills(source, paths.library());
+      }
     } catch (err) {
-      console.error(`${spec}: ${err instanceof Error ? err.message.split('\n')[0] : err}`);
+      // A mistyped source or an underlying filesystem/git error can contain a pasted credential.
+      console.error(`loadout: source ${index + 1} of ${specs.length}: ${github ? 'GitHub import failed' : 'could not add source'}: ${systemError(err)}`);
       failed++;
       continue;
     }
     const total = r.added.length + r.updated.length;
     console.log(`${spec}: ${total ? `${r.added.length} added, ${r.updated.length} updated` : 'no skills found'}`);
-    for (const { name, folder } of r.renamed) console.log(`  "${name}" already exists from another source; installed as ${folder}`);
-    for (const { path, reason } of r.skipped) console.log(`  skipped ${path}: ${reason}`);
+    for (const { name, folder } of r.renamed) console.log(`  "${name.replace(TERMINAL_CONTROLS, '')}" already exists from another source; installed as ${folder}`);
+    for (const { path, reason } of r.skipped) console.log(`  skipped ${path.replace(TERMINAL_CONTROLS, '')}: ${reason}`);
   }
   return failed;
 }
@@ -350,8 +361,15 @@ async function main(): Promise<number> {
       // Loaded on demand: the MCP SDK is the heaviest import, and only this command needs it.
       const { serveHttp, serveStdio } = await import('./mcp.js');
       if (values.http) {
-        const token = values['token-file'] ? readFileSync(values['token-file'], 'utf8').trim() : undefined;
-        if (values['token-file'] && !token) fail(`empty token file: ${values['token-file']}`);
+        let token: string | undefined;
+        if (values['token-file']) {
+          try {
+            token = readFileSync(values['token-file'], 'utf8').trim();
+          } catch {
+            fail('could not read token file; check the path given to --token-file');
+          }
+          if (!token) fail('empty token file');
+        }
         const { url } = await serveHttp(
           { library, config, client, repo: repoSignals(process.cwd()), embeddings: client ? embeddingsFor(library, config) : undefined },
           { port: Number(values.port), host: values.host!, token, allowedHosts: values['allowed-host'] },
@@ -395,11 +413,16 @@ async function main(): Promise<number> {
       return 0;
 
     default:
-      fail(`unknown command "${command}"\n\n${USAGE}`);
+      fail(`unknown command\n\n${USAGE}`);
   }
 }
 
 main().then(
   (code) => process.exit(code),
-  (err: unknown) => fail(err instanceof Error ? err.message : String(err)),
+  (err: unknown) => {
+    // Node's argument-parser messages quote both unknown options and unexpected values.
+    if (err instanceof Error && 'code' in err && String(err.code).startsWith('ERR_PARSE_ARGS_')) fail('invalid arguments; run loadout --help for usage');
+    if (err instanceof Error && 'code' in err) fail(`command failed: ${systemError(err)}`);
+    fail(err instanceof Error ? err.message : String(err));
+  },
 );

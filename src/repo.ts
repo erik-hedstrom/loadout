@@ -2,13 +2,14 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { basename, extname, join } from 'node:path';
 import type { RepoSignals } from './types.js';
+import { withoutKey } from './config.js';
 
 const MAX_FILES = 40;
 const MAX_DEPS = 60;
 
 function gitFiles(cwd: string): string[] {
   try {
-    return execFileSync('git', ['ls-files'], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 64 * 1024 * 1024 })
+    return execFileSync('git', ['ls-files'], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 64 * 1024 * 1024, env: withoutKey() })
       .split('\n')
       .filter(Boolean);
   } catch {

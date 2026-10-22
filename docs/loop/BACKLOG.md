@@ -1261,7 +1261,7 @@ Learnings (2026-10-09):
 | E13 | P1 | Apply Engineer standards to both review paths, with a blocking necessity pass | Codex + Claude review | cloud | done ([#41](https://github.com/erik-hedstrom/loadout/pull/41)) |
 | E14 | P1 | Redact key-shaped strings before anything goes to Jev (prerequisite for the C2 loadout arm) | Codex | cloud | todo |
 | E15 | P1 | Test flakes: WSL-only `bench.test.ts` failure, Windows spawn timeouts | Claude | local | done ([#44](https://github.com/erik-hedstrom/loadout/pull/44)) |
-| E16 | P2 | Hygiene from #30's audit: control characters, `git ls-files` env, config symlink, echoed arguments | Claude | cloud | todo |
+| E16 | P2 | Hygiene from #30's audit: control characters, `git ls-files` env, config symlink, echoed arguments | Codex | local | review ([#50](https://github.com/erik-hedstrom/loadout/pull/50)) |
 | E17 | P3 | One entry-point guard for bench scripts that survives symlinked paths | Codex + Claude review | cloud | review ([#51](https://github.com/erik-hedstrom/loadout/pull/51)) |
 
 **E16. Terminal, config and git hygiene.** From the reviews of #30 (A3);
@@ -1272,12 +1272,31 @@ all older than it.
 - src/repo.ts runs `git ls-files` with the full environment, key included.
   Use `withoutKey()` as `addFromGitHub` does, with a test.
 - From #30's deep security audit: `writeDefaultConfig` follows a symlinked
-  `~/.loadout` (no `isPlainFolder` check before writing), and `loadout add
+  `config.json` (refuse nonregular files before its read and write), and `loadout add
   <arg>` and other commands echo a mistyped argument, which could be a pasted
   key (only `init` uses fixed text). Fix both, with adversarial tests.
 - Decision for Erik, from the same audit: the spawned `claude` and `codex`
   keep `TYPESAFE_API_KEY` in their environment by design. Record whether that
   stands.
+
+Learnings (2026-10-22, #50 review): relocating the home through a link is the
+user's documented choice; a link at `config.json` is not. All config reads use
+the same file check; same-user swaps after inspection remain out of scope.
+HTTP startup and filesystem errors can echo arguments
+just like parser errors: print fixed categories and allowlisted errno codes.
+Failed adds identify the source by position and retain a safe failure reason.
+Swept `init`, `add`, `list`, `audit`, `route`, `claude`, `codex`, `mcp`,
+`mcp-launch`, `setup`, `doctor`, `hook` and unknown-command errors: add/token
+paths and HTTP listen need local boundaries; other coded errors use the CLI
+boundary. Hook/relay/Jev failures already use fixed diagnostics; validated host
+and isolation refusals use known names. Terminal controls share one constant.
+Review fixes against `4413a67`: M1 file checks and home compatibility, M2 safe
+system diagnostics, L1 source positions/reasons, L2 shared control regex;
+covered by [hygiene tests](../../test/hygiene.test.ts). Windows verification:
+`npm test -- --maxWorkers=2 --reporter=dot`: 582 passed, 17 skipped (POSIX smoke
+tests skip on Windows); typecheck, build and diff checks passed. All 16 mutation
+checks failed as intended, then source bytes were restored. Jev/API cost: $0.
+Re-review and the full CI matrix remain with the coordinator.
 
 **E17. Bench entry-point guard.** From pr-reviewer on #45 (C13). Bench
 scripts (judge, stability, sweep, hook-latency, overhead and mcp-overhead on
