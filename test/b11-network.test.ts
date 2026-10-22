@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as cp from 'node:child_process';
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { connect, createServer, type Server } from 'node:net';
@@ -24,16 +24,6 @@ const sandbox = () => {
   mkdirSync(home); mkdirSync(workspace);
   return { home, workspace, binary: '/usr/bin/true' };
 };
-// The outer namespace keeps the host filesystem, including resolv.conf's
-// systemd-resolved/WSL symlink, so mount over its existing target.
-const resolverNamespaceArgs = (resolver: string): string[] => [
-  '--unshare-all', '--uid', '0', '--gid', '0', '--cap-add', 'CAP_NET_ADMIN', '--cap-add', 'CAP_NET_BIND_SERVICE',
-  // pasta maps UID 0 in a child user namespace; Linux requires this in its creator.
-  '--cap-add', 'CAP_SETFCAP',
-  '--bind', '/', '/', '--proc', '/proc', '--dev', '/dev', '--dev-bind', '/dev/net/tun', '/dev/net/tun',
-  '--ro-bind', resolver, realpathSync('/etc/resolv.conf'),
-  '--clearenv', '--setenv', 'PATH', '/usr/sbin:/usr/bin:/bin', '--',
-];
 afterEach(() => {
   vi.mocked(cp.spawn).mockReset().mockImplementation(realCp.spawn);
   vi.mocked(cp.spawnSync).mockReset().mockImplementation(realCp.spawnSync);
@@ -41,20 +31,6 @@ afterEach(() => {
 });
 
 describe.runIf(process.platform === 'linux')('B11 network dependency and preflight diagnostics', () => {
-  it('provides the DNS fixture resolver, nested root mappings and TUN device without pasta', () => {
-    const resolver = join(sandbox().home, 'host-resolv.conf');
-    writeFileSync(resolver, 'nameserver 127.0.0.54\n');
-    const probe = `const fs=require('node:fs'),assert=require('node:assert/strict');
-      assert.equal(process.getuid(),0);assert.equal(process.getgid(),0);
-      for(const file of ['uid_map','gid_map'])assert.match(fs.readFileSync('/proc/self/'+file,'utf8'),/^\\s*0\\s+0\\s+1\\s*$/);
-      fs.closeSync(fs.openSync('/dev/net/tun','r+'));
-      process.stdout.write(fs.readFileSync('/etc/resolv.conf','utf8'));`;
-    const run = realCp.spawnSync('bwrap', [...resolverNamespaceArgs(resolver),
-      'unshare', '--user', '--map-root-user', '--', process.execPath, '-e', probe], { timeout: 5000, encoding: 'utf8' });
-    expect(run.error, run.stderr).toBeUndefined();
-    expect(run.status, run.stderr).toBe(0);
-    expect(run.stdout).toBe('nameserver 127.0.0.54\n');
-  });
   it('pairs DNS-only forwarding with a read-only resolver file and removes it after exit', async () => {
     let resolver = '';
     vi.mocked(cp.spawn).mockImplementation((...args: Parameters<typeof cp.spawn>) => {
@@ -112,42 +88,39 @@ const listen = async (server: Server, port = 0): Promise<number> => {
 const close = (server: Server) => new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
 
 describe.runIf(process.platform === 'linux')('B11 real pasta namespace', () => {
-  it('resolves through a host loopback DNS server without mapping its other TCP or UDP ports', ctx => {
-    if (pastaMissing) { ctx.skip(MISSING_PASTA); return; }
-    const s = sandbox(), resolver = join(s.home, 'host-resolv.conf');
-    writeFileSync(resolver, 'nameserver 127.0.0.54\n');
-    const inner = `const dns=require('node:dns').promises,fs=require('node:fs'),assert=require('node:assert/strict'),net=require('node:net'),dgram=require('node:dgram');
-      const port=Number(process.argv[1]),address=fs.readFileSync('/etc/resolv.conf','utf8').match(/^nameserver (.+)$/m)[1];
-      assert.throws(()=>fs.writeFileSync('/etc/resolv.conf','tampered'),{code:'EROFS'});
-      const tcp=()=>new Promise(resolve=>{let text='';const c=net.connect(port,address);c.setTimeout(300,()=>c.destroy());c.on('data',b=>text+=b);c.on('error',()=>{});c.on('close',()=>resolve(text))});
-      const udp=()=>new Promise(resolve=>{const c=dgram.createSocket('udp4'),timer=setTimeout(()=>{c.close();resolve('')},300);c.on('message',b=>{clearTimeout(timer);c.close();resolve(b.toString())});c.send('probe',port,address)});
-      (async()=>{assert.deepEqual(await dns.resolve4('b11.test'),['192.0.2.11']);assert.equal((await dns.lookup('b11.test',{family:4})).address,'192.0.2.11');
-        assert.deepEqual(await Promise.all([tcp(),udp()]),['','']);console.log('dns-only-ok')})().catch(e=>{console.error(e);process.exit(1)});`;
-    const module = new URL('../bench/b11-sandbox.ts', import.meta.url).href;
-    const fixture = `import assert from 'node:assert/strict';import {execFileSync} from 'node:child_process';import {createSocket} from 'node:dgram';import {createServer} from 'node:net';
-      import {executeSandbox,SANDBOX_NODE} from ${JSON.stringify(module)};
-      for(const args of [['link','set','lo','up'],['link','add','eth0','type','dummy'],['addr','add','192.0.2.1/24','dev','eth0'],['link','set','eth0','up'],['route','add','default','via','192.0.2.254','dev','eth0']])execFileSync('ip',args);
-      const dns=createSocket('udp4'),udp=createSocket('udp4'),tcp=createServer(socket=>socket.end('unrelated-tcp'));
-      dns.on('message',(query,remote)=>{let end=12;while(query[end])end+=query[end]+1;const answer=query.readUInt16BE(end+1)===1,header=Buffer.alloc(12);
-        query.copy(header,0,0,2);header.writeUInt16BE(0x8180,2);header.writeUInt16BE(1,4);header.writeUInt16BE(answer?1:0,6);
-        dns.send(Buffer.concat([header,query.subarray(12,end+5),...(answer?[Buffer.from('c00c000100010000003c0004c000020b','hex')]:[])]),remote.port,remote.address)});
-      udp.on('message',(_,remote)=>udp.send('unrelated-udp',remote.port,remote.address));
-      await new Promise((resolve,reject)=>{dns.once('error',reject);dns.bind(53,'127.0.0.54',resolve)});
-      await new Promise((resolve,reject)=>{tcp.once('error',reject);tcp.listen(0,'127.0.0.54',resolve)});
-      const port=tcp.address().port;
-      await new Promise((resolve,reject)=>{udp.once('error',reject);udp.bind(port,'127.0.0.54',resolve)});
-      try{const run=await executeSandbox(${JSON.stringify(s)},[SANDBOX_NODE,'-e',${JSON.stringify(inner)},String(port)],10000);
-        assert.equal(run.code,0,run.stderr);assert.match(run.stdout,/dns-only-ok/);console.log('dns-only-ok');
-      }finally{dns.close();udp.close();tcp.close()}`;
-    // DNS needs privileged port 53. Give the trusted fixture that capability
-    // only in its own user/network namespace, with no host network or sysctl edits.
-    const run = realCp.spawnSync('bwrap', [
-      ...resolverNamespaceArgs(resolver), process.execPath,
-      '--import', import.meta.resolve('tsx'), '--input-type=module', '-e', fixture,
-    ], { timeout: 12000, encoding: 'utf8' });
-    expect(run.error, run.stderr).toBeUndefined();
-    expect(run.status, run.stderr).toBe(0);
-    expect(run.stdout).toContain('dns-only-ok');
+  it('resolves public DNS through the production forwarder while blocking unrelated host loopback TCP and UDP', async ctx => {
+    if (process.env.B11_TEST_INTERNET !== '1') { ctx.skip('set B11_TEST_INTERNET=1 to enable the public DNS probe'); return; }
+    // CI opts in: missing pasta or failed public DNS must fail, not skip.
+    requireNetwork();
+    const tcp = createServer(socket => socket.end('unrelated-tcp'));
+    const udp = createSocket('udp4');
+    udp.on('message', (_, remote) => udp.send('unrelated-udp', remote.port, remote.address));
+    let udpBound = false;
+    try {
+      const tcpPort = await listen(tcp);
+      await new Promise<void>((resolve, reject) => { udp.once('error', reject); udp.bind(0, '127.0.0.1', resolve); });
+      udpBound = true;
+      const udpPort = udp.address().port;
+      const script = `const dns=require('node:dns'),fs=require('node:fs'),assert=require('node:assert/strict'),net=require('node:net'),dgram=require('node:dgram');
+        assert.equal(fs.readFileSync('/etc/resolv.conf','utf8'),'nameserver 169.254.1.1\\n');
+        assert.deepEqual(dns.getServers(),['169.254.1.1']);
+        assert.throws(()=>fs.writeFileSync('/etc/resolv.conf','tampered'),{code:'EROFS'});
+        const tcp=host=>new Promise(resolve=>{const c=net.connect({port:${tcpPort},host});c.setTimeout(500,()=>c.destroy());
+          c.on('connect',()=>{c.destroy();resolve(true)});c.on('error',()=>{});c.on('close',()=>resolve(false))});
+        const udp=host=>new Promise(resolve=>{const c=dgram.createSocket('udp4'),timer=setTimeout(()=>{c.close();resolve(false)},500);
+          c.on('message',()=>{clearTimeout(timer);c.close();resolve(true)});c.on('error',()=>{clearTimeout(timer);c.close();resolve(false)});c.send('probe',${udpPort},host)});
+        (async()=>{const answers=await dns.promises.resolve4('example.com');assert.ok(answers.length>0);assert.ok(answers.every(address=>net.isIP(address)===4));
+          assert.equal(net.isIP((await dns.promises.lookup('example.com',{family:4})).address),4);
+          for(const host of ['127.0.0.1',...dns.getServers()])assert.deepEqual(await Promise.all([tcp(host),udp(host)]),[false,false],host);
+          console.log('dns-only-ok')})().catch(e=>{console.error(e);process.exit(1)});`;
+      const run = await executeSandbox(sandbox(), [SANDBOX_NODE, '-e', script], 10000);
+      expect(run.timedOut).toBe(false);
+      expect(run.code, run.stderr).toBe(0);
+      expect(run.stdout).toContain('dns-only-ok');
+    } finally {
+      if (udpBound) udp.close();
+      if (tcp.listening) await close(tcp);
+    }
   }, 15000);
 
   it('forwards only allowed host loopback ports', async ctx => {

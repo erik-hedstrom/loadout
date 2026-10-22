@@ -35,7 +35,7 @@ jobs:
           cache: npm
       - name: Install sandbox test dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y bubblewrap passt iproute2
+        run: sudo apt-get update && sudo apt-get install -y bubblewrap passt
       - name: Allow sandbox user namespaces on the ephemeral runner
         if: runner.os == 'Linux'
         # Ubuntu 24.04 restricts unprivileged user namespaces by default; without this, bwrap
