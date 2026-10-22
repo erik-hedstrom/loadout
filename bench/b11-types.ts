@@ -8,7 +8,7 @@ export const DEFAULT_MODELS = ['opencode/glm-5.3-flash-free', 'opencode/deepseek
 const count = z.number().int().nonnegative();
 const name = z.string().regex(/^[\w./:@-]{1,200}$/);
 const kind = z.enum(['skill-needle', 'mcp-needle', 'plain']);
-const invalidReason = z.enum(['rate-limit', 'provider-error', 'timeout', 'sandbox-failure', 'malformed-events', 'budget-exhausted', 'context-limit']);
+const invalidReason = z.enum(['rate-limit', 'provider-error', 'timeout', 'sandbox-failure', 'malformed-events', 'budget-exhausted', 'context-limit', 'usage-limit']);
 const toolStatus = z.enum(['completed', 'error']);
 const tokensSchema = z.strictObject({ input: count, cacheRead: count, cacheWrite: count, output: count, reasoning: count });
 export type B11Tokens = z.infer<typeof tokensSchema>;
@@ -76,7 +76,11 @@ export interface B11Events {
   invalidReason?: z.infer<typeof invalidReason>;
 }
 
-export function parseEvents(text: string, interrupted?: 'timeout'): B11Events {
+export function isUsageLimit(message: string): boolean {
+  return /\bfree usage limit\b/i.test(message);
+}
+
+export function parseEvents(text: string, interrupted?: 'timeout' | 'usage-limit'): B11Events {
   const steps: B11Tokens[] = [], toolCalls: B11Row['toolCalls'] = [], skillsLoaded = new Set<string>();
   let reason: B11Events['invalidReason'] = interrupted, starts = 0;
   try {
@@ -102,9 +106,11 @@ export function parseEvents(text: string, interrupted?: 'timeout'): B11Events {
       if (event.type === 'error') {
         const { error } = errorSchema.parse(value);
         const message = error.data?.message ?? error.message ?? '';
-        const category = error.data?.statusCode === 429 || /rate.?limit|too many requests/i.test(message) ? 'rate-limit'
+        const category = isUsageLimit(message) ? 'usage-limit'
+          : error.data?.statusCode === 429 || /rate.?limit|too many requests/i.test(message) ? 'rate-limit'
           : error.name === 'ContextOverflowError' || /maximum context length|context (?:window|length).*(?:exceed|limit)|too many (?:input )?tokens/i.test(message) ? 'context-limit' : 'provider-error';
-        if (reason !== 'rate-limit' && !(reason === 'context-limit' && category === 'provider-error')) reason = category;
+        if (category === 'usage-limit') reason = category;
+        else if (reason !== 'usage-limit' && reason !== 'rate-limit' && !(reason === 'context-limit' && category === 'provider-error')) reason = category;
       }
     }
     if (!reason && (steps.length === 0 || starts > steps.length)) throw new Error();

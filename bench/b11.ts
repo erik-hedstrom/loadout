@@ -15,7 +15,7 @@ import { isEntry, splitOf } from './lib.js';
 import { ARMS, CORE_ARMS, DEFAULT_MODELS, parseEvents, parseRow, taskSchema, type B11Row, type B11Task } from './b11-types.js';
 import { checkFiles, confinedPath, copyTree, executeSandbox, OPENCODE_CONFIG, removeSession, sandboxCheck, type Sandbox } from './b11-sandbox.js';
 import { canariesSchema, endpoint, fixtureServer, fixtureTools, type Canary } from './b11-mcp.js';
-import { serverSpecs } from './mcp-fixtures.js';
+import { MAX_SERVERS, serverSpecs } from './mcp-fixtures.js';
 import { listingFor, prepareSkills, validateNeeds } from './b11-listing.js';
 
 export function options(args: string[]) {
@@ -23,7 +23,7 @@ export function options(args: string[]) {
     plan: { type: 'boolean' }, run: { type: 'boolean' }, resume: { type: 'boolean' },
     tasks: { type: 'string', default: 'bench/data/b11/tasks.jsonl' },
     opencode: { type: 'string' }, 'opencode-version': { type: 'string', default: '1.19.3' },
-    arms: { type: 'string', default: CORE_ARMS.join(',') }, models: { type: 'string', default: DEFAULT_MODELS.join(',') },
+    arms: { type: 'string', default: CORE_ARMS.filter(arm => arm !== 'skills-all' && arm !== 'all').join(',') }, models: { type: 'string', default: DEFAULT_MODELS.join(',') },
     reps: { type: 'string', default: '1' }, 'batch-size': { type: 'string', default: '9' }, concurrency: { type: 'string', default: '2' },
     'per-kind': { type: 'string' }, timeout: { type: 'string', default: '300' },
     'sweep-per-kind': { type: 'string', default: '3' },
@@ -37,7 +37,7 @@ export function options(args: string[]) {
   if (models.some(m => !(DEFAULT_MODELS as readonly string[]).includes(m)) || new Set(models).size !== models.length) throw new Error('only declared free models are allowed');
   const hasHeavy = arms.includes('heavy-max');
   if (hasHeavy !== (v['heavy-skills'] !== undefined && v['heavy-servers'] !== undefined) || (!hasHeavy && (v['heavy-skills'] !== undefined || v['heavy-servers'] !== undefined))) throw new Error('heavy-max requires both explicit size limits');
-  const heavy = hasHeavy ? { skills: count(v['heavy-skills']!, 10000), servers: count(v['heavy-servers']!, 20) } : undefined;
+  const heavy = hasHeavy ? { skills: count(v['heavy-skills']!, 10000), servers: count(v['heavy-servers']!, MAX_SERVERS) } : undefined;
   if (v.plan && v.run) throw new Error('choose plan or run');
   const budget = Number(v['jev-budget']);
   if (!Number.isFinite(budget) || budget < 0) throw new Error('invalid Jev budget');
@@ -98,7 +98,7 @@ export class JevBudget {
   }
 }
 
-export function classifyRun(run: { stdout: string; stderr: string; code: number | null; timedOut: boolean }, routingFailed = false) {
+export function classifyRun(run: { stdout: string; stderr: string; code: number | null; timedOut: boolean; usageLimited?: boolean }, routingFailed = false) {
   let events: ReturnType<typeof parseEvents> = { steps: [], totals: { input: 0, cacheRead: 0, cacheWrite: 0, output: 0, reasoning: 0 }, toolCalls: [], skillsLoaded: [] };
   let invalidReason: B11Row['invalidReason'];
   const complete = run.timedOut && !run.stdout.endsWith('\n') ? run.stdout.slice(0, run.stdout.lastIndexOf('\n') + 1) : run.stdout;
@@ -107,6 +107,7 @@ export function classifyRun(run: { stdout: string; stderr: string; code: number 
   if (routingFailed || (run.code !== 0 && !run.timedOut && invalidReason === undefined)) invalidReason = 'provider-error';
   if (/^bwrap:/m.test(run.stderr)) invalidReason = 'sandbox-failure';
   if (/\b(?:HTTP(?:\s+status)?|status(?:Code)?)\s*[:=]?\s*429\b|rate[ -]?limit(?:ed| exceeded)|too many requests/i.test(run.stderr) || events.invalidReason === 'rate-limit') invalidReason = 'rate-limit';
+  if (run.usageLimited || events.invalidReason === 'usage-limit') invalidReason = 'usage-limit';
   return { events, invalidReason };
 }
 
@@ -199,13 +200,14 @@ export async function main(args: string[]) {
     console.log(`Confined manifest library: ${skills.length} accepted, ${rejected} rejected.`);
     const token = randomBytes(32).toString('hex');
     const servers: Capability[] = [];
-    for (const spec of serverSpecs(20)) {
+    for (const spec of serverSpecs(MAX_SERVERS)) {
       const e = await endpoint(() => ({ server: fixtureServer(spec, data.canaries) }), token); endpoints.push(e);
       servers.push({ id: `mcp:${spec.name}`, kind: 'mcp', name: spec.name, description: `Third-party fixture ${spec.archetype}. ${fixtureTools(spec, data.canaries).map(t => `${t.name}: ${t.description}`).join('; ')}`, source: 'b11-fixture', gateway: true,
         tools: fixtureTools(spec, data.canaries).map(t => ({ name: t.name, description: t.description })), server: { url: e.url, headers: { Authorization: `Bearer ${token}` } } });
     }
     let orderIndex = Math.max(-1, ...previous.map(r => r.orderIndex)) + 1;
     let rateLimitedUntil = 0, stopped = false, written = 0;
+    let stopReason: 'budget exhausted' | 'free usage limit reached' | undefined;
     // A single queue per block preserves the static arm's cross-session cache opportunity.
     for (const block of plan) {
       if (stopped) break;
@@ -251,10 +253,11 @@ export async function main(args: string[]) {
             if (Object.keys(mcp).length) writeFileSync(join(home, 'mcp-token'), token, { mode: 0o600 });
             row.listing = { skills: selectedSkills.length, servers: selectedServers.length, tools: selectedServers.reduce((n, c) => n + (c.tools?.length ?? 0), 0) };
             writeFileSync(join(workspace, 'opencode.json'), JSON.stringify({ ...OPENCODE_CONFIG, mcp }));
-            const run = await executeSandbox(s, ['/opt/opencode', 'run', '--pure', '-m', block.model, '--format', 'json', task.prompt], o.timeoutMs);
+            const run = await executeSandbox(s, ['/opt/opencode', 'run', '--pure', '--print-logs', '--log-level', 'ERROR', '-m', block.model, '--format', 'json', task.prompt], o.timeoutMs, true, true);
             const classified = classifyRun(run, meter.failed); Object.assign(row, classified.events);
             row.latency = run.clock.snapshot(row.steps.length);
             row.invalidReason = classified.invalidReason;
+            if (row.invalidReason === 'usage-limit') { stopped = true; stopReason = 'free usage limit reached'; }
             if (!row.invalidReason) {
               const checked = await runCheck(task, s, data.root);
               if (checked === 'sandbox-failure') row.invalidReason = checked;
@@ -267,21 +270,24 @@ export async function main(args: string[]) {
           finally {
             if (gateway) await gateway.close();
             await meter.settle();
-            if (meter.failed) { row.result = 'invalid'; row.invalidReason = meter.exhausted ? 'budget-exhausted' : 'provider-error'; }
+            if (meter.failed) {
+              row.result = 'invalid';
+              if (row.invalidReason !== 'usage-limit') row.invalidReason = meter.exhausted ? 'budget-exhausted' : 'provider-error';
+            }
             row.wallMs = Date.now() - start;
             // OpenCode's private databases/logs and generated files never enter public results.
             removeSession(sessionRoot);
           }
           appendFileSync(rowsFile, JSON.stringify(parseRow(row)) + '\n');
           written++;
-          if (meter.exhausted) stopped = true;
+          if (meter.exhausted) { stopped = true; stopReason ??= 'budget exhausted'; }
           console.log(`${row.orderIndex} ${row.model} ${row.arm} ${row.taskId}: ${row.result}${row.invalidReason ? ` (${row.invalidReason})` : ''}`);
         }
       }).map(worker => worker.catch(error => { stopped = true; throw error; })));
       const rejected = workers.find((worker): worker is PromiseRejectedResult => worker.status === 'rejected');
       if (rejected) throw rejected.reason;
     }
-    console.log(`Jev reserved/observed cost: $${budget.spent.toFixed(6)}; new rows: ${written} of ${runs} planned sessions${stopped ? '; budget exhausted' : ''}`);
+    console.log(`Jev reserved/observed cost: $${budget.spent.toFixed(6)}; new rows: ${written} of ${runs} planned sessions${stopReason ? `; ${stopReason}` : ''}`);
   } finally { await Promise.all(endpoints.map(e => e.close())); rmSync(root, { recursive: true, force: true }); }
 }
 

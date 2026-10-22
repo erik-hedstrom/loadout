@@ -17,6 +17,8 @@ describe('B11 study', () => {
   });
   it('requires explicit runs, supported free models, bounded counts and a Jev budget', () => {
     expect(options([]).run).toBe(false);
+    expect(options([]).arms).toEqual(['bare', 'mcp-all', 'gateway', 'preselect']);
+    expect(options(['--arms', 'skills-all,all']).arms).toEqual(['skills-all', 'all']);
     for (const args of [['--concurrency', '0'], ['--arms', 'typo'], ['--models', 'paid/model'], ['--run', '--plan'], ['--jev-budget=-1']]) expect(() => options(args)).toThrow();
     expect(options(['--run', '--resume']).resume).toBe(true);
   });
@@ -76,6 +78,7 @@ describe('B11 study', () => {
     const stdout = JSON.stringify({ type: 'step_finish', part: { tokens: { total: 15, input: 5, cache: { read: 8, write: 0 }, output: 2, reasoning: 0 } } }) + '\n';
     const run = { stdout, stderr: 'connected http://127.0.0.1:42917', code: 0, timedOut: false };
     expect(classifyRun(run).invalidReason).toBeUndefined();
+    expect(classifyRun({ ...run, usageLimited: true, stderr: 'HTTP status 429' }).invalidReason).toBe('usage-limit');
     expect(classifyRun({ ...run, stderr: 'HTTP status 429' }).invalidReason).toBe('rate-limit');
     expect(classifyRun({ ...run, timedOut: true }).invalidReason).toBe('timeout');
     expect(classifyRun({ ...run, timedOut: true }).events.steps).toHaveLength(1);

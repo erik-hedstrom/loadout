@@ -17,6 +17,8 @@ describe.runIf(process.platform === 'linux')('B11 runner lifecycle without provi
     writeFileSync(binary, `#!/bin/sh
 if [ "$1" = "--version" ]; then printf '1.19.3\\n'; exit 0; fi
 case "$*" in *expects-token*) [ -f "$HOME/mcp-token" ] || exit 3;; *) [ ! -e "$HOME/mcp-token" ] || exit 3;; esac
+case "$*" in *quota-stop*) printf '%s\\n' 'AI_APICallError: Free usage limit reached PRIVATE' >&2; sleep 3; exit 9;; esac
+case "$*" in *quota-quote*) printf '%s\\n' 'Free usage limit reached PRIVATE' >&2;; esac
 case "$*" in *slow*) sleep 0.4;; esac
 case "$*" in *lock-output*) mkdir locked; chmod 000 locked;; esac
 printf '%s\\n' '{"type":"step_start"}'
@@ -44,6 +46,19 @@ printf '%s\\n' '{"type":"step_finish","part":{"tokens":{"total":12,"input":10,"o
     await main(a);
     const plan = JSON.parse(vi.mocked(console.log).mock.calls[0]![0]);
     expect(plan).toMatchObject({ runs: 3, concurrency: 2, timeoutSeconds: 5, sessionDeadlineScheduleSeconds: 10 });
+  });
+  it('persists a provider usage cap promptly and stops before another session', async () => {
+    const start = Date.now();
+    await main(args('bare', [task('limited', 'quota-stop'), task('not-started')], '0'));
+    expect(Date.now() - start).toBeLessThan(2500);
+    expect(rows(out)).toMatchObject([{ taskId: 'limited', result: 'invalid', invalidReason: 'usage-limit', steps: [] }]);
+    expect(rows(out)).toHaveLength(1);
+    expect(JSON.stringify(rows(out))).not.toContain('PRIVATE');
+    expect(vi.mocked(console.log).mock.calls.at(-1)![0]).toContain('free usage limit reached');
+  });
+  it('does not treat a quoted quota phrase without an API error as a persistent provider cap', async () => {
+    await main(args('bare', [task('quoted', 'quota-quote')], '0'));
+    expect(rows(out)).toMatchObject([{ taskId: 'quoted', result: 'pass' }]);
   });
   it('persists budget exhaustion and stops before the next session', async () => {
     await main(args('preselect', [task('first'), task('second')], '0'));

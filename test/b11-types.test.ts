@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { parseEvents, parseRow, taskSchema, type B11Row } from '../bench/b11-types.js';
+import { isUsageLimit, parseEvents, parseRow, taskSchema, type B11Row } from '../bench/b11-types.js';
 
 // OpenCode 1.19.3 pilot row orderIndex 2, first request. All non-counter fields removed.
 const recorded = readFileSync(new URL('./fixtures/b11-events.jsonl', import.meta.url), 'utf8');
@@ -16,6 +16,36 @@ function row(): B11Row {
 }
 
 describe('B11 event projection', () => {
+  it.each([
+    ['free usage limit', true], ['Provider: FREE USAGE LIMIT reached.', true],
+    ['free daily usage limit', false], ['free usage limitation', false], ['notfree usage limit', false],
+    ['free usage limits', false], ['rate limit exceeded', false],
+  ])('recognizes only the observed persistent usage-cap marker (%s)', (message, expected) => {
+    expect(isUsageLimit(message)).toBe(expected);
+  });
+  it('projects a typed API usage-cap error without retaining provider diagnostics', () => {
+    const parsed = parseEvents(jsonl({ type: 'error', error: { name: 'APIError', data: { statusCode: 429, message: 'free usage limit PRIVATE PROVIDER DATA' } } }));
+    expect(parsed).toEqual({ steps: [], totals: { input: 0, cacheRead: 0, cacheWrite: 0, output: 0, reasoning: 0 }, toolCalls: [], skillsLoaded: [], invalidReason: 'usage-limit' });
+    expect(JSON.stringify(parsed)).not.toContain('PRIVATE');
+  });
+  it('preserves completed counters when stderr reports a usage cap before any CLI error event', () => {
+    const parsed = parseEvents(recorded + '\n' + JSON.stringify({ type: 'step_start' }), 'usage-limit');
+    expect(parsed.steps).toEqual([{ input: 6657, cacheRead: 0, cacheWrite: 0, output: 26, reasoning: 15 }]);
+    expect(parsed.invalidReason).toBe('usage-limit');
+    expect(parseEvents('', 'usage-limit').invalidReason).toBe('usage-limit');
+  });
+  it.each([
+    { name: 'APIError', data: { statusCode: 429, message: 'PRIVATE rate limit' } },
+    { name: 'ContextOverflowError', data: { message: 'PRIVATE context limit' } },
+    { name: 'AI_RetryError', message: 'PRIVATE failed after three attempts' },
+  ])('keeps usage-cap classification stronger than other errors in either order (%#)', (other) => {
+    const usage = { type: 'error', error: { name: 'AI_APICallError', message: 'FREE USAGE LIMIT PRIVATE' } };
+    for (const events of [[usage, { type: 'error', error: other }], [{ type: 'error', error: other }, usage]]) {
+      const parsed = parseEvents(jsonl(...events));
+      expect(parsed.invalidReason).toBe('usage-limit');
+      expect(JSON.stringify(parsed)).not.toContain('PRIVATE');
+    }
+  });
   it('accepts optional scrubbed timing and rejects mismatched or negative durations', () => {
     const value = row();
     value.latency = { startupMs: 20, stepsMs: [50] };
@@ -106,6 +136,11 @@ describe('B11 persisted rows', () => {
     expect(parseRow(row())).toEqual(row());
     const invalid = { ...row(), steps: [], totals: { input: 0, cacheRead: 0, cacheWrite: 0, output: 0, reasoning: 0 }, result: 'invalid', invalidReason: 'timeout' };
     expect(parseRow(invalid).result).toBe('invalid');
+  });
+  it('accepts a counters-only usage-cap attempt as invalid rather than a quality failure', () => {
+    const invalid = { ...row(), steps: [], totals: { input: 0, cacheRead: 0, cacheWrite: 0, output: 0, reasoning: 0 }, result: 'invalid', invalidReason: 'usage-limit' };
+    expect(parseRow(invalid).invalidReason).toBe('usage-limit');
+    expect(() => parseRow({ ...invalid, result: 'fail' })).toThrow('classification');
   });
   it.each([
     (r: any) => { r.transcript = 'PRIVATE'; },

@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdtempSync, mkdirSync, writeFileSync, symlinkSy
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { eventClock, sandboxArgs, copyTree, checkFiles, confinedPath, materializeSkill, sandboxCheck, removeSession } from '../bench/b11-sandbox.js';
+import { executeSandbox, eventClock, sandboxArgs, copyTree, checkFiles, confinedPath, materializeSkill, sandboxCheck, removeSession } from '../bench/b11-sandbox.js';
 import { runCheck } from '../bench/b11.js';
 
 const roots: string[] = [];
@@ -81,6 +81,12 @@ describe('B11 sandbox', () => {
     expect(existsSync(root)).toBe(false);
     expect(statSync(outside).mode & 0o777).toBe(0o750);
     expect(checkFiles(outside, { type: 'files', path: 'canary', all: ['outside'], none: [] })).toBe(true);
+  });
+  it.runIf(process.platform === 'linux')('keeps quota detection disabled for hidden checks and other non-model commands', async () => {
+    const root = temp(), home = join(root, 'home'), workspace = join(root, 'work');
+    mkdirSync(home); mkdirSync(workspace);
+    const run = await executeSandbox({ home, workspace, binary: '/usr/bin/true' }, ['/usr/bin/node', '-e', 'console.error("AI_APICallError: free usage limit reached");setTimeout(()=>process.exit(0),30)'], 5000, false);
+    expect(run.code).toBe(0); expect(run.usageLimited).toBe(false);
   });
   it.runIf(process.platform === 'linux')('proves the real home, checkout and outside canary are unreadable', async () => {
     await expect(sandboxCheck('/usr/bin/true')).resolves.toBeUndefined();

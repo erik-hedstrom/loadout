@@ -5,6 +5,7 @@ import { isAbsolute, join, posix, relative, resolve } from 'node:path';
 import { stringify } from 'yaml';
 import { escapeSkillTags } from '../src/launch.js';
 import { parseFrontmatter, readConfined } from '../src/library.js';
+import { isUsageLimit } from './b11-types.js';
 
 export interface Sandbox { workspace: string; home: string; binary: string }
 const within = (root: string, p: string) => p === root || p.startsWith(root + '/');
@@ -65,18 +66,22 @@ export function eventClock() {
   };
 }
 
-export function executeSandbox(s: Sandbox, command: string[], timeoutMs: number, network = true): Promise<{ stdout: string; stderr: string; code: number | null; timedOut: boolean; clock: ReturnType<typeof eventClock> }> {
+export function executeSandbox(s: Sandbox, command: string[], timeoutMs: number, network = true, stopOnUsageLimit = false): Promise<{ stdout: string; stderr: string; code: number | null; timedOut: boolean; usageLimited: boolean; clock: ReturnType<typeof eventClock> }> {
   return new Promise((resolvePromise, reject) => {
     const child = spawn('bwrap', sandboxArgs(s, command, network), { env: { PATH: '/usr/bin:/bin' }, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
     const started = performance.now(), clock = eventClock();
-    let stdout = '', stderr = '', timedOut = false;
+    let stdout = '', stderr = '', timedOut = false, usageLimited = false;
     const kill = () => { if (child.pid) { try { process.kill(-child.pid, 'SIGKILL'); } catch (e) { if ((e as NodeJS.ErrnoException).code !== 'ESRCH') reject(new Error('sandbox cleanup failed')); } } };
     const timer = setTimeout(() => { timedOut = true; kill(); }, timeoutMs);
     // Transcripts exist only in bounded memory, never in result files or diagnostics.
     child.stdout.on('data', (b: Buffer) => { const chunk = b.toString(); stdout += chunk; clock.push(chunk, performance.now() - started); if (stdout.length > 16_000_000) { timedOut = true; kill(); } });
-    child.stderr.on('data', (b: Buffer) => { stderr = (stderr + b.toString()).slice(-65536); });
+    child.stderr.on('data', (b: Buffer) => {
+      stderr = (stderr + b.toString()).slice(-65536);
+      // Only model runs opt in. Hidden checks may print arbitrary model-owned text.
+      if (stopOnUsageLimit && /\bAI_(?:APICall|Retry)Error\b/.test(stderr) && isUsageLimit(stderr)) { usageLimited = true; kill(); }
+    });
     child.on('error', () => { clearTimeout(timer); reject(new Error('sandbox could not start')); });
-    child.on('close', code => { clearTimeout(timer); resolvePromise({ stdout, stderr, code, timedOut, clock }); });
+    child.on('close', code => { clearTimeout(timer); resolvePromise({ stdout, stderr, code, timedOut, usageLimited, clock }); });
   });
 }
 
