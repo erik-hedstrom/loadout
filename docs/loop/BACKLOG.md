@@ -37,6 +37,7 @@ Each PR body's **Review state** section has the round-by-round record.
 |---|---|---|
 | [#47](https://github.com/erik-hedstrom/loadout/pull/47) | C14 A/B pilot harness; adds B10 | final review round; the clean Codex-only rerun needs a separately logged-in `CODEX_HOME` |
 | [#57](https://github.com/erik-hedstrom/loadout/pull/57) | B11 cached OpenCode study (draft): harness, dataset and quota-stopped pilots | in review; the full study waits on the free tier's usage cap |
+| [#59](https://github.com/erik-hedstrom/loadout/pull/59) | D21 cache-stable request prefix | in review |
 
 ## A. Adoption and ease of use
 
@@ -754,6 +755,7 @@ binary alone on `PATH`, so the `claude` judge needed no new seam.
 | D18 | P1 | The hook and `load_skill` can offer `load_skill` only, with no folder | Codex | cloud | partial ([#54](https://github.com/erik-hedstrom/loadout/pull/54)): load_skill-only offer merged; C2 dropping its folder-hint limit waits on Erik |
 | D19 | P2 | `which()` honours PATHEXT on Windows | Codex | local | partial ([#52](https://github.com/erik-hedstrom/loadout/pull/52)): PATHEXT lookup merged; the launcher refuses batch hosts instead of spawning them (see learnings) |
 | D20 | P2 | Hook state writes never drop context or the no-key warning | Codex | cloud | done ([#49](https://github.com/erik-hedstrom/loadout/pull/49)) |
+| D21 | P1 | Keep loadout's request prefix cache-stable | Codex | local | review ([#59](https://github.com/erik-hedstrom/loadout/pull/59)) |
 
 **D18. The hook and `load_skill` can offer `load_skill` only, with no folder.**
 Both currently suggest reading skill files directly, even when the host's
@@ -820,6 +822,27 @@ Learnings (2026-10-22): the folder check and `readdirSync` now sit inside the
 sweep's never-throw boundary, like each file's removal. The regression test
 needs a state folder outside the loadout home whose parent is a file, so that
 the directory read itself fails.
+
+**D21. Request prefix stability.** `server_tools` now has a constant
+description: it no longer lists the library's servers, so the tool list stays
+the same when a nonempty server set changes or is reordered (a library with
+no servers has no gateway tools at all), and no untrusted server
+name reaches a tool definition. `find_tools` already returns server keys and
+an example gateway call.
+
+Learnings (2026-10-22): in-process MCP tests compare serialized initialization
+and tool-list results around search, skill loading and gateway discovery,
+including a tool-index write, and reject tool-list-change notifications; this
+guards behaviour main already had. Different and permuted gateway inventories
+produce the same tool list. The existing hook output test pins per-prompt
+context to `additionalContext` on `UserPromptSubmit`.
+Moving the Claude launcher's relevance note from the system prompt into the
+user turn was tried and dropped in review: Claude's cached prefix puts tools
+before the system prompt, and the launcher's tools (plugin-dir skills,
+`--mcp-config`) already vary with the selection, so a constant system prompt
+buys no cross-session reuse there. It would also have added system text to the
+bench's hook and plugin arms that the real plugin never sends. Money saved by
+caching is unmeasured; that remains a B11 / B-series question.
 
 **D17. MCP start-up inside Codex's grace period.** Codex leaves an optional
 MCP server out of the tool list if it is not ready about 1 s after start-up,
