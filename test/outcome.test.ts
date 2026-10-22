@@ -13,7 +13,7 @@ afterAll(() => temps.forEach((dir) => rmSync(dir, { recursive: true, force: true
 const ids = ['a', 'b', 'c'];
 
 /** Runs `outcome.ts --judge-only` with a stand-in `claude` as the only thing on PATH, so a real one can never be reached. */
-async function judge(standInMode: number) {
+async function judge(standInMode: number, runArms = false) {
   const dir = mkdtempSync(join(tmpdir(), 'loadout-outcome-test-'));
   temps.push(dir);
   const sweep = join(dir, 'sweep');
@@ -28,14 +28,19 @@ async function judge(standInMode: number) {
   const bin = join(dir, 'bin');
   const log = join(dir, 'calls.log');
   mkdirSync(bin);
+  if (runArms) {
+    for (const arm of ['bare', 'loadout']) rmSync(join(sweep, 'outcome', 'a', `${arm}.json`));
+    const usage = readFileSync(new URL('./fixtures/request-usage/codex.jsonl', import.meta.url), 'utf8');
+    writeFileSync(join(bin, 'codex'), `#!/bin/sh\ncase " $* " in *' --json '*) ;; *) exit 9 ;; esac\nprintf '%s\\n' '${usage.trim()}'\n`, { mode: 0o755 });
+  }
   writeFileSync(
     join(bin, 'claude'),
-    `#!/bin/sh\n/bin/cat >/dev/null\necho start >> "${log}"\n/bin/sleep 0.2\necho end >> "${log}"\nprintf '{"structured_output":{"winner":"first","confidence":"high","reasons":"x"},"total_cost_usd":0,"duration_ms":1,"usage":{"input_tokens":1}}'\n`,
+    `#!/bin/sh\n/bin/cat >/dev/null\necho start >> "${log}"\n/bin/sleep 0.2\necho end >> "${log}"\nprintf '{"type":"result","structured_output":{"winner":"first","confidence":"high","reasons":"x"},"total_cost_usd":0,"duration_ms":1,"usage":{"input_tokens":1,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":1,"iterations":[{"input_tokens":1,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":1}]}}'\n`,
     { mode: standInMode },
   );
 
   const code = await new Promise<number | null>((resolve) => {
-    const child = spawn(process.execPath, ['--import', 'tsx', 'bench/outcome.ts', sweep, '--ids', ids.join(','), '--judge-only'], {
+    const child = spawn(process.execPath, ['--import', 'tsx', 'bench/outcome.ts', sweep, '--ids', ids.join(','), ...(runArms ? [] : ['--judge-only'])], {
       cwd: join(import.meta.dirname, '..'),
       env: { ...process.env, LOADOUT_HOME: dir, PATH: bin },
       stdio: 'ignore',
@@ -53,6 +58,22 @@ describe.skipIf(process.platform === 'win32')('bench/outcome.ts judging', () => 
     // Two orders per request: overlapping calls would show "start" twice in a row.
     expect(readFileSync(log, 'utf8').trim().split('\n')).toEqual(Array(ids.length * 2).fill(['start', 'end']).flat());
     expect(readFileSync(verdicts, 'utf8').trim().split('\n')).toHaveLength(ids.length);
+    const row = JSON.parse(readFileSync(verdicts, 'utf8').trim().split('\n')[0]!);
+    expect(row.orders.map((order: { usage: unknown }) => order.usage)).toEqual(Array(2).fill({
+      requestSource: 'result.usage.iterations', requests: [{ inputTokens: 1, cachedInputTokens: 0, outputTokens: 1 }],
+      totals: { inputTokens: 1, cachedInputTokens: 0, outputTokens: 1 },
+    }));
+  }, 60_000);
+
+  it('persists host totals and unavailable Codex requests through metadata and verdicts', async () => {
+    const { code, verdicts } = await judge(0o755, true);
+    expect(code).toBe(0);
+    const row = JSON.parse(readFileSync(verdicts, 'utf8').trim().split('\n')[0]!);
+    for (const arm of ['bare', 'loadout']) {
+      expect(row[arm].code).toBe(0);
+      expect(row[arm].usage).toEqual({ requestSource: null, requests: null,
+        totals: { inputTokens: 10135, cachedInputTokens: 7936, outputTokens: 5 } });
+    }
   }, 60_000);
 
   it('fails, and calls nothing else, when the stand-in cannot run', async () => {

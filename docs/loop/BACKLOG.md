@@ -423,7 +423,7 @@ Decisions for Erik:
 | C5 | P2 | Retrieval beyond 200 candidates (Jev tournament) | Codex | cloud | todo |
 | C6 | P2 | Multi-intent requests | Claude | cloud | todo |
 | C7 | P1 | Recommended packs with measured upside (first: frontend with Impeccable) | Codex (harness) + Claude (runs) | cloud (fixtures) + local (runs) | todo (after B1, C2) |
-| C11 | P1 | `bench/outcome.ts` keeps per-request usage | Claude | cloud | todo |
+| C11 | P1 | `bench/outcome.ts` keeps per-request usage | Codex | local | implemented, review pending ([#TBD]): Claude request counters retained; Codex exposes turn totals only |
 | C12 | P1 | Audit the need gate on held-out prompts | Claude | cloud (design) + local (runs) | done ([#46](https://github.com/erik-hedstrom/loadout/pull/46)): audited on C1 dev, no change ([RESULTS](../../bench/RESULTS.md#c12-2026-10-19-the-need-gate-on-c1-dev)) |
 | C13 | P1 | Pure-Jev baseline on main: offline scoring and routing stability | Codex (tools) + Claude (runs) | local | done ([#45](https://github.com/erik-hedstrom/loadout/pull/45)): baseline measured 2026-10-16 ([RESULTS](../../bench/RESULTS.md#c13-2026-10-16-pure-jev-baseline-on-main)) |
 | C8 | P0 | Skill use with the hook-only plugin | Claude | local | done ([#25](https://github.com/erik-hedstrom/loadout/pull/25)): headless, the hook injected a skill's text in 6 of 10; Claude opened 0 of 10, none of the 4 it was only pointed to (D13) |
@@ -618,6 +618,28 @@ totals per task. Prompt-cache misses inside a session are then invisible.
 Acceptance: each request's input, cached input and output tokens go into the
 raw results, from the host's own usage report (no proxy, AGENTS.md rule 1),
 with a test on a recorded fixture.
+Learnings (2026-10-22; implementation awaiting review, [#TBD]):
+- Outcome metadata now retains Codex `turn.completed.usage` totals, and judge
+  orders retain Claude `result.usage.iterations[]` request counters alongside
+  host totals. Existing metadata and `ClaudeResult.inputTokens` remain.
+- Codex CLI 0.163.0 did not emit per-request usage in `exec --json`; request
+  rows are null, not inferred from turn totals. Claude Code 2.1.306 did emit
+  iterations; its assistant output counter was partial. See the recorded
+  [fixtures and provenance](../../test/fixtures/request-usage/README.md).
+- `bench/usage.ts` parses the official JSONL boundary. Missing usage stays
+  null; malformed events and counters fail without echoing event contents.
+  Tests cover fixture totals, multiple requests, missing/malformed data and
+  persistence through outcome metadata and verdicts.
+- Cost: $0 Jev, one tiny subscription run per host. Claude reported
+  $0.0001258; Codex reported no dollar cost. No outcome benchmark was run.
+- Verification: `npm test` passed on Windows (587 passed, 18 skipped) and
+  WSL from an LF checkout (603 passed, 2 skipped); `npm run typecheck` passed
+  on both. All 11 guard/handling mutations were caught; source bytes were
+  restored. `git diff --check` passed. The first WSL run under `/tmp` had one
+  existing test fail because it assumes the checkout is outside the temp
+  root; the focused test and full suite passed from a checkout outside it.
+- Remaining: independent review and CI; per-request Codex visibility is not
+  available in the observed host stream.
 
 **C12. The need gate.** In one local Codex run (2026-10-13) the gate
 selected nothing on a task where a library skill plainly applied. One case

@@ -25,6 +25,7 @@ import { capabilityKey, scanLibrary } from '../src/library.js';
 import { codexArgs, materialize, which } from '../src/launch.js';
 import { claudeJson, decisionFor, pool, readJsonl, run } from './lib.js';
 import type { SweepRow } from './sweep.js';
+import { parseHostEvents, requestUsage } from './usage.js';
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
@@ -102,11 +103,12 @@ if (!values['judge-only']) {
     const session = materialize(decisionFor(row, library, arm === 'bare'), 'codex', config, sessions);
     const cwd = mkdtempSync(join(tmpdir(), 'loadout-outcome-work-'));
     const started = Date.now();
-    const res = await run(bin, codexArgs(session, row.request + NOTE, ['-s', 'workspace-write', '--skip-git-repo-check'], { headless: true }), cwd, Number(values['timeout-s']) * 1000);
+    const res = await run(bin, codexArgs(session, row.request + NOTE, ['-s', 'workspace-write', '--skip-git-repo-check', '--json'], { headless: true }), cwd, Number(values['timeout-s']) * 1000);
+    const usage = requestUsage('codex', parseHostEvents(res.stdout));
     rmSync(target, { recursive: true, force: true });
     mkdirSync(target, { recursive: true });
     cpSync(cwd, target, { recursive: true, filter: (src) => !/[/\\](node_modules|\.git|\.venv|venv|__pycache__)([/\\]|$)/.test(src) });
-    writeFileSync(meta, JSON.stringify({ arm, model: session.model, skills: session.skills.map((c) => capabilityKey(c)), injected: session.injected.length, code: res.code, timedOut: res.timedOut, ms: Date.now() - started }));
+    writeFileSync(meta, JSON.stringify({ arm, model: session.model, skills: session.skills.map((c) => capabilityKey(c)), injected: session.injected.length, code: res.code, timedOut: res.timedOut, ms: Date.now() - started, usage }));
     rmSync(cwd, { recursive: true, force: true });
     console.log(`${id} ${arm}: ${res.timedOut ? 'timed out' : `exit ${res.code}`} in ${((Date.now() - started) / 1000).toFixed(0)} s`);
   });
@@ -137,7 +139,7 @@ for (const id of ids.filter((id) => !judged.has(id) && existsSync(join(out, id, 
     const res = await claudeJson<Pref>(prompt, schema, { model: values.judge!, system: SYSTEM });
     cost += res.costUsd;
     const w = res.output.winner;
-    return { winner: w === 'tie' ? 'tie' : w === 'first' ? first : second, confidence: res.output.confidence, reasons: res.output.reasons };
+    return { winner: w === 'tie' ? 'tie' : w === 'first' ? first : second, confidence: res.output.confidence, reasons: res.output.reasons, usage: res.usage };
   };
   const a = await ask('bare', 'loadout');
   const b = await ask('loadout', 'bare');
