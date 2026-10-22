@@ -423,7 +423,7 @@ Decisions for Erik:
 | C5 | P2 | Retrieval beyond 200 candidates (Jev tournament) | Codex | cloud | todo |
 | C6 | P2 | Multi-intent requests | Claude | cloud | todo |
 | C7 | P1 | Recommended packs with measured upside (first: frontend with Impeccable) | Codex (harness) + Claude (runs) | cloud (fixtures) + local (runs) | todo (after B1, C2) |
-| C11 | P1 | `bench/outcome.ts` keeps per-request usage | Codex | local | review ([#55](https://github.com/erik-hedstrom/loadout/pull/55)) |
+| C11 | P1 | `bench/outcome.ts` keeps per-request usage | Codex | local | partial, review ([#55](https://github.com/erik-hedstrom/loadout/pull/55)): turn totals and crash-safe capture; request usage deferred |
 | C12 | P1 | Audit the need gate on held-out prompts | Claude | cloud (design) + local (runs) | done ([#46](https://github.com/erik-hedstrom/loadout/pull/46)): audited on C1 dev, no change ([RESULTS](../../bench/RESULTS.md#c12-2026-10-19-the-need-gate-on-c1-dev)) |
 | C13 | P1 | Pure-Jev baseline on main: offline scoring and routing stability | Codex (tools) + Claude (runs) | local | done ([#45](https://github.com/erik-hedstrom/loadout/pull/45)): baseline measured 2026-10-16 ([RESULTS](../../bench/RESULTS.md#c13-2026-10-16-pure-jev-baseline-on-main)) |
 | C8 | P0 | Skill use with the hook-only plugin | Claude | local | done ([#25](https://github.com/erik-hedstrom/loadout/pull/25)): headless, the hook injected a skill's text in 6 of 10; Claude opened 0 of 10, none of the 4 it was only pointed to (D13) |
@@ -618,15 +618,24 @@ totals per task. Prompt-cache misses inside a session are then invisible.
 Acceptance: each request's input, cached input and output tokens go into the
 raw results, from the host's own usage report (no proxy, AGENTS.md rule 1),
 with a test on a recorded fixture.
-Learnings (2026-10-22):
-- Codex CLI 0.163.0 emits usage only in `turn.completed` (`exec --json`),
-  so outcome sessions keep turn totals and their request rows stay null,
-  never inferred. Claude Code 2.1.306 reports each request in
-  `result.usage.iterations[]`; its assistant events carry partial output
-  counts. See the recorded
-  [fixtures and provenance](../../test/fixtures/request-usage/README.md).
-- Per-request visibility for the Codex sessions themselves needs a host
-  that reports it; the judge calls (Claude) have it now.
+Learnings (2026-10-22; partial):
+- `exec --json` in Codex CLI 0.163.0 reports turn totals, not per-request
+  usage. Outcome runs retain these totals and preserve deliverables, metadata
+  and raw stdout even when usage JSONL is truncated. Raw stdout lives beside
+  arm metadata, outside the judge-visible deliverable folders.
+- Claude Code 2.1.306's `result.usage.iterations` describes sampling within
+  the last request, not all session requests. Judge calls retain only
+  `result.usage` totals. Missing or invalid usage records a contents-free
+  `usageError` without rejecting a valid answer. Both hosts' request rows
+  remain null. See [capture provenance](../../test/fixtures/request-usage/README.md).
+- Rollout discovery is deferred: `materialize()` creates loadout session
+  files, not a Codex home; `codexArgs()` sets no home; `outcome.ts` calls
+  `run()` without an environment override, inheriting `CODEX_HOME`. Reading
+  that home could read user sessions, so this change does not do so.
+- Erik can choose a follow-up using app-server `thread/tokenUsage/updated`
+  or rollout `token_count` / `last_token_usage` from a benchmark-owned home.
+  Neither path is implemented here; the limit observed here is `exec --json`,
+  not every official Codex output format.
 
 **C12. The need gate.** In one local Codex run (2026-10-13) the gate
 selected nothing on a task where a library skill plainly applied. One case

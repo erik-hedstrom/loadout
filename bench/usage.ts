@@ -1,53 +1,33 @@
-export interface TokenUsage {
-  /** Includes cache reads and cache creation, matching ClaudeResult.inputTokens. */
+interface TokenUsage {
+  /** Input includes cache creation and cache reads for Claude. */
   inputTokens: number;
   cachedInputTokens: number;
   outputTokens: number;
 }
 
 export interface RequestUsage {
-  requestSource: 'result.usage.iterations' | null;
-  /** Null means the host did not report request counters; never infer them from a turn. */
-  requests: TokenUsage[] | null;
+  /** Neither result.usage nor exec --json exposes a list of model requests. */
+  requests: null;
   totals: TokenUsage | null;
 }
 
-export function parseHostEvents(stdout: string): Record<string, unknown>[] {
-  return stdout.split('\n').flatMap((line, index) => {
-    if (!line.trim()) return [];
-    let event;
-    try { event = JSON.parse(line); } catch { throw new Error(`invalid host event at line ${index + 1}`); }
-    // Do not include the line in diagnostics: host output can contain private task data.
-    if (!event || typeof event !== 'object' || Array.isArray(event) || typeof event.type !== 'string') {
-      throw new Error(`invalid host event at line ${index + 1}`);
-    }
-    return [event];
-  });
+export function events(stdout: string): any[] {
+  try { return stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line)); }
+  catch { throw new Error('host emitted invalid JSONL (output suppressed)'); }
+}
+export function counter(value: unknown, name: string): number {
+  if (!Number.isSafeInteger(value) || (value as number) < 0) throw new Error(`missing or invalid ${name}`);
+  return value as number;
 }
 
-function counters(value: unknown, host: 'claude' | 'codex'): TokenUsage {
-  if (!value || typeof value !== 'object') throw new Error('invalid host usage');
-  const u = value as Record<string, unknown>;
-  const count = (key: string): number => {
-    const n = u[key];
-    if (typeof n !== 'number' || !Number.isSafeInteger(n) || n < 0) throw new Error(`invalid host usage counter: ${key}`);
-    return n;
-  };
-  const cachedInputTokens = count(host === 'claude' ? 'cache_read_input_tokens' : 'cached_input_tokens');
-  const inputTokens = count('input_tokens') + (host === 'claude' ? count('cache_creation_input_tokens') + cachedInputTokens : 0);
+export function requestUsage(host: 'claude' | 'codex', records: any[]): RequestUsage {
+  const results = records.filter((e) => e?.type === (host === 'claude' ? 'result' : 'turn.completed'));
+  if (results.length !== 1) throw new Error('missing or multiple host usage totals');
+  const u = results[0].usage;
+  const cachedInputTokens = counter(host === 'claude' ? u?.cache_read_input_tokens : u?.cached_input_tokens, 'cached input');
+  const inputTokens = counter(u?.input_tokens, 'input tokens')
+    + (host === 'claude' ? counter(u?.cache_creation_input_tokens, 'cache creation') + cachedInputTokens : 0);
   if (cachedInputTokens > inputTokens) throw new Error('host usage cached input exceeds input');
-  return { inputTokens, cachedInputTokens, outputTokens: count('output_tokens') };
-}
-
-export function requestUsage(host: 'claude' | 'codex', events: Record<string, unknown>[]): RequestUsage {
-  const results = events.filter((e) => e.type === (host === 'claude' ? 'result' : 'turn.completed'));
-  if (results.length > 1) throw new Error('multiple host usage totals');
-  const usage = results[0]?.usage;
-  if (usage === undefined) return { requestSource: null, requests: null, totals: null };
-  const totals = counters(usage, host);
-  const iterations = (usage as Record<string, unknown>).iterations;
-  if (host === 'codex' || iterations === undefined) return { requestSource: null, requests: null, totals };
-  if (!Array.isArray(iterations)) throw new Error('invalid host usage iterations');
-  // Assistant events can contain partial output counts; the final result has completed iterations.
-  return { requestSource: 'result.usage.iterations', requests: iterations.map((u) => counters(u, host)), totals };
+  // Claude's iterations describe sampling within the last request, not the session's requests.
+  return { requests: null, totals: { inputTokens, cachedInputTokens, outputTokens: counter(u?.output_tokens, 'output tokens') } };
 }
