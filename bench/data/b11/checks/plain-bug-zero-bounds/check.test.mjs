@@ -1,7 +1,10 @@
 import test from 'node:test';
-import assert from 'node:assert/strict';
+import strictAssert from 'node:assert/strict';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+
+// Capture trusted dependencies before importing the generated module.
+const assert = { equal: strictAssert.equal };
 
 const api = await import(pathToFileURL(resolve(process.cwd(), 'index.mjs')).href);
 

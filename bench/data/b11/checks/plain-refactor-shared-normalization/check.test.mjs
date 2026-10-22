@@ -1,8 +1,13 @@
 import test from 'node:test';
-import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import strictAssert from 'node:assert/strict';
+import { readFileSync as nodeReadFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+
+// Capture trusted dependencies before importing the generated module.
+const assert = { equal: strictAssert.equal };
+const { Object } = globalThis;
+const readFileSync = nodeReadFileSync;
 
 const modulePath = resolve(process.cwd(), 'index.mjs');
 const api = await import(pathToFileURL(modulePath).href);

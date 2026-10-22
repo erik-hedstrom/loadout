@@ -58,7 +58,7 @@ printf '%s\\n' '{"type":"step_finish","part":{"tokens":{"total":12,"input":10,"o
     a[a.indexOf('--run')] = '--plan';
     await main(a);
     const plan = JSON.parse(vi.mocked(console.log).mock.calls[0]![0]);
-    expect(plan).toMatchObject({ runs: 3, concurrency: 2, timeoutSeconds: 5, sessionDeadlineScheduleSeconds: 10 });
+    expect(plan).toMatchObject({ nodeVersion: process.version, runs: 3, concurrency: 2, timeoutSeconds: 5, sessionDeadlineScheduleSeconds: 10 });
     expect(plan.library).toMatchObject({ corpus: 'bench/data/library.sh', accepted: 0, rejected: 0, namesSha256: expect.stringMatching(/^[a-f0-9]{64}$/) });
     expect(plan.documentation).toBe('bench/README.md#b11-opencode-sessions');
     for (const removed of ['mounts', 'hostWrites', 'sandboxCheck', 'gatewayEstimateAssumption', 'deadlineScheduleAssumption']) expect(plan).not.toHaveProperty(removed);
@@ -156,15 +156,21 @@ printf '%s\\n' '{"type":"step_finish","part":{"tokens":{"total":12,"input":10,"o
     const changed = [...a]; changed[changed.indexOf('--heavy-skills') + 1] = '500';
     await expect(main([...changed, '--resume'])).rejects.toThrow('size mismatch');
   });
-  networkTest('refuses resuming legacy grading or changed library provenance before another model session', async () => {
+  it('refuses resuming legacy grading, changed Node version or library provenance before another model session', async () => {
+    // Protocol persistence needs real file/process lifecycle, but no networking.
+    const execute = sandbox.executeSandbox;
+    vi.spyOn(sandbox, 'requireNetwork').mockImplementation(() => {});
+    vi.spyOn(sandbox, 'executeSandbox').mockImplementation((s, command, timeout, _network, stopOnUsageLimit) => execute(s, command, timeout, false, stopOnUsageLimit));
     const a = args('bare', [task('provenance')], '0');
     await main(a);
     const file = join(out, 'protocol.json'), protocol = JSON.parse(readFileSync(file, 'utf8'));
-    expect(protocol).toMatchObject({ harnessVersion: 2, opencodeVersion: '1.19.3', library: { accepted: 0 } });
+    expect(protocol).toMatchObject({ harnessVersion: 3, nodeVersion: process.version, opencodeVersion: '1.19.3', library: { accepted: 0 } });
     writeFileSync(file, JSON.stringify({ ...protocol, harnessVersion: 1 }));
-    await expect(main([...a, '--resume'])).rejects.toThrow('matching library provenance and harness version');
+    await expect(main([...a, '--resume'])).rejects.toThrow('matching library provenance, Node version and harness version');
+    writeFileSync(file, JSON.stringify({ ...protocol, nodeVersion: 'v0.0.0' }));
+    await expect(main([...a, '--resume'])).rejects.toThrow('matching library provenance, Node version and harness version');
     writeFileSync(file, JSON.stringify({ ...protocol, library: { ...protocol.library, namesSha256: '0'.repeat(64) } }));
-    await expect(main([...a, '--resume'])).rejects.toThrow('matching library provenance and harness version');
+    await expect(main([...a, '--resume'])).rejects.toThrow('matching library provenance, Node version and harness version');
     expect(rows(out)).toHaveLength(1);
   });
   networkTest('retains fixed-subset target servers for sweeps and all targets/tasks for heavy-max', async () => {

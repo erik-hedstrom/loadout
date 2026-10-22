@@ -12,6 +12,8 @@ export interface Sandbox {
   workspace: string; home: string; binary: string; ports?: number[];
   readonlyMounts?: { source: string; destination: string }[];
 }
+export const SANDBOX_NODE = '/opt/node/bin/node';
+const SANDBOX_DNS = '169.254.1.1';
 const within = (root: string, p: string) => p === root || p.startsWith(root + '/');
 const NETWORK_REQUIRED = 'pasta (passt) is required for network-enabled sandboxes; install passt before --run';
 
@@ -38,8 +40,9 @@ export function sandboxArgs(s: Sandbox, command: string[], network = true): stri
   if ([s.workspace, s.home].some(p => p.split('/').length < 4 || within('/usr', p) || within('/etc', p)) || within(s.workspace, s.home) || within(s.home, s.workspace)) throw new Error('unsafe sandbox mounts');
   const args = ['--unshare-all', ...(network ? ['--share-net'] : []), '--die-with-parent', '--new-session', '--clearenv'];
   for (const dir of ['/usr', '/bin', '/sbin', '/lib', '/lib64']) if (existsSync(dir)) args.push('--ro-bind', dir, dir);
-  for (const file of ['/etc/resolv.conf', '/etc/hosts', '/etc/nsswitch.conf', '/etc/ssl/certs']) if (existsSync(file)) args.push('--ro-bind', file, file);
+  for (const file of ['/etc/hosts', '/etc/nsswitch.conf', '/etc/ssl/certs']) if (existsSync(file)) args.push('--ro-bind', file, file);
   args.push('--proc', '/proc', '--dev', '/dev', '--tmpfs', '/tmp', '--dir', '/home', '--dir', '/opt',
+    '--dir', '/opt/node', '--dir', '/opt/node/bin', '--ro-bind', process.execPath, SANDBOX_NODE,
     '--bind', s.workspace, '/work', '--bind', s.home, '/home/bench', '--ro-bind', s.binary, '/opt/opencode');
   for (const { source, destination } of s.readonlyMounts ?? []) {
     const checksOverlay = source === `${s.workspace}/.b11-checks` && destination === '/work/.b11-checks';
@@ -47,7 +50,7 @@ export function sandboxArgs(s: Sandbox, command: string[], network = true): stri
     args.push('--ro-bind', source, destination);
   }
   args.push(
-    '--setenv', 'HOME', '/home/bench', '--setenv', 'PATH', '/usr/bin:/bin', '--setenv', 'LANG', 'C.UTF-8',
+    '--setenv', 'HOME', '/home/bench', '--setenv', 'PATH', '/opt/node/bin:/usr/bin:/bin', '--setenv', 'LANG', 'C.UTF-8',
     '--setenv', 'XDG_CONFIG_HOME', '/home/bench/config', '--setenv', 'XDG_DATA_HOME', '/home/bench/data',
     '--setenv', 'XDG_CACHE_HOME', '/home/bench/cache', '--setenv', 'XDG_STATE_HOME', '/home/bench/state',
     '--setenv', 'OPENCODE_DISABLE_AUTOUPDATE', 'true', '--setenv', 'OPENCODE_DISABLE_MODELS_FETCH', 'true',
@@ -81,35 +84,46 @@ export function eventClock() {
   };
 }
 
-export function executeSandbox(s: Sandbox, command: string[], timeoutMs: number, network = true, stopOnUsageLimit = false): Promise<{ stdout: string; stderr: string; code: number | null; timedOut: boolean; usageLimited: boolean; clock: ReturnType<typeof eventClock> }> {
-  return new Promise((resolvePromise, reject) => {
-    const args = sandboxArgs(s, command, network);
-    const ports = s.ports ?? [];
-    if (network && ports.some(p => !Number.isInteger(p) || p < 1 || p > 65535)) throw new HarnessError('invalid sandbox port');
-    // --share-net retains pasta's private network, never the host's. Disable
-    // automatic forwarding in both directions; -T forwards namespace loopback.
-    // Contract: passt(1), "pasta-specific options" and "Handling of local traffic".
-    const child = spawn(network ? 'pasta' : 'bwrap', network ? [
-      '--foreground', '--config-net', '--no-map-gw', '-t', 'none', '-u', 'none',
-      '-T', ports.length ? ports.join(',') : 'none', '-U', 'none', '--', 'bwrap', ...args,
-    ] : args, { env: { PATH: '/usr/bin:/bin' }, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
-    const started = performance.now(), clock = eventClock();
-    let stdout = '', stderr = '', timedOut = false, usageLimited = false;
-    const kill = () => { if (child.pid) { try { process.kill(-child.pid, 'SIGKILL'); } catch (e) { if ((e as NodeJS.ErrnoException).code !== 'ESRCH') reject(new Error('sandbox cleanup failed')); } } };
-    const timer = setTimeout(() => { timedOut = true; kill(); }, timeoutMs);
-    // Transcripts exist only in bounded memory, never in result files or diagnostics.
-    child.stdout.on('data', (b: Buffer) => { const chunk = b.toString(); stdout += chunk; clock.push(chunk, performance.now() - started); if (stdout.length > 16_000_000) { timedOut = true; kill(); } });
-    child.stderr.on('data', (b: Buffer) => {
-      stderr = (stderr + b.toString()).slice(-65536);
-      // Only model runs opt in. Hidden checks may print arbitrary model-owned text.
-      if (stopOnUsageLimit && /\bAI_(?:APICall|Retry)Error\b/.test(stderr) && isUsageLimit(stderr)) { usageLimited = true; kill(); }
+export async function executeSandbox(s: Sandbox, command: string[], timeoutMs: number, network = true, stopOnUsageLimit = false): Promise<{ stdout: string; stderr: string; code: number | null; timedOut: boolean; usageLimited: boolean; clock: ReturnType<typeof eventClock> }> {
+  const ports = s.ports ?? [];
+  if (network && ports.some(p => !Number.isInteger(p) || p < 1 || p > 65535)) throw new HarnessError('invalid sandbox port');
+  const dnsRoot = network ? mkdtempSync(join(realpathSync(tmpdir()), 'b11-dns-')) : null;
+  try {
+    const mounts = [...(s.readonlyMounts ?? [])];
+    if (dnsRoot) {
+      const resolv = join(dnsRoot, 'resolv.conf');
+      writeFileSync(resolv, `nameserver ${SANDBOX_DNS}\n`);
+      mounts.push({ source: resolv, destination: '/etc/resolv.conf' });
+    }
+    const args = sandboxArgs({ ...s, readonlyMounts: mounts }, command, network);
+    return await new Promise((resolvePromise, reject) => {
+      // --share-net retains pasta's private network, never the host's. Disable
+      // automatic forwarding in both directions; -T forwards namespace loopback.
+      // --dns-forward maps only DNS to the host resolver, including loopback and WSL.
+      // passt 2024_02_20 supports UDP/53; newer releases also support TCP DNS.
+      // Contract: passt(1), --dns-forward and pasta-specific options.
+      const child = spawn(network ? 'pasta' : 'bwrap', network ? [
+        '--foreground', '--config-net', '--no-map-gw', '--dns-forward', SANDBOX_DNS, '-t', 'none', '-u', 'none',
+        '-T', ports.length ? ports.join(',') : 'none', '-U', 'none', '--', 'bwrap', ...args,
+      ] : args, { env: { PATH: '/usr/bin:/bin' }, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
+      const started = performance.now(), clock = eventClock();
+      let stdout = '', stderr = '', timedOut = false, usageLimited = false;
+      const kill = () => { if (child.pid) { try { process.kill(-child.pid, 'SIGKILL'); } catch (e) { if ((e as NodeJS.ErrnoException).code !== 'ESRCH') reject(new Error('sandbox cleanup failed')); } } };
+      const timer = setTimeout(() => { timedOut = true; kill(); }, timeoutMs);
+      // Transcripts exist only in bounded memory, never in result files or diagnostics.
+      child.stdout.on('data', (b: Buffer) => { const chunk = b.toString(); stdout += chunk; clock.push(chunk, performance.now() - started); if (stdout.length > 16_000_000) { timedOut = true; kill(); } });
+      child.stderr.on('data', (b: Buffer) => {
+        stderr = (stderr + b.toString()).slice(-65536);
+        // Only model runs opt in. Hidden checks may print arbitrary model-owned text.
+        if (stopOnUsageLimit && /\bAI_(?:APICall|Retry)Error\b/.test(stderr) && isUsageLimit(stderr)) { usageLimited = true; kill(); }
+      });
+      child.on('error', error => {
+        clearTimeout(timer);
+        reject(network && (error as NodeJS.ErrnoException).code === 'ENOENT' ? new HarnessError(NETWORK_REQUIRED) : new Error('sandbox could not start'));
+      });
+      child.on('close', code => { clearTimeout(timer); resolvePromise({ stdout, stderr, code, timedOut, usageLimited, clock }); });
     });
-    child.on('error', error => {
-      clearTimeout(timer);
-      reject(network && (error as NodeJS.ErrnoException).code === 'ENOENT' ? new HarnessError(NETWORK_REQUIRED) : new Error('sandbox could not start'));
-    });
-    child.on('close', code => { clearTimeout(timer); resolvePromise({ stdout, stderr, code, timedOut, usageLimited, clock }); });
-  });
+  } finally { if (dnsRoot) rmSync(dnsRoot, { recursive: true, force: true }); }
 }
 
 export async function sandboxCheck(binary: string): Promise<void> {
@@ -118,7 +132,7 @@ export async function sandboxCheck(binary: string): Promise<void> {
   mkdirSync(workspace); mkdirSync(home); writeFileSync(canary, 'synthetic outside canary');
   try {
     const script = 'process.stdout.write("B11_PREFLIGHT_STARTED\\n");const f=require("fs");for(const p of process.argv.slice(1)){try{f.readdirSync(p);process.exit(1)}catch(e){if(!["ENOENT","EACCES","ENOTDIR"].includes(e.code))throw e}try{f.readFileSync(p);process.exit(1)}catch(e){if(!["ENOENT","EACCES","EISDIR"].includes(e.code))throw e}}';
-    const r = await executeSandbox({ workspace, home, binary }, ['/usr/bin/node', '-e', script, homedir(), canary, process.cwd()], 15000, false);
+    const r = await executeSandbox({ workspace, home, binary }, [SANDBOX_NODE, '-e', script, homedir(), canary, process.cwd()], 15000, false);
     if (r.code !== 0 || r.timedOut) {
       // This probe runs only trusted Node code offline. Once it starts, stderr
       // belongs to the command rather than bubblewrap's namespace startup.

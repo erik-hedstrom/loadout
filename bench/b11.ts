@@ -20,8 +20,7 @@ import { MAX_SERVERS, serverSpecs } from './mcp-fixtures.js';
 import { listingFor, validateNeeds } from './b11-listing.js';
 import { prepareB11Library } from './b11-library.js';
 import { fixturePath, runCheck } from './b11-check.js';
-export { fixturePath, runCheck } from './b11-check.js';
-const PROTOCOL_VERSION = 2;
+const PROTOCOL_VERSION = 3;
 
 export function options(args: string[]) {
   const { values: v } = parseArgs({ args, options: {
@@ -151,7 +150,7 @@ export async function main(args: string[]) {
     const skillsDir = join(root, 'library-skills'); mkdirSync(skillsDir);
     const prepared = o.library ? prepareB11Library(o.library, join(data.root, 'skills'), skillsDir) : undefined;
     if (prepared) validateNeeds(data.tasks, prepared.skills, data.canaries);
-    console.log(JSON.stringify({ mode: o.run ? 'run' : 'plan', opencodeVersion: OPENCODE_VERSION, arms: o.arms, tasks: data.tasks.length,
+    console.log(JSON.stringify({ mode: o.run ? 'run' : 'plan', opencodeVersion: OPENCODE_VERSION, nodeVersion: process.version, arms: o.arms, tasks: data.tasks.length,
       taskCounts: Object.fromEntries(['plain', 'skill-needle', 'mcp-needle'].map(k => [k, data.tasks.filter(t => t.kind === k).length])),
       runs, ...(o.heavy ? { heavyMax: o.heavy } : {}), expectedJevCalls: { preselect: data.tasks.length * o.models.length * o.reps * (o.arms.includes('preselect') ? 2 : 0), gatewayAtOneSearchPerStep: data.tasks.length * o.models.length * o.reps * (o.arms.includes('gateway') ? 40 : 0) },
       jevBudgetUsd: o.run ? o.budget : 0, requestedRunBudgetUsd: o.budget, expectedJevCostUsd: { plan: 0, runRange: [0, o.budget] }, modelCostUsd: 0, concurrency: o.concurrency, timeoutSeconds: o.timeoutMs / 1000,
@@ -184,9 +183,9 @@ export async function main(args: string[]) {
     const protocolFile = join(out, 'protocol.json');
     if (previous.length) {
       const prior = existsSync(protocolFile) ? JSON.parse(readFileSync(protocolFile, 'utf8')) : undefined;
-      if (prior?.harnessVersion !== PROTOCOL_VERSION || !isDeepStrictEqual(prior.library, prepared!.provenance)) throw new HarnessError('resume requires matching library provenance and harness version; use a fresh output directory for legacy rows');
+      if (prior?.harnessVersion !== PROTOCOL_VERSION || prior.nodeVersion !== process.version || !isDeepStrictEqual(prior.library, prepared!.provenance)) throw new HarnessError('resume requires matching library provenance, Node version and harness version; use a fresh output directory for legacy rows');
     }
-    writeFileSync(protocolFile, JSON.stringify({ harnessVersion: PROTOCOL_VERSION, opencodeVersion: OPENCODE_VERSION,
+    writeFileSync(protocolFile, JSON.stringify({ harnessVersion: PROTOCOL_VERSION, opencodeVersion: OPENCODE_VERSION, nodeVersion: process.version,
       arms: o.arms, models: o.models, reps: o.reps, batchSize: o.batchSize, sweepPerKind: o.sweepPerKind, ...(o.heavy ? { heavyMax: o.heavy } : {}),
       library: prepared!.provenance, taskCounts: Object.fromEntries(['plain', 'skill-needle', 'mcp-needle'].map(k => [k, data.tasks.filter(t => t.kind === k).length])),
       plannedSessions: runs, concurrency: o.concurrency, timeoutSeconds: o.timeoutMs / 1000,

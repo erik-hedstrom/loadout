@@ -61,12 +61,20 @@ the pinned binary. The host environment is cleared. Pasta supplies a separate
 network namespace with outbound Internet; automatic port forwarding and host
 gateway mapping are disabled. Only selected fixture/gateway TCP ports are
 forwarded to session loopback. Unrelated host loopback listeners are not
-forwarded. Endpoints stay outside the sandbox; every gateway has its own
+forwarded. Non-loopback host addresses, including docker0 and the Windows
+host in WSL NAT mode, remain reachable. Endpoints stay outside the sandbox; every gateway has its own
 short-lived token in the temporary home. Hidden checks are copied after the
 model exits, mounted read-only, and run without network. A separate Node test
 parent compares passed case identities with the trusted fixture inventory;
 an early module exit or printed success marker cannot substitute for cases.
 Supported fixtures use unconditional top-level literal `node:test` calls.
+Checks capture assertion functions and dependencies before importing generated
+code; check children freeze shared JavaScript intrinsics with Node's
+[experimental flag](https://github.com/nodejs/node/blob/v22.12.0/doc/api/cli.md#--frozen-intrinsics).
+This is a completion check, not authenticated grading against code designed to
+tamper with Node's internal test protocol. File checks verify only the stated
+required and forbidden strings. The running Node executable is mounted
+read-only at `/opt/node/bin/node`, and its version is recorded in the protocol.
 Temporary session files, including OpenCode logs/databases,
 are removed. Public rows contain counters, names/statuses and check outcomes,
 never transcripts, arguments, tool results or environment values. Rows also
@@ -97,13 +105,14 @@ it; the reservation cap still applies. Plan JSON links here for these
 assumptions and the mount/write contract. Planning writes only a temporary
 manifest snapshot and preflight files, removed afterward. Runs additionally
 write rows and protocol metadata under `--out`. Resume requires matching
-library provenance and the current grading protocol; start a fresh output
+library provenance, Node version and the current grading protocol; start a fresh output
 directory for legacy rows.
 
 Linux tests skip pasta-dependent cases with a reason if pasta is absent;
 they run in CI, which installs `passt`. `--run` never falls back to shared
 networking. To exercise the optional outbound HTTPS probe, set
-`B11_TEST_INTERNET=1`; only that probe may skip when outbound access is absent.
+`B11_TEST_INTERNET=1`; CI opts in to this exception to the otherwise
+network-free `npm test`. Only that probe may skip when outbound access is absent.
 
 Reports keep the hash-based dev/test split separate, include Wilson 95%
 intervals, and reprice measured tokens under dated official price snapshots.

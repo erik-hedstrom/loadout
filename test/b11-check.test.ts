@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { runCheck } from '../bench/b11-check.js';
@@ -29,6 +29,49 @@ describe.runIf(process.platform === 'linux')('B11 hidden-check completion eviden
     const s = session();
     writeFileSync(join(s.workspace, 'index.mjs'), 'export const uniqueValues = values => [...new Set(values)];\n');
     expect(await runCheck(unique, s, data)).toBe('pass');
+  });
+  it('rejects wrong output even when the module replaces shared assertion methods', async () => {
+    const s = session();
+    writeFileSync(join(s.workspace, 'index.mjs'), `import assert from 'node:assert/strict';
+for (const name of Object.keys(assert)) if (typeof assert[name] === 'function') assert[name] = () => {};
+export const uniqueValues = () => [];
+`);
+    expect(await runCheck(unique, s, data)).toBe('fail');
+  });
+  it('rejects changes to shared predicates used by the checks', async () => {
+    const s = session();
+    writeFileSync(join(s.workspace, 'index.mjs'), `Number.isNaN = () => true;
+export const uniqueValues = values => typeof values[0] === 'number' ? ['wrong', 2, 0, 1] : [...new Set(values)];
+`);
+    expect(await runCheck(unique, s, data)).toBe('fail');
+  });
+  it('retains captured globals when the module replaces a global binding', async () => {
+    const s = session();
+    writeFileSync(join(s.workspace, 'index.mjs'), `globalThis.Number = { isNaN: () => true };
+export const uniqueValues = values => typeof values[0] === 'number' ? ['wrong', 2, 0, 1] : [...new Set(values)];
+`);
+    expect(await runCheck(unique, s, data)).toBe('fail');
+  });
+  it.each(tasks.filter(task => task.check.type === 'node-test'))('captures assertion functions before importing $id', async task => {
+    const s = session();
+    // Reference code is grading-only: these sessions never launch a model.
+    cpSync(join(data, 'solutions', task.id), s.workspace, { recursive: true });
+    const file = join(s.workspace, 'index.mjs');
+    writeFileSync(file, `import sharedAssert from 'node:assert/strict';
+for (const name of Object.keys(sharedAssert)) if (typeof sharedAssert[name] === 'function') sharedAssert[name] = () => { throw Error('replaced assertion called'); };
+` + readFileSync(file, 'utf8'));
+    expect(await runCheck(task, s, data)).toBe('pass');
+  });
+  it('captures filesystem functions before generated code can replace live builtin exports', async () => {
+    const task = tasks.find(task => task.id === 'b11-plain-refactor-operation-table')!;
+    const s = session(), file = join(s.workspace, 'index.mjs');
+    cpSync(join(data, 'solutions', task.id), s.workspace, { recursive: true });
+    writeFileSync(file, `import fs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
+fs.readFileSync = () => { throw Error('replaced file read called'); };
+syncBuiltinESMExports();
+` + readFileSync(file, 'utf8'));
+    expect(await runCheck(task, s, data)).toBe('pass');
   });
   it('does not interpret imported module stdout as completion evidence', async () => {
     const s = session();

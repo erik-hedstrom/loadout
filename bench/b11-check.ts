@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import ts from 'typescript';
 import { readConfined } from '../src/library.js';
-import { checkFiles, confinedPath, copyTree, executeSandbox, type Sandbox } from './b11-sandbox.js';
+import { checkFiles, confinedPath, copyTree, executeSandbox, SANDBOX_NODE, type Sandbox } from './b11-sandbox.js';
 import type { B11Task } from './b11-types.js';
 import { HarnessError } from './b11-errors.js';
 
@@ -54,7 +54,8 @@ const expected = ${JSON.stringify(expected)};
 const key = data => JSON.stringify([data.file, data.name, data.line, data.column]);
 const remaining = new Set(expected.map(key));
 let failed = false;
-const stream = run({ files: ${JSON.stringify(files)}, execArgv: [], concurrency: 1 });
+// Freeze shared prototypes as well as capturing fixture-local functions.
+const stream = run({ files: ${JSON.stringify(files)}, execArgv: ['--frozen-intrinsics'], concurrency: 1 });
 stream.on('data', event => {
   if (event.type === 'test:fail') failed = true;
   if (event.type === 'test:pass') {
@@ -89,7 +90,7 @@ export async function runCheck(task: B11Task, s: Sandbox, data: string): Promise
         { source: script, destination: '/b11-check-runner.cjs' },
       ],
     };
-    const result = await executeSandbox(checkSandbox, ['/usr/bin/node', '/b11-check-runner.cjs'], 15000, false);
+    const result = await executeSandbox(checkSandbox, [SANDBOX_NODE, '/b11-check-runner.cjs'], 15000, false);
     if (!/^B11_CHECK_STARTED:[a-f0-9]{64}\n/.test(result.stdout)) return 'sandbox-failure';
     return !result.timedOut && result.code === 0 && /^B11_CHECK_STARTED:([a-f0-9]{64})\nB11_CHECK_PASS:\1\n$/.test(result.stdout) ? 'pass' : 'fail';
   } finally { rmSync(scratch, { recursive: true, force: true }); }

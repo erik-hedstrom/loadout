@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, it } from 'vitest';
-import { fixturePath, runCheck } from '../bench/b11.js';
+import { fixturePath, runCheck } from '../bench/b11-check.js';
 import { copyTree } from '../bench/b11-sandbox.js';
 import { taskSchema } from '../bench/b11-types.js';
 

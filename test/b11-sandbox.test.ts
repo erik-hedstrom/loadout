@@ -3,8 +3,8 @@ import { chmodSync, existsSync, mkdtempSync, mkdirSync, writeFileSync, symlinkSy
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { executeSandbox, eventClock, sandboxArgs, copyTree, checkFiles, confinedPath, materializeSkill, sandboxCheck, removeSession } from '../bench/b11-sandbox.js';
-import { runCheck } from '../bench/b11.js';
+import { executeSandbox, eventClock, sandboxArgs, copyTree, checkFiles, confinedPath, materializeSkill, sandboxCheck, removeSession, SANDBOX_NODE } from '../bench/b11-sandbox.js';
+import { runCheck } from '../bench/b11-check.js';
 
 const roots: string[] = [];
 const temp = () => { const p = mkdtempSync(join(tmpdir(), 'b11-test-')); roots.push(p); return p; };
@@ -32,11 +32,32 @@ describe('B11 sandbox', () => {
     expect(args).not.toContain('/home/real');
     expect(args).not.toContain('TYPESAFE_API_KEY');
     const sources = args.flatMap((arg, i) => arg === '--bind' || arg === '--ro-bind' ? [args[i + 1]!] : []);
-    for (const src of sources.filter(src => src !== '/home/real/bin/opencode')) {
+    for (const src of sources.filter(src => src !== '/home/real/bin/opencode' && src !== process.execPath)) {
       expect(src === homedir() || src.startsWith(homedir() + '/')).toBe(false);
       expect(src === process.cwd() || src.startsWith(process.cwd() + '/')).toBe(false);
     }
     expect(args.slice(-2)).toEqual(['/opt/opencode', '--version']);
+  });
+  it('mounts the running Node at a fixed read-only path with an executable PATH', () => {
+    const args = sandboxArgs({ workspace: '/var/tmp/run/work', home: '/var/tmp/run/home', binary: '/opt/oc' }, [SANDBOX_NODE, '--version'], false);
+    const node = args.indexOf(process.execPath);
+    expect(args.slice(node - 1, node + 2)).toEqual(['--ro-bind', process.execPath, SANDBOX_NODE]);
+    const path = args.indexOf('PATH');
+    expect(args[path + 1]).toBe('/opt/node/bin:/usr/bin:/bin');
+    expect(args).not.toContain('--share-net');
+    expect(args).not.toContain('/etc/resolv.conf');
+  });
+  it.runIf(process.platform === 'linux')('runs the host Node version by path and PATH and protects the binary offline', async () => {
+    const root = temp(), workspace = join(root, 'work'), home = join(root, 'home');
+    mkdirSync(workspace); mkdirSync(home);
+    const script = `const assert=require('node:assert/strict'),fs=require('node:fs'),cp=require('node:child_process');
+      assert.equal(process.execPath,${JSON.stringify(SANDBOX_NODE)});
+      assert.throws(()=>fs.openSync(process.execPath,'w'),{code:'EROFS'});
+      assert.equal(cp.execFileSync('node',['--version'],{encoding:'utf8'}).trim(),process.version);
+      console.log(process.version);`;
+    const run = await executeSandbox({ workspace, home, binary: '/usr/bin/true' }, [SANDBOX_NODE, '-e', script], 5000, false);
+    expect(run.code, run.stderr).toBe(0);
+    expect(run.stdout.trim()).toBe(process.version);
   });
   it('refuses broad or overlapping writable mounts', () => {
     for (const workspace of ['/', '/home', '/usr', '/var/tmp/run', '/var/tmp/run/home']) {
@@ -50,7 +71,7 @@ describe('B11 sandbox', () => {
     const args = sandboxArgs({ ...s, readonlyMounts: [
       { source: '/var/tmp/run/work/.b11-checks', destination: '/work/.b11-checks' },
       { source: '/var/tmp/trusted/runner.cjs', destination: '/b11-check-runner.cjs' },
-    ] }, ['/usr/bin/node', '/b11-check-runner.cjs'], false);
+    ] }, [SANDBOX_NODE, '/b11-check-runner.cjs'], false);
     const work = args.indexOf(s.workspace), checks = args.indexOf('/var/tmp/run/work/.b11-checks');
     expect(checks).toBeGreaterThan(work);
     expect(args.slice(checks - 1, checks + 2)).toEqual(['--ro-bind', '/var/tmp/run/work/.b11-checks', '/work/.b11-checks']);
@@ -75,7 +96,7 @@ describe('B11 sandbox', () => {
       f.writeFileSync('/work/answer.txt','yes');console.log('trusted-runner-ok');`);
     const run = await executeSandbox({ workspace, home, binary: '/usr/bin/true', readonlyMounts: [
       { source: checks, destination: '/work/.b11-checks' }, { source: runner, destination: '/b11-check-runner.cjs' },
-    ] }, ['/usr/bin/node', '/b11-check-runner.cjs'], 5000, false);
+    ] }, [SANDBOX_NODE, '/b11-check-runner.cjs'], 5000, false);
     expect(run.code, run.stderr).toBe(0); expect(run.stdout).toContain('trusted-runner-ok');
     expect(checkFiles(workspace, { type: 'files', path: 'answer.txt', all: ['yes'], none: [] })).toBe(true);
   });
@@ -119,7 +140,7 @@ describe('B11 sandbox', () => {
   it.runIf(process.platform === 'linux')('keeps quota detection disabled for hidden checks and other non-model commands', async () => {
     const root = temp(), home = join(root, 'home'), workspace = join(root, 'work');
     mkdirSync(home); mkdirSync(workspace);
-    const run = await executeSandbox({ home, workspace, binary: '/usr/bin/true' }, ['/usr/bin/node', '-e', 'console.error("AI_APICallError: free usage limit reached");setTimeout(()=>process.exit(0),30)'], 5000, false);
+    const run = await executeSandbox({ home, workspace, binary: '/usr/bin/true' }, [SANDBOX_NODE, '-e', 'console.error("AI_APICallError: free usage limit reached");setTimeout(()=>process.exit(0),30)'], 5000, false);
     expect(run.code).toBe(0); expect(run.usageLimited).toBe(false);
   });
   it.runIf(process.platform === 'linux')('proves the real home, checkout and outside canary are unreadable', async () => {

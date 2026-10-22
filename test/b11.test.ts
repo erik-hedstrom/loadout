@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { blocks, rowKey, options, JevBudget, fixturePath, classifyRun, sweepTasks, studyConfig } from '../bench/b11.js';
+import { blocks, rowKey, options, JevBudget, classifyRun, sweepTasks, studyConfig } from '../bench/b11.js';
+import { fixturePath } from '../bench/b11-check.js';
 import { mkdtempSync, mkdirSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
