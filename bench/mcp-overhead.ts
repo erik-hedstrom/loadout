@@ -12,7 +12,7 @@
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { homedir, tmpdir, userInfo } from 'node:os';
-import { basename, dirname, join, posix, resolve, win32 } from 'node:path';
+import { basename, dirname, join, posix, win32 } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -23,6 +23,7 @@ import { createServer } from '../src/mcp.js';
 import type { Capability } from '../src/types.js';
 import { assertTemporary, claudeIsolation, cli, codexSettings, execute, MODELS, parseClaudeTurns, parseCodex, parsePromptInput, validateFeatures, withAppServer, type Command, type Host, type ToolCall } from './overhead.js';
 import { catalogFacts, serverSpecs, serverTools, type Facts, type ServerSpec } from './mcp-fixtures.js';
+import { isEntry } from './lib.js';
 
 const LOADOUT_TOOLS = ['find_tools', 'load_skill', 'server_tools', 'call_server_tool'];
 const PROMPTS = ['Reply with exactly OK. Do not use tools, skills, commands, agents, or external services.', 'Reply with exactly OK again. Do not use tools, skills, commands, agents, or external services.'] as const;
@@ -608,6 +609,6 @@ export async function main(args: string[], deps: { print?: (s: string) => void; 
     print(`Raw metrics: ${out}`);
   } finally { rmSync(root, { recursive: true, force: true }); }
 }
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isEntry(import.meta.url)) {
   main(process.argv.slice(2)).catch((error: unknown) => { console.error(error instanceof Error ? error.message : 'mcp-overhead failed'); process.exitCode = 1; });
 }

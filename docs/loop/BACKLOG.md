@@ -36,14 +36,14 @@ Each PR body's **Review state** section has the round-by-round record.
 | PR | Item | State on 2026-10-22 |
 |---|---|---|
 | [#47](https://github.com/erik-hedstrom/loadout/pull/47) | C14 A/B pilot harness; adds B10 | final review round; the clean Codex-only rerun needs a separately logged-in `CODEX_HOME` |
-| [#28](https://github.com/erik-hedstrom/loadout/pull/28) | A1 README rewrite | #36 merged: merge main, then the gate |
+| [#28](https://github.com/erik-hedstrom/loadout/pull/28) | A1 README rewrite | main merged through #49; documentation review fixes awaiting the merge gate |
 
 ## A. Adoption and ease of use
 
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
 | A2 | P0 | `loadout audit`: what your installed skills cost you | Claude | cloud | done ([PR #3](https://github.com/erik-hedstrom/loadout/pull/3)) |
-| A1 | P0 | README rewrite around the problem, 3-command quickstart, GIF | Claude | cloud | review ([#28](https://github.com/erik-hedstrom/loadout/pull/28); GIF waits on A5) |
+| A1 | P0 | README rewrite around the problem, 3-command quickstart, GIF | Claude | cloud | review ([#28](https://github.com/erik-hedstrom/loadout/pull/28); main merged, renewed gate pending; GIF waits on A5) |
 | A3 | P1 | `loadout init` wizard + starter packs | Codex | cloud | done ([#30](https://github.com/erik-hedstrom/loadout/pull/30)) |
 | A4 | P1 | npm package under an available name + release workflow | Codex | cloud + erik | blocked: npm name decision |
 | A5 | P1 | Demo recording (route, launch, hook) | Claude | local | todo (after A1) |
@@ -94,8 +94,13 @@ Acceptance:
 - Reviewed for honesty: the outcome pilot is mixed, so the README must not
   claim better results.
 
-Note (E8 find pass, 2026-10-08): README still leads with the launcher; the
-plugin appears only under "Search mid-session".
+A1 learnings: keep the scope of B1's listing-cost measurement beside the
+README headline, and use a source install until A4 settles the npm name.
+Launcher, library, hook and MCP details belong in `docs/launcher.md`,
+`docs/library.md`, `docs/hook.md` and `docs/mcp.md`; SECURITY.md and DESIGN.md
+hold the security model and router. Keep C8's hook-only plugin results
+distinct from the settings-hook-plus-search result: following injected text
+and better outcomes remain not shown.
 
 **A3. `loadout init` wizard and starter packs.**
 
@@ -1257,7 +1262,7 @@ Learnings (2026-10-09):
 | E14 | P1 | Redact key-shaped strings before anything goes to Jev (prerequisite for the C2 loadout arm) | Codex | cloud | todo |
 | E15 | P1 | Test flakes: WSL-only `bench.test.ts` failure, Windows spawn timeouts | Claude | local | done ([#44](https://github.com/erik-hedstrom/loadout/pull/44)) |
 | E16 | P2 | Hygiene from #30's audit: control characters, `git ls-files` env, config symlink, echoed arguments | Codex | local | review ([#50](https://github.com/erik-hedstrom/loadout/pull/50)) |
-| E17 | P3 | One entry-point guard for bench scripts that survives symlinked paths | Claude | cloud | todo |
+| E17 | P3 | One entry-point guard for bench scripts that survives symlinked paths | Codex + Claude review | cloud | review ([#51](https://github.com/erik-hedstrom/loadout/pull/51)) |
 
 **E16. Terminal, config and git hygiene.** From the reviews of #30 (A3);
 all older than it.
@@ -1299,6 +1304,17 @@ real path, so a script started through a symlink or junction (`/tmp` on
 macOS) does nothing and exits 0. Acceptance: one `isEntry(import.meta.url)`
 in bench/lib.ts comparing real paths, and no `resolve(process.argv[1])` guard
 left under bench/, with a test that runs a script through a link.
+
+Learnings (2026-10-22): canonicalize both sides; resolving only `argv[1]` leaves
+a linked module URL unmatched. Run the Linux suite outside the system temp
+folder: the existing `resetWork` test assumes the checkout is outside it.
+`bench/ab.ts` (#47) still has its own guard; whichever of the two lands second
+converts it.
+
+Review M1/L1: argv lookup ENOENT/ENOTDIR means no entry (missing path or
+non-directory parent); module lookup and unexpected argv errors stay strict.
+Import tests cover these cases, stdin and a deleted importer. Removed seven
+direct-invocation cases; the stability pair still covers direct execution.
 
 **E10. Build without optional dependencies.** src/embed.ts:24 types
 `@huggingface/transformers` with `typeof import(...)`. So `tsc` fails when npm
