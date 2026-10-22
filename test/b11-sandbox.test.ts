@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync, statSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { sandboxArgs, copyTree, checkFiles, confinedPath, materializeSkill, sandboxCheck } from '../bench/b11-sandbox.js';
+import { sandboxArgs, copyTree, checkFiles, confinedPath, materializeSkill, sandboxCheck, removeSession } from '../bench/b11-sandbox.js';
 import { runCheck } from '../bench/b11.js';
 
 const roots: string[] = [];
@@ -58,6 +58,17 @@ describe('B11 sandbox', () => {
     symlinkSync(outside, join(dst, 'redirect'), 'junction');
     expect(() => copyTree(src, join(dst, 'redirect'))).toThrow();
   });
+  it.runIf(process.platform === 'linux')('repairs locked session directories without changing a symlink target', () => {
+    const root = temp(), outside = temp();
+    mkdirSync(join(root, 'locked')); chmodSync(join(root, 'locked'), 0);
+    writeFileSync(join(outside, 'canary'), 'outside');
+    chmodSync(outside, 0o750);
+    symlinkSync(outside, join(root, 'outside-link'));
+    removeSession(root);
+    expect(existsSync(root)).toBe(false);
+    expect(statSync(outside).mode & 0o777).toBe(0o750);
+    expect(checkFiles(outside, { type: 'files', path: 'canary', all: ['outside'], none: [] })).toBe(true);
+  });
   it.runIf(process.platform === 'linux')('proves the real home, checkout and outside canary are unreadable', async () => {
     await expect(sandboxCheck('/usr/bin/true')).resolves.toBeUndefined();
   });
@@ -77,7 +88,7 @@ describe('B11 sandbox', () => {
     writeFileSync(join(workspace, 'answer.txt'), 'wrong');
     expect(await runCheck(task, s, data)).toBe('fail');
   });
-  it('counts unsafe or oversized agent output as a failed task', async () => {
+  it.runIf(process.platform !== 'win32')('counts unsafe or oversized agent output as a failed task', async () => {
     const workspace = temp(), outside = temp();
     writeFileSync(join(outside, 'answer'), 'secret');
     symlinkSync(join(outside, 'answer'), join(workspace, 'answer.txt'));

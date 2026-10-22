@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { blocks, rowKey, options, JevBudget, fixturePath, classifyRun, sweepTasks, studyConfig } from '../bench/b11.js';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DEFAULT_CONFIG } from '../src/config.js';
@@ -38,7 +38,7 @@ describe('B11 study', () => {
     expect([...sweepTasks([{ kind: 'plain', id: 'p1' }, { kind: 'skill', id: 's1' }, { kind: 'plain', id: 'p2' }], 1)]).toEqual(['p1', 's1']);
   });
   it('confines dataset repository paths and short test-fixture paths to the same root', () => {
-    const root = mkdtempSync(join(tmpdir(), 'b11-path-'));
+    const root = mkdtempSync(join(realpathSync(tmpdir()), 'b11-path-'));
     mkdirSync(join(root, 'workspaces'));
     try {
       expect(fixturePath(root, 'workspaces', 'bench/data/b11/workspaces/plain')).toBe(join(root, 'workspaces', 'plain'));

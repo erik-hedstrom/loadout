@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
-import { isAbsolute, join, relative, resolve } from 'node:path';
+import { isAbsolute, join, posix, relative, resolve } from 'node:path';
 import { stringify } from 'yaml';
 import { escapeSkillTags } from '../src/launch.js';
 import { parseFrontmatter, readConfined } from '../src/library.js';
@@ -9,10 +9,21 @@ import { parseFrontmatter, readConfined } from '../src/library.js';
 export interface Sandbox { workspace: string; home: string; binary: string }
 const within = (root: string, p: string) => p === root || p.startsWith(root + '/');
 
+/** Call after the namespace exits: repair only our directory modes, without following agent-created links. */
+export function removeSession(root: string): void {
+  const unlock = (dir: string): void => {
+    if (!lstatSync(dir, { throwIfNoEntry: false })?.isDirectory()) return;
+    chmodSync(dir, 0o700);
+    for (const child of readdirSync(dir)) unlock(join(dir, child));
+  };
+  unlock(root);
+  rmSync(root, { recursive: true, force: true });
+}
+
 /** Fixed destinations keep the model prefix stable across sessions. No host environment is inherited. */
 export function sandboxArgs(s: Sandbox, command: string[], network = true): string[] {
   for (const p of [s.workspace, s.home, s.binary]) {
-    if (!isAbsolute(p) || resolve(p) !== p) throw new Error('sandbox paths must be absolute and normalized');
+    if (!posix.isAbsolute(p) || posix.resolve(p) !== p) throw new Error('sandbox paths must be absolute and normalized');
   }
   if ([s.workspace, s.home].some(p => p.split('/').length < 4 || within('/usr', p) || within('/etc', p)) || within(s.workspace, s.home) || within(s.home, s.workspace)) throw new Error('unsafe sandbox mounts');
   const args = ['--unshare-all', ...(network ? ['--share-net'] : []), '--die-with-parent', '--new-session', '--clearenv'];

@@ -13,7 +13,7 @@ import { route } from '../src/route.js';
 import type { Capability } from '../src/types.js';
 import { isEntry, splitOf } from './lib.js';
 import { ARMS, CORE_ARMS, DEFAULT_MODELS, parseEvents, parseRow, taskSchema, type B11Row, type B11Task } from './b11-types.js';
-import { checkFiles, confinedPath, copyTree, executeSandbox, OPENCODE_CONFIG, sandboxCheck, type Sandbox } from './b11-sandbox.js';
+import { checkFiles, confinedPath, copyTree, executeSandbox, OPENCODE_CONFIG, removeSession, sandboxCheck, type Sandbox } from './b11-sandbox.js';
 import { canariesSchema, endpoint, fixtureServer, fixtureTools, type Canary } from './b11-mcp.js';
 import { serverSpecs } from './mcp-fixtures.js';
 import { listingFor, prepareSkills, validateNeeds } from './b11-listing.js';
@@ -156,7 +156,8 @@ export async function main(args: string[]) {
   const runs = plan.reduce((n, b) => n + b.tasks.length, 0);
   console.log(JSON.stringify({ mode: o.run ? 'run' : 'plan', arms: o.arms, tasks: data.tasks.length,
     taskCounts: Object.fromEntries(['plain', 'skill-needle', 'mcp-needle'].map(k => [k, data.tasks.filter(t => t.kind === k).length])),
-    runs, expectedJevCalls: { preselect: data.tasks.length * o.models.length * o.reps * (o.arms.includes('preselect') ? 2 : 0), gatewayUpperBound: data.tasks.length * o.models.length * o.reps * (o.arms.includes('gateway') ? 40 : 0) },
+    runs, expectedJevCalls: { preselect: data.tasks.length * o.models.length * o.reps * (o.arms.includes('preselect') ? 2 : 0), gatewayAtOneSearchPerStep: data.tasks.length * o.models.length * o.reps * (o.arms.includes('gateway') ? 40 : 0) },
+    gatewayEstimateAssumption: 'One search per model step. Several searches in a step can exceed this estimate; the Jev reservation budget still applies.',
     jevBudgetUsd: o.run ? o.budget : 0, requestedRunBudgetUsd: o.budget, expectedJevCostUsd: { plan: 0, runRange: [0, o.budget], note: 'Usage-dependent; hard reservation cap, no paid calls in plan mode.' }, modelCostUsd: 0, concurrency: o.concurrency,
     mounts: ['system executables/libraries and DNS/CA files: read-only', 'pinned binary: read-only /opt/opencode', 'session workspace: rw /work', 'session home: rw /home/bench', 'private /proc, /dev, /tmp; shared host network including loopback during model sessions'],
     hostWrites: ['temporary preflight canary and sandbox homes/workspaces (removed)', 'result rows under --out (run only)'],
@@ -258,7 +259,7 @@ export async function main(args: string[]) {
             if (meter.failed) { row.result = 'invalid'; row.invalidReason = meter.exhausted ? 'budget-exhausted' : 'provider-error'; }
             row.wallMs = Date.now() - start;
             // OpenCode's private databases/logs and generated files never enter public results.
-            rmSync(sessionRoot, { recursive: true, force: true });
+            removeSession(sessionRoot);
           }
           appendFileSync(rowsFile, JSON.stringify(parseRow(row)) + '\n');
           written++;
