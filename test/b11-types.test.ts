@@ -5,7 +5,7 @@ import { parseEvents, parseRow, taskSchema, type B11Row } from '../bench/b11-typ
 // Counters from the scrubbed OpenCode recording in anomalyco/opencode#26855.
 const recorded = readFileSync(new URL('./fixtures/b11-events.jsonl', import.meta.url), 'utf8');
 const event = (tokens: unknown) => JSON.stringify({ type: 'step_finish', part: { tokens } });
-const tokens = { total: 34, input: 10, cache: { read: 20, write: 2 }, output: 3, reasoning: 1 };
+const tokens = { total: 36, input: 10, cache: { read: 20, write: 2 }, output: 3, reasoning: 1 };
 const jsonl = (...events: unknown[]) => events.map((value) => JSON.stringify(value)).join('\n');
 function row(): B11Row {
   return { taskId: 'b11-plain-01', kind: 'plain', split: 'test', model: 'opencode/glm-5.3-flash-free', arm: 'bare', rep: 0,
@@ -38,7 +38,7 @@ describe('B11 event projection', () => {
   it.each([
     '{PRIVATE', '{}', 'null', JSON.stringify({ type: 'step_finish' }), event({ ...tokens, input: undefined }),
     event({ ...tokens, input: -1 }), event({ ...tokens, input: 1.5 }), event({ ...tokens, input: '10' }),
-    event({ ...tokens, cache: { read: 20 } }), event({ ...tokens, total: 36 }), event({ ...tokens, total: null }),
+    event({ ...tokens, cache: { read: 20 } }), event({ ...tokens, total: 34 }), event({ ...tokens, total: null }),
     event({ ...tokens, reasoning: -1 }), event({ ...tokens, cache: { read: 20, write: -1 } }),
     JSON.stringify({ type: 'tool_use', part: { tool: 'read', state: { status: 'unexpected' } } }),
     JSON.stringify({ type: 'tool_use', part: { tool: 'read PRIVATE TEXT', state: { status: 'completed' } } }),
@@ -56,6 +56,11 @@ describe('B11 event projection', () => {
   });
   it('rejects an unfinished final model request rather than undercounting it', () => {
     expect(() => parseEvents(recorded + '\n' + JSON.stringify({ type: 'step_start' }))).toThrow('malformed-events');
+  });
+  it('preserves completed usage from a timed-out session without treating it as quality evidence', () => {
+    const parsed = parseEvents(recorded + '\n' + JSON.stringify({ type: 'step_start' }), 'timeout');
+    expect(parsed.steps).toHaveLength(1);
+    expect(parsed.invalidReason).toBe('timeout');
   });
   it('rejects an overflowing aggregate rather than rounding token totals', () => {
     const huge = event({ total: Number.MAX_SAFE_INTEGER, input: Number.MAX_SAFE_INTEGER, output: 0, reasoning: 0, cache: { read: 0, write: 0 } });

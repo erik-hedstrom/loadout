@@ -7,7 +7,7 @@ export const DEFAULT_MODELS = ['opencode/glm-5.3-flash-free', 'opencode/deepseek
 const count = z.number().int().nonnegative();
 const name = z.string().regex(/^[\w./:@-]{1,200}$/);
 const kind = z.enum(['skill-needle', 'mcp-needle', 'plain']);
-const invalidReason = z.enum(['rate-limit', 'provider-error', 'timeout', 'sandbox-failure', 'malformed-events']);
+const invalidReason = z.enum(['rate-limit', 'provider-error', 'timeout', 'sandbox-failure', 'malformed-events', 'budget-exhausted']);
 const toolStatus = z.enum(['completed', 'error']);
 const tokensSchema = z.strictObject({ input: count, cacheRead: count, cacheWrite: count, output: count, reasoning: count });
 export type B11Tokens = z.infer<typeof tokensSchema>;
@@ -70,9 +70,9 @@ export interface B11Events {
   invalidReason?: z.infer<typeof invalidReason>;
 }
 
-export function parseEvents(text: string): B11Events {
+export function parseEvents(text: string, interrupted?: 'timeout'): B11Events {
   const steps: B11Tokens[] = [], toolCalls: B11Row['toolCalls'] = [], skillsLoaded = new Set<string>();
-  let reason: B11Events['invalidReason'], starts = 0;
+  let reason: B11Events['invalidReason'] = interrupted, starts = 0;
   try {
     for (const line of text.split(/\r?\n/)) {
       if (!line.trim()) continue;
@@ -81,8 +81,8 @@ export function parseEvents(text: string): B11Events {
       if (event.type === 'step_start') starts++;
       if (event.type === 'step_finish') {
         const { tokens } = stepSchema.parse(value).part;
-        // This equation held in the free-model probe (cache writes were zero); fail if the contract changes.
-        if (tokens.total !== tokens.input + tokens.output + tokens.reasoning + tokens.cache.read) throw new Error();
+        // OpenCode 1.19.3 session/session.ts getUsage subtracts read and write from ordinary input.
+        if (tokens.total !== tokens.input + tokens.output + tokens.reasoning + tokens.cache.read + tokens.cache.write) throw new Error();
         steps.push({ input: tokens.input, cacheRead: tokens.cache.read, cacheWrite: tokens.cache.write, output: tokens.output, reasoning: tokens.reasoning });
       }
       if (event.type === 'tool_use') {

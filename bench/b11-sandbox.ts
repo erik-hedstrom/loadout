@@ -56,10 +56,10 @@ export async function sandboxCheck(binary: string): Promise<void> {
 export function confinedPath(root: string, rel: string): string {
   if (!rel || isAbsolute(rel) || rel.split(/[\\/]/).some(p => p === '..' || p === '')) throw new Error('unsafe fixture path');
   const absoluteRoot = realpathSync(root), p = resolve(absoluteRoot, rel);
+  if (relative(absoluteRoot, p).startsWith('..')) throw new Error('fixture escapes root');
   for (let cursor = p; cursor !== absoluteRoot; cursor = resolve(cursor, '..')) {
     if (lstatSync(cursor, { throwIfNoEntry: false })?.isSymbolicLink()) throw new Error('linked fixture path');
   }
-  if (relative(absoluteRoot, p).startsWith('..')) throw new Error('fixture escapes root');
   return p;
 }
 
@@ -67,6 +67,7 @@ const CONFIG_NAMES = new Set(['AGENTS.md', 'CLAUDE.md', 'opencode.json', 'openco
 /** Input workspaces and hidden checks are trusted repository fixtures, never followed through links. */
 export function copyTree(source: string, destination: string): void {
   if (!lstatSync(source).isDirectory()) throw new Error('fixture root must be a directory');
+  if (lstatSync(destination, { throwIfNoEntry: false })?.isSymbolicLink()) throw new Error('linked destination root');
   mkdirSync(destination, { recursive: true });
   for (const item of readdirSync(source, { withFileTypes: true })) {
     if (CONFIG_NAMES.has(item.name)) throw new Error('fixture contains agent configuration');

@@ -1,5 +1,68 @@
 # loadout benchmark
 
+## B11 OpenCode sessions
+
+`b11.ts` measures completed model requests and checks generated files. It
+requires Linux, bubblewrap, Node 22.12 or later, and an explicitly selected
+OpenCode binary. Version 1.19.3 is pinned by default. No user agent setup is
+edited. Only synthetic workspaces and public skill text should be supplied:
+free-model providers receive these inputs and may retain them.
+
+```bash
+npx tsx bench/b11.ts --plan --opencode "$OPENCODE_BIN"
+npx tsx bench/b11.ts --run --opencode "$OPENCODE_BIN" --out bench/results/approved-b11
+npx tsx bench/b11.ts --run --resume --opencode "$OPENCODE_BIN" --out bench/results/approved-b11
+npx tsx bench/b11-report.ts bench/results/approved-b11/rows.jsonl > report.md
+```
+
+The default is an offline plan: it checks the task contract and runs a
+network-disabled sandbox probe. The probe verifies that the real home,
+checkout and an outside canary cannot be read. Execution needs `--run`.
+Use `--tasks test/fixtures/b11-pilot/tasks.jsonl` for the small harness fixture
+set. These fixtures deliberately name their needed resources; they are not
+held-out evidence for routing quality.
+
+The six default arms are `bare`, `skills-all`, `mcp-all`, `all`, `gateway`
+and `preselect`. Additional size arms are `skills-50`, `skills-250`, `mcp-1`
+and `mcp-5`. Skills are listing-validated, framed `SKILL.md` text without
+bundled files. Only the B7 synthetic servers and task canaries are available;
+personal MCP configuration is never loaded. The gateway calls the same
+in-process loadout implementation as the CLI. Preselection uses `route()`
+and records the chosen names. Embeddings are disabled consistently for these
+two routing arms, avoiding a model download during the study.
+
+Each session receives a fresh writable workspace/home in bubblewrap, a
+private process namespace, read-only system executables, DNS/CA files and
+the pinned binary. The host environment is cleared. Network is available
+during the session. Authenticated fixture and gateway endpoints stay outside
+the sandbox; their short-lived token is a private file in the temporary
+home. Hidden checks are copied in after the model process stops and run
+without network. Temporary session files, including OpenCode logs/databases,
+are removed. Public rows contain counters, names/statuses and check outcomes,
+never transcripts, arguments, tool results or environment values.
+
+Tasks run in blocks of one model/arm, with arm order rotating by batch and
+repetition. `--batch-size` defaults to 9, `--concurrency` to 2 and `--reps`
+to 1. Concurrency is within a block. Initial requests may reuse a provider
+cache from earlier sessions; the report separates each request position.
+`--timeout` bounds each session in seconds. Rate-limit attempts are invalid
+and delay the next starts by at least 60 seconds. Resume skips valid
+task/model/arm/repetition identities and retries invalid ones once per launch.
+
+`--jev-budget` defaults to $0.10. Each Jev call reserves a conservative
+byte-based input allowance before sending; successful usage replaces that
+allowance, while an unanswered request retains it. Automatic Jev retries are
+disabled. Recorded Jev cost includes invalid attempts. A resumed run includes
+earlier attempt costs in its budget. An exhausted budget invalidates routing
+rows instead of silently evaluating keyword fallback.
+
+Reports keep the hash-based dev/test split separate, include Wilson 95%
+intervals, and reprice measured tokens under dated official price snapshots.
+Those prices are hypothetical comparisons across different tokenizers and
+cache policies. Size comparisons use a shared task/repetition panel; gateway
+bands are observed min/max session costs. See [RESULTS](RESULTS.md) for run
+evidence and limits.
+
 Does the router put the skill a task needs in front of the agent, and what
 does that cost, as the library grows from 100 to 20,000 skills?
 

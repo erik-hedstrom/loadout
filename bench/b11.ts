@@ -1,5 +1,5 @@
 /** Cache-aware OpenCode study. See bench/README.md for the offline plan and explicit execution commands. */
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
@@ -57,10 +57,13 @@ export class JevBudget {
   spent = 0;
   constructor(readonly limit: number, readonly config: Config, readonly client: SystemOneClient) {}
   meter() {
-    const meter = { usage: { calls: 0, costUsd: 0 }, failed: false, client: undefined as unknown as SystemOneClient };
-    meter.client = { ask: async (state, questions, signal) => {
+    const pending = new Set<Promise<unknown>>();
+    const meter = { usage: { calls: 0, costUsd: 0 }, failed: false, exhausted: false, client: undefined as unknown as SystemOneClient,
+      settle: async () => { await Promise.allSettled([...pending]); } };
+    meter.client = { ask: (state, questions, signal) => {
+      const call = (async () => {
       const reservation = (Buffer.byteLength(JSON.stringify({ state, questions }), 'utf8') + 8192) / 1e6 * this.config.jev.inputPricePerMTok;
-      if (this.spent + reservation > this.limit) { meter.failed = true; throw new Error('Jev budget exhausted'); }
+      if (this.spent + reservation > this.limit) { meter.failed = true; meter.exhausted = true; throw new Error('Jev budget exhausted'); }
       this.spent += reservation; meter.usage.calls++;
       try {
         const response = await this.client.ask(state, questions, signal);
@@ -68,9 +71,32 @@ export class JevBudget {
         this.spent += cost - reservation; meter.usage.costUsd += cost;
         return response;
       } catch (e) { meter.failed = true; meter.usage.costUsd += reservation; throw e; }
+      })();
+      pending.add(call);
+      void call.then(() => pending.delete(call), () => pending.delete(call));
+      return call;
     } };
     return meter;
   }
+}
+
+export function classifyRun(run: { stdout: string; stderr: string; code: number | null; timedOut: boolean }, routingFailed = false) {
+  let events: ReturnType<typeof parseEvents> = { steps: [], totals: { input: 0, cacheRead: 0, cacheWrite: 0, output: 0, reasoning: 0 }, toolCalls: [], skillsLoaded: [] };
+  let invalidReason: B11Row['invalidReason'];
+  const complete = run.timedOut && !run.stdout.endsWith('\n') ? run.stdout.slice(0, run.stdout.lastIndexOf('\n') + 1) : run.stdout;
+  try { events = parseEvents(complete, run.timedOut ? 'timeout' : undefined); invalidReason = events.invalidReason; }
+  catch { invalidReason = 'malformed-events'; }
+  if (routingFailed || (run.code !== 0 && !run.timedOut && !events.invalidReason)) invalidReason = 'provider-error';
+  if (/^bwrap:/m.test(run.stderr)) invalidReason = 'sandbox-failure';
+  if (/\b(?:HTTP(?:\s+status)?|status(?:Code)?)\s*[:=]?\s*429\b|rate[ -]?limit(?:ed| exceeded)|too many requests/i.test(run.stderr) || events.invalidReason === 'rate-limit') invalidReason = 'rate-limit';
+  return { events, invalidReason };
+}
+
+class RoutingUnavailable extends Error {}
+
+export function fixturePath(root: string, category: 'workspaces' | 'checks', reference: string): string {
+  const prefix = `bench/data/b11/${category}/`;
+  return confinedPath(join(root, category), reference.startsWith(prefix) ? reference.slice(prefix.length) : reference);
 }
 
 function tasksAt(file: string, perKind?: number): { tasks: B11Task[]; root: string; canaries: Canary[] } {
@@ -80,8 +106,8 @@ function tasksAt(file: string, perKind?: number): { tasks: B11Task[]; root: stri
   const counts = new Map<string, number>();
   const tasks = all.filter(t => { const n = counts.get(t.kind) ?? 0; counts.set(t.kind, n + 1); return !perKind || n < perKind; });
   for (const t of tasks) {
-    confinedPath(join(root, 'workspaces'), t.workspace);
-    if (t.check.type === 'node-test') confinedPath(join(root, 'checks'), t.check.tests);
+    fixturePath(root, 'workspaces', t.workspace);
+    if (t.check.type === 'node-test') fixturePath(root, 'checks', t.check.tests);
   }
   const canaryFile = join(root, 'mcp-canaries.json');
   const canaries = existsSync(canaryFile) ? canariesSchema.parse(JSON.parse(readFileSync(canaryFile, 'utf8'))) : [];
@@ -93,17 +119,20 @@ function skillSources(root: string): string[] {
   return readdirSync(root, { withFileTypes: true }).filter(d => d.isDirectory() && !d.isSymbolicLink()).map(d => join(root, d.name)).sort();
 }
 
-async function check(task: B11Task, s: Sandbox, data: string): Promise<boolean> {
-  if (task.check.type === 'files') return checkFiles(s.workspace, task.check);
+export async function runCheck(task: B11Task, s: Sandbox, data: string): Promise<'pass' | 'fail' | 'sandbox-failure'> {
+  if (task.check.type === 'files') {
+    // The agent owns the output: absent, oversized, linked or unreadable output is a failed task.
+    try { return checkFiles(s.workspace, task.check) ? 'pass' : 'fail'; } catch { return 'fail'; }
+  }
   const destination = join(s.workspace, '.b11-checks');
   // The model may have created this name. Refuse it, rather than following or replacing its files.
-  if (existsSync(destination)) throw new Error('hidden check destination occupied');
-  copyTree(confinedPath(join(data, 'checks'), task.check.tests), destination);
+  if (lstatSync(destination, { throwIfNoEntry: false })) return 'fail';
+  copyTree(fixturePath(data, 'checks', task.check.tests), destination);
   const files = readdirSync(destination).filter(f => /\.(?:mjs|cjs|js)$/.test(f));
   if (!files.length) throw new Error('no hidden node tests');
-  const r = await executeSandbox(s, ['/usr/bin/node', '--test', ...files.map(f => `/work/.b11-checks/${f}`)], 15000, false);
-  if (r.timedOut) return false;
-  return r.code === 0;
+  const r = await executeSandbox(s, ['/bin/sh', '-c', 'printf "B11_CHECK_STARTED\\n"; exec /usr/bin/node --test "$@"', 'b11-check', ...files.map(f => `/work/.b11-checks/${f}`)], 15000, false);
+  if (!r.stdout.startsWith('B11_CHECK_STARTED\n')) return 'sandbox-failure';
+  return !r.timedOut && r.code === 0 ? 'pass' : 'fail';
 }
 
 export async function main(args: string[]) {
@@ -116,8 +145,8 @@ export async function main(args: string[]) {
   console.log(JSON.stringify({ mode: o.run ? 'run' : 'plan', arms: o.arms, tasks: data.tasks.length,
     taskCounts: Object.fromEntries(['plain', 'skill-needle', 'mcp-needle'].map(k => [k, data.tasks.filter(t => t.kind === k).length])),
     runs, expectedJevCalls: { preselect: data.tasks.length * o.models.length * o.reps * (o.arms.includes('preselect') ? 2 : 0), gatewayUpperBound: data.tasks.length * o.models.length * o.reps * (o.arms.includes('gateway') ? 40 : 0) },
-    jevBudgetUsd: o.run ? o.budget : 0, requestedRunBudgetUsd: o.budget, modelCostUsd: 0, concurrency: o.concurrency,
-    mounts: ['system executables/libraries and DNS/CA files: read-only', 'pinned binary: read-only /opt/opencode', 'session workspace: rw /work', 'session home: rw /home/bench', 'private /proc, /dev, /tmp; network allowed only during model sessions'],
+    jevBudgetUsd: o.run ? o.budget : 0, requestedRunBudgetUsd: o.budget, expectedJevCostUsd: { plan: 0, runRange: [0, o.budget], note: 'Usage-dependent; hard reservation cap, no paid calls in plan mode.' }, modelCostUsd: 0, concurrency: o.concurrency,
+    mounts: ['system executables/libraries and DNS/CA files: read-only', 'pinned binary: read-only /opt/opencode', 'session workspace: rw /work', 'session home: rw /home/bench', 'private /proc, /dev, /tmp; shared host network including loopback during model sessions'],
     hostWrites: ['temporary preflight canary and sandbox homes/workspaces (removed)', 'result rows under --out (run only)'],
     sandboxCheck: 'real home, checkout and planted outside canary must be unreadable; no network',
   }, null, 2));
@@ -161,13 +190,14 @@ export async function main(args: string[]) {
         tools: fixtureTools(spec, data.canaries).map(t => ({ name: t.name, description: t.description })), server: { url: e.url, headers: { Authorization: `Bearer ${token}` } } });
     }
     let orderIndex = Math.max(-1, ...previous.map(r => r.orderIndex)) + 1;
-    let rateLimitedUntil = 0;
+    let rateLimitedUntil = 0, stopped = false, written = 0;
     // A single queue per block preserves the static arm's cross-session cache opportunity.
     for (const block of plan) {
+      if (stopped) break;
       let next = 0;
       const queue = block.tasks.filter(task => !done.has(rowKey({ taskId: task.id, model: block.model, arm: block.arm as B11Row['arm'], rep: block.rep })));
-      await Promise.all(Array.from({ length: Math.min(o.concurrency, queue.length) }, async () => {
-        while (next < queue.length) {
+      const workers = await Promise.allSettled(Array.from({ length: Math.min(o.concurrency, queue.length) }, async () => {
+        while (!stopped && next < queue.length) {
           const task = queue[next++]!;
           if (Date.now() < rateLimitedUntil) await delay(rateLimitedUntil - Date.now());
           const index = orderIndex++, startedAt = new Date().toISOString(), start = Date.now();
@@ -180,7 +210,7 @@ export async function main(args: string[]) {
             steps: [], totals: { input: 0, cacheRead: 0, cacheWrite: 0, output: 0, reasoning: 0 }, toolCalls: [], skillsLoaded: [], result: 'invalid', invalidReason: 'provider-error', wallMs: 0, jev: meter.usage, listing: { skills: 0, servers: 0, tools: 0 } };
           if (block.arm === 'preselect') row.selection = { skills: [], servers: [] };
           try {
-            copyTree(confinedPath(join(data.root, 'workspaces'), task.workspace), workspace);
+            copyTree(fixturePath(data.root, 'workspaces', task.workspace), workspace);
             writeFileSync(join(workspace, 'AGENTS.md'), '');
             let selectedSkills: Capability[] = [], selectedServers: Capability[] = [];
             if (['skills-all', 'all'].includes(block.arm)) selectedSkills = skills;
@@ -189,7 +219,7 @@ export async function main(args: string[]) {
             if (block.arm === 'mcp-1' || block.arm === 'mcp-5') selectedServers = servers.slice(0, Number(block.arm.slice(4)));
             if (block.arm === 'preselect') {
               const d = await route({ task: task.prompt, repo: { name: 'b11', files: [], languages: {}, dependencies: [] }, library: [...skills, ...servers], config, client: meter.client, excerpt: skillExcerpt });
-              if (d.router !== 'jev' || meter.failed) throw new Error('routing failed');
+              if (d.router !== 'jev' || meter.failed) throw new RoutingUnavailable();
               selectedSkills = d.selected.filter(c => c.capability.kind === 'skill').map(c => c.capability);
               selectedServers = d.selected.filter(c => c.capability.kind === 'mcp').map(c => c.capability);
               row.selection = { skills: selectedSkills.map(s => s.name), servers: selectedServers.map(s => s.name) };
@@ -208,29 +238,36 @@ export async function main(args: string[]) {
             row.listing = { skills: selectedSkills.length, servers: selectedServers.length, tools: selectedServers.reduce((n, c) => n + (c.tools?.length ?? 0), 0) };
             writeFileSync(join(workspace, 'opencode.json'), JSON.stringify({ ...OPENCODE_CONFIG, mcp }));
             const run = await executeSandbox(s, ['/opt/opencode', 'run', '--pure', '-m', block.model, '--format', 'json', task.prompt], o.timeoutMs);
-            if (run.timedOut) row.invalidReason = 'timeout';
-            else {
-              try {
-                const parsed = parseEvents(run.stdout); Object.assign(row, parsed);
-                if (!parsed.invalidReason && run.code === 0 && !meter.failed) {
-                  row.result = await check(task, s, data.root) ? 'pass' : 'fail'; delete row.invalidReason;
-                }
-              } catch { row.invalidReason = 'malformed-events'; }
-              if (/(?:429|rate.?limit|too many requests)/i.test(run.stderr) || row.invalidReason === 'rate-limit') { row.result = 'invalid'; row.invalidReason = 'rate-limit'; rateLimitedUntil = Date.now() + 60000; }
+            const classified = classifyRun(run, meter.failed); Object.assign(row, classified.events);
+            row.invalidReason = classified.invalidReason;
+            if (!row.invalidReason) {
+              const checked = await runCheck(task, s, data.root);
+              if (checked === 'sandbox-failure') row.invalidReason = checked;
+              else { row.result = checked; delete row.invalidReason; }
             }
-          } catch { row.result = 'invalid'; row.invalidReason = meter.failed ? 'provider-error' : 'sandbox-failure'; }
+            if (row.invalidReason === 'rate-limit') rateLimitedUntil = Date.now() + 60000;
+          } catch (error) {
+            if (!(error instanceof RoutingUnavailable)) { stopped = true; throw error; }
+            row.invalidReason = 'provider-error';
+          }
           finally {
-            row.wallMs = Date.now() - start;
             if (gateway) await gateway.close();
+            await meter.settle();
+            if (meter.failed) { row.result = 'invalid'; row.invalidReason = meter.exhausted ? 'budget-exhausted' : 'provider-error'; }
+            row.wallMs = Date.now() - start;
             // OpenCode's private databases/logs and generated files never enter public results.
             rmSync(sessionRoot, { recursive: true, force: true });
           }
           appendFileSync(rowsFile, JSON.stringify(parseRow(row)) + '\n');
+          written++;
+          if (meter.exhausted) stopped = true;
           console.log(`${row.orderIndex} ${row.model} ${row.arm} ${row.taskId}: ${row.result}${row.invalidReason ? ` (${row.invalidReason})` : ''}`);
         }
       }));
+      const rejected = workers.find((worker): worker is PromiseRejectedResult => worker.status === 'rejected');
+      if (rejected) throw rejected.reason;
     }
-    console.log(`Jev reserved/observed cost: $${budget.spent.toFixed(6)}; rows: ${runs}`);
+    console.log(`Jev reserved/observed cost: $${budget.spent.toFixed(6)}; new rows: ${written} of ${runs} planned sessions${stopped ? '; budget exhausted' : ''}`);
   } finally { await Promise.all(endpoints.map(e => e.close())); rmSync(root, { recursive: true, force: true }); }
 }
 
