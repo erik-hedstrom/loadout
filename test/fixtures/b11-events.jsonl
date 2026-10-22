@@ -1,0 +1,2 @@
+{"type":"step_start","part":{"type":"step-start"}}
+{"type":"step_finish","part":{"type":"step-finish","reason":"stop","tokens":{"total":19362,"input":209,"output":209,"reasoning":0,"cache":{"read":18944,"write":0}},"cost":0}}
