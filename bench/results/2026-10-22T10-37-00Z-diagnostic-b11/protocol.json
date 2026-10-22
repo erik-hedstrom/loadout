@@ -1,12 +1,15 @@
 {
-  "status": "in-progress",
+  "status": "quota-stopped",
   "taskFile": "bench/data/b11/tasks.jsonl",
   "selectedTaskIds": [
     "b11-skill-firgrove-release"
   ],
-  "selection": "First skill-needle task in dataset order, selected before outcomes; identical task in all four diagnostics.",
+  "selection": "First skill-needle task in dataset order, fixed before outcomes and identical in all four planned cells.",
   "opencodeVersion": "1.19.3",
   "plannedSessions": 4,
+  "recordedSessions": 2,
+  "interruptedWithoutFinalRows": 1,
+  "notStartedSessions": 1,
   "arms": [
     "skills-all",
     "all"
@@ -20,10 +23,98 @@
   "modelCostUsd": 0,
   "jevCalls": 0,
   "jevCostUsd": 0,
-  "metadataSource": "Read-only scalar/counter projection from the active synthetic session database. No transcripts or raw database files retained.",
+  "coverage": [
+    {
+      "model": "opencode/glm-5.3-flash-free",
+      "arm": "skills-all",
+      "status": "recorded",
+      "result": "invalid",
+      "invalidReason": "timeout"
+    },
+    {
+      "model": "opencode/glm-5.3-flash-free",
+      "arm": "all",
+      "status": "recorded",
+      "result": "invalid",
+      "invalidReason": "timeout"
+    },
+    {
+      "model": "opencode/deepseek-v4.1-flash-free",
+      "arm": "skills-all",
+      "status": "interrupted-without-final-row",
+      "observedStepFinishes": 0
+    },
+    {
+      "model": "opencode/deepseek-v4.1-flash-free",
+      "arm": "all",
+      "status": "not-started"
+    }
+  ],
+  "metadataSource": "Scalar/counter-only projection of synthetic session metadata; no transcripts, raw databases, arguments, outputs or host paths retained.",
+  "metadataSummary": [
+    {
+      "model": "opencode/glm-5.3-flash-free",
+      "arm": "skills-all",
+      "samples": 2,
+      "maxObservedCompactions": 42,
+      "maxObservedStepStarts": 83,
+      "maxObservedStepFinishes": 83,
+      "maxObservedPromptTokens": 176373
+    },
+    {
+      "model": "opencode/glm-5.3-flash-free",
+      "arm": "all",
+      "samples": 21,
+      "maxObservedCompactions": 54,
+      "maxObservedStepStarts": 108,
+      "maxObservedStepFinishes": 108,
+      "maxObservedPromptTokens": 271164
+    },
+    {
+      "model": "opencode/deepseek-v4.1-flash-free",
+      "arm": "skills-all",
+      "samples": 23,
+      "maxObservedCompactions": 0,
+      "maxObservedStepStarts": 0,
+      "maxObservedStepFinishes": 0,
+      "maxObservedPromptTokens": null
+    }
+  ],
+  "timingSummary": [
+    {
+      "model": "opencode/glm-5.3-flash-free",
+      "arm": "skills-all",
+      "wallMs": 1200202,
+      "startupMs": 23569.763847000002,
+      "completedStepSamples": 110,
+      "completedStepMeanMs": 5835.364955145448,
+      "completedStepMedianMs": 5923.055680999969,
+      "completedStepMaxMs": 11315.001005999977,
+      "wallMinusStartupAndCompletedStepsMs": 534742.0910870008
+    },
+    {
+      "model": "opencode/glm-5.3-flash-free",
+      "arm": "all",
+      "wallMs": 1200745,
+      "startupMs": 18275.372260999866,
+      "completedStepSamples": 108,
+      "completedStepMeanMs": 6387.815294379634,
+      "completedStepMedianMs": 7534.5627460000105,
+      "completedStepMaxMs": 19196.464130999986,
+      "wallMinusStartupAndCompletedStepsMs": 492585.5759459997
+    }
+  ],
+  "quotaEvidence": "quota-evidence.json",
+  "report": "summary.md",
+  "rows": "rows.jsonl",
+  "metadataSamples": "metadata-samples.jsonl",
   "notes": [
-    "First session completed its 20-minute ceiling with repeated compaction. Remaining sessions continue.",
-    "Per-step arrival durations exclude gaps before the next step_start. Wall time is not their sum.",
-    "Offline OpenCode model metadata is host-declared capacity, not independently verified provider capacity."
+    "Both recorded GLM sessions reached their 1200-second deadline and are invalid, not quality failures. Their historical rows omit timeoutMs; the configured deadline is retained here rather than backfilled into the rows.",
+    "DeepSeek skills-all was interrupted after a persistent free usage cap. Zero recorded step finishes do not establish zero provider usage; no final row was reconstructed. DeepSeek all never started.",
+    "Compaction summaries are maxima across retained cumulative snapshots, not sums or guaranteed final session totals.",
+    "Startup and completed-step durations do not partition lifecycle wall time; the difference is unattributed time, not a measurement of MCP discovery.",
+    "The maximum observed overlap across this diagnostic and the pilot was three sessions. This does not establish safety at concurrency three or four.",
+    "No numeric HTTP 429, quota amount or reset time was established. The shared quota evidence records the controlled usage-cap marker, API/retry error classes and three internal attempts.",
+    "All provider calls stopped. No full study was launched."
   ]
 }

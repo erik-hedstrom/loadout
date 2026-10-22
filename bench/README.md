@@ -37,9 +37,9 @@ required canary servers added. The bracket selected 250/5, which is actually
 274 skills, 20 servers and 509 tools for this dataset. All 20 servers carry
 required targets, so the fixed full-task comparator retains them. A different
 heavy configuration cannot be silently resumed or pooled into a report.
-The larger full-library arms repeatedly compact; the current study command
+The GLM full-library diagnostics repeatedly compacted; the current study command
 excludes them but keeps their diagnostic rows. Bracketing evidence and the
-real-task pilot are recorded in RESULTS.
+quota-stopped real-task pilot are recorded in RESULTS.
 Only the B7 synthetic servers and task canaries are available;
 personal MCP configuration is never loaded. The gateway calls the same
 in-process loadout implementation as the CLI. Preselection uses `route()`
@@ -69,7 +69,8 @@ cache from earlier sessions; the report separates each request position.
 `--timeout` bounds each session in seconds (default 300). The plan also
 prints the schedule if every session uses its deadline, retaining block
 barriers and excluding setup, routing, checks, cleanup and rate-limit waits. Rate-limit attempts are invalid
-and delay the next starts by at least 60 seconds. Resume skips valid
+and delay the next starts by at least 60 seconds. A persistent free usage-limit
+marker stops further launches; it does not become a task quality failure. Resume skips valid
 task/model/arm/repetition identities and retries invalid ones once per launch.
 
 `--jev-budget` defaults to $0.10. Each Jev call reserves a conservative
@@ -87,6 +88,20 @@ usable in observed attempts. Those prices are hypothetical comparisons across di
 cache policies. Size comparisons use a shared task/repetition panel; gateway
 bands are observed min/max session costs. See [RESULTS](RESULTS.md) for run
 evidence and limits.
+
+The real-task pilot is quota-stopped: 15/90 planned final rows, two sessions
+interrupted without rows and 73 unstarted. Other arms and all DeepSeek cells
+remain unmeasured; unknown interrupted usage is not reconstructed. No
+numeric quota or reset time was established. All provider calls stopped.
+The selected heavy comparator completed only a four-case screen, not a
+broad reliability evaluation. See [RESULTS](RESULTS.md#b11-real-task-pilot-2026-10-22-quota-stopped).
+
+The [handoff](../docs/loop/B11-HANDOFF.md#quota-stopped-real-task-follow-up)
+contains the exact resume command with the original pilot arm order and
+$0.065 Jev cap. It also records the exact nine-arm full-study command
+(792 sessions, concurrency 2, 300-second deadline), gated on a completed
+usable pilot and available quota. Its 37 h 20 min all-deadline schedule is
+not an expected runtime; no full study has run.
 
 Does the router put the skill a task needs in front of the agent, and what
 does that cost, as the library grows from 100 to 20,000 skills?

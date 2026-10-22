@@ -12,6 +12,7 @@ Valid completion = (pass + fail) / all recorded attempts; retries remain separat
 
 | Arm | Valid sessions | Attempts | Valid completion | Assessment |
 |---|---:|---:|---:|---|
+| all | 0 | 1 | 0.00% | UNDER 90%: not usable in observed attempts |
 | skills-all | 0 | 1 | 0.00% | UNDER 90%: not usable in observed attempts |
 
 ## Price snapshots
@@ -30,6 +31,7 @@ USD per million tokens. GLM and DeepSeek have no extra storage/write charge; new
 
 | Model | Arm | Pass | Fail | Invalid attempts | Valid completion | Assessment | Success among valid (Wilson 95%) | Steps | Uncached input | Cache read | Cache write | Output | Reasoning |
 |---|---|---:|---:|---:|---:|---|---|---:|---:|---:|---:|---:|---:|
+| opencode/glm-5.3-flash-free | all | 0 | 0 | 1 | 0.00% | UNDER 90%: not usable in observed attempts | not usable in observed attempts | 0 | 0 | 0 | 0 | 0 | 0 |
 | opencode/glm-5.3-flash-free | skills-all | 0 | 0 | 1 | 0.00% | UNDER 90%: not usable in observed attempts | not usable in observed attempts | 0 | 0 | 0 | 0 | 0 | 0 |
 
 ### Invalid usage and all-attempt Jev spend
@@ -38,6 +40,7 @@ Invalid reasons count attempts, including retries; zero token counters do not im
 
 | Model | Arm | Invalid reasons | Deadlines (ms) | Invalid steps | Invalid uncached | Invalid cache read | Invalid cache write | Invalid output | Invalid reasoning | Jev calls | Jev USD |
 |---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| opencode/glm-5.3-flash-free | all | timeout 1 | unknown (historical) | 108 | 689255 | 14031936 | 0 | 49697 | 2516 | 0 | $0.000000 |
 | opencode/glm-5.3-flash-free | skills-all | timeout 1 | unknown (historical) | 110 | 489878 | 9284992 | 0 | 45262 | 3030 | 0 | $0.000000 |
 
 ### Cache by request position
@@ -51,6 +54,116 @@ Startup is process launch to first step_start; each step is step_start to step_f
 
 | Model | Arm | Phase | Samples | Mean ms | Median ms | Max ms |
 |---|---|---|---:|---:|---:|---:|
+| opencode/glm-5.3-flash-free | all | Session wall | 1 | 1200745.00 | 1200745.00 | 1200745.00 |
+| opencode/glm-5.3-flash-free | all | Startup | 1 | 18275.37 | 18275.37 | 18275.37 |
+| opencode/glm-5.3-flash-free | all | Step 1 | 1 | 983.79 | 983.79 | 983.79 |
+| opencode/glm-5.3-flash-free | all | Step 2 | 1 | 3675.52 | 3675.52 | 3675.52 |
+| opencode/glm-5.3-flash-free | all | Step 3 | 1 | 1061.17 | 1061.17 | 1061.17 |
+| opencode/glm-5.3-flash-free | all | Step 4 | 1 | 6421.13 | 6421.13 | 6421.13 |
+| opencode/glm-5.3-flash-free | all | Step 5 | 1 | 2159.47 | 2159.47 | 2159.47 |
+| opencode/glm-5.3-flash-free | all | Step 6 | 1 | 6541.30 | 6541.30 | 6541.30 |
+| opencode/glm-5.3-flash-free | all | Step 7 | 1 | 624.13 | 624.13 | 624.13 |
+| opencode/glm-5.3-flash-free | all | Step 8 | 1 | 8197.67 | 8197.67 | 8197.67 |
+| opencode/glm-5.3-flash-free | all | Step 9 | 1 | 1288.74 | 1288.74 | 1288.74 |
+| opencode/glm-5.3-flash-free | all | Step 10 | 1 | 7383.17 | 7383.17 | 7383.17 |
+| opencode/glm-5.3-flash-free | all | Step 11 | 1 | 4223.56 | 4223.56 | 4223.56 |
+| opencode/glm-5.3-flash-free | all | Step 12 | 1 | 8077.30 | 8077.30 | 8077.30 |
+| opencode/glm-5.3-flash-free | all | Step 13 | 1 | 1699.42 | 1699.42 | 1699.42 |
+| opencode/glm-5.3-flash-free | all | Step 14 | 1 | 8368.10 | 8368.10 | 8368.10 |
+| opencode/glm-5.3-flash-free | all | Step 15 | 1 | 3514.42 | 3514.42 | 3514.42 |
+| opencode/glm-5.3-flash-free | all | Step 16 | 1 | 9529.69 | 9529.69 | 9529.69 |
+| opencode/glm-5.3-flash-free | all | Step 17 | 1 | 2001.52 | 2001.52 | 2001.52 |
+| opencode/glm-5.3-flash-free | all | Step 18 | 1 | 8756.82 | 8756.82 | 8756.82 |
+| opencode/glm-5.3-flash-free | all | Step 19 | 1 | 812.81 | 812.81 | 812.81 |
+| opencode/glm-5.3-flash-free | all | Step 20 | 1 | 7953.55 | 7953.55 | 7953.55 |
+| opencode/glm-5.3-flash-free | all | Step 21 | 1 | 4519.21 | 4519.21 | 4519.21 |
+| opencode/glm-5.3-flash-free | all | Step 22 | 1 | 7847.14 | 7847.14 | 7847.14 |
+| opencode/glm-5.3-flash-free | all | Step 23 | 1 | 3964.02 | 3964.02 | 3964.02 |
+| opencode/glm-5.3-flash-free | all | Step 24 | 1 | 9145.04 | 9145.04 | 9145.04 |
+| opencode/glm-5.3-flash-free | all | Step 25 | 1 | 4327.29 | 4327.29 | 4327.29 |
+| opencode/glm-5.3-flash-free | all | Step 26 | 1 | 8004.46 | 8004.46 | 8004.46 |
+| opencode/glm-5.3-flash-free | all | Step 27 | 1 | 4065.94 | 4065.94 | 4065.94 |
+| opencode/glm-5.3-flash-free | all | Step 28 | 1 | 8310.67 | 8310.67 | 8310.67 |
+| opencode/glm-5.3-flash-free | all | Step 29 | 1 | 4148.70 | 4148.70 | 4148.70 |
+| opencode/glm-5.3-flash-free | all | Step 30 | 1 | 8364.66 | 8364.66 | 8364.66 |
+| opencode/glm-5.3-flash-free | all | Step 31 | 1 | 6583.42 | 6583.42 | 6583.42 |
+| opencode/glm-5.3-flash-free | all | Step 32 | 1 | 9380.82 | 9380.82 | 9380.82 |
+| opencode/glm-5.3-flash-free | all | Step 33 | 1 | 19196.46 | 19196.46 | 19196.46 |
+| opencode/glm-5.3-flash-free | all | Step 34 | 1 | 8954.49 | 8954.49 | 8954.49 |
+| opencode/glm-5.3-flash-free | all | Step 35 | 1 | 4322.22 | 4322.22 | 4322.22 |
+| opencode/glm-5.3-flash-free | all | Step 36 | 1 | 8408.40 | 8408.40 | 8408.40 |
+| opencode/glm-5.3-flash-free | all | Step 37 | 1 | 5190.23 | 5190.23 | 5190.23 |
+| opencode/glm-5.3-flash-free | all | Step 38 | 1 | 8677.63 | 8677.63 | 8677.63 |
+| opencode/glm-5.3-flash-free | all | Step 39 | 1 | 3032.23 | 3032.23 | 3032.23 |
+| opencode/glm-5.3-flash-free | all | Step 40 | 1 | 10163.15 | 10163.15 | 10163.15 |
+| opencode/glm-5.3-flash-free | all | Step 41 | 1 | 6428.14 | 6428.14 | 6428.14 |
+| opencode/glm-5.3-flash-free | all | Step 42 | 1 | 9367.33 | 9367.33 | 9367.33 |
+| opencode/glm-5.3-flash-free | all | Step 43 | 1 | 4270.42 | 4270.42 | 4270.42 |
+| opencode/glm-5.3-flash-free | all | Step 44 | 1 | 8039.94 | 8039.94 | 8039.94 |
+| opencode/glm-5.3-flash-free | all | Step 45 | 1 | 3523.95 | 3523.95 | 3523.95 |
+| opencode/glm-5.3-flash-free | all | Step 46 | 1 | 8021.66 | 8021.66 | 8021.66 |
+| opencode/glm-5.3-flash-free | all | Step 47 | 1 | 4045.60 | 4045.60 | 4045.60 |
+| opencode/glm-5.3-flash-free | all | Step 48 | 1 | 9586.25 | 9586.25 | 9586.25 |
+| opencode/glm-5.3-flash-free | all | Step 49 | 1 | 7383.77 | 7383.77 | 7383.77 |
+| opencode/glm-5.3-flash-free | all | Step 50 | 1 | 9158.72 | 9158.72 | 9158.72 |
+| opencode/glm-5.3-flash-free | all | Step 51 | 1 | 3210.95 | 3210.95 | 3210.95 |
+| opencode/glm-5.3-flash-free | all | Step 52 | 1 | 8776.64 | 8776.64 | 8776.64 |
+| opencode/glm-5.3-flash-free | all | Step 53 | 1 | 5428.70 | 5428.70 | 5428.70 |
+| opencode/glm-5.3-flash-free | all | Step 54 | 1 | 8494.70 | 8494.70 | 8494.70 |
+| opencode/glm-5.3-flash-free | all | Step 55 | 1 | 1397.75 | 1397.75 | 1397.75 |
+| opencode/glm-5.3-flash-free | all | Step 56 | 1 | 8339.14 | 8339.14 | 8339.14 |
+| opencode/glm-5.3-flash-free | all | Step 57 | 1 | 5513.38 | 5513.38 | 5513.38 |
+| opencode/glm-5.3-flash-free | all | Step 58 | 1 | 9859.70 | 9859.70 | 9859.70 |
+| opencode/glm-5.3-flash-free | all | Step 59 | 1 | 4352.86 | 4352.86 | 4352.86 |
+| opencode/glm-5.3-flash-free | all | Step 60 | 1 | 9067.01 | 9067.01 | 9067.01 |
+| opencode/glm-5.3-flash-free | all | Step 61 | 1 | 7685.36 | 7685.36 | 7685.36 |
+| opencode/glm-5.3-flash-free | all | Step 62 | 1 | 7956.93 | 7956.93 | 7956.93 |
+| opencode/glm-5.3-flash-free | all | Step 63 | 1 | 3335.58 | 3335.58 | 3335.58 |
+| opencode/glm-5.3-flash-free | all | Step 64 | 1 | 9649.62 | 9649.62 | 9649.62 |
+| opencode/glm-5.3-flash-free | all | Step 65 | 1 | 3332.66 | 3332.66 | 3332.66 |
+| opencode/glm-5.3-flash-free | all | Step 66 | 1 | 8795.36 | 8795.36 | 8795.36 |
+| opencode/glm-5.3-flash-free | all | Step 67 | 1 | 4103.95 | 4103.95 | 4103.95 |
+| opencode/glm-5.3-flash-free | all | Step 68 | 1 | 9038.11 | 9038.11 | 9038.11 |
+| opencode/glm-5.3-flash-free | all | Step 69 | 1 | 3456.74 | 3456.74 | 3456.74 |
+| opencode/glm-5.3-flash-free | all | Step 70 | 1 | 8197.77 | 8197.77 | 8197.77 |
+| opencode/glm-5.3-flash-free | all | Step 71 | 1 | 3615.43 | 3615.43 | 3615.43 |
+| opencode/glm-5.3-flash-free | all | Step 72 | 1 | 8837.77 | 8837.77 | 8837.77 |
+| opencode/glm-5.3-flash-free | all | Step 73 | 1 | 2130.46 | 2130.46 | 2130.46 |
+| opencode/glm-5.3-flash-free | all | Step 74 | 1 | 8668.77 | 8668.77 | 8668.77 |
+| opencode/glm-5.3-flash-free | all | Step 75 | 1 | 3507.82 | 3507.82 | 3507.82 |
+| opencode/glm-5.3-flash-free | all | Step 76 | 1 | 7824.22 | 7824.22 | 7824.22 |
+| opencode/glm-5.3-flash-free | all | Step 77 | 1 | 2806.34 | 2806.34 | 2806.34 |
+| opencode/glm-5.3-flash-free | all | Step 78 | 1 | 7992.33 | 7992.33 | 7992.33 |
+| opencode/glm-5.3-flash-free | all | Step 79 | 1 | 5675.08 | 5675.08 | 5675.08 |
+| opencode/glm-5.3-flash-free | all | Step 80 | 1 | 8039.49 | 8039.49 | 8039.49 |
+| opencode/glm-5.3-flash-free | all | Step 81 | 1 | 5178.49 | 5178.49 | 5178.49 |
+| opencode/glm-5.3-flash-free | all | Step 82 | 1 | 7842.42 | 7842.42 | 7842.42 |
+| opencode/glm-5.3-flash-free | all | Step 83 | 1 | 3325.97 | 3325.97 | 3325.97 |
+| opencode/glm-5.3-flash-free | all | Step 84 | 1 | 8314.54 | 8314.54 | 8314.54 |
+| opencode/glm-5.3-flash-free | all | Step 85 | 1 | 4925.37 | 4925.37 | 4925.37 |
+| opencode/glm-5.3-flash-free | all | Step 86 | 1 | 8062.63 | 8062.63 | 8062.63 |
+| opencode/glm-5.3-flash-free | all | Step 87 | 1 | 5437.25 | 5437.25 | 5437.25 |
+| opencode/glm-5.3-flash-free | all | Step 88 | 1 | 8415.12 | 8415.12 | 8415.12 |
+| opencode/glm-5.3-flash-free | all | Step 89 | 1 | 3861.05 | 3861.05 | 3861.05 |
+| opencode/glm-5.3-flash-free | all | Step 90 | 1 | 8719.47 | 8719.47 | 8719.47 |
+| opencode/glm-5.3-flash-free | all | Step 91 | 1 | 3982.44 | 3982.44 | 3982.44 |
+| opencode/glm-5.3-flash-free | all | Step 92 | 1 | 8270.59 | 8270.59 | 8270.59 |
+| opencode/glm-5.3-flash-free | all | Step 93 | 1 | 4499.39 | 4499.39 | 4499.39 |
+| opencode/glm-5.3-flash-free | all | Step 94 | 1 | 9106.26 | 9106.26 | 9106.26 |
+| opencode/glm-5.3-flash-free | all | Step 95 | 1 | 3636.92 | 3636.92 | 3636.92 |
+| opencode/glm-5.3-flash-free | all | Step 96 | 1 | 8842.58 | 8842.58 | 8842.58 |
+| opencode/glm-5.3-flash-free | all | Step 97 | 1 | 9025.66 | 9025.66 | 9025.66 |
+| opencode/glm-5.3-flash-free | all | Step 98 | 1 | 8966.46 | 8966.46 | 8966.46 |
+| opencode/glm-5.3-flash-free | all | Step 99 | 1 | 4433.81 | 4433.81 | 4433.81 |
+| opencode/glm-5.3-flash-free | all | Step 100 | 1 | 8342.87 | 8342.87 | 8342.87 |
+| opencode/glm-5.3-flash-free | all | Step 101 | 1 | 4561.76 | 4561.76 | 4561.76 |
+| opencode/glm-5.3-flash-free | all | Step 102 | 1 | 9211.61 | 9211.61 | 9211.61 |
+| opencode/glm-5.3-flash-free | all | Step 103 | 1 | 3390.78 | 3390.78 | 3390.78 |
+| opencode/glm-5.3-flash-free | all | Step 104 | 1 | 8481.64 | 8481.64 | 8481.64 |
+| opencode/glm-5.3-flash-free | all | Step 105 | 1 | 3870.34 | 3870.34 | 3870.34 |
+| opencode/glm-5.3-flash-free | all | Step 106 | 1 | 9194.94 | 9194.94 | 9194.94 |
+| opencode/glm-5.3-flash-free | all | Step 107 | 1 | 9495.05 | 9495.05 | 9495.05 |
+| opencode/glm-5.3-flash-free | all | Step 108 | 1 | 9692.78 | 9692.78 | 9692.78 |
 | opencode/glm-5.3-flash-free | skills-all | Session wall | 1 | 1200202.00 | 1200202.00 | 1200202.00 |
 | opencode/glm-5.3-flash-free | skills-all | Startup | 1 | 23569.76 | 23569.76 | 23569.76 |
 | opencode/glm-5.3-flash-free | skills-all | Step 1 | 1 | 1706.07 | 1706.07 | 1706.07 |
@@ -166,10 +279,15 @@ Startup is process launch to first step_start; each step is step_start to step_f
 
 ### Hypothetical paid cost per valid session
 
-**Caution: survivor bias in quality and cost.** Under 90% valid completion: opencode/glm-5.3-flash-free / skills-all. These costs describe surviving valid sessions, not the cost of all attempted work; zero-valid arms are not usable in observed attempts.
+**Caution: survivor bias in quality and cost.** Under 90% valid completion: opencode/glm-5.3-flash-free / all; opencode/glm-5.3-flash-free / skills-all. These costs describe surviving valid sessions, not the cost of all attempted work; zero-valid arms are not usable in observed attempts.
 
 | Model | Arm | Sheet | Mean steps | Mean weighted input | Mean input USD | Mean output/reasoning USD | Mean Jev USD | Mean total USD |
 |---|---|---|---:|---:|---:|---:|---:|---:|
+| opencode/glm-5.3-flash-free | all | deepseek-flash-off-peak | not shown | not shown | not shown | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | all | deepseek-flash-peak | not shown | not shown | not shown | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | all | glm-5.3-flash | not shown | not shown | not shown | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | all | claude-sonnet-5.5-5m | not shown | not shown | not shown | not shown | not shown | not shown |
+| opencode/glm-5.3-flash-free | all | gpt-6.1-sol-30m | not shown | not shown | not shown | not shown | not shown | not shown |
 | opencode/glm-5.3-flash-free | skills-all | deepseek-flash-off-peak | not shown | not shown | not shown | not shown | not shown | not shown |
 | opencode/glm-5.3-flash-free | skills-all | deepseek-flash-peak | not shown | not shown | not shown | not shown | not shown | not shown |
 | opencode/glm-5.3-flash-free | skills-all | glm-5.3-flash | not shown | not shown | not shown | not shown | not shown | not shown |

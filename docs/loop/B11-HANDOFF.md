@@ -59,7 +59,7 @@ not a count of unique source conditions.
 
 The dataset at `agent/b11-tasks` (`186c781`) is merged unchanged: 72 tasks,
 24 per kind, six decoys, and host-only reference solutions. The updated
-command below schedules 792 sessions: all tasks in five usable study arms,
+command below schedules 792 sessions: all tasks in five full-task arms,
 plus three tasks per kind in four size arms, across both models. The original
 full-library arms remain available for diagnostics but leave the study plan. Budget exhaustion
 stops the run; a resumed run includes all previous Jev attempt costs.
@@ -75,7 +75,7 @@ npx tsx bench/b11.ts --run --tasks bench/data/b11/tasks.jsonl \
 ```
 
 Use `--plan` in place of `--run` first. The plan is offline and costs $0;
-the command's Jev reservation cap is $1, with free-model spend $0. The 300-second deadline is provisional until the real-task pilot completes.
+the command's Jev reservation cap is $1, with free-model spend $0. The 300-second deadline remains provisional: the real-task pilot was quota-stopped.
 Keep invalid attempts separate. The all-deadline schedule is 37 h 20 min at
 concurrency 2, excluding setup, Jev, checks, cleanup and backoff; expected
 wall time awaits the pilot. Do not launch the full study during implementation.
@@ -84,10 +84,10 @@ wall time awaits the pilot. Do not launch the full study during implementation.
 
 Claude Opus 5.5 and a fresh Codex review both approved
 `a6e2fcd863a1f5d4a4d6c1a3ce9d818c4438e9e0`. No High or Medium findings
-remain. Both verified the 124 B11 tests under real bubblewrap, typecheck,
+remained at that checkpoint. Both verified the 124 B11 tests under real bubblewrap, typecheck,
 build and reproducible report. Claude also ran the full suite (769 passed,
 48 skipped), checked pilot aggregates and spot-checked the newline mutation.
-The subsequent commit changes only this handoff and protocol documentation.
+Those approvals cover that historical checkpoint only.
 
 | Finding | Disposition and evidence |
 |---|---|
@@ -113,36 +113,75 @@ against official sources by the report implementer and independent Codex.
 No additional behavior was added for these Low follow-ups.
 
 Before merge, the orchestrator still owns the required `pr-reviewer` pass,
-`ci-full` matrix, PR placeholder replacement and dataset integration. The full
+`ci-full` matrix and PR placeholder replacement. Dataset integration is complete. The full
 study remains unrun; neither quality retention nor size break-even is shown.
 
 
-## Capacity follow-up in progress
+## Quota-stopped real-task follow-up
 
-Merged task contract: `fixturePath()` strips the repository-relative prefix
-and confines each category; `runCheck()` uses `/work` as cwd. All 72 declared
-workspaces were checked for correct copying without sibling solutions/checks.
-`eventClock()` records arrival timing only. Optional `latency` and `timeoutMs`
-keep historical rows readable. Reports show invalid reasons, distinct
-observed deadlines, under-90% completion, and lifecycle wall-time limitations.
+The dataset `186c781` is integrated unchanged. `fixturePath()` confines its
+repository-relative paths; checks run in `/work`. Event timing measures
+arrival, not discovery. Reports retain invalid reasons, deadline values,
+under-90% completion warnings and zero-valid arms. Historical missing fields
+remain missing. Wall time includes preselection, checks and cleanup; startup
+and completed-step durations do not partition it.
 
-`heavy-max` requires `--heavy-skills` and `--heavy-servers`. These are limits
-on distractors/base servers; plants and required server targets remain.
-`rowKey()` and resume distinguish comparator settings. `summarizeRows()`
-rejects mixed heavy configurations; bracket reports stay separate.
-The fixed sweep subset's server targets are chosen before outcomes, preventing
-all global canaries from collapsing every MCP sweep size to 20 servers.
+[Diagnostic protocol](../../bench/results/2026-10-22T10-37-00Z-diagnostic-b11/protocol.json):
+two GLM 1,200-second timeouts, 110/108 completed steps and maximum sampled
+compactions 42/54. DeepSeek skills-all was interrupted without a row;
+DeepSeek all never started. The heavy bracket selected 250/5, actually
+274 skills /20 servers /509 tools. Four screened sessions completed without
+compaction (three checks passed); this does not establish broad reliability.
+The 500/10 candidate compacted and was deliberately stopped.
 
-The bracket selected 250/5, actually 274 skills /20 servers /509 tools.
-Four screened sessions completed without compaction (15–43 s), with three
-checks passing. The 500/10 candidate compacted on its first GLM request;
-its deliberate stop is documented separately from its raw process-exit
-classification. Original long-deadline diagnostics continue on both models.
-The new pilot is not the full study and will use the same selected comparator.
+[Real-task pilot protocol](../../bench/results/2026-10-22T11-13-00Z-pilot-b11/protocol.json):
+15 of 90 planned sessions recorded, two interrupted without rows and 73
+unstarted. GLM bare completed nine (3 pass /6 fail, 57 steps); GLM mcp-all
+recorded six timeouts (one completed step), not quality failures. Other cells
+are unmeasured. Launch source `e0eaefd` predates quota-stop fixes. All calls
+stopped at the persistent free usage cap. The marker reports API/retry error
+classes and three internal attempts; numeric HTTP status, quota and reset
+time are unknown. Interrupted usage is unknown. Maximum observed overlap
+was three, not evidence that concurrency 3 or 4 is safe. See
+[RESULTS](../../bench/RESULTS.md#b11-real-task-pilot-2026-10-22-quota-stopped).
 
-Code through `3be8d7d` has a fresh Codex approval. Claude R4 requested an
-invalid-reason breakdown; it and all reported timing/deadline Low items are
-fixed in the subsequent report delta, awaiting re-review. Comparator changes
-also await independent review. The earlier approvals above apply to their
-named checkpoints. Current focused checks: 230 B11 tests pass under WSL;
-full final checks and the real-task pilot are pending.
+Combined B11 cost remains 52 Jev calls / $0.029791062; real-task runs used
+no Jev calls and $0 free-model billing. No further provider calls were made
+after detecting the cap. Once provider availability returns, the
+orchestrator can resume the same pilot with its original arm order:
+
+```bash
+npx tsx bench/b11.ts --run --resume --tasks bench/data/b11/tasks.jsonl \
+  --opencode "$OPENCODE_BIN" --opencode-version 1.19.3 \
+  --models opencode/glm-5.3-flash-free,opencode/deepseek-v4.1-flash-free \
+  --arms bare,mcp-all,heavy-max,gateway,preselect \
+  --heavy-skills 250 --heavy-servers 5 \
+  --per-kind 3 --reps 1 --batch-size 9 --concurrency 2 \
+  --timeout 300 --jev-budget 0.065 \
+  --out bench/results/2026-10-22T11-13-00Z-pilot-b11
+```
+
+Resume skips valid identities and retries invalid ones. The $0.065 Jev cap
+plus prior spend is $0.094791062, within the pilot's $0.10 allowance. A full
+study requires a completed usable pilot and available quota; its exact
+nine-arm command is above. The offline plan verifies 792 sessions and 448
+waves at concurrency 2: a 300-second all-deadline schedule of 37 h 20 min,
+not expected runtime. A conditional 31-second wave scenario gives 3 h 51 min
+28 s, but unmeasured arms prevent treating that as a prediction. Expected
+runtime and quota reset time remain unestablished.
+
+Final local verification at `22956a4`: full WSL suite 893 passed /48 skipped
+in 32 files; typecheck and build passed. Focused B11: 248 passed. Native
+Windows: 227 passed /21 POSIX skipped; typecheck passed. Executed mutation
+checks total 208 (189 earlier +8 schema +8 lifecycle +3 quota race checks),
+all caught; saved source bytes were restored. These counts are checks,
+not unique source conditions.
+
+Fresh Codex approved `22956a4` after fixes for cooldown/prelaunch racing
+and partial quota JSONL. Claude R6 approved `2cbe345`; its Low partial-line
+finding was fixed in `22956a4`. The required final Claude R7 review could
+not run because Claude reported an API rate limit; it was not retried.
+That latest cross-model review, `ci-full`, public PR placeholder replacement
+and Erik's merge approval remain pending. Earlier approvals above apply
+only to their named checkpoints. No full study or quality-retention claim
+is complete.

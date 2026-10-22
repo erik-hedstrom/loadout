@@ -1195,7 +1195,7 @@ in the report use disjoint input/read/write buckets and separately priced
 output plus reasoning, following the pinned host's normalization. They do
 not predict another provider's tokenization, quality or billing.
 
-Cost: free-model spend $0; 52 Jev calls, $0.029791 calculated input cost,
+Cost: free-model spend $0; 52 Jev calls, $0.029791062 calculated input cost,
 within the $0.10 pilot cap. No frontier CLI or judge runs were made.
 
 Reproduce the report offline:
@@ -1207,71 +1207,120 @@ npx tsx bench/b11-report.ts bench/results/2026-10-22-b11/rows.jsonl > report.md
 The production dataset's skill-needle prompts name the product, and planted
 skill names contain that product. Retrieving those needles is mostly lexical.
 B11 measures cost at retained quality, not router difficulty. The dataset has
-now been integrated; a real-task timeout diagnostic and pilot are in progress.
+now been integrated; the real-task diagnostic and pilot below were stopped at
+a persistent free usage cap.
 
-## B11 real-task capacity bracket (2026-10-22; diagnostic continuing)
+## B11 real-task capacity bracket (2026-10-22; quota-stopped)
 
 The 72-task dataset from `186c781` is integrated unchanged. Workspace and
-hidden-check references are repository-relative; file checks are relative
-to the workspace. Hidden Node checks run with the workspace as cwd. The
-solver receives only its declared workspace, never reference solutions,
-sibling checks or decoys. The skill-needle product-name limitation above
-applies: this is cost at retained quality, not router difficulty.
+hidden-check paths are repository-relative; file-check paths are workspace-relative.
+These references are confined to the corresponding task-set directory.
+Hidden checks run with the workspace as cwd; the contract matched the harness.
+The solver never receives
+reference solutions, sibling checks or decoys. The lexical skill-needle
+limitation above still applies.
 
 The [long-deadline diagnostic](results/2026-10-22T10-37-00Z-diagnostic-b11/protocol.json)
-uses the first skill task in dataset order, identical across `skills-all`
-and `all` on both models, with a 1,200-second hard ceiling. The first GLM
-skills-all session reached that ceiling after 110 completed requests.
-Launch to first step_start was 23.57 s. Recorded step intervals averaged
-5.84 s (0.33–11.32 s); 534.74 s lay outside startup and completed step
-intervals. Scalar metadata samples confirmed repeated compaction. The
-remaining three diagnostic sessions continue; their final results are pending.
+fixed the first skill task before outcomes for both full-library arms and
+both models. Both recorded GLM sessions reached the 1,200-second deadline;
+these are invalid attempts, not quality failures. DeepSeek `skills-all` was
+interrupted at the usage cap without a final row, and DeepSeek `all` never
+started. Its unknown usage is not reconstructed. See the
+[rows](results/2026-10-22T10-37-00Z-diagnostic-b11/rows.jsonl),
+[report](results/2026-10-22T10-37-00Z-diagnostic-b11/summary.md) and
+[scalar metadata samples](results/2026-10-22T10-37-00Z-diagnostic-b11/metadata-samples.jsonl).
 
-[Offline OpenCode model information](results/2026-10-22T10-37-00Z-diagnostic-b11/model-info.json)
-reports context 200,000 and output 32,000 for each free model. These are the
-host's declared limits, not independently verified provider limits. With
-these fields, the pinned host's [overflow calculation](https://github.com/anomalyco/opencode/blob/v1.19.3/packages/opencode/src/session/overflow.ts)
-and [maximum output default](https://github.com/anomalyco/opencode/blob/v1.19.3/packages/opencode/src/provider/transform.ts#L1385-L1387)
-put its usable threshold at 168,000 tokens. Full-library GLM requests were
-about 176k tokens without MCP and 270k with MCP, before small compaction
-requests. A static listing survives history compaction, so repeatedly
-compacting history does not remove its cost or restore convergence.
-The observed problem is repeated context management, not just slow startup
-or one slow large request. A longer deadline alone did not fix the first arm.
+Both full-library arms were not usable in these GLM diagnostics. DeepSeek
+capacity is not shown because its diagnostic cells could not finish.
 
-A [bracket](results/2026-10-22T11-02-00Z-bracket-b11/protocol.json) fixed the
-first skill and first MCP task before seeing outcomes, testing both models.
-It stopped growth at the first candidate that compacted.
+| GLM arm | Completed steps | Uncached input | Cache read | Output | Max sampled compactions | Startup s | Step mean / max s | Lifecycle wall s |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| skills-all | 110 | 489,878 | 9,284,992 | 45,262 | 42 | 23.57 | 5.84 / 11.32 | 1,200.20 |
+| all | 108 | 689,255 | 14,031,936 | 49,697 | 54 | 18.28 | 6.39 / 19.20 | 1,200.75 |
+
+Compaction counts are maxima of cumulative snapshots, not sums or guaranteed
+final totals. Startup runs from process launch to first `step_start`; step
+durations use event arrival. They do not partition wall time: 534.74 s and
+492.59 s respectively lie outside startup and completed-step intervals.
+Gaps can include tools, MCP, request setup and network activity; this does
+not measure discovery time. Lifecycle wall includes preselection, checks
+and cleanup, and rows can exist without OpenCode launching.
+
+[Offline model metadata](results/2026-10-22T10-37-00Z-diagnostic-b11/model-info.json)
+declares 200,000 context and 32,000 output for both models, not independently
+verified provider limits. The pinned host's
+[overflow calculation](https://github.com/anomalyco/opencode/blob/v1.19.3/packages/opencode/src/session/overflow.ts)
+and [output default](https://github.com/anomalyco/opencode/blob/v1.19.3/packages/opencode/src/provider/transform.ts#L1385-L1387)
+yield a 168,000-token usable threshold. Maximum sampled GLM prompts were
+176,373 without MCP and 271,164 with MCP. Repeated compaction was observed;
+longer deadlines did not produce a valid completion in these two attempts.
+
+A [capacity bracket](results/2026-10-22T11-02-00Z-bracket-b11/protocol.json)
+fixed the first skill and first MCP task before outcomes, testing both models
+and stopping growth at the first candidate that compacted.
 
 | Requested distractor skills / base servers | Actual skills / servers / tools | Screen outcome |
 |---|---|---|
-| 250 / 5 | 274 / 20 / 509 | 4/4 completed without compaction, 15.12–43.22 s; 3 checks passed, 1 failed |
+| 250 / 5 | 274 / 20 / 509 | 4/4 completed without compaction, 15.12-43.22 s; 3 checks passed, 1 failed |
 | 500 / 10 | 524 / 20 / 509 | First GLM request used 171,784 prompt tokens and triggered compaction; screen stopped at 12.49 s |
 
-All 20 servers carry required canaries. The fixed full-task comparator must
-retain them; a requested prefix of five does not mean five actual servers.
-The selected `heavy-max` is therefore **274 skills, 20 servers, 509 tools**,
-the largest passing candidate in this discrete screen. Four observations
-do not establish broad reliability or quality retention. Selection used
-completion without compaction, not task-check success; the failed check is
-retained. The rejected candidate was deliberately stopped after observing
-compaction. Its raw nonzero-process row is `provider-error`, with the deliberate
-stop identified in protocol metadata; it is not evidence of a remote API error.
+The selected `heavy-max` is **274 skills, 20 servers, 509 tools**. All 20
+servers carry required targets. This was the largest passing candidate in
+a discrete screen of completion without compaction; four observations do
+not establish broad reliability or retained quality. The rejected candidate
+was deliberately stopped: its raw `provider-error` classification is not
+evidence of a remote API error. MCP-size sweeps retain only their fixed
+subset's required servers so their actual sizes remain distinct.
 
-The real-task pilot will use a provisional 300-second deadline, about seven
-times the largest selected-bracket session, and validate completion coverage.
-Full-library arms are excluded from the updated study command pending the
-completed diagnostics; their diagnostic rows are retained. Size sweeps stay:
-MCP-size arms retain only required servers for their fixed subset, rather
-than letting all 20 global canary servers collapse every sweep point.
+## B11 real-task pilot (2026-10-22; quota-stopped)
 
-The offline updated plan schedules **792 sessions**: five full-task arms
-across 72 tasks and both models, plus four size arms on nine fixed tasks.
-At concurrency 2, its schedule if every session uses 300 seconds is
-134,400 seconds (37 h 20 min), excluding setup, routing, checks, cleanup and
-rate-limit backoff. This is a deadline schedule, not expected wall time;
-the expected estimate awaits the real pilot. No full study was run. Both
-the diagnostic and bracket use free models ($0), with no Jev calls.
+The [pilot protocol](results/2026-10-22T11-13-00Z-pilot-b11/protocol.json)
+selected the first three tasks of each kind before outcomes: nine tasks,
+five arms and two models, or 90 planned sessions. It used OpenCode 1.19.3,
+300-second deadlines and concurrency 2. The launch source was `e0eaefd`;
+subsequent quota-stop fixes postdate the run. Actual arm order was `bare`,
+`mcp-all`, `heavy-max`, `gateway`, `preselect` in its single batch.
+Only 15 final rows were recorded; two more sessions were interrupted without
+rows at the usage cap and 73 had not started. See
+[raw rows](results/2026-10-22T11-13-00Z-pilot-b11/rows.jsonl),
+[split-separated report](results/2026-10-22T11-13-00Z-pilot-b11/summary.md) and
+[recomputable pooled accounting](results/2026-10-22T11-13-00Z-pilot-b11/pilot-totals.json).
+
+| Model / arm | Steps | Uncached input | Cache read | Output | Pass / fail / invalid | Valid / recorded |
+|---|---:|---:|---:|---:|---:|---:|
+| GLM / bare | 57 | 132,816 | 345,948 | 4,614 | 3 / 6 / 0 | 9 / 9 |
+| GLM / mcp-all | 1 | 101,439 | 0 | 21 | 0 / 0 / 6 | 0 / 6 |
+| Other eight model/arm cells | not shown | not shown | not shown | not shown | not measured | not measured |
+
+This table pools dev/test only for operational accounting. Timeouts are
+invalid, never quality failures. `mcp-all` is **not usable in observed
+attempts**; completion below 90% creates survivor bias in quality and cost.
+The recorded-row completion fractions omit the interrupted sessions, whose
+usage remains unknown. GLM bare lifecycle wall averaged 30.86 s (median
+16.53 s, maximum 121.57 s). Five of the six recorded MCP timeouts had no
+completed token step. The cause of these waits is not established. There
+is no causal arm comparison, retained-quality result or size break-even.
+
+The [controlled quota evidence](results/2026-10-22T11-13-00Z-pilot-b11/quota-evidence.json)
+records a persistent free usage-limit marker, `AI_APICallError` and
+`AI_RetryError`, with three internal attempts. No numeric HTTP 429, quota
+amount or reset time was established. All model calls stopped; no polling
+or replacement model runs followed. Maximum observed overlap across the
+pilot and diagnostic was three sessions, which establishes no safety claim
+for concurrency 3 or 4. The diagnostic and new pilot used $0 free-model
+billing and no Jev calls. Combined B11 Jev usage remains **52 calls,
+$0.029791062** from the earlier synthetic pilot.
+
+The offline full plan schedules **792 sessions** across both models: 720 in
+five full-task arms and 72 in four size arms. At concurrency 2 and a
+300-second deadline, its 448 waves have an all-deadline schedule of
+134,400 seconds (**37 h 20 min**), excluding setup, routing, checks, cleanup
+and rate-limit waits. This is not expected wall time. A conditional scenario
+of 31 seconds per wave gives 448 x 31 = 13,888 seconds (**3 h 51 min 28 s**),
+but other arms are unmeasured and this is **not a prediction**. Expected
+study time is not established; quota reset time is unknown. The full study
+has not run and requires a completed usable pilot. Exact resume and full
+commands are in the [handoff](../docs/loop/B11-HANDOFF.md).
 
 ## E14 matching-time regression (2026-10-22)
 

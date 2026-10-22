@@ -149,37 +149,40 @@ Acceptance:
 | B7 | P1 | MCP overhead study: what configured MCP servers cost per request, natively and through loadout | Claude | cloud (harness, done) + local (runs) | in progress: harness merged in [#38](https://github.com/erik-hedstrom/loadout/pull/38), with no ambient Claude plugins (2026-10-15 decision); live runs wait for Erik's approval of the estimate |
 | B8 | P0 | Backlog items from the launch-readiness review, 2026-10-13, MCP token cost first | Claude | local + erik | todo (the review is private, on Erik's machine) |
 | B9 | P1 | Savings from an adopted library: what a user saves after moving skills and MCP servers into loadout | Claude | local | todo (after B7) |
-| B11 | P1 | OpenCode session cost and task checks with automatic prompt caching | Codex | local | in review ([#TBD]): dataset integrated; capacity diagnostic and heavy-max bracket recorded; real-task pilot pending |
+| B11 | P1 | OpenCode session cost and task checks with automatic prompt caching | Codex | local | in review ([#TBD]): diagnostic and real-task pilot quota-stopped; full study unrun; final Claude review and ci-full pending |
 
 **B11. OpenCode cache and outcome study.**
 
-The runner is `bench/b11.ts`; `bench/b11-report.ts` regenerates tables from
-counter-only session rows. Commands and isolation details are in
-[bench/README](../../bench/README.md#b11-opencode-sessions).
-The 72-task production set is integrated from `agent/b11-tasks` (`186c781`).
-Test-only pilot tasks are
-under `test/fixtures/b11-pilot/` and do not establish study quality.
+The runner is `bench/b11.ts`; `bench/b11-report.ts` regenerates split-separated
+quality, completion and counter tables. See [bench/README](../../bench/README.md#b11-opencode-sessions)
+and the [handoff](B11-HANDOFF.md) for commands, isolation and review checkpoints.
+The 72-task dataset from `186c781` is integrated unchanged. Skill-needle
+prompts and planted names share product names, so retrieval is mostly lexical;
+B11 measures cost at retained quality rather than router difficulty.
 
-Learnings: OpenCode 1.19.3 normalizes input by subtracting both cache reads
-and cache writes. The stock loadout HTTP helper excludes MCP servers; the
-benchmark uses an authenticated loopback endpoint around `createServer()`
-to exercise the gateway. Fixture servers also run outside the sandbox.
-The dataset uses repository-relative workspace/check paths; the loader confines
-those references to the corresponding task-set directory.
-The pilot recorded 132 attempts and 52 Jev calls ($0.029791). Native
-skill-heavy sessions reached the 90-second deadline; retained quality and
-size-sweep break-even are not shown. See [B11 results](../../bench/RESULTS.md#b11-pilot-2026-10-22-cached-opencode-sessions)
-and [handoff](B11-HANDOFF.md). The full study has not run.
-Skill-needle prompts name the product, and planted skill names contain it, so
-retrieval is mostly lexical. B11 measures cost at retained quality, not router
-difficulty.
-The first 20-minute GLM full-library diagnostic still timed out after 110
-requests with repeated compaction. The host declares 200k context and 32k
-output, yielding a 168k usable threshold. A bounded `heavy-max` screen chose
-274 skills /20 servers /509 tools (4/4 completed; 3 checks passed); the next
-524-skill candidate compacted. All 20 servers are required by the complete
-task set. MCP size sweeps preserve only their fixed subset's required
-servers, keeping distinct actual sizes. See the [capacity bracket](../../bench/RESULTS.md#b11-real-task-capacity-bracket-2026-10-22-diagnostic-continuing).
+The original synthetic pilot recorded 132 attempts. Both 20-minute GLM
+full-library diagnostic sessions still timed out (110/108 steps; maximum
+sampled compactions 42/54). The discrete heavy screen selected 274 skills,
+20 servers and 509 tools: 4/4 completed, 3 checks passed. This small screen
+is not broad reliability evidence; the larger 524-skill candidate compacted.
+All full-task required servers remain; MCP-size sweeps retain their fixed
+subset's required servers.
+
+The real-task pilot stopped at a persistent free usage cap: 15/90 planned
+sessions recorded, two interrupted without rows, 73 unstarted. GLM bare
+completed 9/9 (3 pass, 6 fail); all six recorded GLM mcp-all attempts timed
+out and are invalid, not quality failures. Other cells are unmeasured.
+Usage for interrupted sessions and the quota reset time are unknown. No
+further model calls were made after detecting the cap. Combined Jev cost is
+52 calls / $0.029791062; real-task runs used no Jev calls. See
+[B11 results](../../bench/RESULTS.md#b11-real-task-pilot-2026-10-22-quota-stopped)
+and [capacity evidence](../../bench/RESULTS.md#b11-real-task-capacity-bracket-2026-10-22-quota-stopped).
+
+The full 792-session study remains unrun. Its 37 h 20 min all-deadline
+schedule is not expected runtime; other-arm completion and quota availability
+remain unestablished. Resume the pilot before a full study. Source `22956a4`
+has fresh Codex approval and green local checks; latest Claude re-review
+was rate limited and remains pending, alongside `ci-full` and Erik's merge gate.
 
 **B8. Items from the launch-readiness review.** The review (2026-10-13) is
 private ([ORCHESTRATOR](ORCHESTRATOR.md#local-the-default)).
