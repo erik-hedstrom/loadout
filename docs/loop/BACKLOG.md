@@ -1286,6 +1286,17 @@ Learnings (2026-10-09):
 | E15 | P1 | Test flakes: WSL-only `bench.test.ts` failure, Windows spawn timeouts | Claude | local | done ([#44](https://github.com/erik-hedstrom/loadout/pull/44)) |
 | E16 | P2 | Hygiene from #30's audit: control characters, `git ls-files` env, config symlink, echoed arguments | Codex | local | review ([#50](https://github.com/erik-hedstrom/loadout/pull/50)) |
 | E17 | P3 | One entry-point guard for bench scripts that survives symlinked paths | Codex + Claude review | cloud | review ([#51](https://github.com/erik-hedstrom/loadout/pull/51)) |
+| E18 | P1 | Patch the Vite advisories in the development lockfile | Codex | cloud | review ([#56](https://github.com/erik-hedstrom/loadout/pull/56)) |
+
+**E18. npm advisories.** `npm audit` on main reported six advisories against
+Vite 8.3.2 (GHSA-698v-4r3x-3vcv, GHSA-r825-w8mm-5pxw, GHSA-587h-7wmj-h5pm,
+GHSA-9jrq-w75r-8gcw, GHSA-rq7h-c2jc-7f22, GHSA-vfpm-58rq-9qcg); 8.3.3 fixes them.
+
+Learnings (2026-10-22): Vite is development-only here (`vitest -> vite` and
+`vitest -> @vitest/mocker -> vite`, `dev: true` in the lockfile), and
+`npm audit --omit=dev` was already clean, so published users were never
+exposed. Only Vite's lockfile entry changes, within Vitest's peer range; no
+override is needed. The audit itself is the regression check.
 
 **E16. Terminal, config and git hygiene.** From the reviews of #30 (A3);
 all older than it.
