@@ -16,6 +16,7 @@ describe.runIf(process.platform === 'linux')('B11 runner lifecycle without provi
     writeFileSync(join(data, 'skills', 'needle', 'SKILL.md'), '---\nname: needle\ndescription: Synthetic formatting policy for a local output file.\n---\nWrite yes to answer.txt.');
     writeFileSync(binary, `#!/bin/sh
 if [ "$1" = "--version" ]; then printf '1.19.3\\n'; exit 0; fi
+case "$*" in *expects-token*) [ -f "$HOME/mcp-token" ] || exit 3;; *) [ ! -e "$HOME/mcp-token" ] || exit 3;; esac
 case "$*" in *slow*) sleep 0.4;; esac
 printf yes > answer.txt
 printf '%s\\n' '{"type":"step_finish","part":{"tokens":{"total":12,"input":10,"output":2,"reasoning":0,"cache":{"read":0,"write":0}}}}'
@@ -37,6 +38,10 @@ printf '%s\\n' '{"type":"step_finish","part":{"tokens":{"total":12,"input":10,"o
   it('persists budget exhaustion and stops before the next session', async () => {
     await main(args('preselect', [task('first'), task('second')], '0'));
     expect(rows(out)).toMatchObject([{ taskId: 'first', result: 'invalid', invalidReason: 'budget-exhausted', jev: { calls: 0, costUsd: 0 }, selection: { skills: [], servers: [] } }]);
+  });
+  it('materializes an endpoint token only for sessions configured with MCP', async () => {
+    await main(args('mcp-all', [task('mcp', 'expects-token: write yes to answer.txt')], '0'));
+    expect(rows(out)).toMatchObject([{ taskId: 'mcp', result: 'pass' }]);
   });
   it('records unavailable routing as invalid provider attempts without evaluating keyword fallback', async () => {
     await main(args('preselect', [task('first')], '0.10'));

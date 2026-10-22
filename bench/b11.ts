@@ -233,11 +233,11 @@ export async function main(args: string[]) {
               writeFileSync(join(dst, 'SKILL.md'), readConfined(skill.source, 'SKILL.md', 256 * 1024));
             }
             const mcp: Record<string, unknown> = Object.fromEntries(selectedServers.map(c => [c.name, { type: 'remote', url: c.server!.url, oauth: false, headers: { Authorization: 'Bearer {file:/home/bench/mcp-token}' }, timeout: 15000 }]));
-            writeFileSync(join(home, 'mcp-token'), token, { mode: 0o600 });
             if (block.arm === 'gateway') {
               gateway = await endpoint(() => { const g = createServer({ library: [...skills, ...servers], config, client: meter.client }); return { server: g.server, close: () => g.gateway.close() }; }, token);
               mcp.loadout = { type: 'remote', url: gateway.url, oauth: false, headers: { Authorization: 'Bearer {file:/home/bench/mcp-token}' }, timeout: 30000 };
             }
+            if (Object.keys(mcp).length) writeFileSync(join(home, 'mcp-token'), token, { mode: 0o600 });
             row.listing = { skills: selectedSkills.length, servers: selectedServers.length, tools: selectedServers.reduce((n, c) => n + (c.tools?.length ?? 0), 0) };
             writeFileSync(join(workspace, 'opencode.json'), JSON.stringify({ ...OPENCODE_CONFIG, mcp }));
             const run = await executeSandbox(s, ['/opt/opencode', 'run', '--pure', '-m', block.model, '--format', 'json', task.prompt], o.timeoutMs);
@@ -251,7 +251,6 @@ export async function main(args: string[]) {
             if (row.invalidReason === 'rate-limit') rateLimitedUntil = Date.now() + 60000;
           } catch (error) {
             if (!(error instanceof RoutingUnavailable)) { stopped = true; throw error; }
-            row.invalidReason = 'provider-error';
           }
           finally {
             if (gateway) await gateway.close();
@@ -266,7 +265,7 @@ export async function main(args: string[]) {
           if (meter.exhausted) stopped = true;
           console.log(`${row.orderIndex} ${row.model} ${row.arm} ${row.taskId}: ${row.result}${row.invalidReason ? ` (${row.invalidReason})` : ''}`);
         }
-      }));
+      }).map(worker => worker.catch(error => { stopped = true; throw error; })));
       const rejected = workers.find((worker): worker is PromiseRejectedResult => worker.status === 'rejected');
       if (rejected) throw rejected.reason;
     }
