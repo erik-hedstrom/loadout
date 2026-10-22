@@ -9,7 +9,7 @@ import { afterAll, describe, expect, it, vi } from 'vitest';
 import { parse as parseToml } from 'smol-toml';
 import { DEFAULT_CONFIG, jevBaseUrl, loadoutHome, type Config } from '../src/config.js';
 import { jevClient, JevError, validateResponse, type Question, type SystemOneClient } from '../src/jev.js';
-import { claudeArgs, claudeHookSettings, codexArgs, escapeSkillTags, hookCommand, hostSetup, isolateConflict, launch, loaderArgs, materialize, searchServer, toToml } from '../src/launch.js';
+import { claudeArgs, claudeHookSettings, codexArgs, escapeSkillTags, hookCommand, hostSetup, isolateConflict, launch, loaderArgs, materialize, searchServer, toToml, TRUST_NOTE } from '../src/launch.js';
 import { hookOutput, isFollowUp, HOOK_FAILURE_NOTE, JEV_FALLBACK_NOTE, noKeyWarning, NO_KEY_WARNING, promptContext } from '../src/hook.js';
 import { createServer, readSkillFile, serveHttp } from '../src/mcp.js';
 import { rememberTools, withTools } from '../src/toolindex.js';
@@ -19,7 +19,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { createServer as createHttpServer, request } from 'node:http';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { EmptyResultSchema } from '@modelcontextprotocol/sdk/types.js';
+import { EmptyResultSchema, InitializeResultSchema, LATEST_PROTOCOL_VERSION, ToolListChangedNotificationSchema } from '@modelcontextprotocol/sdk/types.js';
 import { addSkills, parseGitHub, parseSkill as parseSkillDir, scanLibrary } from '../src/library.js';
 import { isPlainFolder, writeCacheFile } from '../src/safefs.js';
 import { EMBED_MODEL, EmbeddingStore } from '../src/embed.js';
@@ -968,7 +968,7 @@ describe('launch', () => {
     expect(args[0]!.startsWith(TASK)).toBe(true);
     expect(args[0]).toContain('<skill name="loadout:webapp-testing" trust="third-party">');
     const system = args[args.indexOf('--append-system-prompt') + 1]!;
-    expect(system.startsWith(session.relevance!)).toBe(true);
+    expect(system).toBe(TRUST_NOTE);
     expect(system).toContain('reference material from installed skills');
     expect(system).not.toContain('<skill name=');
     expect(args.slice(1, 5)).toEqual(['--model', 'opus', '--effort', 'high']);
@@ -992,6 +992,33 @@ describe('launch', () => {
     expect(session.skillsDir).toBe(join(session.dir, 'skills'));
     expect(existsSync(join(session.skillsDir!, 'webapp-testing', 'SKILL.md'))).toBe(true);
     expect(args.at(-1)).toContain(join(session.skillsDir!, 'webapp-testing', 'SKILL.md'));
+  });
+
+  it('keeps Claude system text constant across selections and puts relevance in the first user argument', () => {
+    const decisions = [decision, { ...decision, selected: [pick('gh-actions-debug')], suggested: [] }, { ...decision, selected: [], suggested: [] }];
+    for (const selected of decisions) {
+      const session = materialize(selected, 'claude', DEFAULT_CONFIG, tempDir('loadout-s-'));
+      for (const headless of [false, true]) {
+        const args = claudeArgs(session, TASK, ['--permission-mode', 'plan'], { headless });
+        const prompt = args[headless ? 1 : 0]!;
+        expect(prompt.startsWith(TASK)).toBe(true);
+        expect(prompt).toContain(session.relevance!);
+        expect(args[args.indexOf('--append-system-prompt') + 1]).toBe(TRUST_NOTE);
+        expect(args.slice(-2)).toEqual(['--mcp-config', session.mcpConfig]);
+      }
+    }
+  });
+
+  it('keeps Codex selection guidance in the user prompt', () => {
+    for (const selected of [decision, { ...decision, selected: [], suggested: [] }]) {
+      const session = materialize(selected, 'codex', DEFAULT_CONFIG, tempDir('loadout-s-'));
+      for (const headless of [false, true]) {
+        const args = codexArgs(session, TASK, [], { headless });
+        expect(args.at(-1)!.startsWith(TASK)).toBe(true);
+        expect(args.at(-1)).toContain(session.skills.length ? 'webapp-testing' : session.relevance!);
+        expect(args.slice(0, -1).join('\n')).not.toMatch(/skill_relevance|webapp-testing|base_instructions|developer_instructions/);
+      }
+    }
   });
 
   it('serialises TOML inline values and rejects what TOML cannot hold', () => {
@@ -1222,6 +1249,50 @@ describe('mcp server', () => {
     for (const library of [skills, [...skills, { ...canary, gateway: false }]]) {
       const s = await connect(library);
       expect((await s.mcp.listTools()).tools.map((t) => t.name)).toEqual(['find_tools', 'load_skill']);
+      await s.close();
+    }
+  });
+
+  it('keeps tools/list byte-identical across different and permuted gateway inventories', async () => {
+    const other = { ...canary, id: 'mcp:other', name: 'other' };
+    let baseline: string | undefined;
+    for (const library of [[canary], [canary, other], [other, canary], [other]]) {
+      const s = await connect(library);
+      try {
+        const listed = JSON.stringify(await s.mcp.listTools());
+        baseline ??= listed;
+        expect(listed).toBe(baseline);
+      } finally {
+        await s.close();
+      }
+    }
+  });
+
+  it('keeps initialize and tools/list byte-identical after discovery and loading without list-change notifications', async () => {
+    const { client } = fakeClient({ canary: 0.9 });
+    const s = await connect([...skills, canary], client, tempDir('loadout-toolindex-'));
+    const notifications: unknown[] = [];
+    s.mcp.setNotificationHandler(ToolListChangedNotificationSchema, (notification) => { notifications.push(notification); });
+    const initialize = async () => JSON.stringify(await s.mcp.request({
+      method: 'initialize',
+      params: { protocolVersion: LATEST_PROTOCOL_VERSION, capabilities: {}, clientInfo: { name: 'test', version: '0' } },
+    }, InitializeResultSchema));
+    try {
+      const initial = await initialize();
+      const listed = JSON.stringify(await s.mcp.listTools());
+      for (const [name, args, expected] of [
+        ['find_tools', { goal: 'Read memos of ZX Ledger entries' }, 'mcp:canary'],
+        ['load_skill', { skill: 'webapp-testing' }, 'Use Playwright'],
+        ['server_tools', { server: 'mcp:canary' }, 'ledger_memo'],
+      ] as const) {
+        const result = await s.call(name, args);
+        expect(result.isError).toBe(false);
+        expect(result.text).toContain(expected);
+        expect(await initialize(), name).toBe(initial);
+        expect(JSON.stringify(await s.mcp.listTools()), name).toBe(listed);
+        expect(notifications, name).toEqual([]);
+      }
+    } finally {
       await s.close();
     }
   });

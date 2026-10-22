@@ -754,6 +754,22 @@ binary alone on `PATH`, so the `claude` judge needed no new seam.
 | D18 | P1 | The hook and `load_skill` can offer `load_skill` only, with no folder | Codex | cloud | review ([#54](https://github.com/erik-hedstrom/loadout/pull/54)) |
 | D19 | P2 | `which()` honours PATHEXT on Windows | Codex | local | review ([#52](https://github.com/erik-hedstrom/loadout/pull/52)); native-host gate pending re-review |
 | D20 | P2 | Hook state writes never drop context or the no-key warning | Codex | cloud | review ([#49](https://github.com/erik-hedstrom/loadout/pull/49)) |
+| D21 | P1 | Keep loadout's request prefix cache-stable | Codex | local | in review ([#TBD]) |
+
+**D21. Request prefix stability.** `server_tools` now has a constant description;
+`find_tools` already returns server keys and an example gateway call. Claude's
+launcher puts relevance in the user prompt and always appends the same trust
+note to the system prompt, including when no skill is injected. Codex already
+keeps its selection guidance in the user prompt.
+
+Learnings (2026-10-22): in-process MCP tests compare serialized initialization
+and tool-list results around search, skill loading and gateway discovery,
+including a tool-index write, and reject tool-list-change notifications.
+Different and permuted gateway inventories produce the same tool list.
+Launcher tests retain prompt-first and MCP-config-last ordering. The existing
+hook output test pins per-prompt context to `additionalContext` on
+`UserPromptSubmit`; its `systemMessage` carries only the separate user warning.
+Money saved by caching is unmeasured; that remains a B11 / B-series question.
 
 **D18. The hook and `load_skill` can offer `load_skill` only, with no folder.**
 Both currently suggest reading skill files directly, even when the host's
