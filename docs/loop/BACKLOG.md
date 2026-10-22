@@ -423,7 +423,7 @@ Decisions for Erik:
 | C5 | P2 | Retrieval beyond 200 candidates (Jev tournament) | Codex | cloud | todo |
 | C6 | P2 | Multi-intent requests | Claude | cloud | todo |
 | C7 | P1 | Recommended packs with measured upside (first: frontend with Impeccable) | Codex (harness) + Claude (runs) | cloud (fixtures) + local (runs) | todo (after B1, C2) |
-| C11 | P1 | `bench/outcome.ts` keeps per-request usage | Codex | local | todo |
+| C11 | P1 | `bench/outcome.ts` keeps per-request usage | Codex | local | review ([#55](https://github.com/erik-hedstrom/loadout/pull/55)) |
 | C12 | P1 | Audit the need gate on held-out prompts | Claude | cloud (design) + local (runs) | done ([#46](https://github.com/erik-hedstrom/loadout/pull/46)): audited on C1 dev, no change ([RESULTS](../../bench/RESULTS.md#c12-2026-10-19-the-need-gate-on-c1-dev)) |
 | C13 | P1 | Pure-Jev baseline on main: offline scoring and routing stability | Codex (tools) + Claude (runs) | local | done ([#45](https://github.com/erik-hedstrom/loadout/pull/45)): baseline measured 2026-10-16 ([RESULTS](../../bench/RESULTS.md#c13-2026-10-16-pure-jev-baseline-on-main)) |
 | C8 | P0 | Skill use with the hook-only plugin | Claude | local | done ([#25](https://github.com/erik-hedstrom/loadout/pull/25)): headless, the hook injected a skill's text in 6 of 10; Claude opened 0 of 10, none of the 4 it was only pointed to (D13) |
