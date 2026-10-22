@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CONFIG, loadConfig } from '../src/config.js';
 import { promptContext } from '../src/hook.js';
-import { parseSkill } from '../src/library.js';
+import { addSkills, parseSkill, scanLibrary } from '../src/library.js';
 import { loadSkill } from '../src/mcp.js';
 
 const dirs: string[] = [];
@@ -19,6 +19,38 @@ afterEach(() => {
 });
 
 describe('skill folder guidance', () => {
+  it.each([true, false])('filters installed local provenance with skillFolders=%s', async (skillFolders) => {
+    const from = temp();
+    const target = temp();
+    writeFileSync(join(from, 'SKILL.md'), '---\nname: canary\ndescription: Test skill\n---\nReference text.');
+    expect(addSkills(from, target).added).toEqual(['canary']);
+    const installed = scanLibrary(target)[0]!;
+    expect(installed.origin).toBe(from);
+    // Exercise foreign platform paths without relying on the test host's path parser.
+    const origins = [
+      installed.origin!, '/home/user/skills', '/mnt/c/local/skills',
+      'C:/local/skills', 'C:\\local\\skills', 'C:skills',
+      '\\\\server\\share\\skills', '//server/share/skills', '\\\\wsl$\\Ubuntu\\home\\user\\skills',
+      'file:///home/user/skills', 'FILE:///C:/local/skills',
+    ];
+    const remote = ['github.com/owner/repo', 'https://example.com/skills', 'git@github.com:owner/repo.git', 'registry:owner/skill'];
+    for (const origin of [...origins, ...remote]) {
+      const deps = { library: [{ ...installed, origin }], config: { ...DEFAULT_CONFIG, skillFolders } };
+      const outputs = [
+        loadSkill(deps, 'canary'),
+        (await promptContext({ prompt: '/canary help with this task' }, { ...deps, stateDir: temp() }))!,
+      ];
+      for (const output of outputs) {
+        expect(output).toContain('trust="third-party"');
+        if (skillFolders || remote.includes(origin)) expect(output).toContain(`source="${origin}"`);
+        else {
+          expect(output).not.toContain('source=');
+          expect(output).not.toContain(origin);
+        }
+      }
+    }
+  });
+
   it('defaults to folders and loads a folder-less override from config', () => {
     const home = temp();
     vi.stubEnv('LOADOUT_HOME', home);

@@ -757,6 +757,8 @@ folder for binary assets; C2's fenced host is the consumer for `false`. It
 changes generated guidance only, not paths inside skill text or host
 permissions. The benchmark cleanup test assumes its checkout is outside the
 OS temp root, so run the Linux suite from a checkout elsewhere.
+C2 adopting `skillFolders: false` changes its frozen protocol, so Erik decides;
+until then C2 keeps its folder-hint limit.
 
 **D19. `which()` and PATHEXT.** From Sol's review of #30 (A3), which Erik
 overrode for that PR on 2026-10-19 because the gap predates it. `which()` in

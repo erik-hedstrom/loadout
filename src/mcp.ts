@@ -142,7 +142,7 @@ export function skillFiles(dir: string, max = LIST_MAX_FILES): string[] {
  * final symlink) and checked through the open descriptor, so swapping a path
  * component between the check and the read cannot redirect it.
  */
-export function readSkillFile(dir: string, file: string, skillFolders = true): string {
+export function readSkillFile(dir: string, file: string, skillFolders: boolean): string {
   let buf: Buffer;
   try {
     buf = readConfined(dir, file, FILE_MAX_BYTES);
