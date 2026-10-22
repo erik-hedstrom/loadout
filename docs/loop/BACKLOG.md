@@ -43,7 +43,7 @@ Each PR body's **Review state** section has the round-by-round record.
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
 | A2 | P0 | `loadout audit`: what your installed skills cost you | Claude | cloud | done ([PR #3](https://github.com/erik-hedstrom/loadout/pull/3)) |
-| A1 | P0 | README rewrite around the problem, 3-command quickstart, GIF | Claude | cloud | done ([#28](https://github.com/erik-hedstrom/loadout/pull/28)); GIF waits on A5 |
+| A1 | P0 | README rewrite around the problem, 3-command quickstart, GIF | Claude | cloud | partial ([#28](https://github.com/erik-hedstrom/loadout/pull/28)): README merged; the GIF waits on A5 |
 | A3 | P1 | `loadout init` wizard + starter packs | Codex | cloud | done ([#30](https://github.com/erik-hedstrom/loadout/pull/30)) |
 | A4 | P1 | npm package under an available name + release workflow | Codex | cloud + erik | blocked: npm name decision |
 | A5 | P1 | Demo recording (route, launch, hook) | Claude | local | todo (after A1) |
@@ -751,8 +751,8 @@ binary alone on `PATH`, so the `claude` judge needed no new seam.
 | D13 | P0 | The plugin must be able to open what its hook routes to | — | cloud + local + erik | blocked: design decision (Erik) |
 | D14 | P1 | Codex plugin forwards LOADOUT_HOME | Claude | cloud | done ([#36](https://github.com/erik-hedstrom/loadout/pull/36)): Codex gives a stdio MCP server only its default variables plus `env_vars`, so the plugin's `loadout mcp` ignored a custom `LOADOUT_HOME` (and a `"router": "lexical"` profile in it); now forwarded. A relative `LOADOUT_HOME` is now refused (on Windows, anything but a drive-qualified path, so no drive-relative, UNC or device path) and an empty one ignored; the `HOME` (or `USERPROFILE`) fallback must pass the same check. So the working directory or a remote share cannot become the config. An absolute value, including a mapped network drive, is trusted: a project settings `env` that sets one comes from settings that can already run their own hooks. The config the home points to cannot redirect the key (Erik, 2026-10-19): a `jev.baseUrl` other than api.typesafe.ai is refused unless `TYPESAFE_BASE_URL` names the URL. It still chooses `apiKeyFile`, whose content then reaches only that URL, which is why the home must not come from the working directory either. Checked against the Codex source only, not a live run |
 | D16 | P1 | Warn when the hook runs without a TypeSafe key | Claude | cloud | done ([#27](https://github.com/erik-hedstrom/loadout/pull/27)): once per session, as a `systemMessage`, which Claude Code and Codex both show |
-| D18 | P1 | The hook and `load_skill` can offer `load_skill` only, with no folder | Codex | cloud | done ([#54](https://github.com/erik-hedstrom/loadout/pull/54)) |
-| D19 | P2 | `which()` honours PATHEXT on Windows | Codex | local | done ([#52](https://github.com/erik-hedstrom/loadout/pull/52)) |
+| D18 | P1 | The hook and `load_skill` can offer `load_skill` only, with no folder | Codex | cloud | partial ([#54](https://github.com/erik-hedstrom/loadout/pull/54)): load_skill-only offer merged; C2 dropping its folder-hint limit waits on Erik |
+| D19 | P2 | `which()` honours PATHEXT on Windows | Codex | local | partial ([#52](https://github.com/erik-hedstrom/loadout/pull/52)): PATHEXT lookup merged; the launcher refuses batch hosts instead of spawning them (see learnings) |
 | D20 | P2 | Hook state writes never drop context or the no-key warning | Codex | cloud | done ([#49](https://github.com/erik-hedstrom/loadout/pull/49)) |
 
 **D18. The hook and `load_skill` can offer `load_skill` only, with no folder.**
@@ -1302,8 +1302,8 @@ Learnings (2026-10-09):
 | E13 | P1 | Apply Engineer standards to both review paths, with a blocking necessity pass | Codex + Claude review | cloud | done ([#41](https://github.com/erik-hedstrom/loadout/pull/41)) |
 | E14 | P1 | Redact key-shaped strings before anything goes to Jev (prerequisite for the C2 loadout arm) | Codex | cloud | done ([#53](https://github.com/erik-hedstrom/loadout/pull/53)) |
 | E15 | P1 | Test flakes: WSL-only `bench.test.ts` failure, Windows spawn timeouts | Claude | local | done ([#44](https://github.com/erik-hedstrom/loadout/pull/44)) |
-| E16 | P2 | Hygiene from #30's audit: control characters, `git ls-files` env, config symlink, echoed arguments | Codex | local | done ([#50](https://github.com/erik-hedstrom/loadout/pull/50)) |
-| E17 | P3 | One entry-point guard for bench scripts that survives symlinked paths | Codex + Claude review | cloud | done ([#51](https://github.com/erik-hedstrom/loadout/pull/51)) |
+| E16 | P2 | Hygiene from #30's audit: control characters, `git ls-files` env, config symlink, echoed arguments | Codex | local | done ([#50](https://github.com/erik-hedstrom/loadout/pull/50)); key inheritance waits on Erik's decision |
+| E17 | P3 | One entry-point guard for bench scripts that survives symlinked paths | Codex + Claude review | cloud | done ([#51](https://github.com/erik-hedstrom/loadout/pull/51)); converting #47's guard follows that PR |
 | E18 | P1 | Patch the Vite advisories in the development lockfile | Codex | cloud | done ([#56](https://github.com/erik-hedstrom/loadout/pull/56)) |
 
 **E18. npm advisories.** `npm audit` on main reported six advisories against
