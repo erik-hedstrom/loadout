@@ -256,7 +256,7 @@ export async function modelJson<T>(prompt: string, schema: z.ZodType<T>, opts: {
       '-c', 'features.shell_tool=false', '-c', 'features.unified_exec=false', '-c', 'features.view_image=false',
       ...(opts.effort ? ['-c', `model_reasoning_effort=${JSON.stringify(opts.effort)}`] : []),
     ];
-    const shim = process.platform === 'win32' ? which('codex') ?? which('codex.cmd') : undefined;
+    const shim = process.platform === 'win32' ? which('codex') : undefined;
     const { bin, prefix } = codexCli(shim ? [dirname(shim)] : []);
     const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/_(?:KEY|TOKEN|SECRET)$/i.test(key)));
     if (!codexToolsChecked) {

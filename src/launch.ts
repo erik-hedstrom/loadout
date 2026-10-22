@@ -1,6 +1,6 @@
 import { execFileSync, spawn } from 'node:child_process';
 import { accessSync, constants, existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { basename, delimiter, join } from 'node:path';
+import { basename, delimiter, extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tierTarget, withoutKey, type Config } from './config.js';
 import { isPlainFolder } from './safefs.js';
@@ -364,13 +364,20 @@ export function hostSetup(host: Host, windows: boolean): { where: string; snippe
 
 /** Locate an executable on PATH. */
 export function which(bin: string, dirs = (process.env.PATH ?? '').split(delimiter)): string | undefined {
+  const extensions = process.platform === 'win32' && !extname(bin)
+    ? (process.env.PATHEXT || '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean).map((ext) => ext.toLowerCase())
+    : [];
+  // npm installs an extensionless POSIX shim beside its .cmd; prefer the Windows command.
+  const names = [...extensions.map((ext) => bin + ext), bin];
   for (const dir of dirs) {
-    const candidate = join(dir, bin);
-    try {
-      accessSync(candidate, constants.X_OK);
-      return candidate;
-    } catch {
-      // Not here.
+    for (const name of names) {
+      const candidate = join(dir, name);
+      try {
+        accessSync(candidate, constants.X_OK);
+        return candidate;
+      } catch {
+        // Not here.
+      }
     }
   }
   return undefined;
@@ -518,10 +525,39 @@ export function codexArgs(session: Session, task: string, extra: string[], opts:
   return [...args, ...extra, codexPrompt(session, task)];
 }
 
+export const BATCH_REFUSAL = "Cannot safely pass arguments to a Windows batch host (.cmd or .bat). Install the host's native .exe.";
+const MAX_BATCH_COMMAND_LENGTH = 8191;
+
+/** Returns spawn inputs preserving the caller's environment; unsafe batch input throws a fixed refusal. */
+export function hostCommand(bin: string, args: string[], env: NodeJS.ProcessEnv): { command: string; args: string[]; env: NodeJS.ProcessEnv; windowsVerbatimArguments?: boolean } {
+  if (process.platform !== 'win32' || !/\.(cmd|bat)$/i.test(bin)) return { command: bin, args, env };
+  // Batch arguments allow only ASCII letters, digits, spaces and . _ - / \ : = + , @.
+  // Quoting that set preserves spaces without admitting cmd syntax or expansions on either
+  // the initial invocation or a shim's %* forwarding. A final backslash is refused because
+  // it escapes the closing quote when a shim forwards to a native executable.
+  // The path is quoted too: parentheses/spaces are safe there, but syntax/expansions are not.
+  if (args.some((arg) => /[^A-Za-z0-9 ._\-\/\\:=+,@]/.test(arg) || arg.endsWith('\\'))
+    || /[\x00-\x1f\x7f"%!&|<>^]/.test(bin)) throw new Error(BATCH_REFUSAL);
+  const command = `""${bin}" ${args.map((arg) => `"${arg}"`).join(' ')}"`;
+  // An absolute system path avoids cmd.exe planted in the current folder or on PATH.
+  const shell = join(process.env.SystemRoot!, 'System32', 'cmd.exe');
+  const argv = ['/d', '/v:off', '/s', '/c', command];
+  // cmd.exe truncates long command lines; never silently change a prompt or a flag.
+  if ([`"${shell}"`, ...argv].join(' ').length > MAX_BATCH_COMMAND_LENGTH) throw new Error(BATCH_REFUSAL);
+  return {
+    command: shell,
+    args: argv,
+    // cmd.exe otherwise searches cwd before PATH for programs invoked by a trusted shim.
+    env: { ...env, NoDefaultCurrentDirectoryInExePath: '1' },
+    windowsVerbatimArguments: true,
+  };
+}
+
 export function launch(bin: string, args: string[], opts: LaunchOptions = {}): Promise<number> {
   return new Promise((resolve, reject) => {
+    const { command, args: argv, ...options } = hostCommand(bin, args, process.env);
     // Headless runs get no stdin: `codex exec` otherwise waits for more prompt text on a non-TTY stdin.
-    const child = spawn(bin, args, { stdio: opts.headless ? ['ignore', 'inherit', 'inherit'] : 'inherit' });
+    const child = spawn(command, argv, { ...options, stdio: opts.headless ? ['ignore', 'inherit', 'inherit'] : 'inherit' });
     child.on('error', reject);
     child.on('exit', (code, signal) => resolve(code ?? (signal ? 1 : 0)));
   });
