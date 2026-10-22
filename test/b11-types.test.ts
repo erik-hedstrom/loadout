@@ -61,6 +61,15 @@ describe('B11 event projection', () => {
     expect(() => parseEvents(recorded + '\n' + text)).toThrow('malformed-events');
     try { parseEvents(recorded + '\n' + text); } catch (error) { expect(String(error)).not.toContain('PRIVATE'); }
   });
+  it('keeps context-limit errors explicit and scrubbed, with rate limits taking precedence', () => {
+    for (const error of [{ name: 'ContextOverflowError', data: { message: 'PRIVATE' } }, { message: 'maximum context length exceeded PRIVATE' }]) {
+      const parsed = parseEvents(jsonl({ type: 'error', error }, { type: 'error', error: { message: 'PRIVATE' } }));
+      expect(parsed.invalidReason).toBe('context-limit');
+      expect(JSON.stringify(parsed)).not.toContain('PRIVATE');
+    }
+    const parsed = parseEvents(jsonl({ type: 'error', error: { data: { statusCode: 429 } } }, { type: 'error', error: { name: 'ContextOverflowError' } }));
+    expect(parsed.invalidReason).toBe('rate-limit');
+  });
   it('rejects a session with no completed model usage', () => {
     expect(() => parseEvents('')).toThrow('malformed-events');
     expect(() => parseEvents(JSON.stringify({ type: 'text', part: { text: 'PRIVATE' } }))).toThrow('malformed-events');
