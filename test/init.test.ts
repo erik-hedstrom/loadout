@@ -185,7 +185,7 @@ describe('loadout init without a terminal', () => {
     const result = cli(['--pack', 'security'], { PATH: `${bin}${delimiter}${process.env.PATH}`, TYPESAFE_API_KEY: KEY });
     expect(result.status).toBe(1);
     expect(result.stdout).toContain('wrote ');
-    expect(result.stderr).toContain(`${PACKS[1]!.source}: `);
+    expect(result.stderr).toContain('source 1 of 1: GitHub import failed');
     // Both the clone (`-c ...`) and the rev-parse (`-C ...`) ran without the key.
     expect(readFileSync(join(home, 'git-env'), 'utf8')).toBe('-c unset\n-C unset\n');
   });

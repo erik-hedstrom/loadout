@@ -734,7 +734,7 @@ binary alone on `PATH`, so the `claude` judge needed no new seam.
 | D14 | P1 | Codex plugin forwards LOADOUT_HOME | Claude | cloud | done ([#36](https://github.com/erik-hedstrom/loadout/pull/36)): Codex gives a stdio MCP server only its default variables plus `env_vars`, so the plugin's `loadout mcp` ignored a custom `LOADOUT_HOME` (and a `"router": "lexical"` profile in it); now forwarded. A relative `LOADOUT_HOME` is now refused (on Windows, anything but a drive-qualified path, so no drive-relative, UNC or device path) and an empty one ignored; the `HOME` (or `USERPROFILE`) fallback must pass the same check. So the working directory or a remote share cannot become the config. An absolute value, including a mapped network drive, is trusted: a project settings `env` that sets one comes from settings that can already run their own hooks. The config the home points to cannot redirect the key (Erik, 2026-10-19): a `jev.baseUrl` other than api.typesafe.ai is refused unless `TYPESAFE_BASE_URL` names the URL. It still chooses `apiKeyFile`, whose content then reaches only that URL, which is why the home must not come from the working directory either. Checked against the Codex source only, not a live run |
 | D16 | P1 | Warn when the hook runs without a TypeSafe key | Claude | cloud | done ([#27](https://github.com/erik-hedstrom/loadout/pull/27)): once per session, as a `systemMessage`, which Claude Code and Codex both show |
 | D18 | P1 | The hook and `load_skill` can offer `load_skill` only, with no folder | Codex | cloud | todo |
-| D19 | P2 | `which()` honours PATHEXT on Windows | Claude | cloud | todo |
+| D19 | P2 | `which()` honours PATHEXT on Windows | Codex | local | review ([#52](https://github.com/erik-hedstrom/loadout/pull/52)); native-host gate pending re-review |
 | D20 | P2 | Hook state writes never drop context or the no-key warning | Codex | cloud | review ([#49](https://github.com/erik-hedstrom/loadout/pull/49)) |
 
 **D18. The hook and `load_skill` can offer `load_skill` only, with no folder.**
@@ -760,6 +760,20 @@ reports it missing, and so does the launcher. Acceptance: on win32, `which()` al
 (default `.COM;.EXE;.BAT;.CMD`); the launcher spawns a `.cmd` or `.bat` result
 safely (Node refuses them without a shell since the CVE-2024-27980 fix); a test
 covers a host present only as `.exe` and only as `.cmd`.
+
+Learnings (2026-10-22): a Windows batch shim cannot pass arbitrary text
+safely (newlines are cut, and plain batch files and npm shims parse `%*`
+differently). The launcher needs a native `.exe`: both Claude and Codex
+`.cmd`/`.bat` hosts are refused before routing or session writes, with fixed
+text. `--dry-run` still prints the command because it never spawns a host.
+`init` and `doctor` work with `.cmd`; `hostCommand` (src/launch.ts) keeps its
+documented argument allowlist for doctor and as defence in depth in `launch()`.
+Batch spawns set `NoDefaultCurrentDirectoryInExePath=1` in the caller's child
+environment; doctor retains its credential-free environment. npm shims are
+not parsed. `bench/invoke.ts` and `bench/outcome.ts` spawn hosts directly
+through `bench/lib.ts` rather than `launch()`: a batch host produces spawn
+EINVAL. Run those benchmarks on Linux/WSL; their Windows batch support is
+outside D19's scope.
 
 **D20. Hook state writes never drop context.** From the reviews of #27 (D16);
 Erik kept both out of that PR on 2026-10-19.
@@ -1261,7 +1275,7 @@ Learnings (2026-10-09):
 | E13 | P1 | Apply Engineer standards to both review paths, with a blocking necessity pass | Codex + Claude review | cloud | done ([#41](https://github.com/erik-hedstrom/loadout/pull/41)) |
 | E14 | P1 | Redact key-shaped strings before anything goes to Jev (prerequisite for the C2 loadout arm) | Codex | cloud | review ([#53](https://github.com/erik-hedstrom/loadout/pull/53)) |
 | E15 | P1 | Test flakes: WSL-only `bench.test.ts` failure, Windows spawn timeouts | Claude | local | done ([#44](https://github.com/erik-hedstrom/loadout/pull/44)) |
-| E16 | P2 | Hygiene from #30's audit: control characters, `git ls-files` env, config symlink, echoed arguments | Claude | cloud | todo |
+| E16 | P2 | Hygiene from #30's audit: control characters, `git ls-files` env, config symlink, echoed arguments | Codex | local | review ([#50](https://github.com/erik-hedstrom/loadout/pull/50)) |
 | E17 | P3 | One entry-point guard for bench scripts that survives symlinked paths | Codex + Claude review | cloud | review ([#51](https://github.com/erik-hedstrom/loadout/pull/51)) |
 
 **E16. Terminal, config and git hygiene.** From the reviews of #30 (A3);
@@ -1272,12 +1286,31 @@ all older than it.
 - src/repo.ts runs `git ls-files` with the full environment, key included.
   Use `withoutKey()` as `addFromGitHub` does, with a test.
 - From #30's deep security audit: `writeDefaultConfig` follows a symlinked
-  `~/.loadout` (no `isPlainFolder` check before writing), and `loadout add
+  `config.json` (refuse nonregular files before its read and write), and `loadout add
   <arg>` and other commands echo a mistyped argument, which could be a pasted
   key (only `init` uses fixed text). Fix both, with adversarial tests.
 - Decision for Erik, from the same audit: the spawned `claude` and `codex`
   keep `TYPESAFE_API_KEY` in their environment by design. Record whether that
   stands.
+
+Learnings (2026-10-22, #50 review): relocating the home through a link is the
+user's documented choice; a link at `config.json` is not. All config reads use
+the same file check; same-user swaps after inspection remain out of scope.
+HTTP startup and filesystem errors can echo arguments
+just like parser errors: print fixed categories and allowlisted errno codes.
+Failed adds identify the source by position and retain a safe failure reason.
+Swept `init`, `add`, `list`, `audit`, `route`, `claude`, `codex`, `mcp`,
+`mcp-launch`, `setup`, `doctor`, `hook` and unknown-command errors: add/token
+paths and HTTP listen need local boundaries; other coded errors use the CLI
+boundary. Hook/relay/Jev failures already use fixed diagnostics; validated host
+and isolation refusals use known names. Terminal controls share one constant.
+Review fixes against `4413a67`: M1 file checks and home compatibility, M2 safe
+system diagnostics, L1 source positions/reasons, L2 shared control regex;
+covered by [hygiene tests](../../test/hygiene.test.ts). Windows verification:
+`npm test -- --maxWorkers=2 --reporter=dot`: 582 passed, 17 skipped (POSIX smoke
+tests skip on Windows); typecheck, build and diff checks passed. All 16 mutation
+checks failed as intended, then source bytes were restored. Jev/API cost: $0.
+Re-review and the full CI matrix remain with the coordinator.
 
 **E17. Bench entry-point guard.** From pr-reviewer on #45 (C13). Bench
 scripts (judge, stability, sweep, hook-latency, overhead and mcp-overhead on
