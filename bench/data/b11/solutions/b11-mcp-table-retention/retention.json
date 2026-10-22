@@ -1,0 +1,4 @@
+{
+  "table": "events",
+  "policy": "retain_47_days"
+}
