@@ -102,7 +102,7 @@ export function classifyRun(run: { stdout: string; stderr: string; code: number 
   let events: ReturnType<typeof parseEvents> = { steps: [], totals: { input: 0, cacheRead: 0, cacheWrite: 0, output: 0, reasoning: 0 }, toolCalls: [], skillsLoaded: [] };
   let invalidReason: B11Row['invalidReason'];
   const complete = run.timedOut && !run.stdout.endsWith('\n') ? run.stdout.slice(0, run.stdout.lastIndexOf('\n') + 1) : run.stdout;
-  try { events = parseEvents(complete, run.timedOut ? 'timeout' : undefined); invalidReason = events.invalidReason; }
+  try { events = parseEvents(complete, run.usageLimited ? 'usage-limit' : run.timedOut ? 'timeout' : undefined); invalidReason = events.invalidReason; }
   catch { invalidReason = 'malformed-events'; }
   if (routingFailed || (run.code !== 0 && !run.timedOut && invalidReason === undefined)) invalidReason = 'provider-error';
   if (/^bwrap:/m.test(run.stderr)) invalidReason = 'sandbox-failure';
