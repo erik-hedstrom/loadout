@@ -1,0 +1,834 @@
+[
+  {
+    "server": "tracker",
+    "tool": "get_issue_brief",
+    "description": "Retrieve the current issue title by issue_number. Requires the repository owner and name. Returns the title, or a not-found error if the issue does not exist or the current credentials cannot see it.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "owner": {
+          "type": "string",
+          "description": "Account or organization that owns the repository"
+        },
+        "repo": {
+          "type": "string",
+          "description": "Repository name without the owner"
+        },
+        "issue_number": {
+          "type": "integer",
+          "description": "Issue number"
+        }
+      },
+      "required": [
+        "owner",
+        "repo",
+        "issue_number"
+      ],
+      "additionalProperties": false
+    },
+    "args": {
+      "owner": "firgrove",
+      "repo": "dispatch",
+      "issue_number": 4182
+    },
+    "response": "{\"title\":\"Queue lease expires before renewal\"}"
+  },
+  {
+    "server": "database",
+    "tool": "get_table_retention",
+    "description": "Retrieve the retention policy for a table. Pass the database, schema and table name. Returns the policy identifier; does not alter rows or database configuration.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "database": {
+          "type": "string",
+          "description": "Name of the connected database"
+        },
+        "schema": {
+          "type": "string",
+          "description": "Schema name"
+        },
+        "table": {
+          "type": "string",
+          "description": "Table name"
+        }
+      },
+      "required": [
+        "database",
+        "schema",
+        "table"
+      ],
+      "additionalProperties": false
+    },
+    "args": {
+      "database": "ledger",
+      "schema": "archive",
+      "table": "events"
+    },
+    "response": "{\"policy\":\"retain_47_days\"}"
+  },
+  {
+    "server": "browser",
+    "tool": "get_element_notice",
+    "description": "Retrieve the notice text for an element reference from the current browser snapshot. Requires the existing session, tab and element ref. Returns the visible text without clicking the element or changing the page.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "description": "Existing browser session id"
+        },
+        "tab_id": {
+          "type": "string",
+          "description": "Tab to read from"
+        },
+        "ref": {
+          "type": "string",
+          "description": "Element reference from the latest snapshot"
+        }
+      },
+      "required": [
+        "session_id",
+        "tab_id",
+        "ref"
+      ],
+      "additionalProperties": false
+    },
+    "args": {
+      "session_id": "session-juniper",
+      "tab_id": "tab-maintenance",
+      "ref": "notice-17"
+    },
+    "response": "{\"text\":\"Juniper maintenance starts at 03:40 UTC\"}"
+  },
+  {
+    "server": "docs",
+    "tool": "get_page_feature_flag",
+    "description": "Retrieve the feature flag documented on a deployment page by page_id. Pass the documentation space and version. Returns the flag key from the page; does not edit the documentation.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string",
+          "description": "Key of the documentation space"
+        },
+        "version": {
+          "type": "string",
+          "description": "Version identifier"
+        },
+        "page_id": {
+          "type": "string",
+          "description": "Page id or slug"
+        }
+      },
+      "required": [
+        "space",
+        "version",
+        "page_id"
+      ],
+      "additionalProperties": false
+    },
+    "args": {
+      "space": "REL",
+      "version": "2026.10",
+      "page_id": "worker-rollout"
+    },
+    "response": "{\"featureFlag\":\"ROLLOUT_KITE_63\"}"
+  },
+  {
+    "server": "tracker-2",
+    "tool": "get_release_support",
+    "description": "Retrieve the support channel for a release by release_id. Requires the repository owner and name. Returns the channel, or a not-found error when the release is unavailable.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "owner": {
+          "type": "string",
+          "description": "Account or organization that owns the repository"
+        },
+        "repo": {
+          "type": "string",
+          "description": "Repository name without the owner"
+        },
+        "release_id": {
+          "type": "integer",
+          "description": "Release id"
+        }
+      },
+      "required": [
+        "owner",
+        "repo",
+        "release_id"
+      ],
+      "additionalProperties": false
+    },
+    "args": {
+      "owner": "cedarworks",
+      "repo": "relay",
+      "release_id": 7309
+    },
+    "response": "{\"supportChannel\":\"#cedar-release-desk\"}"
+  },
+  {
+    "server": "database-2",
+    "tool": "get_view_watermark",
+    "description": "Retrieve the incremental refresh watermark for a view by view name. Requires the database and schema. Returns the column used for the watermark. This is a read-only metadata lookup.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "database": {
+          "type": "string",
+          "description": "Name of the connected database"
+        },
+        "schema": {
+          "type": "string",
+          "description": "Schema name"
+        },
+        "view": {
+          "type": "string",
+          "description": "View name"
+        }
+      },
+      "required": [
+        "database",
+        "schema",
+        "view"
+      ],
+      "additionalProperties": false
+    },
+    "args": {
+      "database": "harbor",
+      "schema": "reporting",
+      "view": "monthly_ingest"
+    },
+    "response": "{\"watermarkColumn\":\"sealed_at_n7\"}"
+  },
+  {
+    "server": "browser-2",
+    "tool": "get_storage_preset",
+    "description": "Retrieve a display preset stored under a browser storage key. Pass the existing session and tab, storage area and key. Returns the stored preset value without changing browser storage or navigation.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "description": "Existing browser session id"
+        },
+        "tab_id": {
+          "type": "string",
+          "description": "Tab to read from"
+        },
+        "area": {
+          "type": "string",
+          "description": "Browser storage area",
+          "enum": [
+            "local",
+            "session"
+          ]
+        },
+        "key": {
+          "type": "string",
+          "description": "Storage key"
+        }
+      },
+      "required": [
+        "session_id",
+        "tab_id",
+        "area",
+        "key"
+      ],
+      "additionalProperties": false
+    },
+    "args": {
+      "session_id": "session-violet",
+      "tab_id": "tab-board",
+      "area": "session",
+      "key": "layout-preset"
+    },
+    "response": "{\"preset\":\"ridge_amber_12\"}"
+  },
+  {
+    "server": "docs-2",
+    "tool": "get_attachment_filename",
+    "description": "Retrieve the current file name of an attachment by attachment_id. Pass the documentation space and version. Returns the file name without downloading the attachment or altering the page.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string",
+          "description": "Key of the documentation space"
+        },
+        "version": {
+          "type": "string",
+          "description": "Version identifier"
+        },
+        "attachment_id": {
+          "type": "string",
+          "description": "Attachment id"
+        }
+      },
+      "required": [
+        "space",
+        "version",
+        "attachment_id"
+      ],
+      "additionalProperties": false
+    },
+    "args": {
+      "space": "OPS",
+      "version": "v6.2",
+      "attachment_id": "att-731"
+    },
+    "response": "{\"fileName\":\"harbor-readiness-v9.pdf\"}"
+  },
+  {
+    "server": "tracker-3",
+    "tool": "get_workflow_run_artifact",
+    "description": "Retrieve the primary artifact name for a workflow run by run_id. Requires the repository owner and name. Returns the name, or not-found if the run has no visible artifact.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "owner": {
+          "type": "string",
+          "description": "Account or organization that owns the repository"
+        },
+        "repo": {
+          "type": "string",
+          "description": "Repository name without the owner"
+        },
+        "run_id": {
+          "type": "integer",
+          "description": "Workflow run id"
+        }
+      },
+      "required": [
+        "owner",
+        "repo",
+        "run_id"
+      ],
+      "additionalProperties": false
+    },
+    "args": {
+      "owner": "alderlab",
+      "repo": "compiler",
+      "run_id": 66031
+    },
+    "response": "{\"artifact\":\"alder-symbol-map-46.tar\"}"
+  },
+  {
+    "server": "database-3",
+    "tool": "get_role_audit_label",
+    "description": "Retrieve the audit label assigned to a database role by role name. Pass the database and schema that owns the audit metadata. Returns the role label used in audit exports without modifying privileges.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "database": {
+          "type": "string",
+          "description": "Name of the connected database"
+        },
+        "schema": {
+          "type": "string",
+          "description": "Schema name"
+        },
+        "role": {
+          "type": "string",
+          "description": "Role name"
+        }
+      },
+      "required": [
+        "database",
+        "schema",
+        "role"
+      ],
+      "additionalProperties": false
+    },
+    "args": {
+      "database": "tundra",
+      "schema": "security",
+      "role": "batch_reader"
+    },
+    "response": "{\"auditLabel\":\"TUNDRA_READ_BATCH_Q8\"}"
+  },
+  {
+    "server": "browser-3",
+    "tool": "get_request_cache_tag",
+    "description": "Retrieve the cache tag observed on a captured network request by request_id. Requires the existing browser session and tab. Returns the cache tag without replaying the request.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "description": "Existing browser session id"
+        },
+        "tab_id": {
+          "type": "string",
+          "description": "Tab to read from"
+        },
+        "request_id": {
+          "type": "string",
+          "description": "Captured network request id"
+        }
+      },
+      "required": [
+        "session_id",
+        "tab_id",
+        "request_id"
+      ],
+      "additionalProperties": false
+    },
+    "args": {
+      "session_id": "session-delta",
+      "tab_id": "tab-orders",
+      "request_id": "request-884"
+    },
+    "response": "{\"cacheTag\":\"orders-canopy-r27\"}"
+  },
+  {
+    "server": "docs-3",
+    "tool": "get_template_review_code",
+    "description": "Retrieve the review code assigned to a documentation template by template_id. Pass the space and version. Returns the code used to identify that template in review records, or not-found if the template is unavailable.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string",
+          "description": "Key of the documentation space"
+        },
+        "version": {
+          "type": "string",
+          "description": "Version identifier"
+        },
+        "template_id": {
+          "type": "string",
+          "description": "Template id"
+        }
+      },
+      "required": [
+        "space",
+        "version",
+        "template_id"
+      ],
+      "additionalProperties": false
+    },
+    "args": {
+      "space": "ENG",
+      "version": "v4.7",
+      "template_id": "incident-followup"
+    },
+    "response": "{\"reviewCode\":\"ENG-REVIEW-LARK-29\"}"
+  },
+  {
+    "server": "tracker-4",
+    "tool": "get_milestone_freeze",
+    "description": "Retrieve the freeze timestamp for a release milestone by milestone_number. Requires the repository owner and name. Returns the recorded UTC freeze time without updating the milestone.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "owner": {
+          "type": "string",
+          "description": "Account or organization that owns the repository"
+        },
+        "repo": {
+          "type": "string",
+          "description": "Repository name without the owner"
+        },
+        "milestone_number": {
+          "type": "integer",
+          "description": "Milestone number"
+        }
+      },
+      "required": [
+        "owner",
+        "repo",
+        "milestone_number"
+      ],
+      "additionalProperties": false
+    },
+    "args": {
+      "owner": "birchstack",
+      "repo": "gateway",
+      "milestone_number": 58
+    },
+    "response": "{\"freezeAt\":\"2027-02-19T16:25:00Z\"}"
+  },
+  {
+    "server": "database-4",
+    "tool": "get_backup_storage_class",
+    "description": "Retrieve the storage class assigned to a backup by backup_id. Pass the database and schema. Returns the archive storage class without restoring, downloading or changing the backup.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "database": {
+          "type": "string",
+          "description": "Name of the connected database"
+        },
+        "schema": {
+          "type": "string",
+          "description": "Schema name"
+        },
+        "backup_id": {
+          "type": "string",
+          "description": "Backup id"
+        }
+      },
+      "required": [
+        "database",
+        "schema",
+        "backup_id"
+      ],
+      "additionalProperties": false
+    },
+    "args": {
+      "database": "quarry",
+      "schema": "operations",
+      "backup_id": "backup-20261018-03"
+    },
+    "response": "{\"storageClass\":\"quarry-coldline-b6\"}"
+  },
+  {
+    "server": "browser-4",
+    "tool": "get_form_help",
+    "description": "Retrieve the help text associated with a form reference from the current snapshot. Pass the existing browser session, tab and form_ref. Returns the form help text without typing, submitting or changing field values.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "description": "Existing browser session id"
+        },
+        "tab_id": {
+          "type": "string",
+          "description": "Tab to read from"
+        },
+        "form_ref": {
+          "type": "string",
+          "description": "Form reference from the latest snapshot"
+        }
+      },
+      "required": [
+        "session_id",
+        "tab_id",
+        "form_ref"
+      ],
+      "additionalProperties": false
+    },
+    "args": {
+      "session_id": "session-maple",
+      "tab_id": "tab-enrollment",
+      "form_ref": "form-62"
+    },
+    "response": "{\"help\":\"Use the amber enrollment code from your welcome packet.\"}"
+  },
+  {
+    "server": "docs-4",
+    "tool": "get_space_home_alias",
+    "description": "Retrieve the homepage alias for a documentation space by space_key. Pass the containing space and documentation version. Returns the alias used in navigation links without renaming the space or moving its homepage.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string",
+          "description": "Key of the documentation space"
+        },
+        "version": {
+          "type": "string",
+          "description": "Version identifier"
+        },
+        "space_key": {
+          "type": "string",
+          "description": "Space key to look up"
+        }
+      },
+      "required": [
+        "space",
+        "version",
+        "space_key"
+      ],
+      "additionalProperties": false
+    },
+    "args": {
+      "space": "PORTAL",
+      "version": "v3.5",
+      "space_key": "RUNBOOKS"
+    },
+    "response": "{\"homeAlias\":\"nightjar-operations-hub\"}"
+  },
+  {
+    "server": "tracker-5",
+    "tool": "get_branch_required_check",
+    "description": "Retrieve the required validation check for a branch by branch name. Requires the repository owner and name. Returns the check context recorded in branch protection without changing protection rules.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "owner": {
+          "type": "string",
+          "description": "Account or organization that owns the repository"
+        },
+        "repo": {
+          "type": "string",
+          "description": "Repository name without the owner"
+        },
+        "branch": {
+          "type": "string",
+          "description": "Branch name"
+        }
+      },
+      "required": [
+        "owner",
+        "repo",
+        "branch"
+      ],
+      "additionalProperties": false
+    },
+    "args": {
+      "owner": "willowteam",
+      "repo": "scheduler",
+      "branch": "release/next"
+    },
+    "response": "{\"requiredCheck\":\"willow-contracts / epoch-31\"}"
+  },
+  {
+    "server": "database-5",
+    "tool": "get_sequence_owner_label",
+    "description": "Retrieve the ownership label for a sequence by sequence name. Pass the database and schema. Returns the label recorded by the owning team without advancing, resetting or changing the sequence.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "database": {
+          "type": "string",
+          "description": "Name of the connected database"
+        },
+        "schema": {
+          "type": "string",
+          "description": "Schema name"
+        },
+        "sequence": {
+          "type": "string",
+          "description": "Sequence name"
+        }
+      },
+      "required": [
+        "database",
+        "schema",
+        "sequence"
+      ],
+      "additionalProperties": false
+    },
+    "args": {
+      "database": "orchard",
+      "schema": "billing",
+      "sequence": "invoice_number_seq"
+    },
+    "response": "{\"ownerLabel\":\"orchard-finance-cobalt\"}"
+  },
+  {
+    "server": "browser-5",
+    "tool": "get_console_diagnostic",
+    "description": "Retrieve the diagnostic code attached to a captured console message by message_id. Requires the existing browser session and tab. Returns the code without clearing the console buffer.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "description": "Existing browser session id"
+        },
+        "tab_id": {
+          "type": "string",
+          "description": "Tab to read from"
+        },
+        "message_id": {
+          "type": "string",
+          "description": "Captured console message id"
+        }
+      },
+      "required": [
+        "session_id",
+        "tab_id",
+        "message_id"
+      ],
+      "additionalProperties": false
+    },
+    "args": {
+      "session_id": "session-hazel",
+      "tab_id": "tab-preview",
+      "message_id": "message-219"
+    },
+    "response": "{\"diagnosticCode\":\"HAZEL_RENDER_FALLBACK_74\"}"
+  },
+  {
+    "server": "docs-5",
+    "tool": "get_export_bundle_name",
+    "description": "Retrieve the bundle file name for a documentation export by export_id. Pass the space and version. Returns the bundle name without starting another export or downloading its files.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string",
+          "description": "Key of the documentation space"
+        },
+        "version": {
+          "type": "string",
+          "description": "Version identifier"
+        },
+        "export_id": {
+          "type": "string",
+          "description": "Export job id"
+        }
+      },
+      "required": [
+        "space",
+        "version",
+        "export_id"
+      ],
+      "additionalProperties": false
+    },
+    "args": {
+      "space": "PRODUCT",
+      "version": "v8.1",
+      "export_id": "export-562"
+    },
+    "response": "{\"bundleName\":\"product-osprey-handbook-18.zip\"}"
+  },
+  {
+    "server": "tracker",
+    "tool": "get_label_escalation",
+    "description": "Retrieve the escalation queue associated with a repository label by name. Requires the repository owner and name. Returns the queue identifier without editing the label or creating an issue.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "owner": {
+          "type": "string",
+          "description": "Account or organization that owns the repository"
+        },
+        "repo": {
+          "type": "string",
+          "description": "Repository name without the owner"
+        },
+        "name": {
+          "type": "string",
+          "description": "Label name"
+        }
+      },
+      "required": [
+        "owner",
+        "repo",
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "args": {
+      "owner": "elmbridge",
+      "repo": "ingress",
+      "name": "customer-blocked"
+    },
+    "response": "{\"queue\":\"elm-response-falcon-5\"}"
+  },
+  {
+    "server": "database-3",
+    "tool": "get_migration_checksum",
+    "description": "Retrieve the recorded checksum for a migration by version. Pass the database and schema. Returns the checksum without running, reverting or rewriting the migration.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "database": {
+          "type": "string",
+          "description": "Name of the connected database"
+        },
+        "schema": {
+          "type": "string",
+          "description": "Schema name"
+        },
+        "version": {
+          "type": "string",
+          "description": "Version identifier"
+        }
+      },
+      "required": [
+        "database",
+        "schema",
+        "version"
+      ],
+      "additionalProperties": false
+    },
+    "args": {
+      "database": "meadow",
+      "schema": "catalog",
+      "version": "20261014_0820"
+    },
+    "response": "{\"checksum\":\"sum-merlin-9407-e2\"}"
+  },
+  {
+    "server": "browser-4",
+    "tool": "get_frame_build_label",
+    "description": "Retrieve the build label exposed by an embedded frame by frame_id. Pass the existing browser session and tab. Returns the frame build label without navigating or injecting page scripts.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "description": "Existing browser session id"
+        },
+        "tab_id": {
+          "type": "string",
+          "description": "Tab to read from"
+        },
+        "frame_id": {
+          "type": "string",
+          "description": "Frame id"
+        }
+      },
+      "required": [
+        "session_id",
+        "tab_id",
+        "frame_id"
+      ],
+      "additionalProperties": false
+    },
+    "args": {
+      "session_id": "session-pine",
+      "tab_id": "tab-dashboard",
+      "frame_id": "frame-93"
+    },
+    "response": "{\"buildLabel\":\"pine-dashboard-linen-208\"}"
+  },
+  {
+    "server": "docs-5",
+    "tool": "get_section_fallback_region",
+    "description": "Retrieve the fallback region documented under a page section heading. Pass the space, version, page_id and exact heading. Returns the region identifier without editing the page.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "space": {
+          "type": "string",
+          "description": "Key of the documentation space"
+        },
+        "version": {
+          "type": "string",
+          "description": "Version identifier"
+        },
+        "page_id": {
+          "type": "string",
+          "description": "Page id or slug"
+        },
+        "heading": {
+          "type": "string",
+          "description": "Exact section heading"
+        }
+      },
+      "required": [
+        "space",
+        "version",
+        "page_id",
+        "heading"
+      ],
+      "additionalProperties": false
+    },
+    "args": {
+      "space": "RESILIENCE",
+      "version": "v2.9",
+      "page_id": "edge-failover",
+      "heading": "Regional fallback"
+    },
+    "response": "{\"fallbackRegion\":\"eu-north-cypress-7\"}"
+  }
+]
