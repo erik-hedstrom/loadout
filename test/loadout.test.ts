@@ -19,7 +19,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { createServer as createHttpServer, request } from 'node:http';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { EmptyResultSchema } from '@modelcontextprotocol/sdk/types.js';
+import { EmptyResultSchema, InitializeResultSchema, LATEST_PROTOCOL_VERSION, ToolListChangedNotificationSchema } from '@modelcontextprotocol/sdk/types.js';
 import { addSkills, parseGitHub, parseSkill as parseSkillDir, scanLibrary } from '../src/library.js';
 import { isPlainFolder, writeCacheFile } from '../src/safefs.js';
 import { EMBED_MODEL, EmbeddingStore } from '../src/embed.js';
@@ -1222,6 +1222,50 @@ describe('mcp server', () => {
     for (const library of [skills, [...skills, { ...canary, gateway: false }]]) {
       const s = await connect(library);
       expect((await s.mcp.listTools()).tools.map((t) => t.name)).toEqual(['find_tools', 'load_skill']);
+      await s.close();
+    }
+  });
+
+  it('keeps tools/list byte-identical across different and permuted gateway inventories', async () => {
+    const other = { ...canary, id: 'mcp:other', name: 'other' };
+    let baseline: string | undefined;
+    for (const library of [[canary], [canary, other], [other, canary], [other]]) {
+      const s = await connect(library);
+      try {
+        const listed = JSON.stringify(await s.mcp.listTools());
+        baseline ??= listed;
+        expect(listed).toBe(baseline);
+      } finally {
+        await s.close();
+      }
+    }
+  });
+
+  it('keeps initialize and tools/list byte-identical after discovery and loading without list-change notifications', async () => {
+    const { client } = fakeClient({ canary: 0.9 });
+    const s = await connect([...skills, canary], client, tempDir('loadout-toolindex-'));
+    const notifications: unknown[] = [];
+    s.mcp.setNotificationHandler(ToolListChangedNotificationSchema, (notification) => { notifications.push(notification); });
+    const initialize = async () => JSON.stringify(await s.mcp.request({
+      method: 'initialize',
+      params: { protocolVersion: LATEST_PROTOCOL_VERSION, capabilities: {}, clientInfo: { name: 'test', version: '0' } },
+    }, InitializeResultSchema));
+    try {
+      const initial = await initialize();
+      const listed = JSON.stringify(await s.mcp.listTools());
+      for (const [name, args, expected] of [
+        ['find_tools', { goal: 'Read memos of ZX Ledger entries' }, 'mcp:canary'],
+        ['load_skill', { skill: 'webapp-testing' }, 'Use Playwright'],
+        ['server_tools', { server: 'mcp:canary' }, 'ledger_memo'],
+      ] as const) {
+        const result = await s.call(name, args);
+        expect(result.isError).toBe(false);
+        expect(result.text).toContain(expected);
+        expect(await initialize(), name).toBe(initial);
+        expect(JSON.stringify(await s.mcp.listTools()), name).toBe(listed);
+        expect(notifications, name).toEqual([]);
+      }
+    } finally {
       await s.close();
     }
   });
