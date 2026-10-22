@@ -111,7 +111,7 @@ loadout codex "<task>"           # launch Codex with one up-front decision
 - [Library search over MCP](docs/mcp.md): `find_tools` and `load_skill`
   mid-session, and how to set it up per host.
 - [The launcher](docs/launcher.md): `loadout claude|codex`, one decision up
-  front, including a model tier; used by the benchmarks.
+  front, including a model tier.
 - [Hosts](docs/hosts.md): what was checked in which host.
 
 ## Development

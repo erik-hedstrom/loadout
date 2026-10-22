@@ -7,7 +7,7 @@ import { afterAll, describe, expect, it, type TestContext } from 'vitest';
 import { isEntry } from '../bench/lib.js';
 
 const root = join(import.meta.dirname, '..');
-const scripts = ['judge', 'stability', 'sweep', 'hook-latency', 'overhead', 'mcp-overhead', 'need-audit'];
+const scripts = ['judge', 'stability', 'sweep', 'hook-latency', 'overhead', 'mcp-overhead', 'need-audit', 'ab'];
 const temp = mkdtempSync(join(tmpdir(), 'loadout-bench-entry-'));
 afterAll(() => rmSync(temp, { recursive: true, force: true }));
 

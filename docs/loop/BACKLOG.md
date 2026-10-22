@@ -35,8 +35,7 @@ Each PR body's **Review state** section has the round-by-round record.
 
 | PR | Item | State on 2026-10-22 |
 |---|---|---|
-| [#47](https://github.com/erik-hedstrom/loadout/pull/47) | C14 A/B pilot harness; adds B10 | final review round; the clean Codex-only rerun needs a separately logged-in `CODEX_HOME` |
-| [#28](https://github.com/erik-hedstrom/loadout/pull/28) | A1 README rewrite | main merged through #49; documentation review fixes awaiting the merge gate |
+| [#47](https://github.com/erik-hedstrom/loadout/pull/47) | C14 A/B pilot harness; adds B10 | final review round |
 
 ## A. Adoption and ease of use
 
@@ -149,6 +148,7 @@ Acceptance:
 | B7 | P1 | MCP overhead study: what configured MCP servers cost per request, natively and through loadout | Claude | cloud (harness, done) + local (runs) | in progress: harness merged in [#38](https://github.com/erik-hedstrom/loadout/pull/38), with no ambient Claude plugins (2026-10-15 decision); live runs wait for Erik's approval of the estimate |
 | B8 | P0 | Backlog items from the launch-readiness review, 2026-10-13, MCP token cost first | Claude | local + erik | todo (the review is private, on Erik's machine) |
 | B9 | P1 | Savings from an adopted library: what a user saves after moving skills and MCP servers into loadout | Claude | local | todo (after B7) |
+| B10 | P1 | B7: Claude 2.1.281's init lists `@builtin` plugins even with `--setting-sources ""` and a fresh config dir, so `plugins.length !== 0` (`bench/mcp-overhead.ts`, the "Claude init plugins must be empty" check) would refuse every B7 Claude run; ignore `@builtin` plugins as the A/B harness does (`isBuiltin` in `bench/ab.ts`) | Claude | cloud | todo. Seen on 2.1.281 by C14 in a free probe (`claude -p` with HTTPS_PROXY pointed at a closed port prints the init event and makes no model call); not reproduced by review, so confirm with the same probe first |
 
 **B8. Items from the launch-readiness review.** The review (2026-10-13) is
 private ([ORCHESTRATOR](ORCHESTRATOR.md#local-the-default)).
@@ -429,6 +429,7 @@ Decisions for Erik:
 | C8 | P0 | Skill use with the hook-only plugin | Claude | local | done ([#25](https://github.com/erik-hedstrom/loadout/pull/25)): headless, the hook injected a skill's text in 6 of 10; Claude opened 0 of 10, none of the 4 it was only pointed to (D13) |
 | C9 | P1 | Host-model fallback router when there is no TypeSafe key | Claude (design) | cloud (code) + local (bench) | todo |
 | C10 | P2 | Bench quick fixes: sequential outcome judge, tier fixed across arms, stale A2 number | Claude | cloud | done ([#40](https://github.com/erik-hedstrom/loadout/pull/40)) |
+| C14 | P1 | A/B pilot: three prompts with and without loadout in the stock CLIs, tokens (cached apart from uncached) and quality | Claude (harness) + Erik (runs) | cloud (harness) + local (runs) | review ([#47](https://github.com/erik-hedstrom/loadout/pull/47)): harness, plan and tests done, reviews addressed (resume refuses other settings or a batch-stopping row; credentials and keyword-routed loadout runs stop the batch, as RESULTS "What stops the batch" defines); the paid pilot has not run (needs `CLAUDE_CODE_OAUTH_TOKEN` and the TypeSafe key in a key file, from WSL) |
 
 **C13. Pure-Jev baseline without more model spend.**
 
@@ -711,6 +712,89 @@ no paid calls.
 
 Learnings: a script that spawns the CLIs can be tested by putting a fake
 binary alone on `PATH`, so the `claude` judge needed no new seam.
+
+**C14. A/B pilot.** Erik, 2026-10-19: test three prompts with and without
+loadout, evaluate the output and compare token use; he asked about tokens in,
+their effect on caching and output quality, and a small Codex A/B he ran
+showed problems. `bench/ab.ts` runs it on the stock CLIs the way a user
+installs loadout: the plugin and MCP server in Claude Code, the MCP server and
+hook in Codex. Method, selection rule and caveats:
+[RESULTS](../../bench/RESULTS.md#c14-method-not-run-yet-three-prompts-with-and-without-loadout).
+
+`npx tsx bench/ab.ts` (plan, $0), `--run [--repeats 2] [--hosts claude,codex]
+[--ids a,b] [--out <dir>]` (resumable; `INCOMPLETE` until judged),
+`--judge-only <dir>`.
+
+Acceptance:
+- One script records, per run, tokens **per model request** from the host's own
+  report (Claude: each assistant message's usage, deduplicated by message id;
+  Codex: `exec --json` reports only a thread total, so one entry per run), with
+  uncached input, cache writes, cache reads and output apart everywhere, plus
+  cost, turns, time, tools (loadout's named), skills opened, the hook's context
+  size and the skill names it listed or injected, and the `c1-debug-13` hidden
+  test result. This closes C11's acceptance for the harness, with fixture tests.
+- The cold cache does not skew the arms: one recorded warm-up per host and arm,
+  excluded from comparisons and reported as the cold start; measured runs
+  interleaved with the first arm alternating; a request gap over 5 minutes flags
+  `coldCacheRisk`; request 1 is reported apart from requests 2+.
+- Validity stops the batch: the loadout plugin present exactly once in the
+  loadout arm and absent in bare, no other plugin, the hook run once (loadout) or
+  never (bare), the loadout MCP server connected, the model as requested, no run
+  failed before the model; a loadout arm that routed by keyword (no key reached
+  it, or Jev failed); a credential, or something shaped like one, in a run's
+  folder (nothing is copied). A study folder is not resumed with other settings
+  or past such a row.
+- Blind pairwise judging in both orders, cross-family (Sol judges Claude's
+  outputs, Opus judges Codex's), skill names removed from both arms' files.
+- `report.md` per host, arm and prompt, with the loadout − bare difference.
+- Tests with no network and no paid call, `$0` to build and plan. The paid pilot
+  is below.
+
+Estimate for the paid pilot (the plan prints it, with its assumptions): 28
+runs (4 warm-ups), Claude at most 420 requests and Codex 14 thread totals,
+about 1 to 3 hours, subscription quota; Jev about 14 routing calls (under
+$0.05); 24 judge calls (Opus and Sol quota). Needs Erik: the Claude
+subscription token, the TypeSafe key in a key file (`loadout init --key-file`), a
+Linux shell (WSL), and a go-ahead.
+
+Learnings (2026-10-19):
+- `claude -p` with a black-holed proxy and a fresh config directory runs the
+  prompt hook and prints the init event before any model call, so the stream
+  fixtures, the plugin loading under `--setting-sources ''` and the PATH shim
+  are checked for free. The init lists the built-in `agents-md` plugin
+  (`source: agents-md@builtin`) even with no plugin: **B7's "init plugins must be
+  empty" check would refuse every Claude run** (B10). `ab.ts` ignores `@builtin`.
+- `codex exec --json`'s `turn.completed.usage` is the thread's running total,
+  not the last request's (`usage_from_last_total`). Per-request Codex usage
+  needs the app-server, a different integration.
+- Claude Code writes one assistant event per content block, all with the same
+  message id and usage; and a `<synthetic>` assistant message with zero usage
+  for a login failure. Both are handled and tested.
+- `--restricted`, which B7 uses, removes the code-running tools; the pilot's
+  agents need them, so `claudeIsolation` takes `restricted: false`.
+- Codex's `--dangerously-bypass-hook-trust` would also run an ambient
+  `$CODEX_HOME/hooks.json`, which `--ignore-user-config` does not skip: the
+  plan blocks the Codex hook arm if one exists.
+- The working folder is one fixed path for every run (emptied each time),
+  because both hosts put it in the prompt and a different path per run would
+  break the shared cache prefix.
+
+Learnings (2026-10-20):
+- **The first Codex pilot (2026-10-20, at e9d7239) is confounded.** Codex loaded
+  `$CODEX_HOME/AGENTS.md` (Erik's global instructions, via a symlink) into every
+  run of both arms; `--ignore-user-config` and `--ignore-rules` do not skip it.
+  The loadout agent's own `find_tools` query repeated a line from it, and a
+  skill name from it appears in all four `c1-debug-13` streams. Its numbers
+  cannot be read as loadout against bare. Codex reads `AGENTS.override.md`, then
+  `AGENTS.md`, from `CODEX_HOME` and uses the first non-empty one
+  (`codex-rs/codex-home/src/instructions/mod.rs` at rust-v0.160.1); `ab.ts` now
+  refuses the study if either exists (a symlink counts), and the file has to be
+  moved aside for a run. B7 records the same file as "identical across arms"
+  (`hostState`): a token-delta baseline cancels it, so B7 is left as is, but a
+  study of what the agent does is not.
+
+Left: run the pilot (Erik's go-ahead), write the results into RESULTS and
+`report.md`, and decide whether two repeats are enough to say anything.
 
 ## D. Integrations and robustness
 
@@ -1290,8 +1374,8 @@ left under bench/, with a test that runs a script through a link.
 Learnings (2026-10-22): canonicalize both sides; resolving only `argv[1]` leaves
 a linked module URL unmatched. Run the Linux suite outside the system temp
 folder: the existing `resetWork` test assumes the checkout is outside it.
-`bench/ab.ts` (#47) still has its own guard; whichever of the two lands second
-converts it.
+`bench/ab.ts` (#47) now uses `isEntry(import.meta.url)` and is covered by the
+shared symlink and import tests.
 
 Review M1/L1: argv lookup ENOENT/ENOTDIR means no entry (missing path or
 non-directory parent); module lookup and unexpected argv errors stay strict.

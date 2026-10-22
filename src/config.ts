@@ -185,8 +185,8 @@ export function withoutKey(env: NodeJS.ProcessEnv = process.env): NodeJS.Process
  * has to come from TYPESAFE_BASE_URL, which the user sets outside it. A config.json URL that differs from the
  * default is refused, not ignored, so a setup that relied on it fails loudly instead of quietly switching hosts.
  */
-export function jevBaseUrl(config: Config): string {
-  const fromEnv = process.env.TYPESAFE_BASE_URL?.trim();
+export function jevBaseUrl(config: Config, env: NodeJS.ProcessEnv = process.env): string {
+  const fromEnv = env.TYPESAFE_BASE_URL?.trim();
   if (fromEnv) return fromEnv;
   if (config.jev.baseUrl !== DEFAULT_CONFIG.jev.baseUrl) {
     throw new Error('jev.baseUrl in config.json is not the default; the key is sent to another host only when TYPESAFE_BASE_URL names it');

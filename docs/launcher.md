@@ -2,8 +2,10 @@
 
 The [plugins](hook.md) route each substantive prompt inside the agent you
 already run. The launcher instead starts Claude Code or Codex with one
-decision made up front, including the model tier. The benchmarks use it; so
-can you, if you prefer a command per session.
+decision made up front, including the model tier. `bench/invoke.ts` and
+`bench/outcome.ts` use this path. The [C14 A/B pilot](../bench/README.md#ab-pilot-c14)
+uses the stock CLIs with the hook and MCP server. You can use the launcher if
+you prefer a command per session.
 
 ```bash
 loadout route "<task>"                                   # show the decision only

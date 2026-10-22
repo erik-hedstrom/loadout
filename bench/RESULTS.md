@@ -111,6 +111,109 @@ backlog, B7).
   so both remain listed conservatively. Codex's database writes and API-key
   alternative remain Erik's decision (backlog, B7).
 
+## C14 method (not run yet): three prompts with and without loadout
+
+No usable measurement exists for this study. A first Codex pilot (2026-10-20,
+at e9d7239) is confounded: Codex loaded the global `$CODEX_HOME/AGENTS.md` into
+every run of both arms, and the loadout agent's search query repeated its text
+(see the backlog, C14). It is not a result; the harness now refuses a study
+while that file, or `AGENTS.override.md`, exists. The harness is `bench/ab.ts` (backlog,
+C14); `npx tsx bench/ab.ts` prints the plan and the estimate and spends
+nothing.
+
+- **Prompts.** `c1-web-14` (404-page copy), `c1-apps-08` (a questionnaire),
+  `c1-debug-13` (a mobile menu that will not close, with a small fixture
+  project and a hidden test). The selection rule: held-out C1 **test** rows
+  where all three 2026-10-16 Jev reruns loaded the same set and the C1 judge
+  rated a loaded skill useful, one per kind (copy, document, code). These are
+  cases where loadout should help. They are not a random sample, so no general
+  claim follows from them.
+- **Hosts and arms.** The stock `claude` (2.1.281, `sonnet`) and `codex`
+  (0.160.1, `gpt-6.1-sol`), each **bare** and with **loadout** as the documented
+  install gives it: for Claude the shipped plugin (its prompt hook) and the
+  `loadout` MCP server; for Codex the MCP server and the prompt hook. B7's
+  isolation applies to both arms: allowlisted environment, a fresh Claude home
+  with the subscription token, `--ignore-user-config` for Codex, so no ambient
+  plugin or MCP tool reaches the numbers. The arms share every other flag, the
+  model, the turn cap and the timeout. One difference from the Linux plugin
+  install: the Codex MCP server is `required = true`, as `loadout setup codex`
+  writes it, so a failed start stops the run; the plugin leaves it out on
+  purpose (comment in `src/launch.ts`).
+- **Tokens.** Per model request from the host's own report, with uncached input,
+  cache writes, cache reads and output always apart. Claude: each assistant
+  message's usage, deduplicated by message id. Codex: `codex exec --json` gives
+  the thread total once per run (`turn.completed` carries the running total, in
+  codex-rs `exec/src/event_processor_with_jsonl_output.rs` at rust-v0.160.1), so
+  Codex has no per-request split. Effective input weights Claude's cache writes
+  1.25 (5 minutes) or 2 (1 hour) and reads 0.1 (Anthropic's published
+  multipliers); Codex's is not shown.
+- **Cold-cache skew.** The arms have different prefixes (loadout adds MCP tool
+  definitions and, per prompt, the hook's context), so each has its own cache
+  entry, and a cold first run would charge cache writes to whichever arm ran
+  first. So each host and arm gets one **warm-up run** on a neutral prompt,
+  recorded and excluded from every comparison, and the measured runs alternate
+  bare and loadout, the arm that goes first alternating by prompt and repeat.
+  Each request's gap since the same arm's previous request is stored, and a gap
+  over 5 minutes flags the run `coldCacheRisk`. Request 1 of each run is
+  reported apart from requests 2+: the per-prompt hook context cannot be cached
+  the first time, and later requests should read it from cache. The warm-up
+  (cold) and measured (warm) runs are shown side by side.
+- **Quality.** The `c1-debug-13` hidden test (outside tap closes, Escape
+  closes, an inside tap does not, the menu reopens, listeners are removed) is
+  run on a copy of each run's folder and never put in the agent's. The
+  deliverables are then compared blind in both orders (only a preference that
+  holds in both counts), cross-family: Claude-host outputs by Codex (Sol),
+  Codex-host outputs by Claude Opus. Skill names are removed from both arms'
+  files first; a skill's own template can still show the arm.
+- **Sample.** Two repeats per cell: ranges, not intervals, and "not shown" where
+  the sample does not support a claim.
+- **What stops the batch.** A loadout arm that routed by keyword (the hook's
+  no-key warning or Jev-fallback note, or a `find_tools` result tagged as a
+  keyword match), a held TypeSafe key or Claude subscription token in any work-tree
+  file (binary included), relative path, stdout, stderr, hook capture or hook-capture
+  stderr, and token shapes in deliverable paths or text about to be copied.
+  Deliverable checks skip token shapes glued after a letter or digit to avoid
+  stopping on CSS or code identifiers, so an unheld credential with that prefix
+  can be copied into `outputs/`; held secrets still match everywhere. These
+  checks cover warm-ups too, except that their deliverables are not copied or
+  shape-checked. A hit copies nothing, saves no stream, skips the hidden test and
+  records an invalid row without matched text; a credential-bearing path is
+  recorded as `<credential-bearing path>`. A shared sink gate replaces held secrets
+  and token shapes with `<credential>` in rows, verdicts, reports, printed text and
+  public errors. Token shapes in stdout only withhold
+  that run's stream (`streamWithheld: "token shape"`); usage and tools are still
+  parsed in memory and the run can count. Token shapes in excluded files,
+  binaries, stderr and hook captures are not checked. Codex's login token is
+  never read. A loadout hook that exited non-zero or never finished also stops
+  the batch (the shim records each exit status; the Claude stream's hook response
+  is checked too), as do the plugin, hook, server or model checks.
+  Preflight also refuses libraries with token-shaped capability names, and judging
+  refuses a pair whose saved skill names contain `<credential>`: in both cases the
+  judge could not be blinded to the original names.
+  Before any agent runs, each judge the hosts need is checked (`codex features
+  list` must show `shell_tool` and `unified_exec` off): on the codex-cli
+  versions seen so far (0.154.0, 0.160.1; E12) it does not, so a study with the
+  Claude host is refused up front rather than after its quota is spent, and only
+  `--hosts codex` (judged by Claude) runs. Claude runs need the key in a key file named by the loadout config,
+  because the variable alone may not reach the MCP server or the hook. An
+  `--out` folder is one study: it is not resumed with other settings or past
+  such a row, nor after the code or a skill's text or description changed (a
+  commit and a library fingerprint are stored), and a resume works in the same temporary folder, which keeps the
+  working directory in the cached prefix unchanged.
+- **Rows.** `bench/results/<timestamp>-ab-pilot/`: `rows.jsonl` (names only, no
+  paths, no skill text), `outputs/` (the deliverables, this machine's folders
+  written as variables), `verdicts.jsonl`, `report.md`. The raw streams are
+  kept in `streams/`, which is gitignored: they hold file contents, local paths
+  and the hook's skill text.
+- **Not verified offline** (the first paid runs check them): `--max-turns` is
+  absent from `claude --help` 2.1.281; whether `Bash(node --test *)` matches the
+  agent's test command; whether the Codex hook registers through `-c
+  hooks.UserPromptSubmit` with `--dangerously-bypass-hook-trust` (the source
+  says it should; the shim's count decides); whether the key file and a
+  non-default `LOADOUT_HOME` reach `loadout mcp` and the hook under Claude's MCP
+  environment allowlist and subprocess scrub (a keyword-routed loadout run
+  stops the batch).
+
 ## B1 results (2026-10-07): what installed skills cost per request
 
 Note (2026-10-14): B1 measured the earlier `find_skills` tool text. The tool is now `find_tools` with a changed description (skills-only: 336 and 492 characters for the server instructions and the tool description, instead of 337 and 473), so the figures below describe the earlier text and are not remeasured.

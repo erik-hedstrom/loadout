@@ -132,6 +132,9 @@ describe('E9 security', () => {
       vi.stubEnv('TYPESAFE_BASE_URL', ' https://staging.example ');
       expect(jevBaseUrl(redirected)).toBe('https://staging.example');
       expect(jevBaseUrl(DEFAULT_CONFIG)).toBe('https://staging.example');
+      expect(jevBaseUrl(DEFAULT_CONFIG, { TYPESAFE_BASE_URL: ' https://explicit.example ' })).toBe('https://explicit.example');
+      expect(jevBaseUrl(DEFAULT_CONFIG, {})).toBe(DEFAULT_CONFIG.jev.baseUrl);
+      expect(() => jevBaseUrl(redirected, {})).toThrow('TYPESAFE_BASE_URL');
     } finally {
       vi.unstubAllEnvs();
     }
