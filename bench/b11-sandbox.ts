@@ -39,17 +39,44 @@ export function sandboxArgs(s: Sandbox, command: string[], network = true): stri
   return args;
 }
 
-export function executeSandbox(s: Sandbox, command: string[], timeoutMs: number, network = true): Promise<{ stdout: string; stderr: string; code: number | null; timedOut: boolean }> {
+/** Arrival timings only. Strict event validation and token projection remain in parseEvents. */
+export function eventClock() {
+  let pending = '', startupMs: number | null = null, stepStart: number | null = null;
+  const stepsMs: (number | null)[] = [];
+  return {
+    push(chunk: string, elapsedMs: number) {
+      pending += chunk;
+      let newline: number;
+      while ((newline = pending.indexOf('\n')) >= 0) {
+        const line = pending.slice(0, newline); pending = pending.slice(newline + 1);
+        let event: { type?: unknown };
+        try { event = JSON.parse(line) as { type?: unknown }; }
+        catch { continue; } // The strict parser classifies malformed telemetry after execution.
+        if (event?.type === 'step_start') { startupMs ??= elapsedMs; stepStart = elapsedMs; }
+        if (event?.type === 'step_finish') {
+          stepsMs.push(stepStart === null ? null : elapsedMs - stepStart);
+          stepStart = null;
+        }
+      }
+    },
+    snapshot(completedSteps: number) {
+      return { startupMs, stepsMs: Array.from({ length: completedSteps }, (_, i) => stepsMs[i] ?? null) };
+    },
+  };
+}
+
+export function executeSandbox(s: Sandbox, command: string[], timeoutMs: number, network = true): Promise<{ stdout: string; stderr: string; code: number | null; timedOut: boolean; clock: ReturnType<typeof eventClock> }> {
   return new Promise((resolvePromise, reject) => {
     const child = spawn('bwrap', sandboxArgs(s, command, network), { env: { PATH: '/usr/bin:/bin' }, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
+    const started = performance.now(), clock = eventClock();
     let stdout = '', stderr = '', timedOut = false;
     const kill = () => { if (child.pid) { try { process.kill(-child.pid, 'SIGKILL'); } catch (e) { if ((e as NodeJS.ErrnoException).code !== 'ESRCH') reject(new Error('sandbox cleanup failed')); } } };
     const timer = setTimeout(() => { timedOut = true; kill(); }, timeoutMs);
     // Transcripts exist only in bounded memory, never in result files or diagnostics.
-    child.stdout.on('data', (b: Buffer) => { stdout += b.toString(); if (stdout.length > 16_000_000) { timedOut = true; kill(); } });
+    child.stdout.on('data', (b: Buffer) => { const chunk = b.toString(); stdout += chunk; clock.push(chunk, performance.now() - started); if (stdout.length > 16_000_000) { timedOut = true; kill(); } });
     child.stderr.on('data', (b: Buffer) => { stderr = (stderr + b.toString()).slice(-65536); });
     child.on('error', () => { clearTimeout(timer); reject(new Error('sandbox could not start')); });
-    child.on('close', code => { clearTimeout(timer); resolvePromise({ stdout, stderr, code, timedOut }); });
+    child.on('close', code => { clearTimeout(timer); resolvePromise({ stdout, stderr, code, timedOut, clock }); });
   });
 }
 

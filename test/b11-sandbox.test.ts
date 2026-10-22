@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdtempSync, mkdirSync, writeFileSync, symlinkSy
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { sandboxArgs, copyTree, checkFiles, confinedPath, materializeSkill, sandboxCheck, removeSession } from '../bench/b11-sandbox.js';
+import { eventClock, sandboxArgs, copyTree, checkFiles, confinedPath, materializeSkill, sandboxCheck, removeSession } from '../bench/b11-sandbox.js';
 import { runCheck } from '../bench/b11.js';
 
 const roots: string[] = [];
@@ -11,6 +11,19 @@ const temp = () => { const p = mkdtempSync(join(tmpdir(), 'b11-test-')); roots.p
 afterEach(() => roots.splice(0).forEach(p => rmSync(p, { recursive: true, force: true })));
 
 describe('B11 sandbox', () => {
+  it('measures startup and completed requests across fragmented JSONL without retaining content', () => {
+    const clock = eventClock();
+    clock.push('{"type":"step_', 4);
+    clock.push('start","ignored":"private"}\n', 25);
+    clock.push('{"type":"text","part":{"text":"private"}}\n', 50);
+    clock.push('{"type":"step_finish"}\n{"type":"step_start"}\n', 80);
+    clock.push('{"type":"step_finish"}\n{bad}\n{"type":"step_finish"}\n', 120);
+    expect(clock.snapshot(3)).toEqual({ startupMs: 25, stepsMs: [55, 40, null] });
+    expect(JSON.stringify(clock.snapshot(3))).not.toContain('private');
+    const noEvents = eventClock();
+    noEvents.push('{"type":"step_start"}', 20);
+    expect(noEvents.snapshot(0)).toEqual({ startupMs: null, stepsMs: [] });
+  });
   it('uses a private PID namespace, a cleared environment and only explicit mounts', () => {
     const args = sandboxArgs({ workspace: '/var/tmp/run/work', home: '/var/tmp/run/home', binary: '/home/real/bin/opencode' }, ['/opt/opencode', '--version']);
     expect(args).toContain('--unshare-all');

@@ -1204,6 +1204,11 @@ Reproduce the report offline:
 npx tsx bench/b11-report.ts bench/results/2026-10-22-b11/rows.jsonl > report.md
 ```
 
+The production dataset's skill-needle prompts name the product, and planted
+skill names contain that product. Retrieving those needles is mostly lexical.
+B11 measures cost at retained quality, not router difficulty. The dataset has
+now been integrated; a real-task timeout diagnostic and pilot are in progress.
+
 ## E14 matching-time regression (2026-10-22)
 
 Local synthetic check on Node 24.15.0 in WSL2; [raw observations](results/2026-10-22-e14-redaction/timing.json).

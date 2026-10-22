@@ -19,6 +19,8 @@ if [ "$1" = "--version" ]; then printf '1.19.3\\n'; exit 0; fi
 case "$*" in *expects-token*) [ -f "$HOME/mcp-token" ] || exit 3;; *) [ ! -e "$HOME/mcp-token" ] || exit 3;; esac
 case "$*" in *slow*) sleep 0.4;; esac
 case "$*" in *lock-output*) mkdir locked; chmod 000 locked;; esac
+printf '%s\\n' '{"type":"step_start"}'
+sleep 0.02
 printf yes > answer.txt
 printf '%s\\n' '{"type":"step_finish","part":{"tokens":{"total":12,"input":10,"output":2,"reasoning":0,"cache":{"read":0,"write":0}}}}'
 `);
@@ -43,6 +45,9 @@ printf '%s\\n' '{"type":"step_finish","part":{"tokens":{"total":12,"input":10,"o
   it('materializes an endpoint token only for sessions configured with MCP', async () => {
     await main(args('mcp-all', [task('mcp', 'expects-token: write yes to answer.txt')], '0'));
     expect(rows(out)).toMatchObject([{ taskId: 'mcp', result: 'pass' }]);
+    expect(rows(out)[0].latency.startupMs).toBeGreaterThanOrEqual(0);
+    expect(rows(out)[0].latency.stepsMs).toHaveLength(1);
+    expect(rows(out)[0].latency.stepsMs[0]).toBeGreaterThan(0);
   });
   it('cleans directories made unreadable by the agent before persisting the row', async () => {
     await main(args('bare', [task('permissions', 'lock-output: write yes to answer.txt')], '0'));

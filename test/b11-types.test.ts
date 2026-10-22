@@ -16,6 +16,15 @@ function row(): B11Row {
 }
 
 describe('B11 event projection', () => {
+  it('accepts optional scrubbed timing and rejects mismatched or negative durations', () => {
+    const value = row();
+    value.latency = { startupMs: 20, stepsMs: [50] };
+    expect(parseRow(value).latency).toEqual(value.latency);
+    expect(() => parseRow({ ...value, latency: { startupMs: 20, stepsMs: [] } })).toThrow('timings');
+    expect(() => parseRow({ ...value, latency: { startupMs: -1, stepsMs: [50] } })).toThrow();
+    expect(() => parseRow({ ...value, latency: { startupMs: null, stepsMs: [-1] } })).toThrow();
+    expect(parseRow({ ...value, latency: { startupMs: null, stepsMs: [null] } }).latency?.stepsMs).toEqual([null]);
+  });
   it('reads recorded counters and sums uncached and cached input separately', () => {
     expect(parseEvents(recorded + '\n' + event(tokens))).toEqual({
       steps: [{ input: 6657, cacheRead: 0, cacheWrite: 0, output: 26, reasoning: 15 },

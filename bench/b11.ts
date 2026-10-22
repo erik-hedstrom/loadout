@@ -243,6 +243,7 @@ export async function main(args: string[]) {
             writeFileSync(join(workspace, 'opencode.json'), JSON.stringify({ ...OPENCODE_CONFIG, mcp }));
             const run = await executeSandbox(s, ['/opt/opencode', 'run', '--pure', '-m', block.model, '--format', 'json', task.prompt], o.timeoutMs);
             const classified = classifyRun(run, meter.failed); Object.assign(row, classified.events);
+            row.latency = run.clock.snapshot(row.steps.length);
             row.invalidReason = classified.invalidReason;
             if (!row.invalidReason) {
               const checked = await runCheck(task, s, data.root);

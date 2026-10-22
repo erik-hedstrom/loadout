@@ -30,6 +30,7 @@ const rowSchema = z.strictObject({
   listing: z.strictObject({ skills: count, servers: count, tools: count }),
   result: z.enum(['pass', 'fail', 'invalid']), invalidReason: invalidReason.optional(),
   wallMs: z.number().nonnegative(), jev: z.strictObject({ calls: count, costUsd: z.number().nonnegative() }),
+  latency: z.strictObject({ startupMs: z.number().nonnegative().nullable(), stepsMs: z.array(z.number().nonnegative().nullable()) }).optional(),
   selection: z.strictObject({ skills: z.array(name), servers: z.array(name) }).optional(),
 });
 export type B11Row = z.infer<typeof rowSchema>;
@@ -45,6 +46,7 @@ export function parseRow(value: unknown): B11Row {
   if ((row.result === 'invalid') !== (row.invalidReason !== undefined)) throw new Error('Invalid result classification');
   if (row.result !== 'invalid' && row.steps.length === 0) throw new Error('Missing session usage');
   if ((row.arm === 'preselect') !== (row.selection !== undefined)) throw new Error('Invalid selection classification');
+  if (row.latency && row.latency.stepsMs.length !== row.steps.length) throw new Error('Inconsistent step timings');
   const totals = sum(row.steps);
   if (Object.keys(totals).some((key) => totals[key as keyof B11Tokens] !== row.totals[key as keyof B11Tokens])) {
     throw new Error('Inconsistent session totals');
