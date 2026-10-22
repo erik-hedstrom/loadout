@@ -823,20 +823,25 @@ sweep's never-throw boundary, like each file's removal. The regression test
 needs a state folder outside the loadout home whose parent is a file, so that
 the directory read itself fails.
 
-**D21. Request prefix stability.** `server_tools` now has a constant description;
-`find_tools` already returns server keys and an example gateway call. Claude's
-launcher puts relevance in the user prompt and always appends the same trust
-note to the system prompt, including when no skill is injected. Codex already
-keeps its selection guidance in the user prompt.
+**D21. Request prefix stability.** `server_tools` now has a constant
+description: it no longer lists the library's servers, so the tool list stays
+the same when the server set changes or is reordered, and no untrusted server
+name reaches a tool definition. `find_tools` already returns server keys and
+an example gateway call.
 
 Learnings (2026-10-22): in-process MCP tests compare serialized initialization
 and tool-list results around search, skill loading and gateway discovery,
-including a tool-index write, and reject tool-list-change notifications.
-Different and permuted gateway inventories produce the same tool list.
-Launcher tests retain prompt-first and MCP-config-last ordering. The existing
-hook output test pins per-prompt context to `additionalContext` on
-`UserPromptSubmit`; its `systemMessage` carries only the separate user warning.
-Money saved by caching is unmeasured; that remains a B11 / B-series question.
+including a tool-index write, and reject tool-list-change notifications; this
+guards behaviour main already had. Different and permuted gateway inventories
+produce the same tool list. The existing hook output test pins per-prompt
+context to `additionalContext` on `UserPromptSubmit`.
+Moving the Claude launcher's relevance note from the system prompt into the
+user turn was tried and dropped in review: Claude's cached prefix puts tools
+before the system prompt, and the launcher's tools (plugin-dir skills,
+`--mcp-config`) already vary with the selection, so a constant system prompt
+buys no cross-session reuse there. It would also have added system text to the
+bench's hook and plugin arms that the real plugin never sends. Money saved by
+caching is unmeasured; that remains a B11 / B-series question.
 
 **D17. MCP start-up inside Codex's grace period.** Codex leaves an optional
 MCP server out of the tool list if it is not ready about 1 s after start-up,

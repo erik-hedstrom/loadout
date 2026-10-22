@@ -7,7 +7,6 @@ import { PassThrough } from 'node:stream';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { modelJson } from '../bench/lib.js';
-import { TRUST_NOTE } from '../src/launch.js';
 
 vi.mock('node:child_process', async (importOriginal) => ({
   ...await importOriginal<typeof import('node:child_process')>(), spawn: vi.fn(), execFileSync: vi.fn(),
@@ -170,7 +169,7 @@ body
         expect(call.args).toContain('--no-session-persistence');
         expect(call.args).toContain('--include-hook-events');
         if (mode === 'plugin') {
-          expect(call.args).toEqual(['-p', `Request ${i ? 'b' : 'a'}\n\n(Test run: nothing is attached and the folder is empty. Where the request refers to files or data you do not have, create small realistic sample inputs and carry on.)`, '--model', 'sonnet', '--plugin-dir', translate(join(repo, 'plugins', 'loadout')), '--append-system-prompt', TRUST_NOTE, '--output-format', 'stream-json', '--verbose', '--include-hook-events', '--no-session-persistence', '--max-turns', '6', '--strict-mcp-config', '--permission-mode', 'acceptEdits']);
+          expect(call.args).toEqual(['-p', `Request ${i ? 'b' : 'a'}\n\n(Test run: nothing is attached and the folder is empty. Where the request refers to files or data you do not have, create small realistic sample inputs and carry on.)`, '--model', 'sonnet', '--plugin-dir', translate(join(repo, 'plugins', 'loadout')), '--output-format', 'stream-json', '--verbose', '--include-hook-events', '--no-session-persistence', '--max-turns', '6', '--strict-mcp-config', '--permission-mode', 'acceptEdits']);
         }
         // Under WSL the launcher script needs a Linux PATH; WSLENV's PATH/l translates it for claude.exe.
         expect(call.env!.PATH!.slice(call.env!.PATH!.indexOf(delimiter))).toBe(delimiter + fakePath);
