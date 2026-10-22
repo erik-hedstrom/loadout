@@ -80,12 +80,14 @@ export function copyTree(source: string, destination: string): void {
 
 export function checkFiles(workspace: string, check: { type: 'files'; path: string; all: string[]; none: string[] }): boolean {
   const p = confinedPath(workspace, check.path);
-  if (!existsSync(p)) return false;
+  // The sandbox has stopped. A FIFO would block open() before readConfined can inspect its descriptor.
+  if (!lstatSync(p, { throwIfNoEntry: false })?.isFile()) return false;
   const text = readConfined(workspace, check.path, 1024 * 1024).toString('utf8');
   return check.all.every(s => text.includes(s)) && check.none.every(s => !text.includes(s));
 }
 
 export function materializeSkill(source: string, destination: string): { name: string; description: string; source: string } {
+  if (!lstatSync(join(source, 'SKILL.md'), { throwIfNoEntry: false })?.isFile()) throw new Error('skill manifest must be a regular file');
   const original = readConfined(source, 'SKILL.md', 256 * 1024).toString('utf8');
   const metadata = parseFrontmatter(original);
   if (typeof metadata.name !== 'string' || !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(metadata.name) || metadata.name.length > 64 || typeof metadata.description !== 'string' || !metadata.description.trim()) throw new Error('invalid skill listing metadata');

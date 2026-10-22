@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { sandboxArgs, copyTree, checkFiles, confinedPath, materializeSkill, sandboxCheck } from '../bench/b11-sandbox.js';
 import { runCheck } from '../bench/b11.js';
 
@@ -17,6 +18,11 @@ describe('B11 sandbox', () => {
     expect(args).not.toContain('--ro-bind-try');
     expect(args).not.toContain('/home/real');
     expect(args).not.toContain('TYPESAFE_API_KEY');
+    const sources = args.flatMap((arg, i) => arg === '--bind' || arg === '--ro-bind' ? [args[i + 1]!] : []);
+    for (const src of sources.filter(src => src !== '/home/real/bin/opencode')) {
+      expect(src === homedir() || src.startsWith(homedir() + '/')).toBe(false);
+      expect(src === process.cwd() || src.startsWith(process.cwd() + '/')).toBe(false);
+    }
     expect(args.slice(-2)).toEqual(['/opt/opencode', '--version']);
   });
   it('refuses broad or overlapping writable mounts', () => {
@@ -86,6 +92,19 @@ describe('B11 sandbox', () => {
     writeFileSync(join(source, 'SKILL.md'), '---\nname: valid\ndescription: test\n---\nbody');
     materializeSkill(source, dst);
     expect(() => materializeSkill(source, dst)).toThrow('duplicate');
+  });
+  it.runIf(process.platform === 'linux')('refuses output and manifest FIFOs before opening them', () => {
+    const root = temp(), dst = temp();
+    expect(spawnSync('mkfifo', [join(root, 'answer.txt'), join(root, 'SKILL.md')]).status).toBe(0);
+    const module = new URL('../bench/b11-sandbox.ts', import.meta.url).href;
+    const script = `import { checkFiles, materializeSkill } from ${JSON.stringify(module)};
+      const [root, dst] = process.argv.slice(1);
+      if (checkFiles(root, { type: 'files', path: 'answer.txt', all: [], none: [] })) process.exit(2);
+      try { materializeSkill(root, dst); process.exit(3); } catch { console.log('regular-file guards passed'); }`;
+    const result = spawnSync(process.execPath, ['--import', import.meta.resolve('tsx'), '--input-type=module', '-e', script, root, dst], { timeout: 5000, encoding: 'utf8' });
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('regular-file guards passed');
   });
   it('materializes only framed SKILL.md with listing-only metadata', () => {
     const source = temp(); const dst = temp();

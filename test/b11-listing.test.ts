@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -9,7 +9,7 @@ import type { Canary } from '../bench/b11-mcp.js';
 import type { Capability } from '../src/types.js';
 
 const roots: string[] = [];
-const temp = () => { const root = mkdtempSync(join(tmpdir(), 'b11-listing-')); roots.push(root); return root; };
+const temp = () => { const root = mkdtempSync(join(realpathSync(tmpdir()), 'b11-listing-')); roots.push(root); return root; };
 afterEach(() => { vi.restoreAllMocks(); roots.splice(0).forEach(root => rmSync(root, { recursive: true, force: true })); });
 function skill(root: string, folder: string, name = folder): string {
   const source = join(root, folder);

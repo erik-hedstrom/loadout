@@ -43,6 +43,19 @@ describe('B11 study', () => {
     expect(meter.usage.calls).toBe(0);
     expect(meter.failed).toBe(true);
   });
+  it('waits for pending Jev usage before the session can persist its ledger', async () => {
+    const budget = new JevBudget(0.1, DEFAULT_CONFIG, { ask: async () => {
+      await new Promise(resolve => setTimeout(resolve, 20));
+      return { model: 'fake', answers: {}, usage: { input_tokens: 100, output_tokens: 0 } };
+    } });
+    const meter = budget.meter();
+    const call = meter.client.ask({}, {});
+    await meter.settle();
+    expect(meter.usage.calls).toBe(1);
+    expect(meter.usage.costUsd).toBeCloseTo(100 / 1e6 * DEFAULT_CONFIG.jev.inputPricePerMTok, 10);
+    expect(budget.spent).toBeCloseTo(meter.usage.costUsd, 10);
+    await call;
+  });
   it('classifies telemetry, timeout, sandbox and rate limits without confusing port numbers with HTTP status', () => {
     const stdout = JSON.stringify({ type: 'step_finish', part: { tokens: { total: 15, input: 5, cache: { read: 8, write: 0 }, output: 2, reasoning: 0 } } }) + '\n';
     const run = { stdout, stderr: 'connected http://127.0.0.1:42917', code: 0, timedOut: false };
