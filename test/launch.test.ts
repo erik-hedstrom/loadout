@@ -162,14 +162,21 @@ describe.skipIf(process.platform !== 'win32')('Windows host commands', () => {
   });
 
   it('keeps doctor from resolving relative PATH entries', () => {
-    const planted = join(home, 'planted');
+    // Planted under the current folder: across drives (CI checks out on D:, temp is on C:),
+    // relative() returns an absolute path and the entry would no longer be relative.
+    const planted = mkdtempSync(join(process.cwd(), '.loadout-planted-'));
     const real = join(home, 'real');
-    mkdirSync(planted);
-    mkdirSync(real);
-    writeFileSync(join(planted, 'host.exe'), '');
-    writeFileSync(join(real, 'host.cmd'), '');
-    vi.stubEnv('PATH', [relative(process.cwd(), planted), real].join(delimiter));
-    expect(onPath('host')).toBe(join(real, 'host.cmd'));
+    try {
+      mkdirSync(real);
+      writeFileSync(join(planted, 'host.exe'), '');
+      writeFileSync(join(real, 'host.cmd'), '');
+      const entry = relative(process.cwd(), planted);
+      expect(entry).not.toMatch(/^[A-Za-z]:|^[\\/]/);
+      vi.stubEnv('PATH', [entry, real].join(delimiter));
+      expect(onPath('host')).toBe(join(real, 'host.cmd'));
+    } finally {
+      rmSync(planted, { recursive: true, force: true });
+    }
   });
 
   function shim(ext: string) {
