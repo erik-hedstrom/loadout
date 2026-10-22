@@ -825,7 +825,8 @@ the directory read itself fails.
 
 **D21. Request prefix stability.** `server_tools` now has a constant
 description: it no longer lists the library's servers, so the tool list stays
-the same when the server set changes or is reordered, and no untrusted server
+the same when a nonempty server set changes or is reordered (a library with
+no servers has no gateway tools at all), and no untrusted server
 name reaches a tool definition. `find_tools` already returns server keys and
 an example gateway call.
 
