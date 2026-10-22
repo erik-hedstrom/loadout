@@ -40,7 +40,7 @@ completed session cost and retained quality are not established.
 
 Verification in an LF WSL checkout: `npm test -- --maxWorkers=2
 --reporter=default` passed 769 tests, skipped 48; `npm run typecheck` and
-`npm run build` passed. Focused native Windows B11 tests passed 111 and
+`npm run build` passed. Focused native Windows B11 tests passed 112 and
 skipped 12 POSIX cases; native Windows typecheck passed. Linux CI installs
 bubblewrap for the real offline sandbox/lifecycle tests. CI and the macOS
 matrix have not run from this branch.
@@ -78,4 +78,38 @@ the command's Jev reservation cap is $1, with free-model spend $0. The pilot
 does not establish that 120 seconds is sufficient for the heavy arms. Keep
 invalid attempts separate when deciding whether to extend the deadline.
 
-Review dispositions are recorded after the final review round below.
+## Review dispositions
+
+Claude Opus 5.5 and a fresh Codex review both approved
+`a6e2fcd863a1f5d4a4d6c1a3ce9d818c4438e9e0`. No High or Medium findings
+remain. Both verified the 124 B11 tests under real bubblewrap, typecheck,
+build and reproducible report. Claude also ran the full suite (769 passed,
+48 skipped), checked pilot aggregates and spot-checked the newline mutation.
+The subsequent commit changes only this handoff and protocol documentation.
+
+| Finding | Disposition and evidence |
+|---|---|
+| R1: sweep omitted planted resources; bad plants were hidden | Fixed in `b11-listing.ts`: retain all plants and reject failed/colliding plants; listing tests cover every arm. |
+| R1: counter equation excluded cache writes | Fixed in `b11-types.ts`, grounded in pinned OpenCode source; nonzero-write parser regression. |
+| R1: output, infrastructure and harness errors mixed; broad 429 detection | Fixed in `classifyRun`/`runCheck`, with unsafe-output, sentinel, malformed-event and port-number regressions. |
+| R1/R2: worker teardown, pending Jev, budget stop and routing unavailable lacked lifecycle evidence | Fixed with drained workers/meters, explicit budget stop and real-bwrap fake-client runner tests. |
+| R2: inherited routing config | `studyConfig()` pins defaults and Jev; tests verify user policy cannot change the study. |
+| R2: canonical temporary roots | Committed realpath roots and POSIX sandbox paths; native Windows focused tests pass. macOS remains for CI. |
+| R2: missing artifacts and results | Committed rows, reproducible report, protocol, RESULTS and BACKLOG. The PR placeholder stays until the orchestrator opens it. |
+| Earlier Lows: cleanup, token scope, loopback disclosure, plan cost, timeout telemetry and ordering | Fixed with guarded permission repair, MCP-only token files, documented host networking/cost, retained completed counters and block/listing tests. |
+| R3: pooled totals lacked provenance | Linked `pilot-totals.json` from `protocol.json` with its aggregation method and split limitations; all 12 groups independently checked. |
+| R3: missing review notes | Recorded here. |
+
+Remaining Low items: Ubuntu CI may require an AppArmor user-namespace setting
+if bubblewrap reports a uid-map error; this was not observed in WSL and should
+be decided from CI evidence. A check with package imports could resolve agent
+files; current dataset checks use Node built-ins and relative imports (Claude
+accepted that rebuttal). The 16 MiB output cap shares timeout classification,
+top-level diagnostics are deliberately generic, and task kind/needs semantic
+agreement remains dataset responsibility. Pricing snapshots were verified
+against official sources by the report implementer and independent Codex.
+No additional behavior was added for these Low follow-ups.
+
+Before merge, the orchestrator still owns the required `pr-reviewer` pass,
+`ci-full` matrix, PR placeholder replacement and dataset integration. The full
+study remains unrun; neither quality retention nor size break-even is shown.
