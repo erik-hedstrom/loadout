@@ -1282,7 +1282,7 @@ Learnings (2026-10-09):
 | E11 | P1 | Fixed-text diagnostics in the gateway and relay | Codex | cloud | done ([PR #10](https://github.com/erik-hedstrom/loadout/pull/10)) |
 | E12 | P1 | A tool-less Codex bench backend (codex-cli 0.160.1 keeps unified_exec on) | Codex | local | todo |
 | E13 | P1 | Apply Engineer standards to both review paths, with a blocking necessity pass | Codex + Claude review | cloud | done ([#41](https://github.com/erik-hedstrom/loadout/pull/41)) |
-| E14 | P1 | Redact key-shaped strings before anything goes to Jev (prerequisite for the C2 loadout arm) | Codex | cloud | todo |
+| E14 | P1 | Redact key-shaped strings before anything goes to Jev (prerequisite for the C2 loadout arm) | Codex | cloud | review ([#53](https://github.com/erik-hedstrom/loadout/pull/53)) |
 | E15 | P1 | Test flakes: WSL-only `bench.test.ts` failure, Windows spawn timeouts | Claude | local | done ([#44](https://github.com/erik-hedstrom/loadout/pull/44)) |
 | E16 | P2 | Hygiene from #30's audit: control characters, `git ls-files` env, config symlink, echoed arguments | Codex | local | review ([#50](https://github.com/erik-hedstrom/loadout/pull/50)) |
 | E17 | P3 | One entry-point guard for bench scripts that survives symlinked paths | Codex + Claude review | cloud | review ([#51](https://github.com/erik-hedstrom/loadout/pull/51)) |
@@ -1423,6 +1423,18 @@ Acceptance:
 Limit: base64, splitting or any other encoding defeats pattern redaction, so
 this is defence in depth. The C2 protocol's primary layer is that the agent
 cannot read the key. Prerequisite for the C2 loadout arm.
+
+Learnings (2026-10-22, M1–M4): every Jev caller reaches `jevClient().ask()`;
+it redacts the whole JSON body once, so retries reuse it. `redactJson` decodes
+JSON strings first, preserving word boundaries after escapes. C2 keeps its
+frozen `scan-patterns.json`; a deep-equality test checks production patterns
+against it. JWT matching scans disjoint base64url segments to avoid quadratic
+restarts. Routing aliases names that redaction would change, then restores
+answer identities before selection. Stderr records counts, never matches.
+`reportJson` preserves property keys and redacts only string values; this also
+applies to `route --json` and `list --json`. Out of scope: encoded or split keys
+(including across goal and keywords), and keys glued to a preceding word
+character (the patterns' word boundary).
 
 **E15. Test flakes on the merge gate.** Two failures that were already on
 main made the gate noisy during the 2026-10-16 merge round (CI reruns,
