@@ -38,7 +38,7 @@ The protocol records interruptions, concurrency changes and incomplete usage.
 No size sweep or full study was run. The native skill-heavy arms timed out;
 completed session cost and retained quality are not established.
 
-Verification in an LF WSL checkout: `npm test -- --maxWorkers=2
+Original implementation verification, before dataset integration, in an LF WSL checkout: `npm test -- --maxWorkers=2
 --reporter=default` passed 769 tests, skipped 48; `npm run typecheck` and
 `npm run build` passed. Focused native Windows B11 tests passed 112 and
 skipped 12 POSIX cases; native Windows typecheck passed. Linux CI installs
@@ -57,26 +57,28 @@ row-schema, 14 report boundaries, 17 listing, 28 sandbox/runner, 17 lifecycle,
 and 3 final cleanup/report regressions. These are executed mutation checks,
 not a count of unique source conditions.
 
-The separately developed dataset at `agent/b11-tasks` was consumed in an
-offline plan from a temporary copy: 72 tasks, 24 per kind. It is not duplicated
-on this branch. Combine that dataset before the full command below. For the
-72-task version this schedules 936 sessions: all tasks in six core arms, plus
-three tasks per kind in four size arms, across both models. Budget exhaustion
+The dataset at `agent/b11-tasks` (`186c781`) is merged unchanged: 72 tasks,
+24 per kind, six decoys, and host-only reference solutions. The updated
+command below schedules 792 sessions: all tasks in five usable study arms,
+plus three tasks per kind in four size arms, across both models. The original
+full-library arms remain available for diagnostics but leave the study plan. Budget exhaustion
 stops the run; a resumed run includes all previous Jev attempt costs.
 
 ```bash
 B11_RESULTS="bench/results/$(date -u +%Y-%m-%dT%H-%M-%SZ)-b11"
 npx tsx bench/b11.ts --run --tasks bench/data/b11/tasks.jsonl \
   --opencode "$OPENCODE_BIN" --opencode-version 1.19.3 \
-  --arms bare,skills-all,mcp-all,all,gateway,preselect,skills-50,skills-250,mcp-1,mcp-5 \
+  --arms bare,mcp-all,gateway,preselect,heavy-max,skills-50,skills-250,mcp-1,mcp-5 \
+  --heavy-skills 250 --heavy-servers 5 \
   --reps 1 --batch-size 9 --sweep-per-kind 3 --concurrency 2 \
-  --timeout 120 --jev-budget 1.00 --out "$B11_RESULTS"
+  --timeout 300 --jev-budget 1.00 --out "$B11_RESULTS"
 ```
 
 Use `--plan` in place of `--run` first. The plan is offline and costs $0;
-the command's Jev reservation cap is $1, with free-model spend $0. The pilot
-does not establish that 120 seconds is sufficient for the heavy arms. Keep
-invalid attempts separate when deciding whether to extend the deadline.
+the command's Jev reservation cap is $1, with free-model spend $0. The 300-second deadline is provisional until the real-task pilot completes.
+Keep invalid attempts separate. The all-deadline schedule is 37 h 20 min at
+concurrency 2, excluding setup, Jev, checks, cleanup and backoff; expected
+wall time awaits the pilot. Do not launch the full study during implementation.
 
 ## Review dispositions
 
@@ -113,3 +115,34 @@ No additional behavior was added for these Low follow-ups.
 Before merge, the orchestrator still owns the required `pr-reviewer` pass,
 `ci-full` matrix, PR placeholder replacement and dataset integration. The full
 study remains unrun; neither quality retention nor size break-even is shown.
+
+
+## Capacity follow-up in progress
+
+Merged task contract: `fixturePath()` strips the repository-relative prefix
+and confines each category; `runCheck()` uses `/work` as cwd. All 72 declared
+workspaces were checked for correct copying without sibling solutions/checks.
+`eventClock()` records arrival timing only. Optional `latency` and `timeoutMs`
+keep historical rows readable. Reports show invalid reasons, distinct
+observed deadlines, under-90% completion, and lifecycle wall-time limitations.
+
+`heavy-max` requires `--heavy-skills` and `--heavy-servers`. These are limits
+on distractors/base servers; plants and required server targets remain.
+`rowKey()` and resume distinguish comparator settings. `summarizeRows()`
+rejects mixed heavy configurations; bracket reports stay separate.
+The fixed sweep subset's server targets are chosen before outcomes, preventing
+all global canaries from collapsing every MCP sweep size to 20 servers.
+
+The bracket selected 250/5, actually 274 skills /20 servers /509 tools.
+Four screened sessions completed without compaction (15–43 s), with three
+checks passing. The 500/10 candidate compacted on its first GLM request;
+its deliberate stop is documented separately from its raw process-exit
+classification. Original long-deadline diagnostics continue on both models.
+The new pilot is not the full study and will use the same selected comparator.
+
+Code through `3be8d7d` has a fresh Codex approval. Claude R4 requested an
+invalid-reason breakdown; it and all reported timing/deadline Low items are
+fixed in the subsequent report delta, awaiting re-review. Comparator changes
+also await independent review. The earlier approvals above apply to their
+named checkpoints. Current focused checks: 230 B11 tests pass under WSL;
+full final checks and the real-task pilot are pending.

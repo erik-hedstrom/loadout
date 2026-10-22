@@ -25,8 +25,9 @@ export function options(args: string[]) {
     opencode: { type: 'string' }, 'opencode-version': { type: 'string', default: '1.19.3' },
     arms: { type: 'string', default: CORE_ARMS.join(',') }, models: { type: 'string', default: DEFAULT_MODELS.join(',') },
     reps: { type: 'string', default: '1' }, 'batch-size': { type: 'string', default: '9' }, concurrency: { type: 'string', default: '2' },
-    'per-kind': { type: 'string' }, timeout: { type: 'string', default: '120' },
+    'per-kind': { type: 'string' }, timeout: { type: 'string', default: '300' },
     'sweep-per-kind': { type: 'string', default: '3' },
+    'heavy-skills': { type: 'string' }, 'heavy-servers': { type: 'string' },
     'jev-budget': { type: 'string', default: '0.10' }, out: { type: 'string' },
   } });
   const count = (s: string, max: number) => { const n = Number(s); if (!Number.isSafeInteger(n) || n < 1 || n > max) throw new Error('count out of range'); return n; };
@@ -34,11 +35,14 @@ export function options(args: string[]) {
   const models = v.models!.split(',');
   if (arms.some(a => !ARMS.includes(a)) || new Set(arms).size !== arms.length) throw new Error('unknown or repeated arm');
   if (models.some(m => !(DEFAULT_MODELS as readonly string[]).includes(m)) || new Set(models).size !== models.length) throw new Error('only declared free models are allowed');
+  const hasHeavy = arms.includes('heavy-max');
+  if (hasHeavy !== (v['heavy-skills'] !== undefined && v['heavy-servers'] !== undefined) || (!hasHeavy && (v['heavy-skills'] !== undefined || v['heavy-servers'] !== undefined))) throw new Error('heavy-max requires both explicit size limits');
+  const heavy = hasHeavy ? { skills: count(v['heavy-skills']!, 10000), servers: count(v['heavy-servers']!, 20) } : undefined;
   if (v.plan && v.run) throw new Error('choose plan or run');
   const budget = Number(v['jev-budget']);
   if (!Number.isFinite(budget) || budget < 0) throw new Error('invalid Jev budget');
   return { run: v.run ?? false, resume: v.resume ?? false, tasks: resolve(v.tasks!), binary: v.opencode ? realpathSync(v.opencode) : undefined,
-    version: v['opencode-version']!, arms, models, reps: count(v.reps!, 100), batchSize: count(v['batch-size']!, 10000),
+    version: v['opencode-version']!, arms, models, heavy, reps: count(v.reps!, 100), batchSize: count(v['batch-size']!, 10000),
     concurrency: count(v.concurrency!, 16), perKind: v['per-kind'] ? count(v['per-kind'], 10000) : undefined,
     sweepPerKind: count(v['sweep-per-kind']!, 10000),
     timeoutMs: count(v.timeout!, 3600) * 1000, budget, out: v.out ? resolve(v.out) : undefined };
@@ -53,7 +57,7 @@ export function blocks<T>(tasks: T[], models: string[], arms: string[], reps: nu
   }
   return result;
 }
-export const rowKey = (r: Pick<B11Row, 'taskId' | 'model' | 'arm' | 'rep'>) => JSON.stringify([r.taskId, r.model, r.arm, r.rep]);
+export const rowKey = (r: Pick<B11Row, 'taskId' | 'model' | 'arm' | 'rep' | 'heavyConfig'>) => JSON.stringify([r.taskId, r.model, r.arm, r.rep, ...(r.arm === 'heavy-max' ? [r.heavyConfig] : [])]);
 
 /** Pin routing policy; only the established credential/endpoint settings come from the user. */
 export function studyConfig(user: Config): Config {
@@ -150,13 +154,14 @@ export async function main(args: string[]) {
   if (!o.binary) throw new Error('pass --opencode with the pinned binary path');
   const data = tasksAt(o.tasks, o.perKind);
   const subset = sweepTasks(data.tasks, o.sweepPerKind);
+  const sweepCanaries = data.canaries.filter(c => data.tasks.some(task => subset.has(task.id) && task.needs.server === c.server));
   const plan = blocks(data.tasks, o.models, o.arms, o.reps, o.batchSize).map(block => ({ ...block,
-    tasks: (CORE_ARMS as readonly string[]).includes(block.arm) ? block.tasks : block.tasks.filter(task => subset.has(task.id)),
+    tasks: (CORE_ARMS as readonly string[]).includes(block.arm) || block.arm === 'heavy-max' ? block.tasks : block.tasks.filter(task => subset.has(task.id)),
   }));
   const runs = plan.reduce((n, b) => n + b.tasks.length, 0);
   console.log(JSON.stringify({ mode: o.run ? 'run' : 'plan', arms: o.arms, tasks: data.tasks.length,
     taskCounts: Object.fromEntries(['plain', 'skill-needle', 'mcp-needle'].map(k => [k, data.tasks.filter(t => t.kind === k).length])),
-    runs, expectedJevCalls: { preselect: data.tasks.length * o.models.length * o.reps * (o.arms.includes('preselect') ? 2 : 0), gatewayAtOneSearchPerStep: data.tasks.length * o.models.length * o.reps * (o.arms.includes('gateway') ? 40 : 0) },
+    runs, ...(o.heavy ? { heavyMax: { ...o.heavy, note: 'Limits count nonplanted skills and base servers; all planted skills and required canary servers are retained. Actual listing counts are recorded per row.' } } : {}), expectedJevCalls: { preselect: data.tasks.length * o.models.length * o.reps * (o.arms.includes('preselect') ? 2 : 0), gatewayAtOneSearchPerStep: data.tasks.length * o.models.length * o.reps * (o.arms.includes('gateway') ? 40 : 0) },
     gatewayEstimateAssumption: 'One search per model step. Several searches in a step can exceed this estimate; the Jev reservation budget still applies.',
     jevBudgetUsd: o.run ? o.budget : 0, requestedRunBudgetUsd: o.budget, expectedJevCostUsd: { plan: 0, runRange: [0, o.budget], note: 'Usage-dependent; hard reservation cap, no paid calls in plan mode.' }, modelCostUsd: 0, concurrency: o.concurrency, timeoutSeconds: o.timeoutMs / 1000,
     sessionDeadlineScheduleSeconds: plan.reduce((seconds, block) => seconds + Math.ceil(block.tasks.length / o.concurrency) * o.timeoutMs / 1000, 0),
@@ -180,6 +185,7 @@ export async function main(args: string[]) {
     const previous: B11Row[] = existsSync(rowsFile) ? readFileSync(rowsFile, 'utf8').trim().split('\n').filter(Boolean).map(l => parseRow(JSON.parse(l))) : [];
     if (previous.length && !o.resume) throw new Error('results exist; pass --resume');
     if (previous.some(r => r.opencodeVersion !== o.version)) throw new Error('resume OpenCode version mismatch');
+    if (o.heavy && previous.some(r => r.arm === 'heavy-max' && (r.heavyConfig?.skills !== o.heavy!.skills || r.heavyConfig?.servers !== o.heavy!.servers))) throw new Error('resume heavy-max size mismatch');
     const done = new Set(previous.filter(r => r.result !== 'invalid').map(rowKey));
     const config = studyConfig(loadConfig());
     const needsJev = o.arms.some(a => a === 'gateway' || a === 'preselect');
@@ -204,7 +210,7 @@ export async function main(args: string[]) {
     for (const block of plan) {
       if (stopped) break;
       let next = 0;
-      const queue = block.tasks.filter(task => !done.has(rowKey({ taskId: task.id, model: block.model, arm: block.arm as B11Row['arm'], rep: block.rep })));
+      const queue = block.tasks.filter(task => !done.has(rowKey({ taskId: task.id, model: block.model, arm: block.arm as B11Row['arm'], rep: block.rep, ...(block.arm === 'heavy-max' ? { heavyConfig: o.heavy } : {}) })));
       const workers = await Promise.allSettled(Array.from({ length: Math.min(o.concurrency, queue.length) }, async () => {
         while (!stopped && next < queue.length) {
           const task = queue[next++]!;
@@ -217,11 +223,13 @@ export async function main(args: string[]) {
           let gateway: Awaited<ReturnType<typeof endpoint>> | undefined;
           const row: B11Row = { taskId: task.id, kind: task.kind, split: splitOf(task.id), model: block.model as B11Row['model'], arm: block.arm as B11Row['arm'], rep: block.rep, orderIndex: index, startedAt, opencodeVersion: o.version,
             timeoutMs: o.timeoutMs, steps: [], totals: { input: 0, cacheRead: 0, cacheWrite: 0, output: 0, reasoning: 0 }, toolCalls: [], skillsLoaded: [], result: 'invalid', invalidReason: 'provider-error', wallMs: 0, jev: meter.usage, listing: { skills: 0, servers: 0, tools: 0 } };
+          if (block.arm === 'heavy-max') row.heavyConfig = o.heavy!;
           if (block.arm === 'preselect') row.selection = { skills: [], servers: [] };
           try {
             copyTree(fixturePath(data.root, 'workspaces', task.workspace), workspace);
             writeFileSync(join(workspace, 'AGENTS.md'), '');
-            const listing = listingFor(block.arm as B11Row['arm'], skills, servers, plantedNames, data.canaries);
+            const sizeArm = !(CORE_ARMS as readonly string[]).includes(block.arm) && block.arm !== 'heavy-max';
+            const listing = listingFor(block.arm as B11Row['arm'], skills, servers, plantedNames, sizeArm ? sweepCanaries : data.canaries, o.heavy);
             let selectedSkills = listing.skills, selectedServers = listing.servers;
             if (block.arm === 'preselect') {
               const d = await route({ task: task.prompt, repo: { name: 'b11', files: [], languages: {}, dependencies: [] }, library: [...skills, ...servers], config, client: meter.client, excerpt: skillExcerpt });

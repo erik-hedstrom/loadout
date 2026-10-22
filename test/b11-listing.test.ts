@@ -141,6 +141,25 @@ describe('B11 per-arm native listing', () => {
     expect(listingFor('mcp-all', skills, servers, plants, canaries)).toEqual({ skills: [], servers });
     for (const arm of ['bare', 'gateway', 'preselect'] as const) expect(listingFor(arm, skills, servers, plants, canaries)).toEqual({ skills: [], servers: [] });
   });
+  it('combines bounded skill and server prefixes with every provided task reference in heavy-max', () => {
+    const interleaved = [skills[300]!, ...skills.slice(0, 150), skills[301]!, ...skills.slice(150, 300)];
+    const listing = listingFor('heavy-max', interleaved, servers, plants, canaries, { skills: 250, servers: 5 });
+    expect(listing.skills).toEqual([...skills.slice(0, 250), ...skills.slice(-2)]);
+    expect(listing.servers).toEqual([...servers.slice(0, 5), servers[12], servers[19]]);
+    expect(interleaved).toHaveLength(302);
+    expect(servers).toHaveLength(20);
+  });
+  it('uses the requested heavy sizes and keeps all globally required servers when canaries span the full catalogue', () => {
+    const globalCanaries = servers.map(server => canary(server.name));
+    const listing = listingFor('heavy-max', skills, servers, plants, globalCanaries, { skills: 500, servers: 10 });
+    expect(listing.skills).toEqual(skills);
+    expect(listing.servers).toEqual(servers);
+    expect(listingFor('heavy-max', skills, servers, plants, [], { skills: 50, servers: 1 }))
+      .toEqual({ skills: [...skills.slice(0, 50), ...skills.slice(-2)], servers: [servers[0]] });
+  });
+  it('refuses a heavy-max listing without its requested sizes', () => {
+    expect(() => listingFor('heavy-max', skills, servers, plants, canaries)).toThrow(/configuration/i);
+  });
 });
 
 describe('B11 declared task needs', () => {

@@ -149,7 +149,7 @@ Acceptance:
 | B7 | P1 | MCP overhead study: what configured MCP servers cost per request, natively and through loadout | Claude | cloud (harness, done) + local (runs) | in progress: harness merged in [#38](https://github.com/erik-hedstrom/loadout/pull/38), with no ambient Claude plugins (2026-10-15 decision); live runs wait for Erik's approval of the estimate |
 | B8 | P0 | Backlog items from the launch-readiness review, 2026-10-13, MCP token cost first | Claude | local + erik | todo (the review is private, on Erik's machine) |
 | B9 | P1 | Savings from an adopted library: what a user saves after moving skills and MCP servers into loadout | Claude | local | todo (after B7) |
-| B11 | P1 | OpenCode session cost and task checks with automatic prompt caching | Codex | local | in review ([#TBD]): dataset integrated; diagnosing heavy-arm timeouts before the real-task pilot and full-study plan |
+| B11 | P1 | OpenCode session cost and task checks with automatic prompt caching | Codex | local | in review ([#TBD]): dataset integrated; capacity diagnostic and heavy-max bracket recorded; real-task pilot pending |
 
 **B11. OpenCode cache and outcome study.**
 
@@ -173,6 +173,13 @@ and [handoff](B11-HANDOFF.md). The full study has not run.
 Skill-needle prompts name the product, and planted skill names contain it, so
 retrieval is mostly lexical. B11 measures cost at retained quality, not router
 difficulty.
+The first 20-minute GLM full-library diagnostic still timed out after 110
+requests with repeated compaction. The host declares 200k context and 32k
+output, yielding a 168k usable threshold. A bounded `heavy-max` screen chose
+274 skills /20 servers /509 tools (4/4 completed; 3 checks passed); the next
+524-skill candidate compacted. All 20 servers are required by the complete
+task set. MCP size sweeps preserve only their fixed subset's required
+servers, keeping distinct actual sizes. See the [capacity bracket](../../bench/RESULTS.md#b11-real-task-capacity-bracket-2026-10-22-diagnostic-continuing).
 
 **B8. Items from the launch-readiness review.** The review (2026-10-13) is
 private ([ORCHESTRATOR](ORCHESTRATOR.md#local-the-default)).

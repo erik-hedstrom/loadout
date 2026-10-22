@@ -9,9 +9,11 @@ edited. Only synthetic workspaces and public skill text should be supplied:
 free-model providers receive these inputs and may retain them.
 
 ```bash
-npx tsx bench/b11.ts --plan --opencode "$OPENCODE_BIN"
-npx tsx bench/b11.ts --run --opencode "$OPENCODE_BIN" --out bench/results/approved-b11
-npx tsx bench/b11.ts --run --resume --opencode "$OPENCODE_BIN" --out bench/results/approved-b11
+B11_ARGS=(--arms bare,mcp-all,gateway,preselect,heavy-max,skills-50,skills-250,mcp-1,mcp-5
+  --heavy-skills 250 --heavy-servers 5 --timeout 300)
+npx tsx bench/b11.ts --plan "${B11_ARGS[@]}" --opencode "$OPENCODE_BIN"
+npx tsx bench/b11.ts --run "${B11_ARGS[@]}" --opencode "$OPENCODE_BIN" --out bench/results/approved-b11
+npx tsx bench/b11.ts --run --resume "${B11_ARGS[@]}" --opencode "$OPENCODE_BIN" --out bench/results/approved-b11
 npx tsx bench/b11-report.ts bench/results/approved-b11/rows.jsonl > report.md
 ```
 
@@ -22,12 +24,22 @@ Use `--tasks test/fixtures/b11-pilot/tasks.jsonl` for the small harness fixture
 set. These fixtures deliberately name their needed resources; they are not
 held-out evidence for routing quality.
 
-The six default arms are `bare`, `skills-all`, `mcp-all`, `all`, `gateway`
+The six original arms, retained for diagnostic reproduction, are `bare`, `skills-all`, `mcp-all`, `all`, `gateway`
 and `preselect`. Additional size arms are `skills-50`, `skills-250`, `mcp-1`
 and `mcp-5`. Skills are listing-validated, framed `SKILL.md` text without
 bundled files. Size arms use the first `--sweep-per-kind` tasks of each kind
 (default 3), fixed before any results are read. Planted skills and canary
-servers remain available in every size arm; rows record the actual counts.
+needed by the fixed sweep subset remain available in MCP-size arms; rows
+record actual counts. Skill-size arms retain all planted skills.
+`heavy-max` requires explicit `--heavy-skills` and `--heavy-servers` limits:
+nonplanted skills and base fixture servers, with all planted skills and
+required canary servers added. The bracket selected 250/5, which is actually
+274 skills, 20 servers and 509 tools for this dataset. All 20 servers carry
+required targets, so the fixed full-task comparator retains them. A different
+heavy configuration cannot be silently resumed or pooled into a report.
+The larger full-library arms repeatedly compact; the current study command
+excludes them but keeps their diagnostic rows. Bracketing evidence and the
+real-task pilot are recorded in RESULTS.
 Only the B7 synthetic servers and task canaries are available;
 personal MCP configuration is never loaded. The gateway calls the same
 in-process loadout implementation as the CLI. Preselection uses `route()`
@@ -46,13 +58,17 @@ the sandbox; their short-lived token is a private file in the temporary
 home. Hidden checks are copied in after the model process stops and run
 without network. Temporary session files, including OpenCode logs/databases,
 are removed. Public rows contain counters, names/statuses and check outcomes,
-never transcripts, arguments, tool results or environment values.
+never transcripts, arguments, tool results or environment values. Rows also
+record launch-to-first-step and completed-step event-arrival durations, plus
+the configured deadline. These durations do not partition total wall time.
 
 Tasks run in blocks of one model/arm, with arm order rotating by batch and
 repetition. `--batch-size` defaults to 9, `--concurrency` to 2 and `--reps`
 to 1. Concurrency is within a block. Initial requests may reuse a provider
 cache from earlier sessions; the report separates each request position.
-`--timeout` bounds each session in seconds. Rate-limit attempts are invalid
+`--timeout` bounds each session in seconds (default 300). The plan also
+prints the schedule if every session uses its deadline, retaining block
+barriers and excluding setup, routing, checks, cleanup and rate-limit waits. Rate-limit attempts are invalid
 and delay the next starts by at least 60 seconds. Resume skips valid
 task/model/arm/repetition identities and retries invalid ones once per launch.
 
@@ -65,7 +81,9 @@ rows instead of silently evaluating keyword fallback.
 
 Reports keep the hash-based dev/test split separate, include Wilson 95%
 intervals, and reprice measured tokens under dated official price snapshots.
-Those prices are hypothetical comparisons across different tokenizers and
+Completion coverage, invalid-reason counts and observed deadlines stay visible;
+coverage under 90% carries a survivor-bias warning. Zero-valid arms read not
+usable in observed attempts. Those prices are hypothetical comparisons across different tokenizers and
 cache policies. Size comparisons use a shared task/repetition panel; gateway
 bands are observed min/max session costs. See [RESULTS](RESULTS.md) for run
 evidence and limits.

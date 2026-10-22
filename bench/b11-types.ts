@@ -1,7 +1,8 @@
 import { z } from 'zod';
+import { MAX_SERVERS } from './mcp-fixtures.js';
 
 export const CORE_ARMS = ['bare', 'skills-all', 'mcp-all', 'all', 'gateway', 'preselect'] as const;
-export const ARMS = [...CORE_ARMS, 'skills-50', 'skills-250', 'mcp-1', 'mcp-5'] as const;
+export const ARMS = [...CORE_ARMS, 'skills-50', 'skills-250', 'mcp-1', 'mcp-5', 'heavy-max'] as const;
 export const DEFAULT_MODELS = ['opencode/glm-5.3-flash-free', 'opencode/deepseek-v4.1-flash-free'] as const;
 
 const count = z.number().int().nonnegative();
@@ -33,6 +34,7 @@ const rowSchema = z.strictObject({
   timeoutMs: count.optional(),
   latency: z.strictObject({ startupMs: z.number().nonnegative().nullable(), stepsMs: z.array(z.number().nonnegative().nullable()) }).optional(),
   selection: z.strictObject({ skills: z.array(name), servers: z.array(name) }).optional(),
+  heavyConfig: z.strictObject({ skills: z.number().int().positive(), servers: z.number().int().positive().max(MAX_SERVERS) }).optional(),
 });
 export type B11Row = z.infer<typeof rowSchema>;
 
@@ -47,6 +49,7 @@ export function parseRow(value: unknown): B11Row {
   if ((row.result === 'invalid') !== (row.invalidReason !== undefined)) throw new Error('Invalid result classification');
   if (row.result !== 'invalid' && row.steps.length === 0) throw new Error('Missing session usage');
   if ((row.arm === 'preselect') !== (row.selection !== undefined)) throw new Error('Invalid selection classification');
+  if ((row.arm === 'heavy-max') !== (row.heavyConfig !== undefined)) throw new Error('Invalid heavy configuration classification');
   if (row.latency && row.latency.stepsMs.length !== row.steps.length) throw new Error('Inconsistent step timings');
   const totals = sum(row.steps);
   if (Object.keys(totals).some((key) => totals[key as keyof B11Tokens] !== row.totals[key as keyof B11Tokens])) {

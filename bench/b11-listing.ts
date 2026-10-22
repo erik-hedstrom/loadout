@@ -47,23 +47,26 @@ export function prepareSkills(libraryRoot: string, plantedRoot: string, destinat
   return { skills, plantedNames, rejected };
 }
 
-export function listingFor(arm: B11Row['arm'], skills: Capability[], servers: Capability[], plantedNames: Set<string>, canaries: Canary[]): { skills: Capability[]; servers: Capability[] } {
+export function listingFor(arm: B11Row['arm'], skills: Capability[], servers: Capability[], plantedNames: Set<string>, canaries: Canary[], heavy?: { skills: number; servers: number }): { skills: Capability[]; servers: Capability[] } {
   switch (arm) {
     case 'all': return { skills, servers };
     case 'skills-all': return { skills, servers: [] };
     case 'mcp-all': return { skills: [], servers };
     case 'skills-50':
-    case 'skills-250': {
-      const count = arm === 'skills-50' ? 50 : 250;
-      // Sweep size counts distractors: the required task references stay available at every size.
-      const distractors = skills.filter(skill => !plantedNames.has(skill.name)).slice(0, count);
-      return { skills: [...distractors, ...skills.filter(skill => plantedNames.has(skill.name))], servers: [] };
-    }
+    case 'skills-250':
     case 'mcp-1':
-    case 'mcp-5': {
-      const count = arm === 'mcp-1' ? 1 : 5;
-      const names = new Set([...servers.slice(0, count).map(server => server.name), ...canaries.map(canary => canary.server)]);
-      return { skills: [], servers: servers.filter(server => names.has(server.name)) };
+    case 'mcp-5':
+    case 'heavy-max': {
+      if (arm === 'heavy-max' && !heavy) throw new Error('heavy-max requires a configuration');
+      const skillCount = arm === 'heavy-max' ? heavy!.skills : arm === 'skills-50' ? 50 : arm === 'skills-250' ? 250 : 0;
+      const serverCount = arm === 'heavy-max' ? heavy!.servers : arm === 'mcp-1' ? 1 : arm === 'mcp-5' ? 5 : 0;
+      // Sizes count distractors; task references stay available and can increase the actual listing.
+      const distractors = skills.filter(skill => !plantedNames.has(skill.name)).slice(0, skillCount);
+      const names = new Set([...servers.slice(0, serverCount).map(server => server.name), ...canaries.map(canary => canary.server)]);
+      return {
+        skills: skillCount ? [...distractors, ...skills.filter(skill => plantedNames.has(skill.name))] : [],
+        servers: serverCount ? servers.filter(server => names.has(server.name)) : [],
+      };
     }
     case 'bare':
     case 'gateway':

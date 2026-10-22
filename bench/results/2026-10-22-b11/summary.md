@@ -50,20 +50,22 @@ USD per million tokens. GLM and DeepSeek have no extra storage/write charge; new
 
 ### Invalid usage and all-attempt Jev spend
 
-| Model | Arm | Invalid steps | Invalid uncached | Invalid cache read | Invalid cache write | Invalid output | Invalid reasoning | Jev calls | Jev USD |
-|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| opencode/deepseek-v4.1-flash-free | all | 20 | 547352 | 2726016 | 0 | 2659 | 1350 | 0 | $0.000000 |
-| opencode/deepseek-v4.1-flash-free | bare | 9 | 15623 | 55552 | 0 | 803 | 726 | 0 | $0.000000 |
-| opencode/deepseek-v4.1-flash-free | gateway | 2 | 320 | 15616 | 0 | 68 | 47 | 4 | $0.002214 |
-| opencode/deepseek-v4.1-flash-free | mcp-all | 10 | 126562 | 954112 | 0 | 1835 | 1810 | 0 | $0.000000 |
-| opencode/deepseek-v4.1-flash-free | preselect | 0 | 0 | 0 | 0 | 0 | 0 | 14 | $0.008014 |
-| opencode/deepseek-v4.1-flash-free | skills-all | 12 | 289825 | 964352 | 0 | 2057 | 861 | 0 | $0.000000 |
-| opencode/glm-5.3-flash-free | all | 13 | 1070509 | 1057024 | 0 | 1331 | 1290 | 0 | $0.000000 |
-| opencode/glm-5.3-flash-free | bare | 0 | 0 | 0 | 0 | 0 | 0 | 0 | $0.000000 |
-| opencode/glm-5.3-flash-free | gateway | 0 | 0 | 0 | 0 | 0 | 0 | 4 | $0.002194 |
-| opencode/glm-5.3-flash-free | mcp-all | 3 | 116361 | 179904 | 0 | 172 | 155 | 0 | $0.000000 |
-| opencode/glm-5.3-flash-free | preselect | 0 | 0 | 0 | 0 | 0 | 0 | 12 | $0.006885 |
-| opencode/glm-5.3-flash-free | skills-all | 12 | 533062 | 859584 | 0 | 807 | 690 | 0 | $0.000000 |
+Invalid reasons count attempts, including retries; zero token counters do not imply zero invalid attempts. Deadlines list distinct configured timeoutMs values; unknown (historical) marks omitted values. Groups with different deadlines remain pooled and are not a common-timeout comparison.
+
+| Model | Arm | Invalid reasons | Deadlines (ms) | Invalid steps | Invalid uncached | Invalid cache read | Invalid cache write | Invalid output | Invalid reasoning | Jev calls | Jev USD |
+|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| opencode/deepseek-v4.1-flash-free | all | timeout 6 | unknown (historical) | 20 | 547352 | 2726016 | 0 | 2659 | 1350 | 0 | $0.000000 |
+| opencode/deepseek-v4.1-flash-free | bare | timeout 3 | unknown (historical) | 9 | 15623 | 55552 | 0 | 803 | 726 | 0 | $0.000000 |
+| opencode/deepseek-v4.1-flash-free | gateway | timeout 1 | unknown (historical) | 2 | 320 | 15616 | 0 | 68 | 47 | 4 | $0.002214 |
+| opencode/deepseek-v4.1-flash-free | mcp-all | timeout 2 | unknown (historical) | 10 | 126562 | 954112 | 0 | 1835 | 1810 | 0 | $0.000000 |
+| opencode/deepseek-v4.1-flash-free | preselect | malformed-events 1 | unknown (historical) | 0 | 0 | 0 | 0 | 0 | 0 | 14 | $0.008014 |
+| opencode/deepseek-v4.1-flash-free | skills-all | timeout 6 | unknown (historical) | 12 | 289825 | 964352 | 0 | 2057 | 861 | 0 | $0.000000 |
+| opencode/glm-5.3-flash-free | all | timeout 9 | unknown (historical) | 13 | 1070509 | 1057024 | 0 | 1331 | 1290 | 0 | $0.000000 |
+| opencode/glm-5.3-flash-free | bare | timeout 2 | unknown (historical) | 0 | 0 | 0 | 0 | 0 | 0 | 0 | $0.000000 |
+| opencode/glm-5.3-flash-free | gateway | none | unknown (historical) | 0 | 0 | 0 | 0 | 0 | 0 | 4 | $0.002194 |
+| opencode/glm-5.3-flash-free | mcp-all | timeout 4 | unknown (historical) | 3 | 116361 | 179904 | 0 | 172 | 155 | 0 | $0.000000 |
+| opencode/glm-5.3-flash-free | preselect | none | unknown (historical) | 0 | 0 | 0 | 0 | 0 | 0 | 12 | $0.006885 |
+| opencode/glm-5.3-flash-free | skills-all | timeout 12 | unknown (historical) | 12 | 533062 | 859584 | 0 | 807 | 690 | 0 | $0.000000 |
 
 ### Cache by request position
 
@@ -102,7 +104,7 @@ USD per million tokens. GLM and DeepSeek have no extra storage/write charge; new
 
 ### Timing from event-arrival timestamps
 
-Startup is process launch to first step_start; each step is step_start to step_finish, measured at event arrival. Startup is not proof of MCP discovery latency and may include provider/network time. Samples include known startup and completed-step durations from valid and invalid attempts. Historical missing latency and null durations are not shown; unfinished steps have no duration sample. Session wall time covers all attempts, including unfinished timeout waits.
+Startup is process launch to first step_start; each step is step_start to step_finish, measured at event arrival. Startup is not proof of MCP discovery latency and may include provider/network time. Samples include known startup and completed-step durations from valid and invalid attempts. Historical missing latency and null durations are not shown; unfinished steps have no duration sample. Session wall time covers all attempts, including unfinished timeout waits, preselection, checks and cleanup. An attempt may never launch OpenCode; wall time measures the observed lifecycle, not pure model time. Startup and step durations do not partition wall time. Gaps from step_finish to next step_start can include tool/MCP work, request setup and network waits.
 
 | Model | Arm | Phase | Samples | Mean ms | Median ms | Max ms |
 |---|---|---|---:|---:|---:|---:|
@@ -277,20 +279,22 @@ not shown: no common valid gateway/size-sweep panel.
 
 ### Invalid usage and all-attempt Jev spend
 
-| Model | Arm | Invalid steps | Invalid uncached | Invalid cache read | Invalid cache write | Invalid output | Invalid reasoning | Jev calls | Jev USD |
-|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| opencode/deepseek-v4.1-flash-free | all | 6 | 2691 | 1088512 | 0 | 963 | 829 | 0 | $0.000000 |
-| opencode/deepseek-v4.1-flash-free | bare | 16 | 11230 | 157568 | 0 | 1665 | 2479 | 0 | $0.000000 |
-| opencode/deepseek-v4.1-flash-free | gateway | 0 | 0 | 0 | 0 | 0 | 0 | 2 | $0.001079 |
-| opencode/deepseek-v4.1-flash-free | mcp-all | 7 | 45642 | 785920 | 0 | 1356 | 1043 | 0 | $0.000000 |
-| opencode/deepseek-v4.1-flash-free | preselect | 0 | 0 | 0 | 0 | 0 | 0 | 8 | $0.004752 |
-| opencode/deepseek-v4.1-flash-free | skills-all | 10 | 183570 | 893952 | 0 | 2544 | 1192 | 0 | $0.000000 |
-| opencode/glm-5.3-flash-free | all | 6 | 797762 | 265216 | 0 | 565 | 362 | 0 | $0.000000 |
-| opencode/glm-5.3-flash-free | bare | 0 | 0 | 0 | 0 | 0 | 0 | 0 | $0.000000 |
-| opencode/glm-5.3-flash-free | gateway | 3 | 16967 | 7616 | 0 | 67 | 172 | 2 | $0.001103 |
-| opencode/glm-5.3-flash-free | mcp-all | 3 | 106614 | 188864 | 0 | 82 | 185 | 0 | $0.000000 |
-| opencode/glm-5.3-flash-free | preselect | 0 | 0 | 0 | 0 | 0 | 0 | 6 | $0.003550 |
-| opencode/glm-5.3-flash-free | skills-all | 8 | 212410 | 659776 | 0 | 1521 | 961 | 0 | $0.000000 |
+Invalid reasons count attempts, including retries; zero token counters do not imply zero invalid attempts. Deadlines list distinct configured timeoutMs values; unknown (historical) marks omitted values. Groups with different deadlines remain pooled and are not a common-timeout comparison.
+
+| Model | Arm | Invalid reasons | Deadlines (ms) | Invalid steps | Invalid uncached | Invalid cache read | Invalid cache write | Invalid output | Invalid reasoning | Jev calls | Jev USD |
+|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| opencode/deepseek-v4.1-flash-free | all | timeout 3 | unknown (historical) | 6 | 2691 | 1088512 | 0 | 963 | 829 | 0 | $0.000000 |
+| opencode/deepseek-v4.1-flash-free | bare | timeout 2 | unknown (historical) | 16 | 11230 | 157568 | 0 | 1665 | 2479 | 0 | $0.000000 |
+| opencode/deepseek-v4.1-flash-free | gateway | none | unknown (historical) | 0 | 0 | 0 | 0 | 0 | 0 | 2 | $0.001079 |
+| opencode/deepseek-v4.1-flash-free | mcp-all | timeout 1 | unknown (historical) | 7 | 45642 | 785920 | 0 | 1356 | 1043 | 0 | $0.000000 |
+| opencode/deepseek-v4.1-flash-free | preselect | timeout 1 | unknown (historical) | 0 | 0 | 0 | 0 | 0 | 0 | 8 | $0.004752 |
+| opencode/deepseek-v4.1-flash-free | skills-all | timeout 3 | unknown (historical) | 10 | 183570 | 893952 | 0 | 2544 | 1192 | 0 | $0.000000 |
+| opencode/glm-5.3-flash-free | all | timeout 4 | unknown (historical) | 6 | 797762 | 265216 | 0 | 565 | 362 | 0 | $0.000000 |
+| opencode/glm-5.3-flash-free | bare | timeout 3 | unknown (historical) | 0 | 0 | 0 | 0 | 0 | 0 | 0 | $0.000000 |
+| opencode/glm-5.3-flash-free | gateway | timeout 2 | unknown (historical) | 3 | 16967 | 7616 | 0 | 67 | 172 | 2 | $0.001103 |
+| opencode/glm-5.3-flash-free | mcp-all | timeout 3 | unknown (historical) | 3 | 106614 | 188864 | 0 | 82 | 185 | 0 | $0.000000 |
+| opencode/glm-5.3-flash-free | preselect | none | unknown (historical) | 0 | 0 | 0 | 0 | 0 | 0 | 6 | $0.003550 |
+| opencode/glm-5.3-flash-free | skills-all | timeout 6 | unknown (historical) | 8 | 212410 | 659776 | 0 | 1521 | 961 | 0 | $0.000000 |
 
 ### Cache by request position
 
@@ -335,7 +339,7 @@ not shown: no common valid gateway/size-sweep panel.
 
 ### Timing from event-arrival timestamps
 
-Startup is process launch to first step_start; each step is step_start to step_finish, measured at event arrival. Startup is not proof of MCP discovery latency and may include provider/network time. Samples include known startup and completed-step durations from valid and invalid attempts. Historical missing latency and null durations are not shown; unfinished steps have no duration sample. Session wall time covers all attempts, including unfinished timeout waits.
+Startup is process launch to first step_start; each step is step_start to step_finish, measured at event arrival. Startup is not proof of MCP discovery latency and may include provider/network time. Samples include known startup and completed-step durations from valid and invalid attempts. Historical missing latency and null durations are not shown; unfinished steps have no duration sample. Session wall time covers all attempts, including unfinished timeout waits, preselection, checks and cleanup. An attempt may never launch OpenCode; wall time measures the observed lifecycle, not pure model time. Startup and step durations do not partition wall time. Gaps from step_finish to next step_start can include tool/MCP work, request setup and network waits.
 
 | Model | Arm | Phase | Samples | Mean ms | Median ms | Max ms |
 |---|---|---|---:|---:|---:|---:|

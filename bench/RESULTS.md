@@ -1209,6 +1209,70 @@ skill names contain that product. Retrieving those needles is mostly lexical.
 B11 measures cost at retained quality, not router difficulty. The dataset has
 now been integrated; a real-task timeout diagnostic and pilot are in progress.
 
+## B11 real-task capacity bracket (2026-10-22; diagnostic continuing)
+
+The 72-task dataset from `186c781` is integrated unchanged. Workspace and
+hidden-check references are repository-relative; file checks are relative
+to the workspace. Hidden Node checks run with the workspace as cwd. The
+solver receives only its declared workspace, never reference solutions,
+sibling checks or decoys. The skill-needle product-name limitation above
+applies: this is cost at retained quality, not router difficulty.
+
+The [long-deadline diagnostic](results/2026-10-22T10-37-00Z-diagnostic-b11/protocol.json)
+uses the first skill task in dataset order, identical across `skills-all`
+and `all` on both models, with a 1,200-second hard ceiling. The first GLM
+skills-all session reached that ceiling after 110 completed requests.
+Launch to first step_start was 23.57 s. Recorded step intervals averaged
+5.84 s (0.33–11.32 s); 534.74 s lay outside startup and completed step
+intervals. Scalar metadata samples confirmed repeated compaction. The
+remaining three diagnostic sessions continue; their final results are pending.
+
+[Offline OpenCode model information](results/2026-10-22T10-37-00Z-diagnostic-b11/model-info.json)
+reports context 200,000 and output 32,000 for each free model. These are the
+host's declared limits, not independently verified provider limits. With
+these fields, the pinned host's [overflow calculation](https://github.com/anomalyco/opencode/blob/v1.19.3/packages/opencode/src/session/overflow.ts)
+and [maximum output default](https://github.com/anomalyco/opencode/blob/v1.19.3/packages/opencode/src/provider/transform.ts#L1385-L1387)
+put its usable threshold at 168,000 tokens. Full-library GLM requests were
+about 176k tokens without MCP and 270k with MCP, before small compaction
+requests. A static listing survives history compaction, so repeatedly
+compacting history does not remove its cost or restore convergence.
+The observed problem is repeated context management, not just slow startup
+or one slow large request. A longer deadline alone did not fix the first arm.
+
+A [bracket](results/2026-10-22T11-02-00Z-bracket-b11/protocol.json) fixed the
+first skill and first MCP task before seeing outcomes, testing both models.
+It stopped growth at the first candidate that compacted.
+
+| Requested distractor skills / base servers | Actual skills / servers / tools | Screen outcome |
+|---|---|---|
+| 250 / 5 | 274 / 20 / 509 | 4/4 completed without compaction, 15.12–43.22 s; 3 checks passed, 1 failed |
+| 500 / 10 | 524 / 20 / 509 | First GLM request used 171,784 prompt tokens and triggered compaction; screen stopped at 12.49 s |
+
+All 20 servers carry required canaries. The fixed full-task comparator must
+retain them; a requested prefix of five does not mean five actual servers.
+The selected `heavy-max` is therefore **274 skills, 20 servers, 509 tools**,
+the largest passing candidate in this discrete screen. Four observations
+do not establish broad reliability or quality retention. Selection used
+completion without compaction, not task-check success; the failed check is
+retained. The rejected candidate was deliberately stopped after observing
+compaction. Its raw nonzero-process row is `provider-error`, with the deliberate
+stop identified in protocol metadata; it is not evidence of a remote API error.
+
+The real-task pilot will use a provisional 300-second deadline, about seven
+times the largest selected-bracket session, and validate completion coverage.
+Full-library arms are excluded from the updated study command pending the
+completed diagnostics; their diagnostic rows are retained. Size sweeps stay:
+MCP-size arms retain only required servers for their fixed subset, rather
+than letting all 20 global canary servers collapse every sweep point.
+
+The offline updated plan schedules **792 sessions**: five full-task arms
+across 72 tasks and both models, plus four size arms on nine fixed tasks.
+At concurrency 2, its schedule if every session uses 300 seconds is
+134,400 seconds (37 h 20 min), excluding setup, routing, checks, cleanup and
+rate-limit backoff. This is a deadline schedule, not expected wall time;
+the expected estimate awaits the real pilot. No full study was run. Both
+the diagnostic and bracket use free models ($0), with no Jev calls.
+
 ## E14 matching-time regression (2026-10-22)
 
 Local synthetic check on Node 24.15.0 in WSL2; [raw observations](results/2026-10-22-e14-redaction/timing.json).

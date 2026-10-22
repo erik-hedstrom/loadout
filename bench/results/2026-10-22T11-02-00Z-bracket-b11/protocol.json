@@ -1,0 +1,134 @@
+{
+  "status": "complete",
+  "opencodeVersion": "1.19.3",
+  "selectedTaskIds": [
+    "b11-skill-firgrove-release",
+    "b11-mcp-issue-title"
+  ],
+  "selection": "First skill and first MCP task in dataset order, fixed before bracket outcomes.",
+  "timeoutSeconds": 1200,
+  "concurrencyWithinBracket": 1,
+  "overlapsFullLibraryDiagnostic": true,
+  "modelCostUsd": 0,
+  "jevCalls": 0,
+  "jevCostUsd": 0,
+  "cases": [
+    {
+      "candidate": "skills-250-servers-5",
+      "taskId": "b11-skill-firgrove-release",
+      "model": "opencode/glm-5.3-flash-free",
+      "startedAt": "2026-10-22T11:02:26.542019+00:00",
+      "metadataSamples": 15,
+      "compactions": 0,
+      "stoppedForCompaction": false,
+      "exitCode": 0,
+      "result": "pass",
+      "invalidReason": null,
+      "wallMs": 15122,
+      "listing": {
+        "skills": 274,
+        "servers": 20,
+        "tools": 509
+      },
+      "steps": 3
+    },
+    {
+      "candidate": "skills-250-servers-5",
+      "taskId": "b11-mcp-issue-title",
+      "model": "opencode/glm-5.3-flash-free",
+      "startedAt": "2026-10-22T11:02:44.561993+00:00",
+      "metadataSamples": 35,
+      "compactions": 0,
+      "stoppedForCompaction": false,
+      "exitCode": 0,
+      "result": "fail",
+      "invalidReason": null,
+      "wallMs": 35120,
+      "listing": {
+        "skills": 274,
+        "servers": 20,
+        "tools": 509
+      },
+      "steps": 6
+    },
+    {
+      "candidate": "skills-250-servers-5",
+      "taskId": "b11-skill-firgrove-release",
+      "model": "opencode/deepseek-v4.1-flash-free",
+      "startedAt": "2026-10-22T11:03:22.623003+00:00",
+      "metadataSamples": 43,
+      "compactions": 0,
+      "stoppedForCompaction": false,
+      "exitCode": 0,
+      "result": "pass",
+      "invalidReason": null,
+      "wallMs": 43216,
+      "listing": {
+        "skills": 274,
+        "servers": 20,
+        "tools": 509
+      },
+      "steps": 5
+    },
+    {
+      "candidate": "skills-250-servers-5",
+      "taskId": "b11-mcp-issue-title",
+      "model": "opencode/deepseek-v4.1-flash-free",
+      "startedAt": "2026-10-22T11:04:08.682319+00:00",
+      "metadataSamples": 31,
+      "compactions": 0,
+      "stoppedForCompaction": false,
+      "exitCode": 0,
+      "result": "pass",
+      "invalidReason": null,
+      "wallMs": 31245,
+      "listing": {
+        "skills": 274,
+        "servers": 20,
+        "tools": 509
+      },
+      "steps": 5
+    },
+    {
+      "candidate": "skills-500-servers-10",
+      "taskId": "b11-skill-firgrove-release",
+      "model": "opencode/glm-5.3-flash-free",
+      "startedAt": "2026-10-22T11:04:42.737595+00:00",
+      "metadataSamples": 12,
+      "compactions": 1,
+      "stoppedForCompaction": true,
+      "exitCode": 0,
+      "result": "invalid",
+      "invalidReason": "provider-error",
+      "wallMs": 12485,
+      "listing": {
+        "skills": 524,
+        "servers": 20,
+        "tools": 509
+      },
+      "steps": 1
+    }
+  ],
+  "candidates": [
+    {
+      "skills": 250,
+      "servers": 5,
+      "allCellsCompletedWithoutCompaction": true
+    },
+    {
+      "skills": 500,
+      "servers": 10,
+      "allCellsCompletedWithoutCompaction": false
+    }
+  ],
+  "notes": [
+    "Limits count distractor skills and base servers. All planted skills and all required canary servers remain available; production needles require all 20 servers.",
+    "Each cell uses a fresh sandbox. Stop the current candidate at its first compaction or invalid completion. A valid check failure is retained as quality evidence, not a timeout.",
+    "A compaction screen stop kills only the descendant OpenCode process after a read-only metadata counter observes compaction. The raw process-exit row is provider-error; the case metadata identifies the deliberate stop. No provider error is inferred from that row.",
+    "Only database scalar counts are read; no transcripts, arguments, raw database files or provider text are retained."
+  ],
+  "selectedHeavyMax": {
+    "skills": 250,
+    "servers": 5
+  }
+}

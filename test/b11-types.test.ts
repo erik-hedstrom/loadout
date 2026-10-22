@@ -142,6 +142,24 @@ describe('B11 persisted rows', () => {
     expect(() => parseRow({ ...row(), selection: { skills: [], servers: [] } })).toThrow();
     expect(() => parseRow({ ...row(), arm: 'preselect', selection: { skills: [], servers: [], transcript: 'PRIVATE' } })).toThrow();
   });
+  it('records the requested heavy-max configuration separately from the actual listing', () => {
+    const heavy = { ...row(), arm: 'heavy-max', heavyConfig: { skills: 250, servers: 5 }, listing: { skills: 274, servers: 20, tools: 509 } };
+    expect(parseRow(heavy).heavyConfig).toEqual({ skills: 250, servers: 5 });
+    expect(parseRow(heavy).listing).toEqual({ skills: 274, servers: 20, tools: 509 });
+    expect(parseRow({ ...heavy, heavyConfig: { skills: 500, servers: 10 } }).heavyConfig).toEqual({ skills: 500, servers: 10 });
+  });
+  it('requires heavy-max configuration exactly for heavy-max rows', () => {
+    expect(() => parseRow({ ...row(), arm: 'heavy-max' })).toThrow();
+    expect(() => parseRow({ ...row(), heavyConfig: { skills: 250, servers: 5 } })).toThrow();
+    expect(() => parseRow({ ...row(), arm: 'heavy-max', result: 'invalid', invalidReason: 'timeout' })).toThrow();
+  });
+  it.each([
+    { skills: 0, servers: 5 }, { skills: -1, servers: 5 }, { skills: 2.5, servers: 5 },
+    { skills: 250, servers: 0 }, { skills: 250, servers: -1 }, { skills: 250, servers: 2.5 }, { skills: 250, servers: 21 },
+    { skills: 250 }, { servers: 5 }, { skills: 250, servers: 5, transcript: 'PRIVATE' },
+  ])('rejects an unsupported or transcript-bearing heavy configuration (%#)', (heavyConfig) => {
+    expect(() => parseRow({ ...row(), arm: 'heavy-max', heavyConfig })).toThrow();
+  });
 });
 
 describe('B11 task contract', () => {

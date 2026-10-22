@@ -51,6 +51,8 @@ function durationSummary(values: (number | null | undefined)[]) {
 }
 
 export function summarizeRows(rows: readonly B11Row[]) {
+  const heavyConfigs = new Set(rows.filter(row => row.arm === 'heavy-max').map(row => JSON.stringify(row.heavyConfig)));
+  if (heavyConfigs.size > 1) throw new Error('mixed heavy-max configurations; report bracket candidates separately');
   const groups = new Map<string, B11Row[]>();
   const completed = new Set<string>();
   for (const row of rows) {
@@ -70,10 +72,17 @@ export function summarizeRows(rows: readonly B11Row[]) {
     const completionRate = valid.length / attempts.length;
     const pass = valid.filter((row) => row.result === 'pass').length;
     const totals = zero(), invalidTotals = zero();
+    const invalidByReason: Partial<Record<NonNullable<B11Row['invalidReason']>, number>> = {};
+    const timeoutMsValues: (number | null)[] = [...new Set(attempts.flatMap(row => row.timeoutMs === undefined ? [] : [row.timeoutMs]))].sort((a, b) => a - b);
+    if (attempts.some(row => row.timeoutMs === undefined)) timeoutMsValues.push(null);
     const steps: Tokens[] = [], counts: number[] = [];
     for (const row of attempts) {
       add(row.result === 'invalid' ? invalidTotals : totals, row.totals);
-      if (row.result === 'invalid') continue;
+      if (row.result === 'invalid') {
+        const reason = row.invalidReason!;
+        invalidByReason[reason] = (invalidByReason[reason] ?? 0) + 1;
+        continue;
+      }
       row.steps.forEach((step, index) => {
         steps[index] ??= zero();
         counts[index] = (counts[index] ?? 0) + 1;
@@ -83,6 +92,7 @@ export function summarizeRows(rows: readonly B11Row[]) {
     return {
       split: first.split, model: first.model, arm: first.arm, pass, fail: valid.length - pass,
       invalid: attempts.length - valid.length, valid: valid.length,
+      invalidByReason, timeoutMsValues,
       attempts: attempts.length, completionRate, belowCompletionThreshold: completionRate < MIN_VALID_COMPLETION,
       successInterval: valid.length ? wilson(pass, valid.length) : 'not shown', totals, invalidTotals,
       steps: valid.reduce((sum, row) => sum + row.steps.length, 0),
@@ -174,14 +184,20 @@ export function renderReport(rows: readonly B11Row[]): string {
     for (const g of selected) {
       lines.push(`| ${cell(g.model)} | ${cell(g.arm)} | ${g.pass} | ${g.fail} | ${g.invalid} | ${ratio(g.completionRate)} | ${completionStatus(g.valid, g.completionRate)} | ${g.valid ? `${ratio(g.pass / g.valid)} (${g.successInterval})` : 'not usable in observed attempts'} | ${g.steps} | ${g.totals.input} | ${g.totals.cacheRead} | ${g.totals.cacheWrite} | ${g.totals.output} | ${g.totals.reasoning} |`);
     }
-    lines.push('', '### Invalid usage and all-attempt Jev spend', '', '| Model | Arm | Invalid steps | Invalid uncached | Invalid cache read | Invalid cache write | Invalid output | Invalid reasoning | Jev calls | Jev USD |', '|---|---|---:|---:|---:|---:|---:|---:|---:|---:|');
-    for (const g of selected) lines.push(`| ${cell(g.model)} | ${cell(g.arm)} | ${g.invalidSteps} | ${g.invalidTotals.input} | ${g.invalidTotals.cacheRead} | ${g.invalidTotals.cacheWrite} | ${g.invalidTotals.output} | ${g.invalidTotals.reasoning} | ${g.jev.calls} | ${usd(g.jev.costUsd)} |`);
+    lines.push('', '### Invalid usage and all-attempt Jev spend', '',
+      'Invalid reasons count attempts, including retries; zero token counters do not imply zero invalid attempts. Deadlines list distinct configured timeoutMs values; unknown (historical) marks omitted values. Groups with different deadlines remain pooled and are not a common-timeout comparison.', '',
+      '| Model | Arm | Invalid reasons | Deadlines (ms) | Invalid steps | Invalid uncached | Invalid cache read | Invalid cache write | Invalid output | Invalid reasoning | Jev calls | Jev USD |', '|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|');
+    for (const g of selected) {
+      const reasons = Object.entries(g.invalidByReason).sort(([a], [b]) => a.localeCompare(b)).map(([reason, count]) => `${cell(reason)} ${count}`).join('; ') || 'none';
+      const deadlines = g.timeoutMsValues.map(value => value === null ? 'unknown (historical)' : String(value)).join('; ');
+      lines.push(`| ${cell(g.model)} | ${cell(g.arm)} | ${reasons} | ${deadlines} | ${g.invalidSteps} | ${g.invalidTotals.input} | ${g.invalidTotals.cacheRead} | ${g.invalidTotals.cacheWrite} | ${g.invalidTotals.output} | ${g.invalidTotals.reasoning} | ${g.jev.calls} | ${usd(g.jev.costUsd)} |`);
+    }
     lines.push('', '### Cache by request position', '', '| Model | Arm | Request position | Requests | Uncached | Cache read | Cache write | Cache-hit ratio |', '|---|---|---|---:|---:|---:|---:|---:|');
     for (const g of selected) {
       for (const c of g.cache) lines.push(`| ${cell(g.model)} | ${cell(g.arm)} | ${c.step === 1 ? '1 (first / cross-session)' : `${c.step} (later)`} | ${c.requests} | ${c.input} | ${c.cacheRead} | ${c.cacheWrite} | ${ratio(c.hitRatio)} |`);
     }
     lines.push('', '### Timing from event-arrival timestamps', '',
-      'Startup is process launch to first step_start; each step is step_start to step_finish, measured at event arrival. Startup is not proof of MCP discovery latency and may include provider/network time. Samples include known startup and completed-step durations from valid and invalid attempts. Historical missing latency and null durations are not shown; unfinished steps have no duration sample. Session wall time covers all attempts, including unfinished timeout waits.', '',
+      'Startup is process launch to first step_start; each step is step_start to step_finish, measured at event arrival. Startup is not proof of MCP discovery latency and may include provider/network time. Samples include known startup and completed-step durations from valid and invalid attempts. Historical missing latency and null durations are not shown; unfinished steps have no duration sample. Session wall time covers all attempts, including unfinished timeout waits, preselection, checks and cleanup. An attempt may never launch OpenCode; wall time measures the observed lifecycle, not pure model time. Startup and step durations do not partition wall time. Gaps from step_finish to next step_start can include tool/MCP work, request setup and network waits.', '',
       '| Model | Arm | Phase | Samples | Mean ms | Median ms | Max ms |', '|---|---|---|---:|---:|---:|---:|');
     for (const g of selected) {
       const timing = [{ phase: 'Session wall', ...g.timing.wall }, { phase: 'Startup', ...g.timing.startup }, ...g.timing.steps.map(step => ({ phase: `Step ${step.step}`, ...step }))];

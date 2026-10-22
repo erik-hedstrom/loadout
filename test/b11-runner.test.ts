@@ -57,6 +57,28 @@ printf '%s\\n' '{"type":"step_finish","part":{"tokens":{"total":12,"input":10,"o
     expect(rows(out)[0].latency.stepsMs).toHaveLength(1);
     expect(rows(out)[0].latency.stepsMs[0]).toBeGreaterThan(0);
   });
+  it('records the heavy-max limits, resumes them and rejects a changed comparator', async () => {
+    const a = [...args('heavy-max', [task('heavy', 'expects-token: write yes')], '0'), '--heavy-skills', '250', '--heavy-servers', '5'];
+    await main(a);
+    expect(rows(out)).toMatchObject([{ arm: 'heavy-max', result: 'pass', heavyConfig: { skills: 250, servers: 5 } }]);
+    await main([...a, '--resume']);
+    expect(rows(out)).toHaveLength(1);
+    const changed = [...a]; changed[changed.indexOf('--heavy-skills') + 1] = '500';
+    await expect(main([...changed, '--resume'])).rejects.toThrow('size mismatch');
+  });
+  it('retains fixed-subset target servers for sweeps and all targets/tasks for heavy-max', async () => {
+    const canary = (server: string) => ({ server, tool: 'needle', description: 'Synthetic fact for a named output.', inputSchema: { type: 'object', properties: {}, required: [], additionalProperties: false }, args: {}, response: 'yes' });
+    writeFileSync(join(data, 'mcp-canaries.json'), JSON.stringify([canary('database'), canary('browser')]));
+    const tasks = ['database', 'browser'].map((server, i) => ({ ...task('target-' + i, 'expects-token: write yes'), kind: 'mcp-needle', needs: { server, tool: 'needle' } }));
+    await main([...args('mcp-1', tasks, '0'), '--sweep-per-kind', '1']);
+    expect(rows(out)).toMatchObject([{ taskId: 'target-0', listing: { servers: 2 } }]);
+    expect(rows(out)).toHaveLength(1);
+    const a = [...args('heavy-max', tasks, '0'), '--sweep-per-kind', '1', '--heavy-skills', '250', '--heavy-servers', '1'];
+    const heavyOut = out + '-heavy'; a[a.indexOf('--out') + 1] = heavyOut;
+    await main(a);
+    expect(rows(heavyOut)).toHaveLength(2);
+    expect(rows(heavyOut).map(r => r.listing.servers)).toEqual([3, 3]);
+  });
   it('cleans directories made unreadable by the agent before persisting the row', async () => {
     await main(args('bare', [task('permissions', 'lock-output: write yes to answer.txt')], '0'));
     expect(rows(out)).toMatchObject([{ taskId: 'permissions', result: 'pass' }]);

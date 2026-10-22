@@ -20,6 +20,12 @@ describe('B11 study', () => {
     for (const args of [['--concurrency', '0'], ['--arms', 'typo'], ['--models', 'paid/model'], ['--run', '--plan'], ['--jev-budget=-1']]) expect(() => options(args)).toThrow();
     expect(options(['--run', '--resume']).resume).toBe(true);
   });
+  it('requires explicit heavy-max limits and rejects unused or out-of-range limits', () => {
+    for (const args of [['--arms', 'heavy-max'], ['--arms', 'heavy-max', '--heavy-skills', '250'], ['--heavy-skills', '250'], ['--heavy-skills', '250', '--heavy-servers', '5'], ['--arms', 'heavy-max', '--heavy-skills', '250', '--heavy-servers', '21']]) expect(() => options(args)).toThrow();
+    expect(options(['--arms', 'heavy-max', '--heavy-skills', '250', '--heavy-servers', '5']).heavy).toEqual({ skills: 250, servers: 5 });
+    expect(rowKey({ taskId: 'a', model: 'm', arm: 'heavy-max', rep: 1, heavyConfig: { skills: 250, servers: 5 } }))
+      .not.toBe(rowKey({ taskId: 'a', model: 'm', arm: 'heavy-max', rep: 1, heavyConfig: { skills: 500, servers: 10 } }));
+  });
   it('resume keys distinguish task, model, arm and repetition', () => {
     const r = { taskId: 'a', model: 'm', arm: 'bare' as const, rep: 1 };
     expect(rowKey(r)).not.toBe(rowKey({ ...r, rep: 2 }));

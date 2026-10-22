@@ -18,6 +18,48 @@ const row = (overrides: Partial<B11Row> = {}): B11Row => ({
 });
 
 describe('B11 report math', () => {
+  it('refuses to pool different heavy-max comparator sizes', () => {
+    const first = row({ arm: 'heavy-max', heavyConfig: { skills: 250, servers: 5 } });
+    expect(() => summarizeRows([first, row({ arm: 'heavy-max', rep: 2, heavyConfig: { skills: 500, servers: 10 } })])).toThrow('mixed heavy-max');
+    expect(summarizeRows([first, { ...first, rep: 2 }])[0]?.valid).toBe(2);
+  });
+  it('counts invalid reasons per model/arm/split even when no token step completed', () => {
+    const failed = (reason: NonNullable<B11Row['invalidReason']>, overrides: Partial<B11Row> = {}) => row({ arm: 'all', result: 'invalid', invalidReason: reason, steps: [], totals: { input: 0, cacheRead: 0, cacheWrite: 0, output: 0, reasoning: 0 }, ...overrides });
+    const rows = [
+      failed('timeout'), failed('budget-exhausted'), failed('rate-limit'), failed('timeout'), failed('rate-limit'), failed('timeout'),
+      row(), failed('rate-limit', { split: 'dev' }), failed('budget-exhausted', { model: 'opencode/deepseek-v4.1-flash-free' }),
+    ];
+    const groups = summarizeRows(rows);
+    expect(groups.find(g => g.split === 'test' && g.arm === 'all' && g.model.includes('glm')))
+      .toMatchObject({ valid: 0, fail: 0, invalid: 6, invalidSteps: 0, invalidByReason: { timeout: 3, 'budget-exhausted': 1, 'rate-limit': 2 } });
+    expect(groups.find(g => g.arm === 'bare')!.invalidByReason).toEqual({});
+    expect(groups.find(g => g.split === 'dev')!.invalidByReason).toEqual({ 'rate-limit': 1 });
+    expect(groups.find(g => g.model.includes('deepseek'))!.invalidByReason).toEqual({ 'budget-exhausted': 1 });
+    const report = renderReport(rows);
+    expect(report).toContain('| all | budget-exhausted 1; rate-limit 2; timeout 3 | unknown (historical) | 0 | 0 | 0 | 0 | 0 | 0 |');
+    expect(report).toContain('| bare | none | unknown (historical) |');
+    expect(report).toContain('not usable in observed attempts');
+  });
+
+  it('exposes distinct deadlines and historical unknowns rather than treating a mixed group as one timeout', () => {
+    const rows = [
+      row({ timeoutMs: 60000 }),
+      row({ rep: 1, result: 'invalid', invalidReason: 'timeout', timeoutMs: 30000 }),
+      row({ rep: 2, result: 'invalid', invalidReason: 'timeout', timeoutMs: 30000 }),
+      row({ rep: 3, result: 'invalid', invalidReason: 'budget-exhausted' }),
+      row({ arm: 'all', timeoutMs: 5000 }),
+    ];
+    const groups = summarizeRows(rows);
+    expect(groups.find(g => g.arm === 'bare')!.timeoutMsValues).toEqual([30000, 60000, null]);
+    expect(groups.find(g => g.arm === 'all')!.timeoutMsValues).toEqual([5000]);
+    expect(summarizeRows([row({ timeoutMs: 0 })])[0]!.timeoutMsValues).toEqual([0]);
+    const report = renderReport(rows);
+    expect(report).toContain('Deadlines (ms)');
+    expect(report).toContain('| bare | budget-exhausted 1; timeout 2 | 30000; 60000; unknown (historical) |');
+    expect(report).toContain('| all | none | 5000 |');
+    expect(report).toContain('different deadlines remain pooled');
+  });
+
   it('counts valid completion per attempt, with 90% inclusive and timeouts outside quality failures', () => {
     const rows = Array.from({ length: 10 }, (_, rep) => row({ rep, result: rep < 8 ? 'pass' : rep === 8 ? 'fail' : 'invalid', ...(rep === 9 ? { invalidReason: 'timeout' as const } : {}) }));
     expect(summarizeRows(rows)[0]).toMatchObject({ attempts: 10, valid: 9, pass: 8, fail: 1, invalid: 1, completionRate: 0.9, belowCompletionThreshold: false });
@@ -108,6 +150,12 @@ describe('B11 event-arrival timing', () => {
     expect(report).toContain('first step_start');
     expect(report).toContain('not proof of MCP discovery');
     expect(report).toContain('unfinished');
+    expect(report).toContain('preselection, checks and cleanup');
+    expect(report).toContain('may never launch OpenCode');
+    expect(report).toContain('not pure model time');
+    expect(report).toContain('do not partition wall time');
+    expect(report).toContain('step_finish to next step_start');
+    expect(report).toContain('tool/MCP work, request setup and network waits');
     const invalid = renderReport([row({ result: 'invalid', invalidReason: 'timeout', wallMs: 9000, latency: { startupMs: 25, stepsMs: [10] } })]);
     expect(invalid).toContain('| Session wall | 1 | 9000.00 | 9000.00 | 9000.00 |');
     expect(invalid).toContain('| Step 1 | 1 | 10.00 | 10.00 | 10.00 |');
@@ -230,12 +278,13 @@ describe('B11 report input/output', () => {
 
   it('runs the real CLI offline against raw JSONL and emits reproducible Markdown', () => {
     const path = join(temp(), 'rows.jsonl');
-    const timed = row({ latency: { startupMs: 12, stepsMs: [34] } });
+    const timed = row({ timeoutMs: 30000, latency: { startupMs: 12, stepsMs: [34] } });
     writeFileSync(path, JSON.stringify(timed) + '\n');
     const expected = reportFiles([path]);
     const result = spawnSync(process.execPath, ['--import', 'tsx', join(import.meta.dirname, '../bench/b11-report.ts'), path], { encoding: 'utf8', timeout: 30000 });
     expect(result.status, result.stderr).toBe(0);
     expect(result.stdout).toBe(expected);
+    expect(result.stdout).toContain('| bare | none | 30000 |');
     expect(result.stdout).toContain('| Startup | 1 | 12.00 | 12.00 |');
     expect(result.stdout).toContain('| Step 1 | 1 | 34.00 | 34.00 |');
     expect(readFileSync(path, 'utf8')).toBe(JSON.stringify(timed) + '\n');
