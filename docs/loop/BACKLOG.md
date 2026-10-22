@@ -1374,8 +1374,8 @@ left under bench/, with a test that runs a script through a link.
 Learnings (2026-10-22): canonicalize both sides; resolving only `argv[1]` leaves
 a linked module URL unmatched. Run the Linux suite outside the system temp
 folder: the existing `resetWork` test assumes the checkout is outside it.
-`bench/ab.ts` (#47) still has its own guard; whichever of the two lands second
-converts it.
+`bench/ab.ts` (#47) now uses `isEntry(import.meta.url)` and is covered by the
+shared symlink and import tests.
 
 Review M1/L1: argv lookup ENOENT/ENOTDIR means no entry (missing path or
 non-directory parent); module lookup and unexpected argv errors stay strict.

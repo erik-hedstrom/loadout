@@ -17,14 +17,13 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { delimiter, dirname, join, relative, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { DEFAULT_CONFIG, jevBaseUrl, loadConfig, paths, resolveApiKey } from '../src/config.js';
 import { JEV_FALLBACK_NOTE, NO_KEY_WARNING } from '../src/hook.js';
 import { hookCommand, SEARCH_SERVER, SEARCH_TOOLS, searchServer, toToml } from '../src/launch.js';
 import { capabilityKey, readManifest, scanLibrary } from '../src/library.js';
 import { CREDENTIAL_SHAPE, persistJson, redact, report, TOKEN_ANYWHERE, type Leak, type RunRow, type Verdict } from './ab-report.js';
-import { codexJudgeRefusal, DATA, modelJson, readJsonl, RESULTS, run } from './lib.js';
+import { codexJudgeRefusal, DATA, isEntry, modelJson, readJsonl, RESULTS, run } from './lib.js';
 import { CLAUDE_MANAGED_PRECONDITION, CLAUDE_SCRUB_PRECONDITION, CLAUDE_SETTINGS, CLAUDE_SWITCH_PRECONDITION, CODEX_CLOUD_PRECONDITION, childEnv, claudeEnv, envAllowlist, hostWrites, redacted, refusedFiles, resetWork } from './mcp-overhead.js';
 import { assertTemporary, claudeIsolation, cli, execute, validateFeatures, type Command, type Host } from './overhead.js';
 import { deliverableFiles, deliverables, JUDGE_MAX_BYTES, judgePair, JUDGE_SYSTEM, NOTE, PrefSchema, type Arm } from './pairwise.js';
@@ -623,6 +622,6 @@ async function mainImpl(args: string[], print: (s: string) => void, env: NodeJS.
   print(`Raw rows and report: ${redacted(out)}`);
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isEntry(import.meta.url)) {
   main(process.argv.slice(2)).catch((error: unknown) => { console.error(error instanceof Error ? error.message : 'ab failed'); process.exitCode = 1; });
 }
