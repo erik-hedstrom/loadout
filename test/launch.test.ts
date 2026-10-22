@@ -66,15 +66,12 @@ describe.skipIf(process.platform !== 'win32')('Windows host commands', () => {
   });
 
   it.each([
-    ['codex', '.cmd', 'fix tests', []],
-    ['codex', '.bat', 'fix tests', []],
-    ['claude', '.cmd', 'private-canary\nnext line', []],
-    ['claude', '.bat', 'fix tests', ['--', 'private-canary&value']],
-  ] as const)('refuses predictable %s%s input before Jev or session writes (%#)', async (agent, ext, task, extra) => {
+    ['codex', '.cmd'], ['codex', '.bat'], ['claude', '.cmd'], ['claude', '.bat'],
+  ] as const)('refuses %s%s hosts before Jev or session writes with search enabled', async (agent, ext) => {
     const loadout = join(home, 'loadout');
     mkdirSync(loadout);
     cpSync(join(import.meta.dirname, 'fixtures/library'), join(loadout, 'library'), { recursive: true });
-    writeFileSync(join(loadout, 'config.json'), JSON.stringify({ embeddings: false }));
+    writeFileSync(join(loadout, 'config.json'), JSON.stringify({ embeddings: false, search: true }));
     writeFileSync(join(home, `${agent}${ext}`), '@echo off\r\nexit /b 0\r\n');
     const fakeClient = vi.fn();
     const server = createServer((req, res) => { fakeClient(); req.resume(); res.writeHead(400).end('fake Jev must not be called'); });
@@ -82,7 +79,7 @@ describe.skipIf(process.platform !== 'win32')('Windows host commands', () => {
     const address = server.address() as { port: number };
     try {
       const result = await new Promise<{ code: number | null; stderr: string }>((resolve, reject) => {
-        const child = spawn(process.execPath, ['--import', 'tsx', join(import.meta.dirname, '../src/cli.ts'), agent, task, ...extra], {
+        const child = spawn(process.execPath, ['--import', 'tsx', join(import.meta.dirname, '../src/cli.ts'), agent, 'fix tests'], {
           stdio: ['ignore', 'ignore', 'pipe'], timeout: 20_000,
           env: { ...process.env, PATH: home, PATHEXT: '.COM;.EXE;.BAT;.CMD', LOADOUT_HOME: loadout,
             TYPESAFE_API_KEY: 'fake-jev-key', TYPESAFE_BASE_URL: `http://127.0.0.1:${address.port}` },
@@ -98,6 +95,22 @@ describe.skipIf(process.platform !== 'win32')('Windows host commands', () => {
     } finally {
       await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
     }
+  });
+
+  it.each(['claude', 'codex'])('prints a dry-run command for a %s.cmd host without spawning it', (agent) => {
+    const loadout = join(home, 'loadout');
+    mkdirSync(loadout);
+    writeFileSync(join(loadout, 'config.json'), JSON.stringify({ embeddings: false, search: true }));
+    writeFileSync(join(home, `${agent}.cmd`), '@echo off\r\necho BATCH_RAN>"%~dp0batch-ran"\r\n');
+    const result = spawnSync(process.execPath, ['--import', 'tsx', join(import.meta.dirname, '../src/cli.ts'), agent, '--dry-run', '--lexical', 'fix tests & dry run'], {
+      encoding: 'utf8', timeout: 20_000,
+      env: { ...process.env, PATH: home, PATHEXT: '.COM;.EXE;.BAT;.CMD', LOADOUT_HOME: loadout, TYPESAFE_API_KEY: '' },
+    });
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toMatch(new RegExp(`^${agent} `));
+    expect(result.stdout).toContain('fix tests & dry run');
+    expect(result.stderr).not.toContain(BATCH_REFUSAL);
+    expect(existsSync(join(home, 'batch-ran'))).toBe(false);
   });
 
   it.each(['.exe', '.cmd'])('finds a host installed only as %s for init and doctor', async (ext) => {
