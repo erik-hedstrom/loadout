@@ -1350,3 +1350,48 @@ near miss took 10.44 ms. These are single observations, dependent on this
 machine and process warmup. `test/jev-redaction.test.ts` compares normal and
 adversarial strings with the frozen regexes and bounds each timing case below
 100 ms. Cost: $0; no Jev or agent calls.
+
+## B11 replacement pilot (2026-10-23; quota-stopped)
+
+A fresh protocol-v3 pilot at `25b9d7a` used the same fixed first three tasks
+per kind: nine tasks, five arms and two models, or 90 planned sessions.
+OpenCode 1.19.3, Node v24.15.0, concurrency 2 and the 300-second deadline
+were fixed. The explicitly selected public-source corpus accepted 1,234
+distractors and rejected 28; its fingerprints and installed source revisions
+are in the [runtime protocol](results/2026-10-23T11-52-28Z-pilot-b11/protocol.json).
+Source, selection, stop and timing methods are in the
+[run notes](results/2026-10-23T11-52-28Z-pilot-b11/run-notes.json).
+The [raw rows](results/2026-10-23T11-52-28Z-pilot-b11/rows.jsonl) reproduce the
+[report](results/2026-10-23T11-52-28Z-pilot-b11/summary.md), which separates
+dev/test and includes Wilson 95% intervals.
+
+A DeepSeek attempt hit the persistent free usage limit; the harness exited 0.
+This was a controlled early stop, not completion. It recorded 48 attempts:
+47 valid outcomes and one usage-limit invalid, with 42 sessions unattempted.
+GLM completed all 45 identities. DeepSeek recorded two valid task-check
+failures and one invalid attempt, all in test/bare. Its other four arms are
+unmeasured. The invalid is not a quality failure; the 42 unattempted sessions
+have no observed failure reason. No quota polling or further model runs followed.
+Numeric HTTP status, quota amount and reset time were not established.
+
+No recorded attempt timed out. Across all 48 attempts, wall-time nearest-rank
+p50/p95 were 21.762/82.316 seconds, with a maximum of 158.247 seconds.
+The observed session window was 820.483 seconds (13 min 40.483 s), excluding
+launch preflight and final reporting. Wall includes routing, checks and cleanup;
+startup and completed-step intervals do not partition it. These observations
+provide GLM runtime evidence for this small panel; two completed DeepSeek
+sessions do not establish its tails or a deadline for both models. The
+300-second deadline remains provisional. The 792-session study, retained
+quality and size break-even are **not shown**.
+
+All-attempt Jev spend was **28 calls, $0.016171428**, below the $0.065
+replacement cap. Combined with the earlier 52 calls/$0.029791062, B11 totals
+**80 calls, $0.045962490**. Free-model billing was $0; provider quota was
+consumed. The original $0.10 pilot allowance was not exhausted.
+
+Reproduce offline with
+`npx tsx bench/b11-report.ts bench/results/2026-10-23T11-52-28Z-pilot-b11/rows.jsonl`.
+Any later resume must use this fresh output directory and the same source,
+dataset, Node, binary, library and settings. Valid passes and failures are
+skipped; the one invalid and 42 unattempted identities remain. Provider
+availability and a usable two-model pilot still gate the full study.

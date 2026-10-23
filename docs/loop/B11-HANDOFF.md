@@ -320,3 +320,27 @@ The code checkpoints await independent re-review and the CI matrix. No
 provider runs, paid calls, pushes or public comments were made this round;
 cost was $0. Historical rows and solutions are unchanged. The full study
 remains unrun and must not start from this checkpoint alone.
+
+## Approved runtime and replacement-pilot checkpoint (2026-10-23)
+
+Both final reviewers approved `25b9d7a`, and all seven CI checks passed.
+The nested DNS fixture was replaced by a direct production-path test on the
+runner's loopback resolver. Fresh LF WSL verification at this SHA passed
+`npm run typecheck`, `npm run build`, and
+`B11_TEST_INTERNET=1 npm test -- --maxWorkers=2`: 1,016 passed, 48 existing
+platform skips, 36 files. Focused pasta network/runner/sandbox checks passed
+48/48 with the Internet opt-in. Pasta is now installed locally; the earlier
+missing-pasta and pending-review notes above describe historical checkpoints.
+
+The authorized replacement pilot stopped at a persistent usage limit.
+[RESULTS](../../bench/RESULTS.md#b11-replacement-pilot-2026-10-23-quota-stopped)
+records coverage, timing, costs and limits; its linked raw artifacts are the
+checkpoint. Keep 300 seconds provisional. No full study or post-cap retry ran.
+
+After provider availability returns and execution is authorized, resume
+`bench/results/2026-10-23T11-52-28Z-pilot-b11` with the replacement command
+above plus `--resume`, retaining the exact source, dataset, Node version,
+binary, library and settings. Keep its $0.065 cumulative replacement cap;
+resume includes prior attempt costs and skips valid failures as well as passes.
+Do not resume a legacy 2026-10-22 output. Account for pilot spend within the
+iteration's spending ceiling before allocating the full study's budget.

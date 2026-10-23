@@ -149,11 +149,11 @@ Acceptance:
 | B7 | P1 | MCP overhead study: what configured MCP servers cost per request, natively and through loadout | Claude | cloud (harness, done) + local (runs) | in progress: harness merged in [#38](https://github.com/erik-hedstrom/loadout/pull/38), with no ambient Claude plugins (2026-10-15 decision); live runs wait for Erik's approval of the estimate |
 | B8 | P0 | Backlog items from the launch-readiness review, 2026-10-13, MCP token cost first | Claude | local + erik | todo (the review is private, on Erik's machine) |
 | B9 | P1 | Savings from an adopted library: what a user saves after moving skills and MCP servers into loadout | Claude | local | todo (after B7) |
-| B11 | P1 | OpenCode session cost and task checks with automatic prompt caching | Codex | local | in review ([#57](https://github.com/erik-hedstrom/loadout/pull/57)): round-two fixes committed; pasta CI/re-review pending; full study unrun |
+| B11 | P1 | OpenCode session cost and task checks with automatic prompt caching | Codex | local | in review ([#57](https://github.com/erik-hedstrom/loadout/pull/57)): both reviews and full CI green at 25b9d7a; replacement pilot quota-stopped; full study unrun |
 
 **B11. OpenCode cache and outcome study.** Draft [PR #57](https://github.com/erik-hedstrom/loadout/pull/57).
-Round-two fixes are committed for grading and Ubuntu runtime failures; pasta CI/re-review remain pending and the pilot is quota-stopped.
-Evidence and limitations: [RESULTS](../../bench/RESULTS.md#b11-real-task-pilot-2026-10-22-quota-stopped).
+Both reviews and full CI pass at `25b9d7a`. The replacement pilot is quota-stopped; the full study remains unrun.
+Evidence and limitations: [RESULTS](../../bench/RESULTS.md#b11-replacement-pilot-2026-10-23-quota-stopped).
 Commands, verification and review dispositions: [handoff](B11-HANDOFF.md).
 
 **B8. Items from the launch-readiness review.** The review (2026-10-13) is
