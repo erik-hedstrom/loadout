@@ -36,7 +36,6 @@ Each PR body's **Review state** section has the round-by-round record.
 | PR | Item | State on 2026-10-22 |
 |---|---|---|
 | [#47](https://github.com/erik-hedstrom/loadout/pull/47) | C14 A/B pilot harness; adds B10 | final review round; the clean Codex-only rerun needs a separately logged-in `CODEX_HOME` |
-| [#57](https://github.com/erik-hedstrom/loadout/pull/57) | B11 cached OpenCode study (draft): harness, dataset and quota-stopped pilots | in review; the full study waits on the free tier's usage cap |
 
 ## A. Adoption and ease of use
 
@@ -149,10 +148,11 @@ Acceptance:
 | B7 | P1 | MCP overhead study: what configured MCP servers cost per request, natively and through loadout | Claude | cloud (harness, done) + local (runs) | in progress: harness merged in [#38](https://github.com/erik-hedstrom/loadout/pull/38), with no ambient Claude plugins (2026-10-15 decision); live runs wait for Erik's approval of the estimate |
 | B8 | P0 | Backlog items from the launch-readiness review, 2026-10-13, MCP token cost first | Claude | local + erik | todo (the review is private, on Erik's machine) |
 | B9 | P1 | Savings from an adopted library: what a user saves after moving skills and MCP servers into loadout | Claude | local | todo (after B7) |
-| B11 | P1 | OpenCode session cost and task checks with automatic prompt caching | Codex | local | in review ([#57](https://github.com/erik-hedstrom/loadout/pull/57)): both reviews and full CI green at 25b9d7a; replacement pilot quota-stopped; full study unrun |
+| B11 | P1 | OpenCode session cost and task checks with automatic prompt caching | Codex | local | partial ([#57](https://github.com/erik-hedstrom/loadout/pull/57)): harness, dataset and two quota-stopped pilots merged; the 792-session study is unrun |
 
-**B11. OpenCode cache and outcome study.** Draft [PR #57](https://github.com/erik-hedstrom/loadout/pull/57).
-Both reviews and full CI pass at `25b9d7a`. The replacement pilot is quota-stopped; the full study remains unrun.
+**B11. OpenCode cache and outcome study.** [PR #57](https://github.com/erik-hedstrom/loadout/pull/57) merged the harness, the 72-task dataset
+and two quota-stopped pilots. Next: resume the replacement pilot, then the 792-session study, when the free tier's
+quota allows; afterwards fold the handoff into `bench/README.md`. Cost at retained quality and break-even are not shown.
 Evidence and limitations: [RESULTS](../../bench/RESULTS.md#b11-replacement-pilot-2026-10-23-quota-stopped).
 Commands, verification and review dispositions: [handoff](B11-HANDOFF.md).
 
