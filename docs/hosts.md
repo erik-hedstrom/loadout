@@ -5,10 +5,6 @@ session. "Untested" means loadout implements it (for most hosts,
 `loadout setup <host>` prints the config), but nobody has run it in that host
 yet.
 
-In the stock CLIs, Jev selects skills per substantive prompt through the hook.
-MCP servers are found on demand through loadout's MCP tools. Only the
-`loadout claude|codex` launcher applies a model tier, once per session.
-
 | Host | Launch | Tier | Hook | Search | Gateway |
 |---|---|---|---|---|---|
 | Claude Code CLI | verified [1] | untested [2] | verified [3] | verified [4] | untested |
