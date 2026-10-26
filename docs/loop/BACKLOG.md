@@ -148,13 +148,6 @@ Acceptance:
 | B7 | P1 | MCP overhead study: what configured MCP servers cost per request, natively and through loadout | Claude | cloud (harness, done) + local (runs) | in progress: harness merged in [#38](https://github.com/erik-hedstrom/loadout/pull/38), with no ambient Claude plugins (2026-10-15 decision); live runs wait for Erik's approval of the estimate |
 | B8 | P0 | Backlog items from the launch-readiness review, 2026-10-13, MCP token cost first | Claude | local + erik | todo (the review is private, on Erik's machine) |
 | B9 | P1 | Savings from an adopted library: what a user saves after moving skills and MCP servers into loadout | Claude | local | todo (after B7) |
-| B11 | P1 | OpenCode session cost and task checks with automatic prompt caching | Codex | local | partial ([#57](https://github.com/erik-hedstrom/loadout/pull/57)): harness, dataset and two quota-stopped pilots merged; the 792-session study is unrun |
-
-**B11. OpenCode cache and outcome study.** [PR #57](https://github.com/erik-hedstrom/loadout/pull/57) merged the harness, the 72-task dataset
-and two quota-stopped pilots. Next: resume the replacement pilot, then the 792-session study, when the free tier's
-quota allows; afterwards fold the handoff into `bench/README.md`. Cost at retained quality and break-even are not shown.
-Evidence and limitations: [RESULTS](../../bench/RESULTS.md#b11-replacement-pilot-2026-10-23-quota-stopped).
-Commands, verification and review dispositions: [handoff](B11-HANDOFF.md).
 
 **B8. Items from the launch-readiness review.** The review (2026-10-13) is
 private ([ORCHESTRATOR](ORCHESTRATOR.md#local-the-default)).
@@ -429,7 +422,7 @@ Decisions for Erik:
 | C5 | P2 | Retrieval beyond 200 candidates (Jev tournament) | Codex | cloud | todo |
 | C6 | P2 | Multi-intent requests | Claude | cloud | todo |
 | C7 | P1 | Recommended packs with measured upside (first: frontend with Impeccable) | Codex (harness) + Claude (runs) | cloud (fixtures) + local (runs) | todo (after B1, C2) |
-| C11 | P1 | `bench/outcome.ts` keeps per-request usage | Codex | local | partial ([#55](https://github.com/erik-hedstrom/loadout/pull/55)): turn totals and crash-safe capture; request usage deferred |
+| C11 | P1 | `bench/outcome.ts` keeps per-request usage | Codex | local | partial ([#55](https://github.com/erik-hedstrom/loadout/pull/55)): turn totals and crash-safe capture; request usage moved to F2 |
 | C12 | P1 | Audit the need gate on held-out prompts | Claude | cloud (design) + local (runs) | done ([#46](https://github.com/erik-hedstrom/loadout/pull/46)): audited on C1 dev, no change ([RESULTS](../../bench/RESULTS.md#c12-2026-10-19-the-need-gate-on-c1-dev)) |
 | C13 | P1 | Pure-Jev baseline on main: offline scoring and routing stability | Codex (tools) + Claude (runs) | local | done ([#45](https://github.com/erik-hedstrom/loadout/pull/45)): baseline measured 2026-10-16 ([RESULTS](../../bench/RESULTS.md#c13-2026-10-16-pure-jev-baseline-on-main)) |
 | C8 | P0 | Skill use with the hook-only plugin | Claude | local | done ([#25](https://github.com/erik-hedstrom/loadout/pull/25)): headless, the hook injected a skill's text in 6 of 10; Claude opened 0 of 10, none of the 4 it was only pointed to (D13) |
@@ -847,7 +840,7 @@ before the system prompt, and the launcher's tools (plugin-dir skills,
 `--mcp-config`) already vary with the selection, so a constant system prompt
 buys no cross-session reuse there. It would also have added system text to the
 bench's hook and plugin arms that the real plugin never sends. Money saved by
-caching is unmeasured; that remains a B11 / B-series question.
+caching is unmeasured; that is section F's question (B11, F1).
 
 **D17. MCP start-up inside Codex's grace period.** Codex leaves an optional
 MCP server out of the tool list if it is not ready about 1 s after start-up,
@@ -1692,6 +1685,73 @@ for one finding had dropped edges added earlier: the library edges to the
 named-skill step and to `load_skill` went when five edges were folded into one.
 Labels carry only each node's role and key output; limits and conditions live
 in the prose, so they are stated once.
+
+## F. Prompt caching
+
+Its own track, with the boundary to the core in
+[CACHE-TRACK.md](CACHE-TRACK.md): this track measures what complete cached
+sessions cost and keeps loadout's requests cache-friendly. What to select stays
+with the core (section C). Changes to the shared contract (MCP facade, hook
+output, launcher composition) name their cache effect in the PR.
+
+| ID | P | Task | Agent | Lane | Status |
+|---|---|---|---|---|---|
+| B11 | P1 | OpenCode session cost and task checks with automatic prompt caching | Codex | local | partial ([#57](https://github.com/erik-hedstrom/loadout/pull/57)): harness, dataset and two quota-stopped pilots merged; the 792-session study is unrun |
+| F1 | P1 | Prefix continuity on real hosts: loadout keeps the cached prefix turn after turn | Codex | local | todo |
+| F2 | P1 | Session-cost capture: per-request usage in outcome runs and session columns in B7 | Codex | local | todo (C11's deferred part) |
+| F3 | P2 | Shorter constant MCP text and fewer discovery requests, at unchanged recall | Codex | local | todo (after F2) |
+| F4 | P2 | `loadout audit` reports cache-aware cost from measured numbers | Codex | cloud | todo (after B11, F1) |
+| F5 | P3 | Start-up and path variability: Codex first-request tools, launcher session paths | Codex | local | todo |
+
+**B11. OpenCode cache and outcome study.** [PR #57](https://github.com/erik-hedstrom/loadout/pull/57) merged the harness, the 72-task dataset
+and two quota-stopped pilots. Next: resume the replacement pilot, then the 792-session study, when the free tier's
+quota allows; afterwards fold the handoff into `bench/README.md`. Cost at retained quality and break-even are not shown.
+Evidence and limitations: [RESULTS](../../bench/RESULTS.md#b11-replacement-pilot-2026-10-23-quota-stopped).
+Commands, verification and review dispositions: [handoff](B11-HANDOFF.md).
+
+**F1. Prefix continuity on real hosts.** The D21 tests pin the facade
+in-process; nothing shows that a real host keeps reading loadout's prefix from
+cache across turns.
+
+Acceptance: sessions of at least five turns on Claude Code, Codex and
+OpenCode, with loadout's hook and MCP on and off. From the host's own
+per-request usage, cache reads continue every turn in the loadout arm wherever
+they do in the off arm; a turn where they stop is traced to its cause. Codex
+runs gpt-6-luna at medium effort; Claude runs Haiku; OpenCode runs the free
+models. Raw results committed; a RESULTS section either way.
+
+**F2. Session-cost capture.** Outcome runs keep only turn totals (C11), and
+B7 reports per-request overhead, not what a session costs.
+
+Acceptance: `bench/outcome.ts` keeps each request's input, cache read, cache
+write and output from the host's own report (a fixture test per host; no
+proxy, AGENTS.md rule 1), and `bench/mcp-overhead.ts` reports per session:
+request count, the token buckets, Jev cost, latency and completion, for native
+default against the gateway, short and long sessions, and a gap past the cache
+lifetime. C11's learnings list what each host exposes today.
+
+**F3. Lower fixed and discovery overhead.** Candidates: shorter constant
+descriptions and server instructions in `createServer()`, and loading a named
+skill without a search first.
+
+Acceptance: measured against current main on F2's columns: loadout's fixed
+tokens, extra discovery requests per session, and recall on C1 dev (core
+review required, since it changes the facade). Keep only what lowers session
+cost with recall unchanged; record the rest as negative results.
+
+**F4. Cache-aware audit.** `loadout audit` (A2) reports what installed skills
+and MCP servers cost on the first request only.
+
+Acceptance: it also reports the cost on cached turns per host price profile,
+using numbers measured in B11 or F1 and linked from RESULTS, with dated
+prices. No figure without a RESULTS entry; "not shown" where none exists.
+
+**F5. Start-up and path variability.** The Codex plugin's MCP server can
+arrive after the first request (D17), and launcher session directories put
+timestamps into copied skill paths (`src/launch.ts`).
+
+Acceptance: measure first-request tool presence and cross-session cache loss
+first; change start-up or paths only where the measurement shows a cost.
 
 ## Iteration log
 
