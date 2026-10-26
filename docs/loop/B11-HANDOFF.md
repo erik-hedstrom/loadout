@@ -332,14 +332,9 @@ platform skips, 36 files. Focused pasta network/runner/sandbox checks passed
 48/48 with the Internet opt-in. Pasta is now installed locally; the earlier
 missing-pasta and pending-review notes above describe historical checkpoints.
 
-The authorized replacement pilot completed on 2026-10-26 after resuming the
-same protocol-v3 output at `25b9d7a`: 91 attempts, 90 unique identities,
-90 valid sessions and no timeouts. The first 48 rows are preserved; the one
-historical DeepSeek usage-limit invalid remains separate from quality outcomes.
-[RESULTS](../../bench/RESULTS.md#b11-replacement-pilot-2026-10-23-completed-2026-10-26)
-records coverage, per-arm outcomes, timing, costs and limits; its linked raw
-artifacts are the checkpoint. Keep 300 seconds provisional for both models;
-full-study tails are not established. The 792-session study is not completed;
-resume it with `--resume` into its own output folder, never a legacy
-2026-10-22 output. Pilot spend is in RESULTS; account for it within the
-iteration's ceiling before allocating the full study's budget.
+The replacement pilot completed on 2026-10-26, resumed at `25b9d7a`;
+[RESULTS](../../bench/RESULTS.md#b11-replacement-pilot-2026-10-23-completed-2026-10-26) has its coverage, outcomes,
+timing, spend and limits. The full study runs in its own output folder: the
+first launch with `--run --out`, later launches with `--resume` into that
+folder, never into the pilot's or a legacy 2026-10-22 output. Account for the
+pilot spend within the iteration's ceiling before allocating its budget.

@@ -99,11 +99,12 @@ Each goal maps to backlog items, which hold the acceptance criteria.
 
 ## State (2026-10-26)
 
-- **On main:** D21 ([#59](https://github.com/erik-hedstrom/loadout/pull/59)) and B11's harness and pilots
-  ([#57](https://github.com/erik-hedstrom/loadout/pull/57)).
+- **On main:** D21 ([#59](https://github.com/erik-hedstrom/loadout/pull/59)), B11's harness and pilots
+  ([#57](https://github.com/erik-hedstrom/loadout/pull/57)) and its completed replacement pilot
+  ([#63](https://github.com/erik-hedstrom/loadout/pull/63)).
 - **Observations so far:** B11's [first pilot](../../bench/RESULTS.md#b11-pilot-2026-10-22-cached-opencode-sessions)
-  and completed [replacement pilot](../../bench/RESULTS.md#b11-replacement-pilot-2026-10-23-completed-2026-10-26).
-- **B11:** replacement pilot complete (90 valid sessions); the 792-session full study is not completed.
+  and completed [replacement pilot](../../bench/RESULTS.md#b11-replacement-pilot-2026-10-23-completed-2026-10-26); the 792-session full study is
+  not completed.
 - **Not shown:**
   - cost at retained quality;
   - break-even;

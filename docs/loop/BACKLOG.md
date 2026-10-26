@@ -1827,7 +1827,7 @@ with the core (section C). Changes to the shared contract follow
 
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
-| B11 | P1 | OpenCode session cost and task checks with automatic prompt caching | Codex | local | partial ([#57](https://github.com/erik-hedstrom/loadout/pull/57)): harness and dataset merged; replacement pilot complete; the 792-session study is not completed |
+| B11 | P1 | OpenCode session cost and task checks with automatic prompt caching | Codex | local | partial ([#57](https://github.com/erik-hedstrom/loadout/pull/57)): harness and dataset merged; replacement pilot complete ([#63](https://github.com/erik-hedstrom/loadout/pull/63)); the 792-session study is not completed |
 | F1 | P1 | Prefix continuity on real hosts: loadout keeps the cached prefix turn after turn | Codex | local | todo (after F2) |
 | F2 | P1 | Session-cost capture: per-request usage in outcome runs and session columns in B7 | Codex | local | todo (C11's deferred part) |
 | F3 | P2 | Shorter constant MCP text and fewer discovery requests, at unchanged task success | Codex | local | todo (after F2) |
@@ -1835,11 +1835,10 @@ with the core (section C). Changes to the shared contract follow
 | F5 | P3 | Start-up and path variability: Codex first-request tools, launcher session paths | Codex | local | todo |
 
 **B11. OpenCode cache and outcome study.** [PR #57](https://github.com/erik-hedstrom/loadout/pull/57) merged the harness, the 72-task dataset
-and historical pilots. The replacement pilot completed on 2026-10-26: 91 attempts, 90 valid sessions,
-one historical usage-limit invalid and no timeouts. The 792-session study is not completed. Next: resume it into the same output
-folder as the free tier's quota allows; afterwards fold the handoff into `bench/README.md`. Retained quality, cost at
-retained quality and break-even are not shown.
-Evidence and limitations: [RESULTS](../../bench/RESULTS.md#b11-replacement-pilot-2026-10-23-completed-2026-10-26).
+and historical pilots; [#63](https://github.com/erik-hedstrom/loadout/pull/63) recorded the completed replacement pilot
+([RESULTS](../../bench/RESULTS.md#b11-replacement-pilot-2026-10-23-completed-2026-10-26)). Next: the 792-session study, with the nine-arm command in the
+[handoff](B11-HANDOFF.md), in its own output folder (never the pilot's) as the free tier's quota allows; afterwards fold
+the handoff into `bench/README.md`.
 Commands, verification and review dispositions: [handoff](B11-HANDOFF.md).
 
 **F1. Prefix continuity on real hosts.** The D21 tests pin the facade

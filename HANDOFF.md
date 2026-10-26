@@ -65,8 +65,8 @@ All numbers, caveats, raw-result links and recorded costs are in
    arm is blocked until a tool-less Codex judge is available (E12).
    [Method and limits](bench/RESULTS.md#c14-method-not-run-yet-three-prompts-with-and-without-loadout);
    [run command](bench/README.md#ab-pilot-c14).
-2. **B11:** the replacement pilot completed (90 valid sessions). Resume the
-   792-session full study into its own output folder as the free quota allows.
+2. **B11:** the replacement pilot completed. Run the 792-session full study
+   in its own output folder (never the pilot's) as the free quota allows.
    [Evidence](bench/RESULTS.md#b11-replacement-pilot-2026-10-23-completed-2026-10-26);
    [commands and handoff](docs/loop/B11-HANDOFF.md).
 3. **Prompt caching:** [CACHE-TRACK.md](docs/loop/CACHE-TRACK.md) defines the
