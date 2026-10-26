@@ -332,15 +332,9 @@ platform skips, 36 files. Focused pasta network/runner/sandbox checks passed
 48/48 with the Internet opt-in. Pasta is now installed locally; the earlier
 missing-pasta and pending-review notes above describe historical checkpoints.
 
-The authorized replacement pilot stopped at a persistent usage limit.
-[RESULTS](../../bench/RESULTS.md#b11-replacement-pilot-2026-10-23-quota-stopped)
-records coverage, timing, costs and limits; its linked raw artifacts are the
-checkpoint. Keep 300 seconds provisional. No full study or post-cap retry ran.
-
-After provider availability returns and execution is authorized, resume
-`bench/results/2026-10-23T11-52-28Z-pilot-b11` with the replacement command
-above plus `--resume`, retaining the exact source, dataset, Node version,
-binary, library and settings. Keep its $0.065 cumulative replacement cap;
-resume includes prior attempt costs and skips valid failures as well as passes.
-Do not resume a legacy 2026-10-22 output. Account for pilot spend within the
-iteration's spending ceiling before allocating the full study's budget.
+The replacement pilot completed on 2026-10-26, resumed at `25b9d7a`;
+[RESULTS](../../bench/RESULTS.md#b11-replacement-pilot-2026-10-23-completed-2026-10-26) has its coverage, outcomes,
+timing, spend and limits. The full study runs in its own output folder: the
+first launch with `--run --out`, later launches with `--resume` into that
+folder, never into the pilot's or a legacy 2026-10-22 output. Account for the
+pilot spend within the iteration's ceiling before allocating its budget.
