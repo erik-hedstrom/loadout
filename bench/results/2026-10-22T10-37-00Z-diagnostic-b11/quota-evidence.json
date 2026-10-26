@@ -1,0 +1,53 @@
+{
+  "observedAt": "2026-10-22T11:32:10.194935+00:00",
+  "category": "free-usage-limit",
+  "evidence": "Controlled marker and error-class projection only; no provider text retained.",
+  "action": "Stopped both owned runners to avoid further model attempts after a persistent usage cap.",
+  "interruptedSessions": [
+    {
+      "study": "diagnostic",
+      "freeUsageLimitMarker": true,
+      "errorClasses": [
+        "AI_APICallError",
+        "AI_RetryError"
+      ],
+      "internalRetryAttempts": [
+        3
+      ],
+      "stepStarts": 0,
+      "stepFinishes": 0,
+      "compactions": 0
+    },
+    {
+      "study": "pilot",
+      "freeUsageLimitMarker": true,
+      "errorClasses": [
+        "AI_APICallError",
+        "AI_RetryError"
+      ],
+      "internalRetryAttempts": [
+        3
+      ],
+      "stepStarts": 0,
+      "stepFinishes": 0,
+      "compactions": 0
+    },
+    {
+      "study": "pilot",
+      "freeUsageLimitMarker": true,
+      "errorClasses": [
+        "AI_APICallError",
+        "AI_RetryError"
+      ],
+      "internalRetryAttempts": [
+        3
+      ],
+      "stepStarts": 0,
+      "stepFinishes": 0,
+      "compactions": 0
+    }
+  ],
+  "jevCallsDuringInterruptedSessions": 0,
+  "resetTime": "not supplied by observed marker",
+  "numericLimit": "not shown"
+}

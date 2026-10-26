@@ -1,0 +1,20 @@
+{
+  "opencodeVersion": "1.19.3",
+  "source": "opencode models opencode --verbose --pure (offline, built-in model metadata)",
+  "models": [
+    {
+      "model": "opencode/deepseek-v4.1-flash-free",
+      "limit": {
+        "context": 200000,
+        "output": 32000
+      }
+    },
+    {
+      "model": "opencode/glm-5.3-flash-free",
+      "limit": {
+        "context": 200000,
+        "output": 32000
+      }
+    }
+  ]
+}

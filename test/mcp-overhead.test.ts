@@ -85,10 +85,10 @@ describe('offline mode', () => {
     }
   });
 
-  it('grows loadout\'s cost with the server names it lists and carries its instructions', async () => {
+  it('keeps loadout\'s definition cost fixed across server counts and carries its instructions', async () => {
     const one = await loadoutFacts(serverSpecs(1));
     const twenty = await loadoutFacts(serverSpecs(20));
-    expect(twenty.definitionChars).toBeGreaterThan(one.definitionChars);
+    expect(twenty.definitionChars).toBe(one.definitionChars);
     expect(one.instructionChars).toBeGreaterThan(200);
     expect((await loadoutFacts([])).tools).toBe(2);
   });

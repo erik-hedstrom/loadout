@@ -8,6 +8,7 @@ import { capabilityKey } from '../src/library.js';
 import { z } from 'zod';
 import type { Capability, RawRouting, RepoSignals, RouteDecision, ScoredCapability } from '../src/types.js';
 import type { SweepRow } from './sweep.js';
+import { tokenUsage, type TokenUsage } from './usage.js';
 
 const BENCH = import.meta.dirname;
 export const DATA = join(BENCH, 'data');
@@ -175,8 +176,9 @@ export async function pool<T, R>(items: T[], concurrency: number, fn: (item: T, 
 export interface ClaudeResult<T> {
   output: T;
   costUsd: number;
-  inputTokens: number;
   ms: number;
+  usage: TokenUsage | null;
+  usageError?: string;
 }
 
 export const modelFamily = (model: string): string => {
@@ -348,15 +350,19 @@ export function claudeJson<T>(prompt: string, schema: object, opts: { model: str
           result?: string;
           total_cost_usd: number;
           duration_ms: number;
-          usage: { input_tokens: number; cache_creation_input_tokens?: number; cache_read_input_tokens?: number };
-        };
+        } | undefined;
+        if (!res) throw new Error('no Claude result');
         if (res.is_error || res.structured_output === undefined) throw new Error(res.result ?? 'no structured output');
-        const u = res.usage;
+        let usage: TokenUsage | null = null;
+        let usageError: string | undefined;
+        try { usage = tokenUsage('claude', [res]); }
+        catch { usageError = 'Claude usage unavailable (contents suppressed)'; }
         resolve({
           output: res.structured_output,
           costUsd: res.total_cost_usd,
-          inputTokens: u.input_tokens + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0),
           ms: res.duration_ms,
+          usage,
+          usageError,
         });
       } catch (err) {
         reject(new Error(`claude exited ${code}: ${err instanceof Error ? err.message : err}\n${stderr.slice(-500)}`));

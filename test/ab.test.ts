@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CREDENTIAL_SHAPE, persistJson, redact, report, type RunRow, type Verdict } from '../bench/ab-report.js';
-import { JUDGE_MAX_BYTES } from '../bench/pairwise.js';
+import { JUDGE_MAX_BYTES, judgePair } from '../bench/pairwise.js';
 import { AB_MODELS, blockers, buildCommand, checkRun, copyOutputs, hiddenResult, hookFacts, main, openedSkills, planLines, promptText, provenance, redactNames, refuseOtherSettings, refuseStopped, routedByKeyword, runEnv, schedule, scrub, type Ctx, type Evidence, type Job, type Options } from '../bench/ab.js';
 import { DEFAULT_CONFIG } from '../src/config.js';
 import { JEV_FALLBACK_NOTE, NO_KEY_WARNING } from '../src/hook.js';
@@ -534,6 +534,19 @@ const row = (over: Partial<RunRow>): RunRow => ({
     { n: 2, at: null, model: null, uncached: 2, cacheWrite: 100, cacheRead: 21000, output: 50, cacheWrite5m: 100, cacheWrite1h: 0, reasoning: null, subagent: false, gapMs: 5000 }],
   totals: { uncached: 12, cacheWrite: 1100, cacheRead: 41000, output: 150, effectiveInput: 5000, costUsd: 0.1, turns: 2 },
   unreconciled: [], modelUsage: null, coldCacheRisk: false, toolCalls: 0, toolErrors: 0, loadoutTools: [], skillsOpened: [], hook: { invocations: 0, contextChars: 0, listed: [], injected: [] }, hiddenTest: null, ...over,
+});
+
+it('keeps judge usage and diagnostics with each blind order', async () => {
+  let order = 0;
+  const result = await judgePair('request', { bare: 'first', loadout: 'second' }, async () => ({
+    winner: 'first', confidence: 'high', reasons: 'fixture',
+    usage: order++ === 0 ? { inputTokens: 10, cachedInputTokens: 5, outputTokens: 2 } : null,
+    usageError: order === 2 ? 'usage unavailable' : undefined,
+  }));
+  expect(result.orders).toEqual([
+    { winner: 'bare', confidence: 'high', reasons: 'fixture', usage: { inputTokens: 10, cachedInputTokens: 5, outputTokens: 2 }, usageError: undefined },
+    { winner: 'loadout', confidence: 'high', reasons: 'fixture', usage: null, usageError: 'usage unavailable' },
+  ]);
 });
 
 describe('report', () => {

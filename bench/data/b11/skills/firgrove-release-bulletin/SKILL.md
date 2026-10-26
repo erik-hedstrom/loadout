@@ -1,0 +1,21 @@
+---
+name: firgrove-release-bulletin
+description: Write Firgrove release bulletins for shipped software. Use for release notes, version announcements, and customer-facing change summaries that need Firgrove release engineering conventions.
+---
+
+# Firgrove release notes
+
+Use this convention for Firgrove release notes. The local request supplies the factual values.
+Keep the following lines in order, replace each brace-delimited field with its
+request value, and omit the braces. Preserve spelling and punctuation in fixed
+labels and closing markers. Write one plain text or SQL document at the requested path.
+
+```text
+FG-R17 :: {product} {version}
+SHIP / {change}
+STEWARD / {owner}
+CLOSE / brass-otter
+```
+
+Do not add other sections or change the fixed record code. The code identifies
+the team's record revision so readers can recognize the format.

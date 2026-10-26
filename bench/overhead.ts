@@ -11,6 +11,7 @@ import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { readConfined } from '../src/library.js';
 import { escapeSkillTags, toToml } from '../src/launch.js';
 import { codexCli, isEntry } from './lib.js';
+import { events, counter } from './usage.js';
 
 const PROMPT = 'Reply with exactly OK. Do not use tools, skills, commands, agents, or external services.';
 const CONFIGURATIONS = ['baseline', 'superpowers', 'anthropics', 'top50', 'impeccable', 'library', 'loadout'] as const;
@@ -233,14 +234,6 @@ export function buildPlan(library: string, root: string): Plan {
   return { calls, blockers, root };
 }
 
-function events(stdout: string): any[] {
-  try { return stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line)); }
-  catch { throw new Error('host emitted invalid JSONL (output suppressed)'); }
-}
-function counter(value: unknown, name: string): number {
-  if (!Number.isSafeInteger(value) || (value as number) < 0) throw new Error(`missing or invalid ${name}`);
-  return value as number;
-}
 function names(value: unknown): string[] {
   if (!Array.isArray(value)) throw new Error('missing init inventory');
   return value.map((v) => {

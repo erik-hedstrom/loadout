@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 import type { FitMeasure } from './route.js';
@@ -41,6 +41,8 @@ export interface Config {
   embeddings: boolean;
   /** Attach `loadout mcp` to launched sessions so the agent can search the library mid-session. */
   search: boolean;
+  /** Offer direct skill-folder access in hook and MCP guidance; disable for file-fenced hosts. */
+  skillFolders: boolean;
   /**
    * Model (and optionally reasoning effort) per tier, per CLI. A bare string is a model.
    * Presets: whether each fits the work Jev assigns to its tier is unmeasured (C3).
@@ -80,6 +82,7 @@ export const DEFAULT_CONFIG: Config = {
   // candidates 87% of the time vs 80% for keywords alone (bench/RESULTS.md, v4).
   embeddings: true,
   search: true,
+  skillFolders: true,
   tiers: {
     claude: { small: 'haiku', medium: 'sonnet', large: { model: 'opus', effort: 'high' } },
     codex: {
@@ -123,6 +126,7 @@ export function validateConfig(c: Config): Config {
   for (const k of ['share', 'fit'] as const) unit(`winner.${k}`, c.winner?.[k]);
   if (typeof c.inject?.enabled !== 'boolean') problems.push('inject.enabled must be true or false');
   if (typeof c.search !== 'boolean') problems.push('search must be true or false');
+  if (typeof c.skillFolders !== 'boolean') problems.push('skillFolders must be true or false');
   if (typeof c.embeddings !== 'boolean') problems.push('embeddings must be true or false');
   count('maxCandidates', c.maxCandidates, 254);
   count('shortlist', c.shortlist, 64);
@@ -146,7 +150,7 @@ function readConfigFile(file: string): Partial<Config> {
 
 export function loadConfig(): Config {
   const file = paths.config();
-  if (!existsSync(file)) return DEFAULT_CONFIG;
+  if (!regularConfigExists(file)) return DEFAULT_CONFIG;
   const user = readConfigFile(file);
   return validateConfig({
     ...DEFAULT_CONFIG,
@@ -168,10 +172,21 @@ export function loadConfig(): Config {
 export function writeDefaultConfig(overrides: Partial<Config['jev']> = {}): string {
   const file = paths.config();
   mkdirSync(loadoutHome(), { recursive: true });
-  const existing = existsSync(file) ? readConfigFile(file) : {};
+  const existing = regularConfigExists(file) ? readConfigFile(file) : {};
   const config: Partial<Config> = Object.keys(overrides).length ? { ...existing, jev: { ...existing.jev, ...overrides } as Config['jev'] } : existing;
   writeFileSync(file, JSON.stringify(config, null, 2) + '\n');
   return file;
+}
+
+/** Refuse pre-existing config links; relocated homes are supported, same-user swaps are out of scope. */
+function regularConfigExists(file: string): boolean {
+  try {
+    if (!lstatSync(file).isFile()) throw new Error('config.json must be a regular file');
+    return true;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return false;
+    throw err;
+  }
 }
 
 /** The environment for a child process that needs no loadout credential. Windows matches env names in any case. */

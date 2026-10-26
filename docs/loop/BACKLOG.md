@@ -35,14 +35,14 @@ Each PR body's **Review state** section has the round-by-round record.
 
 | PR | Item | State on 2026-10-22 |
 |---|---|---|
-| [#47](https://github.com/erik-hedstrom/loadout/pull/47) | C14 A/B pilot harness; adds B10 | final review round |
+| [#47](https://github.com/erik-hedstrom/loadout/pull/47) | C14 A/B pilot harness; adds B10 | final review round; the clean Codex-only rerun needs a separately logged-in `CODEX_HOME` |
 
 ## A. Adoption and ease of use
 
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
 | A2 | P0 | `loadout audit`: what your installed skills cost you | Claude | cloud | done ([PR #3](https://github.com/erik-hedstrom/loadout/pull/3)) |
-| A1 | P0 | README rewrite around the problem, 3-command quickstart, GIF | Claude | cloud | review ([#28](https://github.com/erik-hedstrom/loadout/pull/28); main merged, renewed gate pending; GIF waits on A5) |
+| A1 | P0 | README rewrite around the problem, 3-command quickstart, GIF | Claude | cloud | partial ([#28](https://github.com/erik-hedstrom/loadout/pull/28)): README merged; the GIF waits on A5 |
 | A3 | P1 | `loadout init` wizard + starter packs | Codex | cloud | done ([#30](https://github.com/erik-hedstrom/loadout/pull/30)) |
 | A4 | P1 | npm package under an available name + release workflow | Codex | cloud + erik | blocked: npm name decision |
 | A5 | P1 | Demo recording (route, launch, hook) | Claude | local | todo (after A1) |
@@ -149,6 +149,13 @@ Acceptance:
 | B8 | P0 | Backlog items from the launch-readiness review, 2026-10-13, MCP token cost first | Claude | local + erik | todo (the review is private, on Erik's machine) |
 | B9 | P1 | Savings from an adopted library: what a user saves after moving skills and MCP servers into loadout | Claude | local | todo (after B7) |
 | B10 | P1 | B7: Claude 2.1.281's init lists `@builtin` plugins even with `--setting-sources ""` and a fresh config dir, so `plugins.length !== 0` (`bench/mcp-overhead.ts`, the "Claude init plugins must be empty" check) would refuse every B7 Claude run; ignore `@builtin` plugins as the A/B harness does (`isBuiltin` in `bench/ab.ts`) | Claude | cloud | todo. Seen on 2.1.281 by C14 in a free probe (`claude -p` with HTTPS_PROXY pointed at a closed port prints the init event and makes no model call); not reproduced by review, so confirm with the same probe first |
+| B11 | P1 | OpenCode session cost and task checks with automatic prompt caching | Codex | local | partial ([#57](https://github.com/erik-hedstrom/loadout/pull/57)): harness, dataset and two quota-stopped pilots merged; the 792-session study is unrun |
+
+**B11. OpenCode cache and outcome study.** [PR #57](https://github.com/erik-hedstrom/loadout/pull/57) merged the harness, the 72-task dataset
+and two quota-stopped pilots. Next: resume the replacement pilot, then the 792-session study, when the free tier's
+quota allows; afterwards fold the handoff into `bench/README.md`. Cost at retained quality and break-even are not shown.
+Evidence and limitations: [RESULTS](../../bench/RESULTS.md#b11-replacement-pilot-2026-10-23-quota-stopped).
+Commands, verification and review dispositions: [handoff](B11-HANDOFF.md).
 
 **B8. Items from the launch-readiness review.** The review (2026-10-13) is
 private ([ORCHESTRATOR](ORCHESTRATOR.md#local-the-default)).
@@ -417,13 +424,13 @@ Decisions for Erik:
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
 | C1 | P0 | New held-out request set + re-measure v4 | Codex (seeds, expand) + Claude (judge) | local | done ([#16](https://github.com/erik-hedstrom/loadout/pull/16)): precision falls on new requests (64% vs 82%); judged through local `claude -p`, not the API (see Learnings) |
-| C2 | P1 | Outcome eval on the small tier with fixed fixtures | Claude (design) | cloud (fixtures) + local (runs) | in progress (fixtures and protocol merged in [#37](https://github.com/erik-hedstrom/loadout/pull/37), decisions made 2026-10-19; Console, Jev key and E14 open before the run; runs local) |
+| C2 | P1 | Outcome eval on the small tier with fixed fixtures | Claude (design) | cloud (fixtures) + local (runs) | in progress (fixtures and protocol merged in [#37](https://github.com/erik-hedstrom/loadout/pull/37), decisions made 2026-10-19; Console and Jev key open before the run (E14 done, #53); runs local) |
 | C3 | P2 | Does Jev pick a sensible model tier? | Claude | cloud | todo (launcher only: the hook and search keep the user's model) |
 | C4 | P0 | Demote generic "fits everything" skills | Codex | cloud | todo (next: C1 shows over-loading on general business requests) |
 | C5 | P2 | Retrieval beyond 200 candidates (Jev tournament) | Codex | cloud | todo |
 | C6 | P2 | Multi-intent requests | Claude | cloud | todo |
 | C7 | P1 | Recommended packs with measured upside (first: frontend with Impeccable) | Codex (harness) + Claude (runs) | cloud (fixtures) + local (runs) | todo (after B1, C2) |
-| C11 | P1 | `bench/outcome.ts` keeps per-request usage | Claude | cloud | todo |
+| C11 | P1 | `bench/outcome.ts` keeps per-request usage | Codex | local | partial ([#55](https://github.com/erik-hedstrom/loadout/pull/55)): turn totals and crash-safe capture; request usage deferred |
 | C12 | P1 | Audit the need gate on held-out prompts | Claude | cloud (design) + local (runs) | done ([#46](https://github.com/erik-hedstrom/loadout/pull/46)): audited on C1 dev, no change ([RESULTS](../../bench/RESULTS.md#c12-2026-10-19-the-need-gate-on-c1-dev)) |
 | C13 | P1 | Pure-Jev baseline on main: offline scoring and routing stability | Codex (tools) + Claude (runs) | local | done ([#45](https://github.com/erik-hedstrom/loadout/pull/45)): baseline measured 2026-10-16 ([RESULTS](../../bench/RESULTS.md#c13-2026-10-16-pure-jev-baseline-on-main)) |
 | C8 | P0 | Skill use with the hook-only plugin | Claude | local | done ([#25](https://github.com/erik-hedstrom/loadout/pull/25)): headless, the hook injected a skill's text in 6 of 10; Claude opened 0 of 10, none of the 4 it was only pointed to (D13) |
@@ -543,7 +550,7 @@ Learnings (cloud half): [fixtures and protocol](../../bench/fixtures/c2/PROTOCOL
   margin; a licence check of the loaded skills before any push; the shared prompt
   cache accepted as a limit. Still open before the run: the Anthropic Console organization and
   workspaces (and who archives them), the dedicated Jev key and whether Jev
-  reports usage per key, and E14
+  reports usage per key (E14 is done, #53)
   ([Decided by Erik](../../bench/fixtures/c2/PROTOCOL.md#decided-by-erik-2026-10-19)).
 
 **C3. Tier choice.**
@@ -619,6 +626,24 @@ totals per task. Prompt-cache misses inside a session are then invisible.
 Acceptance: each request's input, cached input and output tokens go into the
 raw results, from the host's own usage report (no proxy, AGENTS.md rule 1),
 with a test on a recorded fixture.
+Learnings (2026-10-22; partial):
+- `exec --json` in Codex CLI 0.163.0 reports turn totals, not per-request
+  usage. Outcome runs retain these totals and preserve deliverables and
+  metadata even when usage JSONL is truncated. Host stdout is not persisted
+  because command output and messages can contain private data.
+- Claude Code 2.1.306's `result.usage.iterations` describes sampling within
+  the last request, not all session requests. Judge calls retain only
+  `result.usage` totals. Missing or invalid usage records a contents-free
+  `usageError` without rejecting a valid answer. Usage stores only token
+  totals or null. See [capture provenance](../../test/fixtures/request-usage/README.md).
+- Rollout discovery is deferred: `materialize()` creates loadout session
+  files, not a Codex home; `codexArgs()` sets no home; `outcome.ts` calls
+  `run()` without an environment override, inheriting `CODEX_HOME`. Reading
+  that home could read user sessions, so this change does not do so.
+- Erik can choose a follow-up using app-server `thread/tokenUsage/updated`
+  or rollout `token_count` / `last_token_usage` from a benchmark-owned home.
+  Neither path is implemented here; the limit observed here is `exec --json`,
+  not every official Codex output format.
 
 **C12. The need gate.** In one local Codex run (2026-10-13) the gate
 selected nothing on a task where a library skill plainly applied. One case
@@ -817,9 +842,10 @@ Left: run the pilot (Erik's go-ahead), write the results into RESULTS and
 | D13 | P0 | The plugin must be able to open what its hook routes to | — | cloud + local + erik | blocked: design decision (Erik) |
 | D14 | P1 | Codex plugin forwards LOADOUT_HOME | Claude | cloud | done ([#36](https://github.com/erik-hedstrom/loadout/pull/36)): Codex gives a stdio MCP server only its default variables plus `env_vars`, so the plugin's `loadout mcp` ignored a custom `LOADOUT_HOME` (and a `"router": "lexical"` profile in it); now forwarded. A relative `LOADOUT_HOME` is now refused (on Windows, anything but a drive-qualified path, so no drive-relative, UNC or device path) and an empty one ignored; the `HOME` (or `USERPROFILE`) fallback must pass the same check. So the working directory or a remote share cannot become the config. An absolute value, including a mapped network drive, is trusted: a project settings `env` that sets one comes from settings that can already run their own hooks. The config the home points to cannot redirect the key (Erik, 2026-10-19): a `jev.baseUrl` other than api.typesafe.ai is refused unless `TYPESAFE_BASE_URL` names the URL. It still chooses `apiKeyFile`, whose content then reaches only that URL, which is why the home must not come from the working directory either. Checked against the Codex source only, not a live run |
 | D16 | P1 | Warn when the hook runs without a TypeSafe key | Claude | cloud | done ([#27](https://github.com/erik-hedstrom/loadout/pull/27)): once per session, as a `systemMessage`, which Claude Code and Codex both show |
-| D18 | P1 | The hook and `load_skill` can offer `load_skill` only, with no folder | Codex | cloud | todo |
-| D19 | P2 | `which()` honours PATHEXT on Windows | Claude | cloud | todo |
-| D20 | P2 | Hook state writes never drop context or the no-key warning | Codex | cloud | review ([#49](https://github.com/erik-hedstrom/loadout/pull/49)) |
+| D18 | P1 | The hook and `load_skill` can offer `load_skill` only, with no folder | Codex | cloud | partial ([#54](https://github.com/erik-hedstrom/loadout/pull/54)): load_skill-only offer merged; C2 dropping its folder-hint limit waits on Erik |
+| D19 | P2 | `which()` honours PATHEXT on Windows | Codex | local | partial ([#52](https://github.com/erik-hedstrom/loadout/pull/52)): PATHEXT lookup merged; the launcher refuses batch hosts instead of spawning them (see learnings) |
+| D20 | P2 | Hook state writes never drop context or the no-key warning | Codex | cloud | done ([#49](https://github.com/erik-hedstrom/loadout/pull/49)) |
+| D21 | P1 | Keep loadout's request prefix cache-stable | Codex | local | done ([#59](https://github.com/erik-hedstrom/loadout/pull/59)) |
 
 **D18. The hook and `load_skill` can offer `load_skill` only, with no folder.**
 Both currently suggest reading skill files directly, even when the host's
@@ -835,6 +861,15 @@ Acceptance:
 - C2 drops its folder-hint limit when this lands. C2 does not depend on D18:
   its file fence, OS denies and probes enforce framed loading already.
 
+Learnings: `skillFolders` (default `true`) is an option, not the default,
+because `load_skill` returns text files only and a user's host can read the
+folder for binary assets; C2's fenced host is the consumer for `false`. It
+changes generated guidance only, not paths inside skill text or host
+permissions. The benchmark cleanup test assumes its checkout is outside the
+OS temp root, so run the Linux suite from a checkout elsewhere.
+C2 adopting `skillFolders: false` changes its frozen protocol, so Erik decides;
+until then C2 keeps its folder-hint limit.
+
 **D19. `which()` and PATHEXT.** From Sol's review of #30 (A3), which Erik
 overrode for that PR on 2026-10-19 because the gap predates it. `which()` in
 src/launch.ts checks extensionless names only, so a host installed only as
@@ -844,6 +879,20 @@ reports it missing, and so does the launcher. Acceptance: on win32, `which()` al
 (default `.COM;.EXE;.BAT;.CMD`); the launcher spawns a `.cmd` or `.bat` result
 safely (Node refuses them without a shell since the CVE-2024-27980 fix); a test
 covers a host present only as `.exe` and only as `.cmd`.
+
+Learnings (2026-10-22): a Windows batch shim cannot pass arbitrary text
+safely (newlines are cut, and plain batch files and npm shims parse `%*`
+differently). The launcher needs a native `.exe`: both Claude and Codex
+`.cmd`/`.bat` hosts are refused before routing or session writes, with fixed
+text. `--dry-run` still prints the command because it never spawns a host.
+`init` and `doctor` work with `.cmd`; `hostCommand` (src/launch.ts) keeps its
+documented argument allowlist for doctor and as defence in depth in `launch()`.
+Batch spawns set `NoDefaultCurrentDirectoryInExePath=1` in the caller's child
+environment; doctor retains its credential-free environment. npm shims are
+not parsed. `bench/invoke.ts` and `bench/outcome.ts` spawn hosts directly
+through `bench/lib.ts` rather than `launch()`: a batch host produces spawn
+EINVAL. Run those benchmarks on Linux/WSL; their Windows batch support is
+outside D19's scope.
 
 **D20. Hook state writes never drop context.** From the reviews of #27 (D16);
 Erik kept both out of that PR on 2026-10-19.
@@ -863,6 +912,27 @@ Learnings (2026-10-22): the folder check and `readdirSync` now sit inside the
 sweep's never-throw boundary, like each file's removal. The regression test
 needs a state folder outside the loadout home whose parent is a file, so that
 the directory read itself fails.
+
+**D21. Request prefix stability.** `server_tools` now has a constant
+description: it no longer lists the library's servers, so the tool list stays
+the same when a nonempty server set changes or is reordered (a library with
+no servers has no gateway tools at all), and no untrusted server
+name reaches a tool definition. `find_tools` already returns server keys and
+an example gateway call.
+
+Learnings (2026-10-22): in-process MCP tests compare serialized initialization
+and tool-list results around search, skill loading and gateway discovery,
+including a tool-index write, and reject tool-list-change notifications; this
+guards behaviour main already had. Different and permuted gateway inventories
+produce the same tool list. The existing hook output test pins per-prompt
+context to `additionalContext` on `UserPromptSubmit`.
+Moving the Claude launcher's relevance note from the system prompt into the
+user turn was tried and dropped in review: Claude's cached prefix puts tools
+before the system prompt, and the launcher's tools (plugin-dir skills,
+`--mcp-config`) already vary with the selection, so a constant system prompt
+buys no cross-session reuse there. It would also have added system text to the
+bench's hook and plugin arms that the real plugin never sends. Money saved by
+caching is unmeasured; that remains a B11 / B-series question.
 
 **D17. MCP start-up inside Codex's grace period.** Codex leaves an optional
 MCP server out of the tool list if it is not ready about 1 s after start-up,
@@ -1343,10 +1413,21 @@ Learnings (2026-10-09):
 | E11 | P1 | Fixed-text diagnostics in the gateway and relay | Codex | cloud | done ([PR #10](https://github.com/erik-hedstrom/loadout/pull/10)) |
 | E12 | P1 | A tool-less Codex bench backend (codex-cli 0.160.1 keeps unified_exec on) | Codex | local | todo |
 | E13 | P1 | Apply Engineer standards to both review paths, with a blocking necessity pass | Codex + Claude review | cloud | done ([#41](https://github.com/erik-hedstrom/loadout/pull/41)) |
-| E14 | P1 | Redact key-shaped strings before anything goes to Jev (prerequisite for the C2 loadout arm) | Codex | cloud | todo |
+| E14 | P1 | Redact key-shaped strings before anything goes to Jev (prerequisite for the C2 loadout arm) | Codex | cloud | done ([#53](https://github.com/erik-hedstrom/loadout/pull/53)) |
 | E15 | P1 | Test flakes: WSL-only `bench.test.ts` failure, Windows spawn timeouts | Claude | local | done ([#44](https://github.com/erik-hedstrom/loadout/pull/44)) |
-| E16 | P2 | Hygiene from #30's audit: control characters, `git ls-files` env, config symlink, echoed arguments | Claude | cloud | todo |
-| E17 | P3 | One entry-point guard for bench scripts that survives symlinked paths | Codex + Claude review | cloud | review ([#51](https://github.com/erik-hedstrom/loadout/pull/51)) |
+| E16 | P2 | Hygiene from #30's audit: control characters, `git ls-files` env, config symlink, echoed arguments | Codex | local | done ([#50](https://github.com/erik-hedstrom/loadout/pull/50)); key inheritance waits on Erik's decision |
+| E17 | P3 | One entry-point guard for bench scripts that survives symlinked paths | Codex + Claude review | cloud | done ([#51](https://github.com/erik-hedstrom/loadout/pull/51)); converting #47's guard follows that PR |
+| E18 | P1 | Patch the Vite advisories in the development lockfile | Codex | cloud | done ([#56](https://github.com/erik-hedstrom/loadout/pull/56)) |
+
+**E18. npm advisories.** `npm audit` on main reported six advisories against
+Vite 8.3.2 (GHSA-698v-4r3x-3vcv, GHSA-r825-w8mm-5pxw, GHSA-587h-7wmj-h5pm,
+GHSA-9jrq-w75r-8gcw, GHSA-rq7h-c2jc-7f22, GHSA-vfpm-58rq-9qcg); 8.3.3 fixes them.
+
+Learnings (2026-10-22): Vite is development-only here (`vitest -> vite` and
+`vitest -> @vitest/mocker -> vite`, `dev: true` in the lockfile), and
+`npm audit --omit=dev` was already clean, so published users were never
+exposed. Only Vite's lockfile entry changes, within Vitest's peer range; no
+override is needed. The audit itself is the regression check.
 
 **E16. Terminal, config and git hygiene.** From the reviews of #30 (A3);
 all older than it.
@@ -1356,12 +1437,31 @@ all older than it.
 - src/repo.ts runs `git ls-files` with the full environment, key included.
   Use `withoutKey()` as `addFromGitHub` does, with a test.
 - From #30's deep security audit: `writeDefaultConfig` follows a symlinked
-  `~/.loadout` (no `isPlainFolder` check before writing), and `loadout add
+  `config.json` (refuse nonregular files before its read and write), and `loadout add
   <arg>` and other commands echo a mistyped argument, which could be a pasted
   key (only `init` uses fixed text). Fix both, with adversarial tests.
 - Decision for Erik, from the same audit: the spawned `claude` and `codex`
   keep `TYPESAFE_API_KEY` in their environment by design. Record whether that
   stands.
+
+Learnings (2026-10-22, #50 review): relocating the home through a link is the
+user's documented choice; a link at `config.json` is not. All config reads use
+the same file check; same-user swaps after inspection remain out of scope.
+HTTP startup and filesystem errors can echo arguments
+just like parser errors: print fixed categories and allowlisted errno codes.
+Failed adds identify the source by position and retain a safe failure reason.
+Swept `init`, `add`, `list`, `audit`, `route`, `claude`, `codex`, `mcp`,
+`mcp-launch`, `setup`, `doctor`, `hook` and unknown-command errors: add/token
+paths and HTTP listen need local boundaries; other coded errors use the CLI
+boundary. Hook/relay/Jev failures already use fixed diagnostics; validated host
+and isolation refusals use known names. Terminal controls share one constant.
+Review fixes against `4413a67`: M1 file checks and home compatibility, M2 safe
+system diagnostics, L1 source positions/reasons, L2 shared control regex;
+covered by [hygiene tests](../../test/hygiene.test.ts). Windows verification:
+`npm test -- --maxWorkers=2 --reporter=dot`: 582 passed, 17 skipped (POSIX smoke
+tests skip on Windows); typecheck, build and diff checks passed. All 16 mutation
+checks failed as intended, then source bytes were restored. Jev/API cost: $0.
+Re-review and the full CI matrix remain with the coordinator.
 
 **E17. Bench entry-point guard.** From pr-reviewer on #45 (C13). Bench
 scripts (judge, stability, sweep, hook-latency, overhead and mcp-overhead on
@@ -1465,6 +1565,18 @@ Acceptance:
 Limit: base64, splitting or any other encoding defeats pattern redaction, so
 this is defence in depth. The C2 protocol's primary layer is that the agent
 cannot read the key. Prerequisite for the C2 loadout arm.
+
+Learnings (2026-10-22, M1–M4): every Jev caller reaches `jevClient().ask()`;
+it redacts the whole JSON body once, so retries reuse it. `redactJson` decodes
+JSON strings first, preserving word boundaries after escapes. C2 keeps its
+frozen `scan-patterns.json`; a deep-equality test checks production patterns
+against it. JWT matching scans disjoint base64url segments to avoid quadratic
+restarts. Routing aliases names that redaction would change, then restores
+answer identities before selection. Stderr records counts, never matches.
+`reportJson` preserves property keys and redacts only string values; this also
+applies to `route --json` and `list --json`. Out of scope: encoded or split keys
+(including across goal and keywords), and keys glued to a preceding word
+character (the patterns' word boundary).
 
 **E15. Test flakes on the merge gate.** Two failures that were already on
 main made the gate noisy during the 2026-10-16 merge round (CI reruns,

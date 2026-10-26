@@ -1,0 +1,37 @@
+{
+  "method": "Sum retained rows by model and arm. Operational accounting pools dev/test; summary.md reports quality separately by split. Interrupted sessions without rows are excluded and their usage remains unknown.",
+  "groups": [
+    {
+      "model": "opencode/glm-5.3-flash-free",
+      "arm": "bare",
+      "attempts": 9,
+      "steps": 57,
+      "totals": {
+        "input": 132816,
+        "cacheRead": 345948,
+        "cacheWrite": 0,
+        "output": 4614,
+        "reasoning": 10410
+      },
+      "pass": 3,
+      "fail": 6,
+      "invalid": 0
+    },
+    {
+      "model": "opencode/glm-5.3-flash-free",
+      "arm": "mcp-all",
+      "attempts": 6,
+      "steps": 1,
+      "totals": {
+        "input": 101439,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "output": 21,
+        "reasoning": 101
+      },
+      "pass": 0,
+      "fail": 0,
+      "invalid": 6
+    }
+  ]
+}

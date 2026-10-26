@@ -6,7 +6,7 @@ import { parse as parseToml } from 'smol-toml';
 import { paths, resolveApiKey, type Config } from './config.js';
 import { EmbeddingStore, hasTransformers } from './embed.js';
 import type { SystemOneClient } from './jev.js';
-import { escapeSkillTags, which } from './launch.js';
+import { escapeSkillTags, hostCommand, which } from './launch.js';
 import { scanLibrary } from './library.js';
 import type { Capability } from './types.js';
 
@@ -29,7 +29,8 @@ function version(bin: string): string | undefined {
   // A shim such as `#!/usr/bin/env node` resolves through PATH too: an empty or relative entry would find a planted `node`.
   if (env.PATH !== undefined) env.PATH = absolutePath().join(delimiter);
   try {
-    return execFileSync(bin, ['--version'], { encoding: 'utf8', timeout: 10_000, killSignal: 'SIGKILL', stdio: ['ignore', 'pipe', 'ignore'], env }).trim().split('\n')[0];
+    const { command, args, ...options } = hostCommand(bin, ['--version'], env);
+    return execFileSync(command, args, { ...options, encoding: 'utf8', timeout: 10_000, killSignal: 'SIGKILL', stdio: ['ignore', 'pipe', 'ignore'] }).trim().split('\n')[0];
   } catch {
     return undefined;
   }

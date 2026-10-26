@@ -20,6 +20,8 @@ Flags: `--dry-run` prints the command instead of launching; `--lexical` routes
 offline without Jev; `--headless` runs once and exits; `--isolate` hides your
 own MCP servers ([isolation](#isolation)). If Jev is unreachable, loadout falls back to keyword
 ranking and says so: an unreachable Jev delays a launch but does not stop it.
+On Windows, launching needs the host's native `.exe`. A `.cmd` or `.bat`
+host is refused before routing; `--dry-run` still prints the command.
 Each launch writes its decision, copies of the selected and offered skills
 and any generated config to `~/.loadout/sessions/<id>/` (under
 `$LOADOUT_HOME` when set).
