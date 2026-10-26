@@ -111,9 +111,10 @@ backlog, B7).
   so both remain listed conservatively. Codex's database writes and API-key
   alternative remain Erik's decision (backlog, B7).
 
-## C14 method (not run yet): three prompts with and without loadout
+## C14 method: three prompts with and without loadout
 
-No usable measurement exists for this study. A first Codex pilot (2026-10-20,
+The first clean Codex pilot is recorded [below](#c14-results-2026-10-26-codex-luna-pilot-inconclusive).
+Its quality readings are invalidated by two measurement defects. An earlier Codex pilot (2026-10-20,
 at e9d7239) is confounded: Codex loaded the global `$CODEX_HOME/AGENTS.md` into
 every run of both arms, and the loadout agent's search query repeated its text
 (see the backlog, C14). It is not a result; the harness now refuses a study
@@ -166,7 +167,16 @@ The Codex pilot command is in [bench/README.md](README.md#ab-pilot-c14).
   deliverables are then compared blind in both orders (only a preference that
   holds in both counts), cross-family: Claude-host outputs by Codex (Sol),
   Codex-host outputs by Claude Opus. Skill names are removed from both arms'
-  files first; a skill's own template can still show the arm.
+  files first; a skill's own template can still show the arm. After the
+  2026-10-26 pilot, the saved judge view also includes one synthetic
+  `agent-final-message.txt` per run (prefixed with `_` until it cannot collide
+  with an agent file or directory): the last completed Codex `agent_message`
+  or Claude's `result` text, when present. It has the same 200,000-byte and
+  binary exclusion, local-path scrubbing, shared 60,000-character judge budget
+  and skill-name redaction as file outputs. Intermediate messages and reasoning
+  are excluded. The hidden-test fake elements now record `focus()` through
+  `doc.activeElement`; focus return remains optional and all behavioral
+  assertions are unchanged.
 - **Sample.** Two repeats per cell: ranges, not intervals, and "not shown" where
   the sample does not support a claim.
 - **What stops the batch.** A loadout arm that routed by keyword (the hook's
@@ -177,12 +187,14 @@ The Codex pilot command is in [bench/README.md](README.md#ab-pilot-c14).
   Deliverable checks skip token shapes glued after a letter or digit to avoid
   stopping on CSS or code identifiers, so an unheld credential with that prefix
   can be copied into `outputs/`; held secrets still match everywhere. These
-  checks cover warm-ups too, except that their deliverables are not copied or
-  shape-checked. A hit copies nothing, saves no stream, skips the hidden test and
+  checks cover warm-ups too, except that their work-folder deliverables are not
+  copied or shape-checked. Final responses are screened for held secrets even
+  when excluded by size, and for token shapes whenever eligible for persistence,
+  including warm-ups. A hit copies nothing, saves no stream, skips the hidden test and
   records an invalid row without matched text; a credential-bearing path is
   recorded as `<credential-bearing path>`. A shared sink gate replaces held secrets
   and token shapes with `<credential>` in rows, verdicts, reports, printed text and
-  public errors. Token shapes in stdout only withhold
+  public errors. Token shapes elsewhere in stdout only withhold
   that run's stream (`streamWithheld: "token shape"`); usage and tools are still
   parsed in memory and the run can count. Token shapes in excluded files,
   binaries, stderr and hook captures are not checked. Codex's login token is
@@ -204,7 +216,14 @@ The Codex pilot command is in [bench/README.md](README.md#ab-pilot-c14).
   working directory in the cached prefix unchanged.
 - **Rows.** `bench/results/<timestamp>-ab-pilot/`: `rows.jsonl` (names only, no
   paths, no skill text), `outputs/` (the deliverables, this machine's folders
-  written as variables), `verdicts.jsonl`, `report.md`. The raw streams are
+  written as variables, plus captured final responses), `verdicts.jsonl`,
+  `report.md`. Each new row's `wroteFile` records whether a deliverable was new
+  or changed relative to the seeded fixture; synthetic responses and unchanged
+  fixture files do not count. The report shows "Wrote a file" counts;
+  historical rows without this flag read "not shown". No study-setting keys
+  changed: the existing commit/dirty-diff fingerprint prevents resuming an old
+  study across these harness changes. Judge-only still uses the saved view and
+  does not retrofit historical rows or verdicts. The raw streams are
   kept in `streams/`, which is gitignored: they hold file contents, local paths
   and the hook's skill text.
 - **Not verified offline** (the first paid runs check them): `--max-turns` is
@@ -215,6 +234,97 @@ The Codex pilot command is in [bench/README.md](README.md#ab-pilot-c14).
   non-default `LOADOUT_HOME` reach `loadout mcp` and the hook under Claude's MCP
   environment allowlist and subprocess scrub (a keyword-routed loadout run
   stops the batch).
+
+## C14 results (2026-10-26): Codex Luna pilot, inconclusive
+
+**This pilot does not establish a quality difference or cost saving: two measurement
+defects invalidate its hidden-test and copy-prompt quality readings.**
+
+At main `a887d3d`, from WSL, Codex CLI 0.163.0, requested model
+`gpt-6-luna`, explicit medium effort, with a dedicated, freshly logged-in
+`CODEX_HOME`. Command: `npx tsx bench/ab.ts --run --hosts codex --codex-model
+gpt-6-luna --codex-effort medium`. Fourteen runs: two warm-ups, twelve measured,
+zero excluded; six pairs judged by Claude Opus in both orders. Cost: Jev under
+$0.05 (operator-reported); agent and judge subscription quota otherwise.
+No paid call was made to record or repair this result.
+
+Raw [rows](results/2026-10-26T16-04-19Z-ab-pilot-luna/rows.jsonl),
+[outputs](results/2026-10-26T16-04-19Z-ab-pilot-luna/outputs/),
+[verdicts](results/2026-10-26T16-04-19Z-ab-pilot-luna/verdicts.jsonl) and
+[report](results/2026-10-26T16-04-19Z-ab-pilot-luna/report.md) are preserved
+exactly as produced, with no raw streams. The report contains the original,
+defective hidden-test scores and file-only judge view; the fixes above apply
+to future runs. This is a negative/inconclusive result, not router tuning.
+
+Mean tokens per measured run (min–max), two repeats per cell; warm-ups
+excluded. Counters remain separate. Codex reports turn totals, not individual
+model requests. All cache-write counters were zero.
+
+| Prompt | Arm | Uncached input | Cache write | Cache read | Output |
+|---|---|---:|---:|---:|---:|
+| c1-web-14 | bare | 3,299 (1,959–4,638) | 0 | 23,680 (11,392–35,968) | 262 (118–406) |
+| c1-web-14 | loadout | 8,007 (6,642–9,371) | 0 | 42,496 (37,248–47,744) | 462 (358–565) |
+| c1-apps-08 | bare | 1,954 | 0 | 11,392 | 463 (434–491) |
+| c1-apps-08 | loadout | 10,291 (9,014–11,568) | 0 | 41,152 (34,176–48,128) | 903 (722–1,083) |
+| c1-debug-13 | bare | 13,850 (7,755–19,944) | 0 | 135,232 (99,200–171,264) | 2,188 (2,088–2,287) |
+| c1-debug-13 | loadout | 17,170 (13,282–21,057) | 0 | 95,232 (82,816–107,648) | 1,850 (1,645–2,054) |
+
+Loadout − bare, difference of unrounded means, rounded for display:
+
+| Prompt | Uncached input | Cache write | Cache read | Output |
+|---|---:|---:|---:|---:|
+| c1-web-14 | +4,708 | 0 | +18,816 | +200 |
+| c1-apps-08 | +8,337 | 0 | +29,760 | +440 |
+| c1-debug-13 | +3,320 | 0 | −40,000 | −338 |
+
+Cold-start warm-ups versus measured mean totals across the three prompts:
+
+| Arm | Warm-up uncached / write / read / output | Measured uncached / write / read / output |
+|---|---|---|
+| bare | 1,820 / 0 / 11,392 / 5 | 6,367 / 0 / 56,768 / 971 |
+| loadout | 1,820 / 0 / 11,392 / 5 | 11,822 / 0 / 59,627 / 1,071 |
+
+Original judge outcomes, descriptive counts only:
+
+| Prompt | Loadout | Bare | Tie | Split | Wrote a file, bare / loadout |
+|---|---:|---:|---:|---:|---|
+| c1-web-14 | 1 | 0 | 0 | 1 | 1 of 2 / 2 of 2 |
+| c1-apps-08 | 2 | 0 | 0 | 0 | 0 of 2 / 2 of 2 |
+| c1-debug-13 | 0 | 2 | 0 | 0 | 2 of 2 / 2 of 2 |
+
+Across the six pairs: loadout 3 (50%, Wilson 95% 19–81%), bare 2
+(33%, 10–70%), split 1 (17%, 3–56%). These intervals are descriptive only:
+repeats on three selected prompts are not independent population samples,
+and the measurement defects prevent a quality interpretation.
+
+1. **Hidden-test defect.** The saved report says loadout passes 2 of 2 and
+   bare 0 of 2. Both bare outputs pass the behavioral assertions but fail the
+   Node process because the hidden test's fake button has no `focus()`.
+   Escape correctly returns focus to the toggle, raising an uncaught
+   `TypeError: button.focus is not a function`. Reproduced by copying each
+   bare output and the hidden test into a temporary directory and running
+   `node --test`. The prompt asks for focus handling where relevant; the
+   judge prefers bare in both orders of both code pairs, citing focus return.
+   The apparent hidden-test advantage is invalid. The hook added no context
+   on either code run, so that loadout arm is close to bare plus idle MCP tools.
+2. **Missing-deliverable measurement defect.** Three of four bare copy runs
+   wrote no file: `c1-web-14/bare-1`, `c1-apps-08/bare-1` and `bare-2`.
+   All four loadout copy runs wrote one. The file-only judge saw empty sides;
+   its reasons explicitly cite missing files. The copy outcomes (loadout 3,
+   split 1) largely measure file production, not content quality. Final
+   responses were absent from the committable view, so their content cannot
+   be recovered here. A rerun must expose both final responses and files.
+3. **Cost and use.** `loadoutTools` is empty on every row. Only one skill
+   was opened: `ux-copy`, on `c1-web-14/loadout-1`. Hook-injected skills are
+   distinct from opened skills. Uncached input increased for every prompt;
+   cache reads increased for both copy prompts and fell for the code prompt.
+   These counters do not establish a monetary saving.
+
+**Not shown:** any quality difference; any cost saving; a causal benefit from
+skill use; generalization beyond these selected prompts; results for Claude,
+other models or effort levels; per-request Codex caching behavior; Codex's
+actual resolved model name, monetary cost or effective-input price.
+Left: rerun the Codex pilot with the fixes, in a fresh output folder.
 
 ## B1 results (2026-10-07): what installed skills cost per request
 

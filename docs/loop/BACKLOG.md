@@ -33,9 +33,7 @@ These items' rows and detail sections arrive with their PRs, so they are
 not repeated in the tables below. Delete a line here when its PR merges.
 Each PR body's **Review state** section has the round-by-round record.
 
-| PR | Item | State on 2026-10-22 |
-|---|---|---|
-| [#47](https://github.com/erik-hedstrom/loadout/pull/47) | C14 A/B pilot harness; adds B10 | final review round; explicit Codex effort is pinned and recorded; the clean Codex-only rerun needs a separately logged-in `CODEX_HOME` |
+None. C14?s harness merged in [#47](https://github.com/erik-hedstrom/loadout/pull/47); its measurement fixes await review below.
 
 ## A. Adoption and ease of use
 
@@ -429,7 +427,7 @@ Decisions for Erik:
 | C8 | P0 | Skill use with the hook-only plugin | Claude | local | done ([#25](https://github.com/erik-hedstrom/loadout/pull/25)): headless, the hook injected a skill's text in 6 of 10; Claude opened 0 of 10, none of the 4 it was only pointed to (D13) |
 | C9 | P1 | Host-model fallback router when there is no TypeSafe key | Claude (design) | cloud (code) + local (bench) | todo |
 | C10 | P2 | Bench quick fixes: sequential outcome judge, tier fixed across arms, stale A2 number | Claude | cloud | done ([#40](https://github.com/erik-hedstrom/loadout/pull/40)) |
-| C14 | P1 | A/B pilot: three prompts with and without loadout in the stock CLIs, tokens (cached apart from uncached) and quality | Claude (harness) + Erik (runs) | cloud (harness) + local (runs) | review ([#47](https://github.com/erik-hedstrom/loadout/pull/47)): harness, plan and tests done; explicit Codex effort and resume checks added, reviews addressed (resume refuses other settings or a batch-stopping row; credentials and keyword-routed loadout runs stop the batch, as RESULTS "What stops the batch" defines); the paid pilot has not run (needs `CLAUDE_CODE_OAUTH_TOKEN` and the TypeSafe key in a key file, from WSL) |
+| C14 | P1 | A/B pilot: three prompts with and without loadout in the stock CLIs, tokens (cached apart from uncached) and quality | Claude (harness) + Erik (runs) | cloud (harness) + local (runs) | in progress: harness merged ([#47](https://github.com/erik-hedstrom/loadout/pull/47)); clean Codex Luna pilot recorded (2026-10-26), inconclusive; hidden-test and missing-response measurement fixes implemented; rerun pending |
 
 **C13. Pure-Jev baseline without more model spend.**
 
@@ -737,7 +735,7 @@ their effect on caching and output quality, and a small Codex A/B he ran
 showed problems. `bench/ab.ts` runs it on the stock CLIs the way a user
 installs loadout: the plugin and MCP server in Claude Code, the MCP server and
 hook in Codex. Method, selection rule and caveats:
-[RESULTS](../../bench/RESULTS.md#c14-method-not-run-yet-three-prompts-with-and-without-loadout).
+[RESULTS](../../bench/RESULTS.md#c14-method-three-prompts-with-and-without-loadout).
 
 `npx tsx bench/ab.ts` (plan, $0), `--run [--repeats 2] [--hosts claude,codex]
 [--ids a,b] [--out <dir>]` (resumable; `INCOMPLETE` until judged),
@@ -815,8 +813,17 @@ Learnings (2026-10-26):
 - Codex effort is part of the persisted study settings and printed argv; changing or removing it refuses resume. The pilot pins medium explicitly because the model default is not a study setting.
 - The harness accepts the nine named effort levels in codex-cli 0.163.0; custom model-defined strings are outside this study interface.
 
-Left: run the pilot (Erik's go-ahead), write the results into RESULTS and
-`report.md`, and decide whether two repeats are enough to say anything.
+- The first clean Codex pilot at a887d3d used gpt-6-luna at medium effort:
+  14 runs (2 warm-ups), 0 excluded, 6 Opus-judged pairs. It is
+  [inconclusive](../../bench/RESULTS.md#c14-results-2026-10-26-codex-luna-pilot-inconclusive):
+  a missing fake `focus()` invalidated the hidden-test advantage, and three
+  bare copy runs had no files for the file-only judge. Final responses now
+  join the screened, bounded judge view; rows distinguish file writes from
+  final responses and unchanged fixture files. No MCP tools were called;
+  only one skill was opened. Uncached tokens rose for all three prompts;
+  neither quality improvement nor cost saving is shown.
+
+Left: rerun the Codex pilot with the fixes.
 
 ## D. Integrations and robustness
 
