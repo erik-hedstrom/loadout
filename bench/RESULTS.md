@@ -1569,47 +1569,69 @@ machine and process warmup. `test/jev-redaction.test.ts` compares normal and
 adversarial strings with the frozen regexes and bounds each timing case below
 100 ms. Cost: $0; no Jev or agent calls.
 
-## B11 replacement pilot (2026-10-23; quota-stopped)
+## B11 replacement pilot (2026-10-23; completed 2026-10-26)
 
 A fresh protocol-v3 pilot at `25b9d7a` used the same fixed first three tasks
 per kind: nine tasks, five arms and two models, or 90 planned sessions.
-OpenCode 1.19.3, Node v24.15.0, concurrency 2 and the 300-second deadline
-were fixed. The explicitly selected public-source corpus accepted 1,234
-distractors and rejected 28; its fingerprints and installed source revisions
-are in the [runtime protocol](results/2026-10-23T11-52-28Z-pilot-b11/protocol.json).
-Source, selection, stop and timing methods are in the
+The same run resumed with `--resume` on 2026-10-26 at that pinned commit;
+main's B11 code and dataset are identical. OpenCode 1.19.3, Node v24.15.0,
+concurrency 2 and the 300-second deadline were fixed. The explicitly selected
+public-source corpus accepted 1,234 distractors and rejected 28; its
+fingerprints and installed source revisions are in the
+[runtime protocol](results/2026-10-23T11-52-28Z-pilot-b11/protocol.json).
+Source, selection, resume and timing methods are in the
 [run notes](results/2026-10-23T11-52-28Z-pilot-b11/run-notes.json).
 The [raw rows](results/2026-10-23T11-52-28Z-pilot-b11/rows.jsonl) reproduce the
 [report](results/2026-10-23T11-52-28Z-pilot-b11/summary.md), which separates
 dev/test and includes Wilson 95% intervals.
 
-A DeepSeek attempt hit the persistent free usage limit; the harness exited 0.
-This was a controlled early stop, not completion. It recorded 48 attempts:
-47 valid outcomes and one usage-limit invalid, with 42 sessions unattempted.
-GLM completed all 45 identities. DeepSeek recorded two valid task-check
-failures and one invalid attempt, all in test/bare. Its other four arms are
-unmeasured. The invalid is not a quality failure; the 42 unattempted sessions
-have no observed failure reason. No quota polling or further model runs followed.
-Numeric HTTP status, quota amount and reset time were not established.
+The completed pilot contains **91 attempts, 90 unique identities and 90 valid
+sessions**, with no unattempted identities. GLM 5.3 Flash Free and DeepSeek
+V4.1 Flash Free each completed 45 valid sessions (nine tasks x five arms).
+The first 48 rows are preserved unchanged. The sole invalid is the historical
+DeepSeek test/bare `usage-limit` attempt; it is not a quality failure. Numeric
+HTTP status, quota amount and reset time were not established. Its identity
+completed on resume. Pooled operational valid completion is 18/19 (94.74%)
+for bare and 18/18 (100%) for each other arm. DeepSeek test/bare retains
+6/7 (85.71%) valid completion, below the report's 90% caution threshold.
 
-No recorded attempt timed out. Across all 48 attempts, wall-time nearest-rank
-p50/p95 were 21.762/82.316 seconds, with a maximum of 158.247 seconds.
-The observed session window was 820.483 seconds (13 min 40.483 s), excluding
-launch preflight and final reporting. Wall includes routing, checks and cleanup;
-startup and completed-step intervals do not partition it. These observations
-provide GLM runtime evidence for this small panel; two completed DeepSeek
-sessions do not establish its tails or a deadline for both models. The
-300-second deadline remains provisional. The 792-session study, retained
-quality and size break-even are **not shown**.
+Task-check outcomes below keep the six test tasks and three dev tasks separate.
+Each cell is passes/valid sessions, followed by its Wilson 95% interval.
+Dev rows are not evaluation evidence; no tuning was performed for this update.
 
-All-attempt Jev spend was **28 calls, $0.016171428**, below the $0.065
-replacement cap. Combined with the earlier 52 calls/$0.029791062, B11 totals
-**80 calls, $0.045962490**. Free-model billing was $0; provider quota was
-consumed. The original $0.10 pilot allowance was not exhausted.
+| Model | Arm | Test passes/valid (Wilson 95%) | Dev passes/valid (Wilson 95%) |
+|---|---|---:|---:|
+| GLM 5.3 Flash Free | bare | 1/6 (3–56%) | 2/3 (21–94%) |
+| GLM 5.3 Flash Free | mcp-all | 3/6 (19–81%) | 3/3 (44–100%) |
+| GLM 5.3 Flash Free | heavy-max | 6/6 (61–100%) | 3/3 (44–100%) |
+| GLM 5.3 Flash Free | gateway | 5/6 (44–97%) | 3/3 (44–100%) |
+| GLM 5.3 Flash Free | preselect | 5/6 (44–97%) | 2/3 (21–94%) |
+| DeepSeek V4.1 Flash Free | bare | 1/6 (3–56%) | 2/3 (21–94%) |
+| DeepSeek V4.1 Flash Free | mcp-all | 3/6 (19–81%) | 3/3 (44–100%) |
+| DeepSeek V4.1 Flash Free | heavy-max | 6/6 (61–100%) | 3/3 (44–100%) |
+| DeepSeek V4.1 Flash Free | gateway | 6/6 (61–100%) | 3/3 (44–100%) |
+| DeepSeek V4.1 Flash Free | preselect | 5/6 (44–97%) | 2/3 (21–94%) |
+
+**No attempt timed out.** Nearest-rank wall seconds over all recorded attempts,
+including the historical invalid, were:
+
+| Model | Attempts | p50 | p95 | Max |
+|---|---:|---:|---:|---:|
+| GLM 5.3 Flash Free | 45 | 21.813 | 82.316 | 158.247 |
+| DeepSeek V4.1 Flash Free | 46 | 22.484 | 128.665 | 160.024 |
+
+Wall includes routing, checks and cleanup; startup and completed-step intervals
+do not partition it. Keep **300 seconds for both models provisionally**;
+these nine tasks per arm and model do not establish full-study tails. The
+same tasks recur across arms and models, so the observations are not independent
+population-wide evidence. Retained quality, cost at retained quality and
+break-even are **not shown**. The 792-session full study is **not completed**.
+
+The resume made **38 Jev calls, $0.022266300**. Whole replacement-pilot
+all-attempt spend was **66 calls, $0.038437728**, below the $0.065 cumulative
+replacement cap. Combined with the earlier 52 calls/$0.029791062, B11 pilot
+totals are **118 calls, $0.068228790**, within the original $0.10 pilot
+allowance. Free-model billing was **$0**; provider quota was consumed.
 
 Reproduce offline with
 `npx tsx bench/b11-report.ts bench/results/2026-10-23T11-52-28Z-pilot-b11/rows.jsonl`.
-Any later resume must use this fresh output directory and the same source,
-dataset, Node, binary, library and settings. Valid passes and failures are
-skipped; the one invalid and 42 unattempted identities remain. Provider
-availability and a usable two-model pilot still gate the full study.

@@ -2,17 +2,17 @@
     "sourceCommit":  "25b9d7a784e1e2b45f8ea4000ebad013abc77deb",
     "datasetTree":  "997f9a3b50185b5cdd1beee08725c84162bb463f",
     "opencodeBinarySha256":  "179ca421d61eefeadfa0c50e084a6e79c1623734732f0f4593f81ccfd3ab7ee9",
-    "status":  "quota-stopped",
+    "status":  "complete",
     "exitCode":  0,
     "selection":  "First three tasks of each kind in dataset order, chosen before outcomes; one nine-task batch and fixed arm order.",
     "perKind":  3,
-    "recordedSessions":  48,
-    "validSessions":  47,
+    "recordedSessions":  91,
+    "validSessions":  90,
     "invalidSessions":  1,
-    "notStartedSessions":  42,
+    "notStartedSessions":  0,
     "jevBudgetUsd":  0.065,
-    "jevCalls":  28,
-    "jevCostUsd":  0.016171428,
+    "jevCalls":  66,
+    "jevCostUsd":  0.038437728,
     "modelCostUsd":  0,
     "stop":  {
                  "model":  "opencode/deepseek-v4.1-flash-free",
@@ -23,17 +23,17 @@
              },
     "observedSessionWindow":  {
                                   "firstStartedAt":  "2026-10-23T11:52:30.986Z",
-                                  "lastObservedEnd":  "2026-10-23T12:06:11.469Z",
-                                  "milliseconds":  820483,
-                                  "method":  "Minimum startedAt through maximum startedAt + wallMs across recorded attempts; excludes launch preflight and final reporting/copy overhead."
+                                  "lastObservedEnd":  "2026-10-26T13:21:42.796Z",
+                                  "milliseconds":  264551810,
+                                  "method":  "Minimum startedAt through maximum startedAt + wallMs across recorded attempts; includes the multi-day quota pause, not active run time; excludes launch preflight and final reporting/copy overhead."
                               },
     "timingMethod":  "Nearest-rank percentiles over wallMs for all recorded attempts, including invalid attempts; wall includes routing, checks and cleanup.",
     "notes":  [
-                  "Fresh protocol-v3 output; no legacy rows resumed. Runtime protocol.json is retained unchanged.",
-                  "The harness stopped new launches at a persistent usage-limit marker, drained active work and exited 0. This is an incomplete pilot, not a successful 90-session completion.",
-                  "GLM recorded all 45 planned valid identities. DeepSeek recorded two valid failures and one usage-limit invalid, all in test/bare; its remaining 42 identities were unattempted.",
-                  "An invalid attempt is not a task-quality failure. Unattempted sessions have no observed invalid reason.",
-                  "No provider polling, extra quota probes, replacement models, retries after the cap or full-study launch followed.",
-                  "The 300-second deadline was unchanged. DeepSeek has no runtime evidence in four arms, so a safe deadline for both models and retained quality remain unestablished."
+                  "Fresh protocol-v3 output resumed on 2026-10-26 with --resume at the same pinned source and settings. Runtime protocol.json is retained unchanged.",
+                  "The first 48 recorded attempts are preserved. The historical stop object describes the 2026-10-23 usage-limit stop, not the completed resume.",
+                  "Completed pilot: 91 recorded attempts, 90 unique identities, 90 valid sessions and no unattempted identities. Each model completed 45 valid sessions across nine tasks and five arms.",
+                  "The one preserved DeepSeek test/bare usage-limit attempt is invalid, not a task-quality failure. No attempt timed out.",
+                  "The resume added 38 Jev calls costing $0.022266300; the cumulative replacement pilot used 66 calls costing $0.038437728 and $0 free-model billing.",
+                  "The 300-second deadline is kept for both models provisionally; full-study tails, retained quality, cost at retained quality and break-even are not shown."
               ]
 }
