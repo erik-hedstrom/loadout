@@ -19,8 +19,8 @@ yet.
 The columns:
 - **Launch:** `loadout claude` / `loadout codex` start the agent with the
   selection.
-- **Tier:** the launch also sets the model for the chosen tier. Hosts without
-  a launch keep the user's model.
+- **Tier:** the launcher sets the model for the chosen tier once per session.
+  The hook and MCP tools keep the user's model.
 - **Hook:** a prompt hook routes each substantive prompt and adds the skills
   predicted to fit as context.
 - **Search:** `find_tools` and `load_skill` over MCP. `find_tools` covers
@@ -34,7 +34,8 @@ Notes:
    read, the selected MCP server's tool was called, and an injected skill was
    followed ([RESULTS](../bench/RESULTS.md#end-to-end-in-the-agents)).
 2. The launch passes the tier's model (`--model`, `-m`). No recorded run
-   shows a tier choice reaching the agent.
+   shows a tier choice reaching the agent. Tier-choice quality is not evaluated
+   ([RESULTS](../bench/RESULTS.md#threats-to-validity)).
 3. The plugin, one `claude -p --plugin-dir` run, 2026-10-08
    ([RESULTS](../bench/RESULTS.md#the-hook-plugin-in-the-claude-code-cli-2026-10-08)). The
    marketplace install is untested.

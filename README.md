@@ -17,6 +17,13 @@ makes the prediction, for about $0.001 per routing decision on the v4
 benchmark's requests
 ([RESULTS](bench/RESULTS.md#v4-2026-10-06-realistic-requests-on-the-real-library-judged)).
 
+loadout's [MCP tools](docs/mcp.md) let the agent search the library, and MCP
+servers you opt into the gateway are offered there too (untested in a host).
+The [launcher](docs/launcher.md) instead makes one decision per session:
+skills, MCP servers and a model tier. Tier-choice quality is not evaluated
+([RESULTS](bench/RESULTS.md#threats-to-validity)). Host checks and untested
+paths: [hosts](docs/hosts.md).
+
 ## Quickstart
 
 Needs Node 22.12+, a TypeSafe API key, and the `claude` or `codex` CLI. The

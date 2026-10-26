@@ -1,7 +1,7 @@
 {
   "name": "loadout",
   "version": "0.1.0",
-  "description": "Pick the model, skills and MCP servers for each coding-agent session from an unlimited library, using a cheap System One router.",
+  "description": "Add the skills that fit each prompt in Claude Code and Codex, or pick skills, MCP servers and a model tier per session with the launcher, from a separate library, using a cheap model (Jev).",
   "type": "module",
   "bin": {
     "loadout": "dist/cli.js"
@@ -23,7 +23,7 @@
     "@modelcontextprotocol/sdk": "^1.32.1",
     "smol-toml": "^1.9.0",
     "yaml": "^2.9.1",
-    "zod": "^4.6.5"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^26.6.4",
