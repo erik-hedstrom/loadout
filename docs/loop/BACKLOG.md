@@ -1415,6 +1415,7 @@ Learnings (2026-10-09):
 | E16 | P2 | Hygiene from #30's audit: control characters, `git ls-files` env, config symlink, echoed arguments | Codex | local | done ([#50](https://github.com/erik-hedstrom/loadout/pull/50)); key inheritance waits on Erik's decision |
 | E17 | P3 | One entry-point guard for bench scripts that survives symlinked paths | Codex + Claude review | cloud | done ([#51](https://github.com/erik-hedstrom/loadout/pull/51)); converting #47's guard follows that PR |
 | E18 | P1 | Patch the Vite advisories in the development lockfile | Codex | cloud | done ([#56](https://github.com/erik-hedstrom/loadout/pull/56)) |
+| E19 | P1 | Patch the production dependency advisories (zod, body-parser, fast-uri, ip-address) | Codex | cloud | review |
 
 **E18. npm advisories.** `npm audit` on main reported six advisories against
 Vite 8.3.2 (GHSA-698v-4r3x-3vcv, GHSA-r825-w8mm-5pxw, GHSA-587h-7wmj-h5pm,
@@ -1425,6 +1426,42 @@ Learnings (2026-10-22): Vite is development-only here (`vitest -> vite` and
 `npm audit --omit=dev` was already clean, so published users were never
 exposed. Only Vite's lockfile entry changes, within Vitest's peer range; no
 override is needed. The audit itself is the regression check.
+
+**E19. Production npm advisories.** `npm audit fix` (without `--force`)
+updates body-parser 2.3.0 -> 2.4.0 (GHSA-27r3-jxmh-p828), fast-uri 3.1.8 ->
+3.1.9 (GHSA-w74x-v6f9-j3xg, GHSA-xhq7-xmqj-769h, GHSA-wjr9-j795-jxcr,
+GHSA-333x-w4r6-6crp), ip-address 10.7.3 -> 10.7.5 (GHSA-rxp7-6hxx-x8q5),
+and zod 4.6.5 -> 4.6.7 (GHSA-mrhx-c7xc-m3w5). It also updates qs 6.16.0 ->
+6.16.1, required by body-parser 2.4.0. No package.json range changes: the
+existing zod `^4.6.5` already admits 4.6.6; the lockfile selects 4.6.7.
+
+Learnings (2026-10-26), from `npm ls body-parser fast-uri ip-address zod`:
+all four are production dependencies, not development-only.
+
+- `@modelcontextprotocol/sdk -> express -> body-parser`: `serveHttp` uses
+  `node:http` and the SDK's Hono adapter, without Express/body-parser
+  middleware (`src/mcp.ts:448`, `src/mcp.ts:463`, `src/mcp.ts:478`). The
+  compressed-body surface is not reached by this server.
+- `@modelcontextprotocol/sdk -> ajv -> fast-uri`: SDK schema resolution
+  includes fast-uri. The gateway supplies its own validator
+  (`src/mcp.ts:284`); the audit client uses the SDK default
+  (`src/audit.ts:247`). Reachability of the advisory URI inputs is not
+  established.
+- `@modelcontextprotocol/sdk -> express-rate-limit -> ip-address`: the HTTP
+  server uses its own in-flight cap (`src/mcp.ts:468`), without the SDK's
+  Express OAuth rate-limit handlers. Attacker-controlled Address6 input is
+  not established.
+- `zod` is direct and also under `@modelcontextprotocol/sdk`, directly and
+  via `zod-to-json-schema`. MCP validates bounded arrays (`src/mcp.ts:373`)
+  and SDK tool-list/result arrays (`src/mcp.ts:311`, `src/mcp.ts:333`);
+  oversized-collection exposure is possible through those upstream inputs.
+
+The audit itself is the regression check; no probes or exploits were run.
+Verification (Windows, Node 24.16.0, npm 11.13.0): both `npm audit --omit=dev`
+and `npm audit` report 0 vulnerabilities; `npm ci` installs 173 packages
+(174 audited); build and typecheck pass. `npm test`: 1,093 passed, 114 skipped
+(33 files passed, 4 skipped). Jev/API spend: $0. Independent review remains
+with the orchestrator; no push or PR from this implementation task.
 
 **E16. Terminal, config and git hygiene.** From the reviews of #30 (A3);
 all older than it.
