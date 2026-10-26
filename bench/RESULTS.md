@@ -1149,6 +1149,196 @@ repo-specific skills 97%, general 93% (threshold 0.8).
 4. **End-to-end pilot** (does the routed agent actually finish more tasks, for
    less?), possibly on `claude plugin eval`.
 
+## B11 pilot (2026-10-22): cached OpenCode sessions
+
+This is a harness pilot on nine synthetic fixture tasks, not held-out evidence
+for routing quality. The 108 task/model/arm identities produced 132 recorded
+attempts across an interrupted launch, resume and two final retries.
+[Raw rows](results/2026-10-22-b11/rows.jsonl),
+[protocol and limits](results/2026-10-22-b11/protocol.json), and
+[the reproducible report](results/2026-10-22-b11/summary.md) are committed.
+The report keeps test and dev rows separate, with Wilson 95% intervals for
+valid check outcomes, first-request versus later-request cache ratios, and
+dated official price snapshots. The fixtures deliberately name resources;
+they do not measure routing on ordinary requests.
+
+OpenCode was pinned to 1.19.3. The library copy accepted 1,237 manifests and
+rejected 28; native MCP arms configured 20 B7 fixture servers and three
+planted tools (488 tools total). Models saw only synthetic workspaces and
+text-only skill manifests. Free providers receive these inputs and may
+retain them. The agent's process namespace, home and workspace were isolated
+with bubblewrap; preflight proved the real home, checkout and outside canary
+unreadable. Fixture/gateway processes and the Jev credential stayed outside.
+
+Sessions ran in model/arm blocks. This gives a static configuration an
+opportunity to reuse its prefix across tasks; preselection can change its
+listing by task. The full runner rotates arm order between batches and
+repetitions. The nine-task pilot used one batch, so its arm order was fixed.
+Concurrency was 2 initially, 4 after resume, and 2 for the final two retries;
+the deadline was 90 seconds throughout. This operational pilot does not
+support a causal arm comparison. Two in-flight sessions were terminated at
+restart without final rows. Their usage is unavailable. Early timed-out
+attempts also discarded partial usage, so invalid-attempt token totals are
+lower bounds. Later attempts retain completed request counters on timeout.
+
+There were 74 recorded invalid attempts: 73 timeouts and one malformed event
+stream. Invalid attempts do not enter quality denominators. Both final
+DeepSeek preselection retries passed. No explicit 429/rate-limit event was
+recorded; free-tier throughput limits remain unestablished. The native
+skill-heavy arms read cached tokens and reached the deadline. Their completed
+session cost and quality are **not shown**. Quality retention and size-sweep
+break-even are **not shown**; the full study was not run.
+
+All 319 retained request-counter events passed the input/read/write/output/
+reasoning total cross-check; cache writes were zero. Hypothetical paid costs
+in the report use disjoint input/read/write buckets and separately priced
+output plus reasoning, following the pinned host's normalization. They do
+not predict another provider's tokenization, quality or billing.
+
+Cost: free-model spend $0; 52 Jev calls, $0.029791062 calculated input cost,
+within the $0.10 pilot cap. No frontier CLI or judge runs were made.
+
+Reproduce the report offline:
+
+```bash
+npx tsx bench/b11-report.ts bench/results/2026-10-22-b11/rows.jsonl > report.md
+```
+
+The production dataset's skill-needle prompts name the product, and planted
+skill names contain that product. Retrieving those needles is mostly lexical.
+B11 measures cost at retained quality, not router difficulty. The dataset has
+now been integrated; the real-task diagnostic and pilot below were stopped at
+a persistent free usage cap.
+
+The historical pilots used an ambient configured library intended to match
+`bench/data/library.sh`: controlled logs record 1,234 accepted distractors and
+28 rejections, plus the relevant plants. Exact accepted-name/content hashes
+and installed source revisions were not recorded; public-corpus provenance
+cannot be verified retrospectively. Their protocols retain those unknowns.
+Historical model sessions also shared the host network. Their Node checks
+used exit-code grading susceptible to early module exit before assertions;
+recorded pass rows are retained as observations, not verified quality evidence.
+New runs require explicit library provenance, isolated networking and expected
+hidden-test completion, and cannot silently resume these legacy protocols.
+Protocol v3 also records and checks the Node version. Hidden fixtures capture
+assertion and filesystem functions before importing generated code, and check
+children freeze shared JavaScript intrinsics. These guards do not retroactively
+verify historical grades or authenticate Node's internal test protocol; see
+the [checker limits](README.md#b11-opencode-sessions).
+
+## B11 real-task capacity bracket (2026-10-22; quota-stopped)
+
+The 72-task definitions and workspaces come from `186c781`; hidden checks now
+capture grading dependencies before importing generated code. Workspace and
+hidden-check paths are repository-relative; file-check paths are workspace-relative.
+These references are confined to the corresponding task-set directory.
+Hidden checks run with the workspace as cwd; the contract matched the harness.
+The solver never receives
+reference solutions, sibling checks or decoys. The lexical skill-needle
+limitation above still applies.
+
+The [long-deadline diagnostic](results/2026-10-22T10-37-00Z-diagnostic-b11/protocol.json)
+fixed the first skill task before outcomes for both full-library arms and
+both models. Both recorded GLM sessions reached the 1,200-second deadline;
+these are invalid attempts, not quality failures. DeepSeek `skills-all` was
+interrupted at the usage cap without a final row, and DeepSeek `all` never
+started. Its unknown usage is not reconstructed. See the
+[rows](results/2026-10-22T10-37-00Z-diagnostic-b11/rows.jsonl),
+[report](results/2026-10-22T10-37-00Z-diagnostic-b11/summary.md) and
+[scalar metadata samples](results/2026-10-22T10-37-00Z-diagnostic-b11/metadata-samples.jsonl).
+
+Both full-library arms were not usable in these GLM diagnostics. DeepSeek
+capacity is not shown because its diagnostic cells could not finish.
+
+| GLM arm | Completed steps | Uncached input | Cache read | Output | Max sampled compactions | Startup s | Step mean / max s | Lifecycle wall s |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| skills-all | 110 | 489,878 | 9,284,992 | 45,262 | 42 | 23.57 | 5.84 / 11.32 | 1,200.20 |
+| all | 108 | 689,255 | 14,031,936 | 49,697 | 54 | 18.28 | 6.39 / 19.20 | 1,200.75 |
+
+Compaction counts are maxima of cumulative snapshots, not sums or guaranteed
+final totals. Startup runs from process launch to first `step_start`; step
+durations use event arrival. They do not partition wall time: 534.74 s and
+492.59 s respectively lie outside startup and completed-step intervals.
+Gaps can include tools, MCP, request setup and network activity; this does
+not measure discovery time. Lifecycle wall includes preselection, checks
+and cleanup, and rows can exist without OpenCode launching.
+
+[Offline model metadata](results/2026-10-22T10-37-00Z-diagnostic-b11/model-info.json)
+declares 200,000 context and 32,000 output for both models, not independently
+verified provider limits. The pinned host's
+[overflow calculation](https://github.com/anomalyco/opencode/blob/v1.19.3/packages/opencode/src/session/overflow.ts)
+and [output default](https://github.com/anomalyco/opencode/blob/v1.19.3/packages/opencode/src/provider/transform.ts#L1385-L1387)
+yield a 168,000-token usable threshold. Maximum sampled GLM prompts were
+176,373 without MCP and 271,164 with MCP. Repeated compaction was observed;
+longer deadlines did not produce a valid completion in these two attempts.
+
+A [capacity bracket](results/2026-10-22T11-02-00Z-bracket-b11/protocol.json)
+fixed the first skill and first MCP task before outcomes, testing both models
+and stopping growth at the first candidate that compacted.
+
+| Requested distractor skills / base servers | Actual skills / servers / tools | Screen outcome |
+|---|---|---|
+| 250 / 5 | 274 / 20 / 509 | 4/4 completed without compaction, 15.12-43.22 s; 3 checks passed, 1 failed |
+| 500 / 10 | 524 / 20 / 509 | First GLM request used 171,784 prompt tokens and triggered compaction; screen stopped at 12.49 s |
+
+The selected `heavy-max` is **274 skills, 20 servers, 509 tools**. All 20
+servers carry required targets. This was the largest passing candidate in
+a discrete screen of completion without compaction; four observations do
+not establish broad reliability or retained quality. The rejected candidate
+was deliberately stopped: its raw `provider-error` classification is not
+evidence of a remote API error. MCP-size sweeps retain only their fixed
+subset's required servers so their actual sizes remain distinct.
+
+## B11 real-task pilot (2026-10-22; quota-stopped)
+
+The [pilot protocol](results/2026-10-22T11-13-00Z-pilot-b11/protocol.json)
+selected the first three tasks of each kind before outcomes: nine tasks,
+five arms and two models, or 90 planned sessions. It used OpenCode 1.19.3,
+300-second deadlines and concurrency 2. The launch source was `e0eaefd`;
+subsequent quota-stop fixes postdate the run. Actual arm order was `bare`,
+`mcp-all`, `heavy-max`, `gateway`, `preselect` in its single batch.
+Only 15 final rows were recorded; two more sessions were interrupted without
+rows at the usage cap and 73 had not started. See
+[raw rows](results/2026-10-22T11-13-00Z-pilot-b11/rows.jsonl),
+[split-separated report](results/2026-10-22T11-13-00Z-pilot-b11/summary.md) and
+[recomputable pooled accounting](results/2026-10-22T11-13-00Z-pilot-b11/pilot-totals.json).
+
+| Model / arm | Steps | Uncached input | Cache read | Output | Pass / fail / invalid | Valid / recorded |
+|---|---:|---:|---:|---:|---:|---:|
+| GLM / bare | 57 | 132,816 | 345,948 | 4,614 | 3 / 6 / 0 | 9 / 9 |
+| GLM / mcp-all | 1 | 101,439 | 0 | 21 | 0 / 0 / 6 | 0 / 6 |
+| Other eight model/arm cells | not shown | not shown | not shown | not shown | not measured | not measured |
+
+This table pools dev/test only for operational accounting. Timeouts are
+invalid, never quality failures. `mcp-all` is **not usable in observed
+attempts**; completion below 90% creates survivor bias in quality and cost.
+The recorded-row completion fractions omit the interrupted sessions, whose
+usage remains unknown. GLM bare lifecycle wall averaged 30.86 s (median
+16.53 s, maximum 121.57 s). Five of the six recorded MCP timeouts had no
+completed token step. The cause of these waits is not established. There
+is no causal arm comparison, retained-quality result or size break-even.
+
+The [controlled quota evidence](results/2026-10-22T11-13-00Z-pilot-b11/quota-evidence.json)
+records a persistent free usage-limit marker, `AI_APICallError` and
+`AI_RetryError`, with three internal attempts. No numeric HTTP 429, quota
+amount or reset time was established. All model calls stopped; no polling
+or replacement model runs followed. Maximum observed overlap across the
+pilot and diagnostic was three sessions, which establishes no safety claim
+for concurrency 3 or 4. The diagnostic and new pilot used $0 free-model
+billing and no Jev calls. Combined B11 Jev usage remains **52 calls,
+$0.029791062** from the earlier synthetic pilot.
+
+The offline full plan schedules **792 sessions** across both models: 720 in
+five full-task arms and 72 in four size arms. At concurrency 2 and a
+300-second deadline, its 448 waves have an all-deadline schedule of
+134,400 seconds (**37 h 20 min**), excluding setup, routing, checks, cleanup
+and rate-limit waits. This is not expected wall time. A conditional scenario
+of 31 seconds per wave gives 448 x 31 = 13,888 seconds (**3 h 51 min 28 s**),
+but other arms are unmeasured and this is **not a prediction**. Expected
+study time is not established; quota reset time is unknown. The full study
+has not run and requires a completed usable pilot. Exact resume and full
+commands are in the [handoff](../docs/loop/B11-HANDOFF.md).
+
 ## E14 matching-time regression (2026-10-22)
 
 Local synthetic check on Node 24.15.0 in WSL2; [raw observations](results/2026-10-22-e14-redaction/timing.json).
@@ -1160,3 +1350,48 @@ near miss took 10.44 ms. These are single observations, dependent on this
 machine and process warmup. `test/jev-redaction.test.ts` compares normal and
 adversarial strings with the frozen regexes and bounds each timing case below
 100 ms. Cost: $0; no Jev or agent calls.
+
+## B11 replacement pilot (2026-10-23; quota-stopped)
+
+A fresh protocol-v3 pilot at `25b9d7a` used the same fixed first three tasks
+per kind: nine tasks, five arms and two models, or 90 planned sessions.
+OpenCode 1.19.3, Node v24.15.0, concurrency 2 and the 300-second deadline
+were fixed. The explicitly selected public-source corpus accepted 1,234
+distractors and rejected 28; its fingerprints and installed source revisions
+are in the [runtime protocol](results/2026-10-23T11-52-28Z-pilot-b11/protocol.json).
+Source, selection, stop and timing methods are in the
+[run notes](results/2026-10-23T11-52-28Z-pilot-b11/run-notes.json).
+The [raw rows](results/2026-10-23T11-52-28Z-pilot-b11/rows.jsonl) reproduce the
+[report](results/2026-10-23T11-52-28Z-pilot-b11/summary.md), which separates
+dev/test and includes Wilson 95% intervals.
+
+A DeepSeek attempt hit the persistent free usage limit; the harness exited 0.
+This was a controlled early stop, not completion. It recorded 48 attempts:
+47 valid outcomes and one usage-limit invalid, with 42 sessions unattempted.
+GLM completed all 45 identities. DeepSeek recorded two valid task-check
+failures and one invalid attempt, all in test/bare. Its other four arms are
+unmeasured. The invalid is not a quality failure; the 42 unattempted sessions
+have no observed failure reason. No quota polling or further model runs followed.
+Numeric HTTP status, quota amount and reset time were not established.
+
+No recorded attempt timed out. Across all 48 attempts, wall-time nearest-rank
+p50/p95 were 21.762/82.316 seconds, with a maximum of 158.247 seconds.
+The observed session window was 820.483 seconds (13 min 40.483 s), excluding
+launch preflight and final reporting. Wall includes routing, checks and cleanup;
+startup and completed-step intervals do not partition it. These observations
+provide GLM runtime evidence for this small panel; two completed DeepSeek
+sessions do not establish its tails or a deadline for both models. The
+300-second deadline remains provisional. The 792-session study, retained
+quality and size break-even are **not shown**.
+
+All-attempt Jev spend was **28 calls, $0.016171428**, below the $0.065
+replacement cap. Combined with the earlier 52 calls/$0.029791062, B11 totals
+**80 calls, $0.045962490**. Free-model billing was $0; provider quota was
+consumed. The original $0.10 pilot allowance was not exhausted.
+
+Reproduce offline with
+`npx tsx bench/b11-report.ts bench/results/2026-10-23T11-52-28Z-pilot-b11/rows.jsonl`.
+Any later resume must use this fresh output directory and the same source,
+dataset, Node, binary, library and settings. Valid passes and failures are
+skipped; the one invalid and 42 unattempted identities remain. Provider
+availability and a usable two-model pilot still gate the full study.

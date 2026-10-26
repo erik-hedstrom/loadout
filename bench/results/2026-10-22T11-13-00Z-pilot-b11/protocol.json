@@ -1,0 +1,152 @@
+{
+  "status": "quota-stopped",
+  "taskFile": "bench/data/b11/tasks.jsonl",
+  "selectedTaskIds": [
+    "b11-skill-firgrove-release",
+    "b11-skill-mistvale-release",
+    "b11-skill-cedar-postgres",
+    "b11-mcp-issue-title",
+    "b11-mcp-table-retention",
+    "b11-mcp-element-banner",
+    "b11-plain-bug-unique-values",
+    "b11-plain-bug-chunk-tail",
+    "b11-plain-bug-zero-bounds"
+  ],
+  "selection": "First three tasks of each kind in dataset order, chosen before outcomes. One nine-task batch; fixed arm order.",
+  "opencodeVersion": "1.19.3",
+  "models": [
+    "opencode/glm-5.3-flash-free",
+    "opencode/deepseek-v4.1-flash-free"
+  ],
+  "arms": [
+    "bare",
+    "mcp-all",
+    "heavy-max",
+    "gateway",
+    "preselect"
+  ],
+  "heavyMax": {
+    "skills": 250,
+    "servers": 5,
+    "actualSkills": 274,
+    "actualServers": 20,
+    "actualTools": 509
+  },
+  "reps": 1,
+  "batchSize": 9,
+  "perKind": 3,
+  "concurrency": 2,
+  "timeoutSeconds": 300,
+  "jevBudgetUsd": 0.065,
+  "plannedSessions": 90,
+  "recordedSessions": 15,
+  "interruptedWithoutFinalRows": 2,
+  "notStartedSessions": 73,
+  "modelCostUsd": 0,
+  "jevCalls": 0,
+  "jevCostUsd": 0,
+  "coverage": [
+    {
+      "model": "opencode/glm-5.3-flash-free",
+      "arm": "bare",
+      "planned": 9,
+      "recorded": 9
+    },
+    {
+      "model": "opencode/glm-5.3-flash-free",
+      "arm": "mcp-all",
+      "planned": 9,
+      "recorded": 6
+    },
+    {
+      "model": "opencode/glm-5.3-flash-free",
+      "arm": "heavy-max",
+      "planned": 9,
+      "recorded": 0
+    },
+    {
+      "model": "opencode/glm-5.3-flash-free",
+      "arm": "gateway",
+      "planned": 9,
+      "recorded": 0
+    },
+    {
+      "model": "opencode/glm-5.3-flash-free",
+      "arm": "preselect",
+      "planned": 9,
+      "recorded": 0
+    },
+    {
+      "model": "opencode/deepseek-v4.1-flash-free",
+      "arm": "bare",
+      "planned": 9,
+      "recorded": 0
+    },
+    {
+      "model": "opencode/deepseek-v4.1-flash-free",
+      "arm": "mcp-all",
+      "planned": 9,
+      "recorded": 0
+    },
+    {
+      "model": "opencode/deepseek-v4.1-flash-free",
+      "arm": "heavy-max",
+      "planned": 9,
+      "recorded": 0
+    },
+    {
+      "model": "opencode/deepseek-v4.1-flash-free",
+      "arm": "gateway",
+      "planned": 9,
+      "recorded": 0
+    },
+    {
+      "model": "opencode/deepseek-v4.1-flash-free",
+      "arm": "preselect",
+      "planned": 9,
+      "recorded": 0
+    }
+  ],
+  "rows": "rows.jsonl",
+  "report": "summary.md",
+  "aggregate": "pilot-totals.json",
+  "quotaEvidence": "quota-evidence.json",
+  "notes": [
+    "Nine GLM bare sessions completed: three checks passed and six failed. Six recorded GLM mcp-all sessions reached the 300-second deadline and are invalid, not quality failures.",
+    "Two in-flight pilot sessions were interrupted without final rows at the persistent free usage cap. Their usage is unknown; no rows or new telemetry fields were fabricated. The remaining 73 planned sessions had not started.",
+    "Persisted-row completion coverage does not account for those interrupted sessions or the unstarted study cells. Most arms and all DeepSeek pilot cells remain unmeasured.",
+    "The maximum observed overlap across this pilot and the diagnostic was three sessions. No safety inference at concurrency three or four follows.",
+    "The free usage marker and API/retry error classes were observed, with three internal attempts. Numeric HTTP status, quota and reset time were not established.",
+    "All provider calls stopped. Resume only after provider availability returns; the full study still requires a completed usable pilot.",
+    "The new real-task runs spent no Jev credit. Combined B11 spend remains 52 Jev calls and USD 0.029791062 from the earlier synthetic pilot.",
+    "The pilot ran before the subsequent quota-stop runner fixes; sourceCommit identifies the launch source. Reports were regenerated offline from the final reporting source."
+  ],
+  "sourceCommit": "e0eaefd",
+  "historicalLibrary": {
+    "selection": "Ambient configured loadout library; not an explicit --library argument.",
+    "intendedCorpus": "bench/data/library.sh",
+    "acceptedDistractors": 1234,
+    "rejectedDistractors": 28,
+    "plantedSkills": 24,
+    "acceptedNamesSha256": null,
+    "contentSha256": null,
+    "observedSourceRevisions": null,
+    "provenanceVerified": false,
+    "limitation": "Counts were retained in controlled runner logs. Per-skill origins, source revisions, exact accepted names and original content were not captured at run time; the intended public corpus cannot be verified retrospectively."
+  },
+  "historicalIsolation": {
+    "network": "Shared host network, including unrelated loopback listeners. New runs require pasta isolation.",
+    "nodeChecks": "Legacy exit-code grading could accept an early module exit before assertions. New runs require expected test-case completion evidence.",
+    "resume": "Use a fresh output directory with the new harness; legacy protocol and unknown library fingerprints cannot be resumed as equivalent."
+  },
+  "quotaEvidenceMethod": {
+    "identification": "Match OpenCode processes by ancestry to the owned benchmark runner, its cwd and requested output directory. Match the namespace home inode/device to the owned session home.",
+    "input": "Read each owned session data/opencode/log/*.log in memory, taking only its final 1000000 characters. No log text persisted.",
+    "markerRegex": "free\\s+usage\\s+limit (case-insensitive)",
+    "errorClassRegex": "AI_(?:APICall|Retry)Error",
+    "retryCountRegex": "Failed after (\\d+) attempts (case-insensitive)",
+    "counterSql": "select json_extract(data,'$.type'),count(*) from part group by 1",
+    "projection": "Persist only marker booleans, recognized constant error classes, integer internal retry counts and step/compaction counts, with UTC observation time. No HTTP status or reset time was inferred.",
+    "stop": "After validating the usage marker for the owned sessions, freeze both schedulers, terminate them, and verify sandbox descendants exited before cleanup. Interrupted rows were not reconstructed."
+  }
+}

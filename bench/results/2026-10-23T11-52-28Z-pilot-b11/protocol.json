@@ -1,0 +1,317 @@
+{
+  "harnessVersion": 3,
+  "opencodeVersion": "1.19.3",
+  "nodeVersion": "v24.15.0",
+  "arms": [
+    "bare",
+    "mcp-all",
+    "heavy-max",
+    "gateway",
+    "preselect"
+  ],
+  "models": [
+    "opencode/glm-5.3-flash-free",
+    "opencode/deepseek-v4.1-flash-free"
+  ],
+  "reps": 1,
+  "batchSize": 9,
+  "sweepPerKind": 3,
+  "heavyMax": {
+    "skills": 250,
+    "servers": 5
+  },
+  "library": {
+    "corpus": "bench/data/library.sh",
+    "accepted": 1234,
+    "rejected": 28,
+    "namesSha256": "1c8393f3e13d8bca04b30db3da9c8c6a5eeece5319a8e9a7a722573c3e543d77",
+    "contentSha256": "5c59a1ef19e687913b09b640e518397ed41f5de6142f76481f27d02058e41ad1",
+    "sourcesSha256": "1caa9be3cad4658e7122452cc3fc4641b2cc4123718306d77b7a45297e43b2e1",
+    "sources": [
+      {
+        "source": "https://github.com/101-skills/superpowers",
+        "revision": "becc25649700d5457772a00e5143e28ccf9e5afa",
+        "corpusCommit": "becc25649700",
+        "accepted": 85
+      },
+      {
+        "source": "https://github.com/ComposioHQ/awesome-claude-skills/tree/master/changelog-generator",
+        "revision": "be2a406907dbc61b73e6827ded415c96139d13a2",
+        "corpusCommit": "be2a406907db",
+        "accepted": 1
+      },
+      {
+        "source": "https://github.com/ComposioHQ/awesome-claude-skills/tree/master/competitive-ads-extractor",
+        "revision": "be2a406907dbc61b73e6827ded415c96139d13a2",
+        "corpusCommit": "be2a406907db",
+        "accepted": 1
+      },
+      {
+        "source": "https://github.com/ComposioHQ/awesome-claude-skills/tree/master/content-research-writer",
+        "revision": "be2a406907dbc61b73e6827ded415c96139d13a2",
+        "corpusCommit": "be2a406907db",
+        "accepted": 1
+      },
+      {
+        "source": "https://github.com/ComposioHQ/awesome-claude-skills/tree/master/developer-growth-analysis",
+        "revision": "be2a406907dbc61b73e6827ded415c96139d13a2",
+        "corpusCommit": "be2a406907db",
+        "accepted": 1
+      },
+      {
+        "source": "https://github.com/ComposioHQ/awesome-claude-skills/tree/master/domain-name-brainstormer",
+        "revision": "be2a406907dbc61b73e6827ded415c96139d13a2",
+        "corpusCommit": "be2a406907db",
+        "accepted": 1
+      },
+      {
+        "source": "https://github.com/ComposioHQ/awesome-claude-skills/tree/master/file-organizer",
+        "revision": "be2a406907dbc61b73e6827ded415c96139d13a2",
+        "corpusCommit": "be2a406907db",
+        "accepted": 1
+      },
+      {
+        "source": "https://github.com/ComposioHQ/awesome-claude-skills/tree/master/image-enhancer",
+        "revision": "be2a406907dbc61b73e6827ded415c96139d13a2",
+        "corpusCommit": "be2a406907db",
+        "accepted": 1
+      },
+      {
+        "source": "https://github.com/ComposioHQ/awesome-claude-skills/tree/master/invoice-organizer",
+        "revision": "be2a406907dbc61b73e6827ded415c96139d13a2",
+        "corpusCommit": "be2a406907db",
+        "accepted": 1
+      },
+      {
+        "source": "https://github.com/ComposioHQ/awesome-claude-skills/tree/master/langsmith-fetch",
+        "revision": "be2a406907dbc61b73e6827ded415c96139d13a2",
+        "corpusCommit": "be2a406907db",
+        "accepted": 1
+      },
+      {
+        "source": "https://github.com/ComposioHQ/awesome-claude-skills/tree/master/lead-research-assistant",
+        "revision": "be2a406907dbc61b73e6827ded415c96139d13a2",
+        "corpusCommit": "be2a406907db",
+        "accepted": 1
+      },
+      {
+        "source": "https://github.com/ComposioHQ/awesome-claude-skills/tree/master/meeting-insights-analyzer",
+        "revision": "be2a406907dbc61b73e6827ded415c96139d13a2",
+        "corpusCommit": "be2a406907db",
+        "accepted": 1
+      },
+      {
+        "source": "https://github.com/ComposioHQ/awesome-claude-skills/tree/master/raffle-winner-picker",
+        "revision": "be2a406907dbc61b73e6827ded415c96139d13a2",
+        "corpusCommit": "be2a406907db",
+        "accepted": 1
+      },
+      {
+        "source": "https://github.com/ComposioHQ/awesome-claude-skills/tree/master/tailored-resume-generator",
+        "revision": "be2a406907dbc61b73e6827ded415c96139d13a2",
+        "corpusCommit": "be2a406907db",
+        "accepted": 1
+      },
+      {
+        "source": "https://github.com/ComposioHQ/awesome-claude-skills/tree/master/twitter-algorithm-optimizer",
+        "revision": "be2a406907dbc61b73e6827ded415c96139d13a2",
+        "corpusCommit": "be2a406907db",
+        "accepted": 1
+      },
+      {
+        "source": "https://github.com/ComposioHQ/awesome-claude-skills/tree/master/video-downloader",
+        "revision": "be2a406907dbc61b73e6827ded415c96139d13a2",
+        "corpusCommit": "be2a406907db",
+        "accepted": 1
+      },
+      {
+        "source": "https://github.com/K-Dense-AI/scientific-agent-skills",
+        "revision": "92ace75ac21efe19a620434e0ca4e356081fe807",
+        "corpusCommit": "92ace75ac21e",
+        "accepted": 177
+      },
+      {
+        "source": "https://github.com/addyosmani/agent-skills",
+        "revision": "1401c8b8030e023baeebb31781a6653fe8e93026",
+        "corpusCommit": "1401c8b8030e",
+        "accepted": 24
+      },
+      {
+        "source": "https://github.com/anthropics/knowledge-work-plugins",
+        "revision": "8444efcd48f7012f09797778a36a33e73d0861f4",
+        "corpusCommit": "8444efcd48f7",
+        "accepted": 213
+      },
+      {
+        "source": "https://github.com/anthropics/skills",
+        "revision": "683bc88e56f3e09ba94f7055977f3d3aa499f202",
+        "corpusCommit": "683bc88e56f3",
+        "accepted": 19
+      },
+      {
+        "source": "https://github.com/cloudflare/skills",
+        "revision": "41e0d19858946d18af9ee2c2feebbe2e11d829ff",
+        "corpusCommit": "41e0d1985894",
+        "accepted": 16
+      },
+      {
+        "source": "https://github.com/designed-by-ai/skills",
+        "revision": "1c332ee9f3852714ac37278e7215d6512e6eca9c",
+        "corpusCommit": "1c332ee9f385",
+        "accepted": 1
+      },
+      {
+        "source": "https://github.com/dotnet/skills",
+        "revision": "6bd184d0347c97da442ce2dade62666216fe7428",
+        "corpusCommit": "6bd184d0347c",
+        "accepted": 99
+      },
+      {
+        "source": "https://github.com/flowkit-labs/skills",
+        "revision": "0c9e2b63f504a296a86e45ed3a60a426dd979ca6",
+        "corpusCommit": "0c9e2b63f504",
+        "accepted": 1
+      },
+      {
+        "source": "https://github.com/getsentry/skills",
+        "revision": "d18b7aa8ba878354e5c348310230e652f7690f9c",
+        "corpusCommit": "d18b7aa8ba87",
+        "accepted": 25
+      },
+      {
+        "source": "https://github.com/google/agents-cli",
+        "revision": "2c3945901e8e5cc933fa94fa44d1d4aaf644b596",
+        "corpusCommit": "2c3945901e8e",
+        "accepted": 7
+      },
+      {
+        "source": "https://github.com/google/skills",
+        "revision": "d6eee396ed6a51871cc3f0979c5ff1be26d35d10",
+        "corpusCommit": "d6eee396ed6a",
+        "accepted": 150
+      },
+      {
+        "source": "https://github.com/heygen-com/hyperframes",
+        "revision": "568dc2ae5bbc0fc7f3acce5b3f6e745f7b1c670c",
+        "corpusCommit": "568dc2ae5bbc",
+        "accepted": 21
+      },
+      {
+        "source": "https://github.com/huggingface/skills",
+        "revision": "ca0325bb20b2d0a1b2efa893670c4c72f79e707b",
+        "corpusCommit": "ca0325bb20b2",
+        "accepted": 26
+      },
+      {
+        "source": "https://github.com/juliusbrussee/caveman",
+        "revision": "6571943370f7c9d4de1946481177ee7b306cd8e8",
+        "corpusCommit": "6571943370f7",
+        "accepted": 22
+      },
+      {
+        "source": "https://github.com/kepano/obsidian-skills",
+        "revision": "3ccff5338ea700537839b21900aa5358a0402c98",
+        "corpusCommit": "3ccff5338ea7",
+        "accepted": 6
+      },
+      {
+        "source": "https://github.com/larksuite/cli",
+        "revision": "7beffb086d7fa3c5b843d8affa7c089f49cfc65e",
+        "corpusCommit": "7beffb086d7f",
+        "accepted": 28
+      },
+      {
+        "source": "https://github.com/leonxlnx/taste-skill",
+        "revision": "ce26fc25c0e5e8cab638f883de62d9a86ee5e45b",
+        "corpusCommit": "ce26fc25c0e5",
+        "accepted": 13
+      },
+      {
+        "source": "https://github.com/lllllllama/rigorpilot-skills",
+        "revision": "fb3ccdf5aa64b1fa5b1d0463e666a8bc8bc26e01",
+        "corpusCommit": "fb3ccdf5aa64",
+        "accepted": 11
+      },
+      {
+        "source": "https://github.com/mattpocock/skills",
+        "revision": "4588b32ecab9ecc9fc8cc6b6c5e7d675b6004b0d",
+        "corpusCommit": "4588b32ecab9",
+        "accepted": 38
+      },
+      {
+        "source": "https://github.com/microsoft/azure-skills",
+        "revision": "344bd5b3e041445237de09007ef62f4b3c51805d",
+        "corpusCommit": "344bd5b3e041",
+        "accepted": 38
+      },
+      {
+        "source": "https://github.com/obra/superpowers",
+        "revision": "8ca22dba9a94f28898bbce59f2537ff4d87c747d",
+        "corpusCommit": "8ca22dba9a94",
+        "accepted": 15
+      },
+      {
+        "source": "https://github.com/openai/skills",
+        "revision": "49f948faa9258a0c61caceaf225e179651397431",
+        "corpusCommit": "49f948faa925",
+        "accepted": 40
+      },
+      {
+        "source": "https://github.com/pbakaus/impeccable",
+        "revision": "0fd148c49724300b7ed11d96ad95c120dd137d93",
+        "corpusCommit": "0fd148c49724",
+        "accepted": 1
+      },
+      {
+        "source": "https://github.com/prime-skills/runcomfy-agent-skills",
+        "revision": "fca19ae084c2ae4667f5c8affbb99da5103d5832",
+        "corpusCommit": "fca19ae084c2",
+        "accepted": 25
+      },
+      {
+        "source": "https://github.com/remotion-dev/skills",
+        "revision": "473352613039e718e46655a26df224851e84c4aa",
+        "corpusCommit": "473352613039",
+        "accepted": 11
+      },
+      {
+        "source": "https://github.com/supabase/agent-skills",
+        "revision": "c9be0e931b7930f7d02126d04774d904c381e7d7",
+        "corpusCommit": "c9be0e931b79",
+        "accepted": 2
+      },
+      {
+        "source": "https://github.com/trailofbits/skills",
+        "revision": "82fe8226252622fa807643bdca1710901198553a",
+        "corpusCommit": "82fe82262526",
+        "accepted": 85
+      },
+      {
+        "source": "https://github.com/vercel-labs/agent-browser",
+        "revision": "526157cfd4ec64f45939f9ba0f10d5936aa7ac33",
+        "corpusCommit": "526157cfd4ec",
+        "accepted": 10
+      },
+      {
+        "source": "https://github.com/vercel-labs/agent-skills",
+        "revision": "063bee94c3f4df8453406c830b0a7df0f2860278",
+        "corpusCommit": "063bee94c3f4",
+        "accepted": 9
+      },
+      {
+        "source": "https://github.com/vercel-labs/skills",
+        "revision": "14cf84aa922cccc7e5b11fee5af9a01b3750fddf",
+        "corpusCommit": "14cf84aa922c",
+        "accepted": 1
+      }
+    ]
+  },
+  "taskCounts": {
+    "plain": 3,
+    "skill-needle": 3,
+    "mcp-needle": 3
+  },
+  "plannedSessions": 90,
+  "concurrency": 2,
+  "timeoutSeconds": 300
+}

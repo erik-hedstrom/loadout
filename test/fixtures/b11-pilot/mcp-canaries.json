@@ -1,0 +1,65 @@
+[
+    {
+        "response":  "PILOT-MCP-1",
+        "description":  "Get synthetic pilot lookup 1 value; write its returned value to answer.txt.",
+        "args":  {
+                     "id":  "pilot-1"
+                 },
+        "server":  "tracker",
+        "inputSchema":  {
+                            "additionalProperties":  false,
+                            "properties":  {
+                                               "id":  {
+                                                          "type":  "string"
+                                                      }
+                                           },
+                            "type":  "object",
+                            "required":  [
+                                             "id"
+                                         ]
+                        },
+        "tool":  "pilot_lookup_1"
+    },
+    {
+        "response":  "PILOT-MCP-2",
+        "description":  "Get synthetic pilot lookup 2 value; write its returned value to answer.txt.",
+        "args":  {
+                     "id":  "pilot-2"
+                 },
+        "server":  "tracker",
+        "inputSchema":  {
+                            "additionalProperties":  false,
+                            "properties":  {
+                                               "id":  {
+                                                          "type":  "string"
+                                                      }
+                                           },
+                            "type":  "object",
+                            "required":  [
+                                             "id"
+                                         ]
+                        },
+        "tool":  "pilot_lookup_2"
+    },
+    {
+        "response":  "PILOT-MCP-3",
+        "description":  "Get synthetic pilot lookup 3 value; write its returned value to answer.txt.",
+        "args":  {
+                     "id":  "pilot-3"
+                 },
+        "server":  "tracker",
+        "inputSchema":  {
+                            "additionalProperties":  false,
+                            "properties":  {
+                                               "id":  {
+                                                          "type":  "string"
+                                                      }
+                                           },
+                            "type":  "object",
+                            "required":  [
+                                             "id"
+                                         ]
+                        },
+        "tool":  "pilot_lookup_3"
+    }
+]
