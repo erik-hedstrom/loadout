@@ -54,8 +54,9 @@ All numbers, caveats, raw-result links and recorded costs are in
   has no usable measurement; its first pilot was confounded.
 - **Not shown:** [B7's configured-MCP overhead study](bench/RESULTS.md#b7-method-not-run-yet-what-configured-mcp-servers-cost-per-request)
   has not run; [model-tier choice](bench/RESULTS.md#threats-to-validity)
-  is not evaluated. [B11](bench/RESULTS.md#b11-replacement-pilot-2026-10-23-quota-stopped)
-  does not establish retained quality or size break-even; the full study is unrun.
+  is not evaluated. [B11's completed replacement pilot](bench/RESULTS.md#b11-replacement-pilot-2026-10-23-completed-2026-10-26)
+  does not establish retained quality or size break-even; the full study is
+  not completed.
 
 ## Pick up here
 
@@ -64,9 +65,9 @@ All numbers, caveats, raw-result links and recorded costs are in
    arm is blocked until a tool-less Codex judge is available (E12).
    [Method and limits](bench/RESULTS.md#c14-method-not-run-yet-three-prompts-with-and-without-loadout);
    [run command](bench/README.md#ab-pilot-c14).
-2. **B11:** the replacement pilot stopped at the free usage limit. Resume
-   when quota allows before attempting the full study.
-   [Evidence](bench/RESULTS.md#b11-replacement-pilot-2026-10-23-quota-stopped);
+2. **B11:** the replacement pilot completed (90 valid sessions). Resume the
+   792-session full study into its own output folder as the free quota allows.
+   [Evidence](bench/RESULTS.md#b11-replacement-pilot-2026-10-23-completed-2026-10-26);
    [commands and handoff](docs/loop/B11-HANDOFF.md).
 3. **Prompt caching:** [CACHE-TRACK.md](docs/loop/CACHE-TRACK.md) defines the
    boundary and [BACKLOG section F](docs/loop/BACKLOG.md#f-prompt-caching)
