@@ -235,18 +235,17 @@ function heldSecretLeak(work: string, secrets: string[], dir = work): Leak | nul
  * Held secrets stop any run; token shapes stop only files that would reach the judge. The copy is the judge's view
  * (`deliverables` in pairwise.ts): binary files and files over JUDGE_MAX_BYTES are left out there, so they are here too.
  */
-export function copyOutputs(work: string, dest: string, folders: [string, string][], secrets: string[], finalMessage?: string, warmup = false): Leak | null {
+export function copyOutputs(work: string, dest: string, folders: [string, string][], secrets: string[], finalMessage?: string): Leak | null {
   rmSync(dest, { recursive: true, force: true });
   if (finalMessage !== undefined && holdsSecret(finalMessage, secrets)) return { file: '<final message>', rule: 'held secret' };
   const leak = heldSecretLeak(work, secrets);
   if (leak) return leak;
-  const files = (warmup ? [] : deliverableFiles(work)).flatMap((p) => {
+  const files = deliverableFiles(work).flatMap((p) => {
     if (statSync(p).size > JUDGE_MAX_BYTES) return [];
     const buf = readFileSync(p);
     return buf.includes(0) ? [] : [{ file: relative(work, p), text: buf.toString('utf8') }];
   });
   if (finalMessage !== undefined && !finalMessage.includes('\0') && Buffer.byteLength(finalMessage, 'utf8') <= JUDGE_MAX_BYTES) {
-    if (CREDENTIAL_SHAPE.test(finalMessage)) return { file: '<final message>', rule: 'token shape' };
     // The response is harness metadata; never overwrite a deliverable with the same name (or a directory).
     let file = 'agent-final-message.txt';
     while (existsSync(join(work, file))) file = `_${file}`;
@@ -416,7 +415,7 @@ async function execute1(job: Job, prompt: string, spec: PromptSpec | undefined, 
   const stream = toolEvents(proc.stdout);
   const streamLeak = holdsSecret([proc.stdout, proc.stderr, capturedRaw, hookStderr].join('\n'), secrets);
   const leak: Leak | null = streamLeak ? { file: '<stream>', rule: 'held secret' }
-    : copyOutputs(ctx.work, dest, folders, secrets, stream.finalMessage, job.warmup);
+    : job.warmup ? heldSecretLeak(ctx.work, secrets) : copyOutputs(ctx.work, dest, folders, secrets, stream.finalMessage);
   let usage: RunUsage | null = null;
   try { usage = (job.host === 'claude' ? claudeUsage : codexUsage)(proc.stdout); } catch { /* checkRun says why */ }
   const marks = readFileSync(marker, 'utf8').split('\n');

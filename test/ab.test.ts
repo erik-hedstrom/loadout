@@ -454,7 +454,7 @@ describe('what a run shows', () => {
     const secret = kind === 'held' ? 'synthetic-held-key' : `sk-${'a1B2'.repeat(8)}`;
     writeFileSync(join(work, 'safe.md'), 'safe');
     expect(copyOutputs(work, dest, [], kind === 'held' ? [secret] : [], `Answer: ${secret}`))
-      .toEqual({ file: '<final message>', rule: kind === 'held' ? 'held secret' : 'token shape' });
+      .toEqual({ file: kind === 'held' ? '<final message>' : 'agent-final-message.txt', rule: kind === 'held' ? 'held secret' : 'token shape' });
     expect(existsSync(dest)).toBe(false);
   });
 
@@ -974,7 +974,7 @@ describe('credential screening before persistence', () => {
     const lead = prefix ? leads[prefix]! : '';
     const value = lead + secret;
     const target = when === 'warmup' ? 0 : 2;
-    const stops = kind === 'held' || where === 'final message' || (when !== 'warmup' && where.startsWith('deliverable'));
+    const stops = kind === 'held' || (when !== 'warmup' && (where === 'final message' || where.startsWith('deliverable')));
     let runs = 0;
     vi.spyOn(benchLib, 'run').mockImplementation(async (_bin, _args, work) => {
       const tainted = runs++ === target;
@@ -1029,7 +1029,8 @@ describe('credential screening before persistence', () => {
       if (where === 'shaped filename') expect(row.leak?.file).toBe('<credential>.md');
       expect(row.leak?.rule).toBe(stops ? kind === 'held' ? 'held secret' : 'token shape' : undefined);
       if (stops && where.includes('path')) expect(row.leak?.file).toBe('<credential-bearing path>');
-      const withheld = !stops && where === 'stdout';
+      if (stops && kind === 'shape' && where === 'final message') expect(row.leak?.file).toBe('agent-final-message.txt');
+      const withheld = !stops && ['stdout', 'final message'].includes(where);
       expect(row.streamWithheld).toBe(withheld ? 'token shape' : undefined);
       if (!stops) {
         expect(row.totals.cacheRead).toBeGreaterThan(0);
@@ -1038,7 +1039,7 @@ describe('credential screening before persistence', () => {
       const streamFile = join(out, 'streams', row.id.replace(/\//g, '_') + '.jsonl');
       expect(existsSync(streamFile)).toBe(!stops && !withheld);
       const dest = join(out, 'outputs', row.host, row.prompt, `${row.arm}-${row.repeat}`);
-      expect(existsSync(dest)).toBe(!stops);
+      expect(existsSync(dest)).toBe(!stops && when !== 'warmup');
       if (!stops && when !== 'warmup') expect(readFileSync(join(dest, 'notes.md'), 'utf8')).toBe('safe deliverable');
       const files = (readdirSync(out, { recursive: true }) as string[]).filter((f) => statSync(join(out, f)).isFile());
       const persisted = files.map((f) => readFileSync(join(out, f), 'utf8')).join('\n');
@@ -1063,10 +1064,7 @@ describe('credential screening before persistence', () => {
       }
       if (stops) {
         expect(files.filter((f) => f.startsWith('streams'))).toHaveLength(target);
-        // Safe earlier warm-up responses remain; the stopped run persisted no output.
-        const outputs = files.filter((f) => f.startsWith('outputs'));
-        expect(outputs).toHaveLength(target);
-        expect(outputs.every((f) => f.endsWith('agent-final-message.txt'))).toBe(true);
+        expect(files.filter((f) => f.startsWith('outputs'))).toHaveLength(0);
       }
     } finally {
       Object.defineProperty(process, 'platform', platform);
@@ -1202,7 +1200,9 @@ if (args.includes('--output-schema')) {
     for (const r of rows) {
       expect(r.invalid).toBeUndefined();
       expect(r.wroteFile).toBe(true);
-      expect(readFileSync(join(out, 'outputs', r.host, r.prompt, `${r.arm}-${r.repeat}`, 'agent-final-message.txt'), 'utf8')).toBe('Final using ux-copy in <work>');
+      const dest = join(out, 'outputs', r.host, r.prompt, `${r.arm}-${r.repeat}`);
+      if (r.warmup) expect(existsSync(dest)).toBe(false);
+      else expect(readFileSync(join(dest, 'agent-final-message.txt'), 'utf8')).toBe('Final using ux-copy in <work>');
       expect(r.hook.invocations).toBe(r.arm === 'loadout' ? 1 : 0);
     }
     const loadoutClaude = rows.find((r) => r.host === 'claude' && r.arm === 'loadout' && !r.warmup)!;
@@ -1341,7 +1341,8 @@ if (args.includes('--output-schema')) {
     expect(rows.every((r) => r.wroteFile === false)).toBe(true);
     for (const r of rows) {
       const view = deliverables(join(out, 'outputs', r.host, r.prompt, `${r.arm}-${r.repeat}`));
-      expect(view).toContain('Final using ux-copy in <work>');
+      if (r.warmup) expect(view).toBe('(no files produced)');
+      else expect(view).toContain('Final using ux-copy in <work>');
     }
     expect(readFileSync(join(out, 'report.md'), 'utf8')).toContain('0 of 1');
   }, 180_000);

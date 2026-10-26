@@ -169,14 +169,16 @@ The Codex pilot command is in [bench/README.md](README.md#ab-pilot-c14).
   Codex-host outputs by Claude Opus. Skill names are removed from both arms'
   files first; a skill's own template can still show the arm. After the
   2026-10-26 pilot, the saved judge view also includes one synthetic
-  `agent-final-message.txt` per run (prefixed with `_` until it cannot collide
-  with an agent file or directory): the last completed Codex `agent_message`
+  `agent-final-message.txt` per measured run (prefixed with `_` until it cannot
+  collide with an agent file or directory): the last completed Codex `agent_message`
   or Claude's `result` text, when present. It has the same 200,000-byte and
   binary exclusion, local-path scrubbing, shared 60,000-character judge budget
-  and skill-name redaction as file outputs. Intermediate messages and reasoning
-  are excluded. The hidden-test fake elements now record `focus()` through
-  `doc.activeElement`; focus return remains optional and all behavioral
-  assertions are unchanged.
+  and skill-name redaction as file outputs. Final messages can narrate skill
+  use, leaving a `[skill]` placeholder only on the loadout side and revealing
+  the arm; each verdict's `redactions` counts record when names were replaced.
+  Intermediate messages and reasoning are excluded. The hidden-test fake elements
+  now record `focus()` through `doc.activeElement`; focus return remains optional
+  and all behavioral assertions are unchanged.
 - **Sample.** Two repeats per cell: ranges, not intervals, and "not shown" where
   the sample does not support a claim.
 - **What stops the batch.** A loadout arm that routed by keyword (the hook's
@@ -187,11 +189,11 @@ The Codex pilot command is in [bench/README.md](README.md#ab-pilot-c14).
   Deliverable checks skip token shapes glued after a letter or digit to avoid
   stopping on CSS or code identifiers, so an unheld credential with that prefix
   can be copied into `outputs/`; held secrets still match everywhere. These
-  checks cover warm-ups too, except that their work-folder deliverables are not
-  copied or shape-checked. Final responses are screened for held secrets even
-  when excluded by size, and for token shapes whenever eligible for persistence,
-  including warm-ups. A hit copies nothing, saves no stream, skips the hidden test and
-  records an invalid row without matched text; a credential-bearing path is
+  checks cover warm-ups too, except that their work-folder deliverables and final
+  responses are not copied or shape-checked. Final responses are screened for held
+  secrets even when excluded by size, and for token shapes when eligible for
+  persistence on measured runs. A hit copies nothing, saves no stream, skips the
+  hidden test and records an invalid row without matched text; a credential-bearing path is
   recorded as `<credential-bearing path>`. A shared sink gate replaces held secrets
   and token shapes with `<credential>` in rows, verdicts, reports, printed text and
   public errors. Token shapes elsewhere in stdout only withhold
@@ -284,7 +286,8 @@ Cold-start warm-ups versus measured mean totals across the three prompts:
 | bare | 1,820 / 0 / 11,392 / 5 | 6,367 / 0 / 56,768 / 971 |
 | loadout | 1,820 / 0 / 11,392 / 5 | 11,822 / 0 / 59,627 / 1,071 |
 
-Original judge outcomes, descriptive counts only:
+Original judge outcomes, descriptive counts only; file-writing counts come
+from the committed `outputs/` folders because these rows lack `wroteFile`:
 
 | Prompt | Loadout | Bare | Tie | Split | Wrote a file, bare / loadout |
 |---|---:|---:|---:|---:|---|
@@ -307,18 +310,18 @@ and the measurement defects prevent a quality interpretation.
    judge prefers bare in both orders of both code pairs, citing focus return.
    The apparent hidden-test advantage is invalid. The hook added no context
    on either code run, so that loadout arm is close to bare plus idle MCP tools.
-2. **Missing-deliverable measurement defect.** Three of four bare copy runs
-   wrote no file: `c1-web-14/bare-1`, `c1-apps-08/bare-1` and `bare-2`.
-   All four loadout copy runs wrote one. The file-only judge saw empty sides;
-   its reasons explicitly cite missing files. The copy outcomes (loadout 3,
-   split 1) largely measure file production, not content quality. Final
-   responses were absent from the committable view, so their content cannot
-   be recovered here. A rerun must expose both final responses and files.
+2. **Missing-deliverable measurement defect.** Three of four bare copy and
+   document runs wrote no file: `c1-web-14/bare-1`, `c1-apps-08/bare-1` and `bare-2`.
+   All four loadout copy and document runs wrote one. The file-only judge saw
+   empty sides; its reasons explicitly cite missing files. The copy and document
+   outcomes (loadout 3, split 1) largely measure file production, not content
+   quality. Final responses were absent from the committable view, so their
+   content cannot be recovered here. A rerun must expose both final responses and files.
 3. **Cost and use.** `loadoutTools` is empty on every row. Only one skill
    was opened: `ux-copy`, on `c1-web-14/loadout-1`. Hook-injected skills are
    distinct from opened skills. Uncached input increased for every prompt;
-   cache reads increased for both copy prompts and fell for the code prompt.
-   These counters do not establish a monetary saving.
+   cache reads increased for the copy and document prompts and fell for the code
+   prompt. These counters do not establish a monetary saving.
 
 **Not shown:** any quality difference; any cost saving; a causal benefit from
 skill use; generalization beyond these selected prompts; results for Claude,
