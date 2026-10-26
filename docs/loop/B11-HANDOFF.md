@@ -339,24 +339,7 @@ historical DeepSeek usage-limit invalid remains separate from quality outcomes.
 [RESULTS](../../bench/RESULTS.md#b11-replacement-pilot-2026-10-23-completed-2026-10-26)
 records coverage, per-arm outcomes, timing, costs and limits; its linked raw
 artifacts are the checkpoint. Keep 300 seconds provisional for both models;
-full-study tails are not established. The 792-session study remains unrun.
-
-The completed replacement pilot used 66 Jev calls / $0.038437728, including
-38 calls / $0.022266300 on resume, within its $0.065 cumulative cap.
-Together with the earlier pilot, spend is $0.068228790 of the $0.10 allowance.
-Free-model billing is $0. Do not resume a legacy 2026-10-22 output. Account
-for pilot spend within the iteration's ceiling before allocating the full
-study's budget. Retained quality, cost at retained quality and break-even
-are not shown.
-
-Results-import verification (2026-10-26, Windows): `npm ci` and
-`npm run typecheck` passed. The initial `npm test` had one CLI subprocess
-timeout (1,092 passed / 114 skipped); that test passed in isolation, and
-`npm test -- --maxWorkers=2` passed 1,093 / skipped 114. No executable code
-changed. `npm ci` reported two moderate and two high dependency vulnerabilities;
-dependencies were not changed. The first 48 rows match the committed rows,
-the report regenerates byte-for-byte after line-ending normalization, and
-credential/home-path, renamed-link, mojibake and `git diff --check` scans pass.
-Only the three approved artifacts were imported; protocol content is unchanged.
-No provider calls, pushes or PRs were made for this import (cost $0).
-Independent review of this results update remains with the coordinator.
+full-study tails are not established. The 792-session study is not completed;
+resume it with `--resume` into its own output folder, never a legacy
+2026-10-22 output. Pilot spend is in RESULTS; account for it within the
+iteration's ceiling before allocating the full study's budget.

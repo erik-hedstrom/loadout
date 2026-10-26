@@ -1512,7 +1512,7 @@ do not partition it. Keep **300 seconds for both models provisionally**;
 these nine tasks per arm and model do not establish full-study tails. The
 same tasks recur across arms and models, so the observations are not independent
 population-wide evidence. Retained quality, cost at retained quality and
-break-even are **not shown**. The 792-session full study **remains unrun**.
+break-even are **not shown**. The 792-session full study is **not completed**.
 
 The resume made **38 Jev calls, $0.022266300**. Whole replacement-pilot
 all-attempt spend was **66 calls, $0.038437728**, below the $0.065 cumulative

@@ -1794,8 +1794,8 @@ with the core (section C). Changes to the shared contract follow
 
 **B11. OpenCode cache and outcome study.** [PR #57](https://github.com/erik-hedstrom/loadout/pull/57) merged the harness, the 72-task dataset
 and historical pilots. The replacement pilot completed on 2026-10-26: 91 attempts, 90 valid sessions,
-one historical usage-limit invalid and no timeouts. The 792-session study remains unrun. Next: run it when
-the free tier's quota allows; afterwards fold the handoff into `bench/README.md`. Retained quality, cost at
+one historical usage-limit invalid and no timeouts. The 792-session study is not completed. Next: resume it into the same output
+folder as the free tier's quota allows; afterwards fold the handoff into `bench/README.md`. Retained quality, cost at
 retained quality and break-even are not shown.
 Evidence and limitations: [RESULTS](../../bench/RESULTS.md#b11-replacement-pilot-2026-10-23-completed-2026-10-26).
 Commands, verification and review dispositions: [handoff](B11-HANDOFF.md).

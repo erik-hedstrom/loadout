@@ -103,7 +103,7 @@ Each goal maps to backlog items, which hold the acceptance criteria.
   ([#57](https://github.com/erik-hedstrom/loadout/pull/57)).
 - **Observations so far:** B11's [first pilot](../../bench/RESULTS.md#b11-pilot-2026-10-22-cached-opencode-sessions)
   and completed [replacement pilot](../../bench/RESULTS.md#b11-replacement-pilot-2026-10-23-completed-2026-10-26).
-- **B11:** replacement pilot complete (90 valid sessions); the 792-session full study remains unrun.
+- **B11:** replacement pilot complete (90 valid sessions); the 792-session full study is not completed.
 - **Not shown:**
   - cost at retained quality;
   - break-even;
