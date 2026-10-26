@@ -6,11 +6,10 @@ Commands for the OpenCode study are in [B11-HANDOFF.md](B11-HANDOFF.md).
 
 ## Why a separate track
 
-loadout's core uses Jev to choose skills per substantive prompt in stock hosts.
-MCP servers are found on demand through loadout's MCP tools; the launcher
-additionally picks a model tier once per session. Its cost argument is that a
-short, task-specific context costs less than a host that lists everything.
-Prompt caching weakens that argument: the major providers reuse an unchanged request prefix at a fraction of the input
+loadout's core uses Jev to choose a short, task-specific context
+([README](../../README.md)). Its cost argument is that such a context costs
+less than a host that lists everything. Prompt caching weakens that argument:
+the major providers reuse an unchanged request prefix at a fraction of the input
 price. A static listing read from cache may cost little, and a loadout that
 moved the prefix would lose the discount on everything after it.
 

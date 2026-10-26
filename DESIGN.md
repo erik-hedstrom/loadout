@@ -7,10 +7,11 @@ What that cost in Claude Code and Codex, as measured by B1, is summarised in
 the [README](README.md).
 
 **loadout aims to decouple library size from per-request cost.**
-[Jev](https://typesafe.ai/blog/introducing-system-one-models-and-jev) selects
-skills per substantive prompt in stock Claude Code and Codex. MCP servers are
-found on demand through loadout's MCP tools. The launcher additionally picks
-a model tier once per session. Tier-choice quality is not evaluated
+[Jev](https://typesafe.ai/blog/introducing-system-one-models-and-jev) picks a
+deliberately over-inclusive shortlist of skills per substantive prompt in stock
+Claude Code and Codex, and the agent makes the final call. The launcher instead
+makes one decision per session: skills, MCP servers and a model tier.
+Tier-choice quality is not evaluated
 ([RESULTS](bench/RESULTS.md#threats-to-validity)).
 
 How this differs from native skill loading, tool search, MCP gateways, model

@@ -1459,14 +1459,14 @@ all four are production dependencies, not development-only.
 
 The audit itself is the regression check.
 
-**E20.** Verify main's merge history and the implementation before updating
-HANDOFF's state and scope wording in README, AGENTS, host docs, package and
-plugin descriptions. Distinguish per-prompt skill selection in stock hosts,
-on-demand MCP discovery, and the launcher's per-session model tier. Link
-measured studies and unshown outcomes to RESULTS; link C14's Codex-only pilot,
-B11's quota-stopped pilot and unrun full study, and the caching track instead
-of restating them. Preserve candid limitations and line endings. Run typecheck,
-tests, diff and encoding checks, and resolve every touched relative link and anchor.
+**E20. Docs match the evidence.** HANDOFF's state matches main's merge
+history and links RESULTS, the backlog and the caching track instead of
+restating them. The scope wording in README, AGENTS, DESIGN, HANDOFF, the cache
+track, package.json and the comparison says what the code does: in stock hosts
+the hook adds skills per substantive prompt and the MCP tools search the
+library (gateway servers only when opted in, untested in a host); the launcher
+makes one decision per session (skills, MCP servers, model tier). Tier-choice
+quality is "not evaluated". Candid limitations stay.
 
 **E16. Terminal, config and git hygiene.** From the reviews of #30 (A3);
 all older than it.

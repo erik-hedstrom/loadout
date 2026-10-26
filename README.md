@@ -17,9 +17,10 @@ makes the prediction, for about $0.001 per routing decision on the v4
 benchmark's requests
 ([RESULTS](bench/RESULTS.md#v4-2026-10-06-realistic-requests-on-the-real-library-judged)).
 
-MCP servers are found on demand through loadout's [MCP tools](docs/mcp.md).
-The [launcher](docs/launcher.md) additionally picks a model tier once per
-session; tier-choice quality is not evaluated
+loadout's [MCP tools](docs/mcp.md) let the agent search the library, and MCP
+servers you opt into the gateway are offered there too (untested in a host).
+The [launcher](docs/launcher.md) instead makes one decision per session:
+skills, MCP servers and a model tier. Tier-choice quality is not evaluated
 ([RESULTS](bench/RESULTS.md#threats-to-validity)). Host checks and untested
 paths: [hosts](docs/hosts.md).
 

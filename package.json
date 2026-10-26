@@ -1,7 +1,7 @@
 {
   "name": "loadout",
   "version": "0.1.0",
-  "description": "Select skills per prompt with Jev, discover MCP servers on demand, and pick a model tier per session with the launcher.",
+  "description": "Add the skills that fit each prompt in Claude Code and Codex, or pick skills, MCP servers and a model tier per session with the launcher, from a separate library, using a cheap model (Jev).",
   "type": "module",
   "bin": {
     "loadout": "dist/cli.js"

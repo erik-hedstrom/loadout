@@ -12,10 +12,10 @@ Read this first if you are joining the project, human or agent. Then read
 
 ## The one-paragraph version
 
-In stock `claude` and `codex`, loadout uses Jev to select skills per
-substantive prompt. MCP servers are found on demand through loadout's MCP
-tools. The `loadout claude|codex` launcher additionally picks a model tier
-once per session. It uses documented extension points. See [README.md](README.md)
+In stock `claude` and `codex`, loadout uses Jev to add the skills that fit
+each substantive prompt, and its MCP tools let the agent search the library.
+The `loadout claude|codex` launcher instead makes one decision per session:
+skills, MCP servers and a model tier. It uses documented extension points. See [README.md](README.md)
 for usage and [DESIGN.md](DESIGN.md) for the architecture.
 
 ## Where it stands
@@ -26,10 +26,10 @@ for usage and [DESIGN.md](DESIGN.md) for the architecture.
   decisions below).
 - **Owner:** Erik Hedström (GitHub `erik-hedstrom`). Commits use
   `63313283+erik-hedstrom@users.noreply.github.com`.
-- **Main snapshot (2026-10-26):** `a887d3d`. It includes the C14 A/B
+- **Main snapshot (2026-10-26):** `99fc000`. It includes the C14 A/B
   harness (#47), B11's OpenCode harness and quota-stopped pilots (#57),
-  D21's cache-stable request prefix (#59), and the separate caching track
-  (#60). Current work and review state: [BACKLOG](docs/loop/BACKLOG.md).
+  D21's cache-stable request prefix (#59), the separate caching track (#60)
+  and the production dependency patches (#61). Current work and review state: [BACKLOG](docs/loop/BACKLOG.md).
 
 ### What exists
 
@@ -75,7 +75,7 @@ All numbers, caveats, raw-result links and recorded costs are in
 ## How the work continues
 
 The work continues as a loop in which Sol (Codex) builds and Claude reviews.
-Erik gates every merge. Cloud sessions fill in when local usage runs out. The
+Cloud sessions fill in when local usage runs out. The
 topology, merge gate, prompts and budgets are in
 [docs/loop/ORCHESTRATOR.md](docs/loop/ORCHESTRATOR.md). Shared state lives in
 branches, PRs and `docs/loop/BACKLOG.md`.

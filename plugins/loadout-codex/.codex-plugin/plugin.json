@@ -1,4 +1,4 @@
 {
   "name": "loadout-codex",
-  "description": "Per-prompt skill routing and on-demand MCP library search for Codex CLI. Requires loadout on PATH and Node 22.12+. Each routed prompt, with the repository's top-level file names and dependency names, goes to TypeSafe's Jev API; setting \"router\": \"lexical\" keeps prompts local. Trust the hook in /hooks after installation."
+  "description": "Prompt routing and library search for Codex CLI. Requires loadout on PATH and Node 22.12+. Each routed prompt, with the repository's top-level file names and dependency names, goes to TypeSafe's Jev API; setting \"router\": \"lexical\" keeps prompts local. Trust the hook in /hooks after installation."
 }
