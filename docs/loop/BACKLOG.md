@@ -149,13 +149,6 @@ Acceptance:
 | B8 | P0 | Backlog items from the launch-readiness review, 2026-10-13, MCP token cost first | Claude | local + erik | todo (the review is private, on Erik's machine) |
 | B9 | P1 | Savings from an adopted library: what a user saves after moving skills and MCP servers into loadout | Claude | local | todo (after B7) |
 | B10 | P1 | B7: Claude 2.1.281's init lists `@builtin` plugins even with `--setting-sources ""` and a fresh config dir, so `plugins.length !== 0` (`bench/mcp-overhead.ts`, the "Claude init plugins must be empty" check) would refuse every B7 Claude run; ignore `@builtin` plugins as the A/B harness does (`isBuiltin` in `bench/ab.ts`) | Claude | cloud | todo. Seen on 2.1.281 by C14 in a free probe (`claude -p` with HTTPS_PROXY pointed at a closed port prints the init event and makes no model call); not reproduced by review, so confirm with the same probe first |
-| B11 | P1 | OpenCode session cost and task checks with automatic prompt caching | Codex | local | partial ([#57](https://github.com/erik-hedstrom/loadout/pull/57)): harness, dataset and two quota-stopped pilots merged; the 792-session study is unrun |
-
-**B11. OpenCode cache and outcome study.** [PR #57](https://github.com/erik-hedstrom/loadout/pull/57) merged the harness, the 72-task dataset
-and two quota-stopped pilots. Next: resume the replacement pilot, then the 792-session study, when the free tier's
-quota allows; afterwards fold the handoff into `bench/README.md`. Cost at retained quality and break-even are not shown.
-Evidence and limitations: [RESULTS](../../bench/RESULTS.md#b11-replacement-pilot-2026-10-23-quota-stopped).
-Commands, verification and review dispositions: [handoff](B11-HANDOFF.md).
 
 **B8. Items from the launch-readiness review.** The review (2026-10-13) is
 private ([ORCHESTRATOR](ORCHESTRATOR.md#local-the-default)).
@@ -430,7 +423,7 @@ Decisions for Erik:
 | C5 | P2 | Retrieval beyond 200 candidates (Jev tournament) | Codex | cloud | todo |
 | C6 | P2 | Multi-intent requests | Claude | cloud | todo |
 | C7 | P1 | Recommended packs with measured upside (first: frontend with Impeccable) | Codex (harness) + Claude (runs) | cloud (fixtures) + local (runs) | todo (after B1, C2) |
-| C11 | P1 | `bench/outcome.ts` keeps per-request usage | Codex | local | partial ([#55](https://github.com/erik-hedstrom/loadout/pull/55)): turn totals and crash-safe capture; request usage deferred |
+| C11 | P1 | `bench/outcome.ts` keeps per-request usage | Codex | local | partial ([#55](https://github.com/erik-hedstrom/loadout/pull/55)): turn totals and crash-safe capture; request usage moved to F2 |
 | C12 | P1 | Audit the need gate on held-out prompts | Claude | cloud (design) + local (runs) | done ([#46](https://github.com/erik-hedstrom/loadout/pull/46)): audited on C1 dev, no change ([RESULTS](../../bench/RESULTS.md#c12-2026-10-19-the-need-gate-on-c1-dev)) |
 | C13 | P1 | Pure-Jev baseline on main: offline scoring and routing stability | Codex (tools) + Claude (runs) | local | done ([#45](https://github.com/erik-hedstrom/loadout/pull/45)): baseline measured 2026-10-16 ([RESULTS](../../bench/RESULTS.md#c13-2026-10-16-pure-jev-baseline-on-main)) |
 | C8 | P0 | Skill use with the hook-only plugin | Claude | local | done ([#25](https://github.com/erik-hedstrom/loadout/pull/25)): headless, the hook injected a skill's text in 6 of 10; Claude opened 0 of 10, none of the 4 it was only pointed to (D13) |
@@ -936,7 +929,7 @@ before the system prompt, and the launcher's tools (plugin-dir skills,
 `--mcp-config`) already vary with the selection, so a constant system prompt
 buys no cross-session reuse there. It would also have added system text to the
 bench's hook and plugin arms that the real plugin never sends. Money saved by
-caching is unmeasured; that remains a B11 / B-series question.
+caching is unmeasured; that is section F's question (B11, F1).
 
 **D17. MCP start-up inside Codex's grace period.** Codex leaves an optional
 MCP server out of the tool list if it is not ready about 1 s after start-up,
@@ -1781,6 +1774,82 @@ for one finding had dropped edges added earlier: the library edges to the
 named-skill step and to `load_skill` went when five edges were folded into one.
 Labels carry only each node's role and key output; limits and conditions live
 in the prose, so they are stated once.
+
+## F. Prompt caching
+
+Its own track, with the boundary to the core in
+[CACHE-TRACK.md](CACHE-TRACK.md): this track measures what complete cached
+sessions cost and keeps loadout's requests cache-friendly. What to select stays
+with the core (section C). Changes to the shared contract follow
+[its rule](CACHE-TRACK.md#boundary).
+
+| ID | P | Task | Agent | Lane | Status |
+|---|---|---|---|---|---|
+| B11 | P1 | OpenCode session cost and task checks with automatic prompt caching | Codex | local | partial ([#57](https://github.com/erik-hedstrom/loadout/pull/57)): harness, dataset and two quota-stopped pilots merged; the 792-session study is unrun |
+| F1 | P1 | Prefix continuity on real hosts: loadout keeps the cached prefix turn after turn | Codex | local | todo (after F2) |
+| F2 | P1 | Session-cost capture: per-request usage in outcome runs and session columns in B7 | Codex | local | todo (C11's deferred part) |
+| F3 | P2 | Shorter constant MCP text and fewer discovery requests, at unchanged task success | Codex | local | todo (after F2) |
+| F4 | P2 | `loadout audit` reports cache-aware cost from measured numbers | Codex | cloud | todo (after B11, F1) |
+| F5 | P3 | Start-up and path variability: Codex first-request tools, launcher session paths | Codex | local | todo |
+
+**B11. OpenCode cache and outcome study.** [PR #57](https://github.com/erik-hedstrom/loadout/pull/57) merged the harness, the 72-task dataset
+and two quota-stopped pilots. Next: resume the replacement pilot, then the 792-session study, when the free tier's
+quota allows; afterwards fold the handoff into `bench/README.md`. Cost at retained quality and break-even are not shown.
+Evidence and limitations: [RESULTS](../../bench/RESULTS.md#b11-replacement-pilot-2026-10-23-quota-stopped).
+Commands, verification and review dispositions: [handoff](B11-HANDOFF.md).
+
+**F1. Prefix continuity on real hosts.** The D21 tests pin the facade
+in-process; nothing shows that a real host keeps reading loadout's prefix from
+cache across turns.
+
+Acceptance: sessions of at least five turns on Claude Code, Codex and
+OpenCode, with loadout on and off (the hook and MCP on Claude Code and Codex;
+MCP only on OpenCode, which has no loadout hook). From the host's own
+per-request usage, each turn's cached tokens cover the previous request's
+input up to the host's cache granularity, as in the off arm. Any shortfall,
+partial or total, is traced to its cause: nonzero reads alone do not show
+continuity. Codex
+runs gpt-6-luna at medium effort; Claude runs Haiku; OpenCode runs the free
+models. Raw results committed; a RESULTS section either way.
+
+**F2. Session-cost capture.** Outcome runs keep only turn totals (C11), and
+B7 reports per-request overhead, not what a session costs.
+
+Acceptance: `bench/outcome.ts` keeps each request's input, cache read, cache
+write and output from the host's own report (a fixture test per host; no
+proxy, AGENTS.md rule 1), and `bench/mcp-overhead.ts` reports per session:
+request count, the token buckets, Jev cost, latency and completion, for native
+default against the gateway, short and long sessions, and a gap past the cache
+lifetime. C11's learnings list what each host exposes today; reuse the per-message
+Claude usage that #47 adds to `bench/usage.ts`, if it merges. Decision for Erik: the Codex usage
+source (`exec --json` has turn totals only; the alternatives read a Codex home,
+see C11). Until then Codex per-request usage is "not shown".
+
+**F3. Lower fixed and discovery overhead.** Candidates: shorter constant
+descriptions and server instructions in `createServer()`, and loading a named
+skill without a search first.
+
+Acceptance: measured against current main on F2's columns: loadout's fixed
+tokens and extra discovery requests per session. The host's agent must still
+discover and use the right resources and finish the tasks (B11 checks or C14
+runs): select on the dev split, then report the kept change once on test. C1 recall alone cannot show this, because the sweep calls
+`route()` directly. Core review is required, since the change touches the
+facade. Keep only what lowers session
+cost with task success unchanged; record the rest as negative results.
+
+**F4. Cache-aware audit.** `loadout audit` (A2) estimates skill-listing tokens
+per host; it does not count MCP schemas and puts no price on either.
+
+Acceptance: it reports first-request and cached-turn cost per host price profile,
+using numbers measured in B11 or F1 and linked from RESULTS, with dated
+prices. No figure without a RESULTS entry; "not shown" where none exists.
+
+**F5. Start-up and path variability.** The Codex plugin's MCP server can
+arrive after the first request (D17), and launcher session directories put
+timestamps into copied skill paths (`src/launch.ts`).
+
+Acceptance: measure first-request tool presence and cross-session cache loss
+first; change start-up or paths only where the measurement shows a cost.
 
 ## Iteration log
 

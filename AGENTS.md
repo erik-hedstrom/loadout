@@ -118,7 +118,9 @@ npm run dev -- route "<task>"   # needs a TypeSafe key (TYPESAFE_API_KEY or `loa
   - how it was tested (commands and their output);
   - the cost incurred;
   - the backlog item ID;
-  - what is left.
+  - what is left;
+  - for changes to the MCP facade, the hook output or the launcher composition,
+    the cache effect ([CACHE-TRACK.md](docs/loop/CACHE-TRACK.md#boundary)).
 - **Merge** needs `npm test` and `npm run typecheck` green, plus two reviews
   against the Code Review Rules below:
   - the `pr-reviewer` subagent (`.claude/agents/pr-reviewer.md`);
