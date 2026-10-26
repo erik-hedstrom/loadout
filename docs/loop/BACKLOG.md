@@ -1827,7 +1827,7 @@ with the core (section C). Changes to the shared contract follow
 
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
-| B11 | P1 | OpenCode session cost and task checks with automatic prompt caching | Codex | local | partial ([#57](https://github.com/erik-hedstrom/loadout/pull/57)): harness and dataset merged; replacement pilot complete; the 792-session study remains unrun |
+| B11 | P1 | OpenCode session cost and task checks with automatic prompt caching | Codex | local | partial ([#57](https://github.com/erik-hedstrom/loadout/pull/57)): harness and dataset merged; replacement pilot complete; the 792-session study is not completed |
 | F1 | P1 | Prefix continuity on real hosts: loadout keeps the cached prefix turn after turn | Codex | local | todo (after F2) |
 | F2 | P1 | Session-cost capture: per-request usage in outcome runs and session columns in B7 | Codex | local | todo (C11's deferred part) |
 | F3 | P2 | Shorter constant MCP text and fewer discovery requests, at unchanged task success | Codex | local | todo (after F2) |
