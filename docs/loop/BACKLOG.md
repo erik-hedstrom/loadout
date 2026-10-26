@@ -797,10 +797,6 @@ Learnings (2026-10-19):
   because both hosts put it in the prompt and a different path per run would
   break the shared cache prefix.
 
-Learnings (2026-10-26):
-- Codex effort is part of the persisted study settings and printed argv; changing or removing it refuses resume. The pilot pins medium explicitly because the model default is not a study setting.
-- The harness accepts the nine named effort levels in codex-cli 0.163.0; custom model-defined strings are outside this study interface.
-
 Learnings (2026-10-20):
 - **The first Codex pilot (2026-10-20, at e9d7239) is confounded.** Codex loaded
   `$CODEX_HOME/AGENTS.md` (Erik's global instructions, via a symlink) into every
@@ -814,6 +810,10 @@ Learnings (2026-10-20):
   moved aside for a run. B7 records the same file as "identical across arms"
   (`hostState`): a token-delta baseline cancels it, so B7 is left as is, but a
   study of what the agent does is not.
+
+Learnings (2026-10-26):
+- Codex effort is part of the persisted study settings and printed argv; changing or removing it refuses resume. The pilot pins medium explicitly because the model default is not a study setting.
+- The harness accepts the nine named effort levels in codex-cli 0.163.0; custom model-defined strings are outside this study interface.
 
 Left: run the pilot (Erik's go-ahead), write the results into RESULTS and
 `report.md`, and decide whether two repeats are enough to say anything.

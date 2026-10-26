@@ -66,6 +66,8 @@ export function counter(v: unknown, name: string): number {
   return v as number;
 }
 
+// Lenient on purpose, unlike `events` below: a host killed at the timeout can cut its last line, and the A/B
+// rows still count the requests that completed (a run without usage is unusable in bench/ab.ts).
 const usageEvents = (stdout: string): any[] =>
   stdout.split('\n').flatMap((line) => {
     try { return [JSON.parse(line)]; } catch { return []; }
