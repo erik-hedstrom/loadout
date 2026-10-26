@@ -1431,8 +1431,9 @@ updates body-parser 2.3.0 -> 2.4.0 (GHSA-27r3-jxmh-p828), fast-uri 3.1.8 ->
 3.1.9 (GHSA-w74x-v6f9-j3xg, GHSA-xhq7-xmqj-769h, GHSA-wjr9-j795-jxcr,
 GHSA-333x-w4r6-6crp), ip-address 10.7.3 -> 10.7.5 (GHSA-rxp7-6hxx-x8q5),
 and zod 4.6.5 -> 4.6.7 (GHSA-mrhx-c7xc-m3w5). It also updates qs 6.16.0 ->
-6.16.1, required by body-parser 2.4.0. No package.json range changes: the
-existing zod `^4.6.5` already admits 4.6.6; the lockfile selects 4.6.7.
+6.16.1, required by body-parser 2.4.0. package.json raises zod from `^4.6.5`
+to `^4.6.7`: npm ignores a dependency's lockfile, so the old range would let
+an install of loadout resolve the vulnerable 4.6.5.
 
 Learnings (2026-10-26), from `npm ls body-parser fast-uri ip-address zod`:
 all four are production dependencies, not development-only.
@@ -1447,13 +1448,13 @@ all four are production dependencies, not development-only.
   (`src/audit.ts:247`). Reachability of the advisory URI inputs is not
   established.
 - `@modelcontextprotocol/sdk -> express-rate-limit -> ip-address`: the HTTP
-  server uses its own in-flight cap (`src/mcp.ts:468`), without the SDK's
+  server uses its own in-flight cap (`MAX_HTTP_IN_FLIGHT` in `src/mcp.ts`), without the SDK's
   Express OAuth rate-limit handlers. Attacker-controlled Address6 input is
   not established.
 - `zod` is direct and also under `@modelcontextprotocol/sdk`, directly and
-  via `zod-to-json-schema`. MCP validates bounded arrays (`src/mcp.ts:373`)
-  and SDK tool-list/result arrays (`src/mcp.ts:311`, `src/mcp.ts:333`);
-  oversized-collection exposure is possible through those upstream inputs.
+  via `zod-to-json-schema`. Oversized-collection exposure is possible through
+  agent or HTTP-client tool arguments (`src/mcp.ts:373`) and upstream servers'
+  tool lists and results (`src/mcp.ts:311`, `src/mcp.ts:333`).
 
 The audit itself is the regression check.
 
