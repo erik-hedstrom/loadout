@@ -1415,6 +1415,7 @@ Learnings (2026-10-09):
 | E17 | P3 | One entry-point guard for bench scripts that survives symlinked paths | Codex + Claude review | cloud | done ([#51](https://github.com/erik-hedstrom/loadout/pull/51)); converting #47's guard follows that PR |
 | E18 | P1 | Patch the Vite advisories in the development lockfile | Codex | cloud | done ([#56](https://github.com/erik-hedstrom/loadout/pull/56)) |
 | E19 | P1 | Patch the production dependency advisories (zod, body-parser, fast-uri, ip-address) | Codex | cloud | done ([#61](https://github.com/erik-hedstrom/loadout/pull/61)) |
+| E20 | P2 | Docs match the evidence: HANDOFF state and the per-prompt scope claim | Codex | cloud | review ([#62](https://github.com/erik-hedstrom/loadout/pull/62)) |
 
 **E18. npm advisories.** `npm audit` on main reported six advisories against
 Vite 8.3.2 (GHSA-698v-4r3x-3vcv, GHSA-r825-w8mm-5pxw, GHSA-587h-7wmj-h5pm,
@@ -1457,6 +1458,15 @@ all four are production dependencies, not development-only.
   tool lists and results (`src/mcp.ts:311`, `src/mcp.ts:333`).
 
 The audit itself is the regression check.
+
+**E20. Docs match the evidence.** HANDOFF's state matches main's merge
+history and links RESULTS, the backlog and the caching track instead of
+restating them. The scope wording in README, AGENTS, DESIGN, HANDOFF, the cache
+track, package.json and the comparison says what the code does: in stock hosts
+the hook adds skills per substantive prompt and the MCP tools search the
+library (gateway servers only when opted in, untested in a host); the launcher
+makes one decision per session (skills, MCP servers, model tier). Tier-choice
+quality is "not evaluated". Candid limitations stay.
 
 **E16. Terminal, config and git hygiene.** From the reviews of #30 (A3);
 all older than it.
