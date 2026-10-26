@@ -117,6 +117,16 @@ const without = (args: string[], piece: string[]) => {
 };
 
 describe('commands', () => {
+  it.each(['bare', 'loadout'] as const)('pins explicit Codex effort in the %s arm and leaves unset argv unchanged', (arm) => {
+    const original = buildCommand(job('codex', arm), 'P', ctx()).args;
+    const explicit = buildCommand(job('codex', arm), 'P', { ...ctx(), codexEffort: 'medium' }).args;
+    expect(original.some((arg) => arg.startsWith('model_reasoning_effort='))).toBe(false);
+    expect(explicit).toContain('model_reasoning_effort=medium');
+    expect(without(explicit, ['-c', 'model_reasoning_effort=medium'])).toEqual(original);
+    expect(buildCommand(job('claude', arm), 'P', { ...ctx(), codexEffort: 'medium' }).args)
+      .toEqual(buildCommand(job('claude', arm), 'P', ctx()).args);
+  });
+
   it('give the Claude arms the same flags, apart from the plugin, the MCP server and their two tools', () => {
     const bare = buildCommand(job('claude', 'bare'), 'P', ctx());
     const loadout = buildCommand(job('claude', 'loadout'), 'P', ctx());
@@ -182,6 +192,36 @@ describe('commands', () => {
 });
 
 describe('plan', () => {
+  it('leaves effort unset when the CLI flag is omitted', async () => {
+    const lines: string[] = [];
+    const versions = vi.spyOn(childProcess, 'execFileSync').mockReturnValue('0.163.0');
+    try {
+      await main(['--plan', '--hosts', 'codex'], { print: (line) => lines.push(line), env: {} });
+      const argv = lines.filter((line) => line.startsWith('ARGV '));
+      expect(argv).toHaveLength(2);
+      for (const line of argv) expect(line).not.toContain('model_reasoning_effort=');
+    } finally { versions.mockRestore(); }
+  });
+
+  it.each(['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra', 'persistent'])('accepts named Codex effort %s and prints it in both arms', async (effort) => {
+    const lines: string[] = [];
+    const versions = vi.spyOn(childProcess, 'execFileSync').mockReturnValue('0.163.0');
+    try {
+      await main(['--plan', '--hosts', 'codex', '--codex-model', 'gpt-6-luna', '--codex-effort', effort], { print: (line) => lines.push(line), env: {} });
+      const argv = lines.filter((line) => line.startsWith('ARGV '));
+      expect(argv).toHaveLength(2);
+      for (const line of argv) {
+        expect(line).toContain('gpt-6-luna');
+        expect(line).toContain(`model_reasoning_effort=${effort}`);
+      }
+    } finally { versions.mockRestore(); }
+  });
+
+  it.each(['', 'invalid', 'MEDIUM', 'medium -c other=true'])('refuses invalid Codex effort %j at the CLI boundary', async (effort) => {
+    await expect(main(['--plan', '--codex-effort', effort], { print: () => {}, env: {} }))
+      .rejects.toThrow('--codex-effort must be one of');
+  });
+
   const secrets = { CLAUDE_CODE_OAUTH_TOKEN: 'oauth-secret-value', TYPESAFE_API_KEY: 'jev-secret-value', ANTHROPIC_API_KEY: 'anthropic-secret-value' };
   const lines = planLines(options, { PATH: '/usr/bin', HOME: '/home/u', ...secrets });
   const text = lines.join('\n');
@@ -630,6 +670,19 @@ describe('resuming and finishing a study', () => {
     expect(() => refuseOtherSettings(dir, options, { ...prov, commit: 'other-commit' }, [])).toThrow(/other settings \(commit\)/);
     expect(() => refuseOtherSettings(dir, options, { ...prov, library: '13 skills, 000000000000' }, [])).toThrow(/other settings \(library\)/);
     refuseOtherSettings(join(dir, 'new'), options, prov, []);
+  });
+
+  it('refuses to mix explicit, changed and unset Codex effort when resuming', () => {
+    const explicit = study(rows, { codexEffort: 'medium' });
+    expect(() => refuseOtherSettings(explicit, { ...options, codexEffort: 'medium' }, prov, [])).not.toThrow();
+    for (const codexEffort of ['high', undefined]) {
+      expect(() => refuseOtherSettings(explicit, { ...options, codexEffort }, prov, []))
+        .toThrow(/other settings \(codexEffort\)/);
+    }
+    const unset = study(rows);
+    expect(() => refuseOtherSettings(unset, options, prov, [])).not.toThrow();
+    expect(() => refuseOtherSettings(unset, { ...options, codexEffort: 'medium' }, prov, []))
+      .toThrow(/other settings \(codexEffort\)/);
   });
 
   it('fingerprints each tracked diff so a second dirty edit refuses resume', async () => {
@@ -1180,5 +1233,24 @@ if (args.includes('--output-schema')) {
     expect((await start(args)).code).toBe(0);
     expect(rowsOf()).toHaveLength(kept.length + 1);
     expect(new Set(calls().map((c) => c.cwd)).size).toBe(1);
+  }, 180_000);
+
+  it('persists Codex effort, passes it to every run and refuses changed or unset effort before launching', async () => {
+    const { out, start, calls } = stage();
+    const args = ['--hosts', 'codex', '--repeats', '1', '--ids', 'c1-web-14', '--codex-model', 'gpt-6-luna'];
+    const first = await start([...args, '--codex-effort', 'medium']);
+    expect(first.code, first.text).toBe(0);
+    expect(JSON.parse(readFileSync(join(out, 'config.json'), 'utf8')).codexEffort).toBe('medium');
+    const before = calls();
+    expect(before).toHaveLength(4);
+    for (const call of before) expect(call.args).toContain('model_reasoning_effort=medium');
+    for (const changed of [args, [...args, '--codex-effort', 'high']]) {
+      const result = await start(changed);
+      expect(result.code).toBe(1);
+      expect(result.text).toContain('other settings (codexEffort)');
+      expect(calls()).toEqual(before);
+    }
+    expect((await start([...args, '--codex-effort', 'medium'])).code).toBe(0);
+    expect(calls()).toEqual(before);
   }, 180_000);
 });

@@ -121,6 +121,8 @@ while that file, or `AGENTS.override.md`, exists. The harness is `bench/ab.ts` (
 C14); `npx tsx bench/ab.ts` prints the plan and the estimate and spends
 nothing.
 
+The Codex pilot runs `--hosts codex --codex-model gpt-6-luna --codex-effort medium`, judged by Claude per the cross-family rule.
+
 - **Prompts.** `c1-web-14` (404-page copy), `c1-apps-08` (a questionnaire),
   `c1-debug-13` (a mobile menu that will not close, with a small fixture
   project and a hidden test). The selection rule: held-out C1 **test** rows

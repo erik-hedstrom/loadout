@@ -41,6 +41,8 @@ type PromptSpec = { id: string; kind: string; fixture?: string; hidden?: string 
 /** Three or more words, or the hook treats it as a follow-up and adds nothing. */
 const WARMUP_PROMPT = 'Reply with the single word READY and nothing else. Do not use any tools.';
 export const AB_MODELS: Record<Host, string> = { claude: 'sonnet', codex: 'gpt-6.1-sol' };
+/** Named levels in codex-cli 0.163.0; keep study inputs explicit rather than accepting custom model-defined strings. */
+const CODEX_EFFORTS = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra', 'persistent'];
 /** Cross-family (AGENTS.md): Codex outputs are judged by Claude, Claude outputs by Codex. */
 const JUDGES: Record<Host, { backend: 'claude' | 'codex'; model: string }> = { claude: { backend: 'codex', model: 'gpt-6.1-sol' }, codex: { backend: 'claude', model: 'opus' } };
 /** Beyond the allowlist, only the loadout arm gets these: the hook and the MCP server read the key, endpoint and home. */
@@ -84,6 +86,7 @@ export interface Ctx {
   /** The environment the harness itself runs in; a run gets only the allowlisted part. */
   env: NodeJS.ProcessEnv;
   models: Record<Host, string>;
+  codexEffort?: string;
   maxTurns: number;
   codexHook: boolean;
 }
@@ -126,6 +129,7 @@ export function buildCommand(job: Job, prompt: string, ctx: Ctx): Command {
   }
   const hook = job.arm === 'loadout' && ctx.codexHook;
   const args = ['exec', '--json', '--ephemeral', '--ignore-user-config', '--ignore-rules', '--skip-git-repo-check', '-s', 'workspace-write', '-m', ctx.models.codex,
+    ...(ctx.codexEffort === undefined ? [] : ['-c', `model_reasoning_effort=${ctx.codexEffort}`]),
     ...featuresOff(job.arm, ctx.codexHook).flatMap((f) => ['--disable', f]),
     ...(job.arm === 'loadout' ? ['-c', `mcp_servers.${SEARCH_SERVER}=${toToml(codexServer())}`] : []),
     ...(hook ? ['--dangerously-bypass-hook-trust', '-c', `hooks.UserPromptSubmit=${toToml(CODEX_HOOK)}`] : []), prompt];
@@ -277,7 +281,7 @@ export function redactNames(text: string, names: string[]): { text: string; coun
 
 // --- Plan -------------------------------------------------------------------------------------
 
-export interface Options { hosts: Host[]; ids: string[]; repeats: number; models: Record<Host, string>; maxTurns: number; timeoutS: number; codexHook: boolean }
+export interface Options { hosts: Host[]; ids: string[]; repeats: number; models: Record<Host, string>; codexEffort?: string; maxTurns: number; timeoutS: number; codexHook: boolean }
 
 /** Set only by the harness's stand-in test; a real study never sets it. */
 const SELF_TEST = 'LOADOUT_AB_SELF_TEST';
@@ -352,7 +356,7 @@ export function planLines(o: Options, env: NodeJS.ProcessEnv = process.env, root
   lines.push(`Estimate (assumptions, not measurements): Claude ${claudeRuns * 2} to ${claudeRuns * o.maxTurns} requests, each carrying roughly 15k to 40k input tokens that are mostly cache reads; Codex one thread total per run; up to ${Math.round(jobs.length * o.timeoutS / 60)} minutes at the timeout, typically a third of that. Subscription quota, not cash. Jev: about ${loadoutRuns} routing calls (under $0.05, RESULTS sweeps run near $0.001 each) plus any find_tools. Judging: ${o.hosts.length * o.ids.length * o.repeats * 2} calls, sequential (Claude Opus on Codex outputs, Sol on Claude outputs).`);
   for (const s of specs) lines.push(`PROMPT ${s.id} (${s.kind}): ${promptText(s).length} characters with the note${s.fixture ? `; fixture ${s.fixture}, hidden test ${s.hidden}` : ''}`);
   for (const host of o.hosts) lines.push(`SCHEDULE ${host} (arm/prompt/repeat; warm-ups are repeat 0): ${jobs.filter((j) => j.host === host).map((j) => `${j.arm}/${j.prompt}/${j.repeat}`).join('  ')}`);
-  const ctx: Ctx = { work: join(root, 'work'), shimDir: join(root, 'shim', '<host>'), configDir: '<fresh CLAUDE_CONFIG_DIR per run>', env, models: o.models, maxTurns: o.maxTurns, codexHook: o.codexHook };
+  const ctx: Ctx = { work: join(root, 'work'), shimDir: join(root, 'shim', '<host>'), configDir: '<fresh CLAUDE_CONFIG_DIR per run>', env, models: o.models, codexEffort: o.codexEffort, maxTurns: o.maxTurns, codexHook: o.codexHook };
   for (const host of o.hosts) for (const arm of ARMS) {
     const c = buildCommand({ host, arm, prompt: o.ids[0]!, repeat: 1, warmup: false, seq: 0 }, '<prompt>', ctx);
     lines.push(`ARGV ${host}/${arm}: cwd=${JSON.stringify(c.cwd)} argv=${JSON.stringify([c.bin, ...c.args])}`);
@@ -469,7 +473,7 @@ export function provenance(): Provenance {
   return { commit: diff ? `${head}+dirty-${createHash('sha256').update(diff).digest('hex').slice(0, 12)}` : head, library: `${library.length} capabilities, ${createHash('sha256').update(library.join('\n')).digest('hex').slice(0, 12)}` };
 }
 
-const studySettings = (s: Options & Partial<Provenance>) => ({ hosts: s.hosts, ids: s.ids, repeats: s.repeats, models: s.models, maxTurns: s.maxTurns, timeoutS: s.timeoutS, codexHook: s.codexHook, commit: s.commit, library: s.library });
+const studySettings = (s: Options & Partial<Provenance>) => ({ hosts: s.hosts, ids: s.ids, repeats: s.repeats, models: s.models, codexEffort: s.codexEffort, maxTurns: s.maxTurns, timeoutS: s.timeoutS, codexHook: s.codexHook, commit: s.commit, library: s.library });
 
 /** An --out folder is one study: resuming it with other settings (another model, other code or library) would pair rows measured under different ones. */
 export function refuseOtherSettings(out: string, o: Options, p: Provenance, secrets: string[]): void {
@@ -512,7 +516,7 @@ async function runAll(o: Options, out: string, deps: { token?: string; print: (s
       const spec = specs.find((s) => s.id === job.prompt);
       mkdirSync(join(root, 'claude-homes'), { recursive: true });
       const configDir = job.host === 'claude' ? mkdtempSync(join(root, 'claude-homes', 'run-')) : '';
-      const ctx: Ctx = { work: join(root, 'work'), shimDir: shims[job.host]!, configDir, env: deps.env, models: o.models, maxTurns: o.maxTurns, codexHook: o.codexHook };
+      const ctx: Ctx = { work: join(root, 'work'), shimDir: shims[job.host]!, configDir, env: deps.env, models: o.models, codexEffort: o.codexEffort, maxTurns: o.maxTurns, codexHook: o.codexHook };
       const row = await execute1(job, spec ? promptText(spec) : WARMUP_PROMPT, spec, ctx, o, { out, previous, token: deps.token, secrets, versions });
       if (configDir) rmSync(configDir, { recursive: true, force: true });
       if (previous.some((r) => r.host === row.host && r.hostVersion && row.hostVersion && r.hostVersion !== row.hostVersion)) row.invalid ??= `${row.host} version changed during the study; measurement invalid`;
@@ -583,12 +587,13 @@ export async function main(args: string[], deps: { print?: (s: string) => void; 
 
 async function mainImpl(args: string[], print: (s: string) => void, env: NodeJS.ProcessEnv, secrets: string[]): Promise<void> {
   const { values } = parseArgs({ args, options: { plan: { type: 'boolean' }, run: { type: 'boolean' }, 'judge-only': { type: 'string' }, hosts: { type: 'string' }, ids: { type: 'string' }, repeats: { type: 'string' }, out: { type: 'string' },
-    'claude-model': { type: 'string' }, 'codex-model': { type: 'string' }, 'max-turns': { type: 'string' }, 'timeout-s': { type: 'string' }, 'no-codex-hook': { type: 'boolean' } } });
+    'claude-model': { type: 'string' }, 'codex-model': { type: 'string' }, 'codex-effort': { type: 'string' }, 'max-turns': { type: 'string' }, 'timeout-s': { type: 'string' }, 'no-codex-hook': { type: 'boolean' } } });
+  if (values['codex-effort'] !== undefined && !CODEX_EFFORTS.includes(values['codex-effort'])) throw new Error(`--codex-effort must be one of: ${CODEX_EFFORTS.join(', ')}`);
   const list = <T extends string>(text: string | undefined, allowed: readonly T[], fallback: T[]) => text?.split(',').map((x) => { if (!allowed.includes(x as T)) throw new Error(`unknown value ${x}`); return x as T; }) ?? fallback;
   const positive = (text: string | undefined, fallback: number, name: string) => { const n = text === undefined ? fallback : Number(text); if (!Number.isInteger(n) || n < 1) throw new Error(`--${name} must be a positive integer`); return n; };
   const o: Options = {
     hosts: list(values.hosts, ['claude', 'codex'], ['claude', 'codex']), ids: list(values.ids, PILOT.map((p) => p.id), PILOT.map((p) => p.id)), repeats: positive(values.repeats, 2, 'repeats'),
-    models: { claude: values['claude-model'] ?? AB_MODELS.claude, codex: values['codex-model'] ?? AB_MODELS.codex }, maxTurns: positive(values['max-turns'], 30, 'max-turns'), timeoutS: positive(values['timeout-s'], 600, 'timeout-s'), codexHook: !values['no-codex-hook'],
+    models: { claude: values['claude-model'] ?? AB_MODELS.claude, codex: values['codex-model'] ?? AB_MODELS.codex }, codexEffort: values['codex-effort'], maxTurns: positive(values['max-turns'], 30, 'max-turns'), timeoutS: positive(values['timeout-s'], 600, 'timeout-s'), codexHook: !values['no-codex-hook'],
   };
   if (values['judge-only'] !== undefined) {
     const dir = resolve(values['judge-only']);

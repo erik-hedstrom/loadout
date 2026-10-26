@@ -227,6 +227,8 @@ CLAUDE_CODE_OAUTH_TOKEN=... npx tsx bench/ab.ts --run [--repeats 2] [--hosts cla
 npx tsx bench/ab.ts --judge-only bench/results/<run>-ab-pilot        # judge and write report.md again
 ```
 
+The Codex pilot runs `--hosts codex --codex-model gpt-6-luna --codex-effort medium`, judged by Claude per the cross-family rule.
+
 Three prompts, each with and without loadout (the plugin, MCP server and hook as
 a user installs them) in the stock `claude` and `codex`: per-request token usage
 with cached and uncached input apart, a blind cross-family judge and, for the

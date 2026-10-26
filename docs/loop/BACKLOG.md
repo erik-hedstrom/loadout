@@ -35,7 +35,7 @@ Each PR body's **Review state** section has the round-by-round record.
 
 | PR | Item | State on 2026-10-22 |
 |---|---|---|
-| [#47](https://github.com/erik-hedstrom/loadout/pull/47) | C14 A/B pilot harness; adds B10 | final review round; the clean Codex-only rerun needs a separately logged-in `CODEX_HOME` |
+| [#47](https://github.com/erik-hedstrom/loadout/pull/47) | C14 A/B pilot harness; adds B10 | final review round; explicit Codex effort is pinned and recorded; the clean Codex-only rerun needs a separately logged-in `CODEX_HOME` |
 
 ## A. Adoption and ease of use
 
@@ -436,7 +436,7 @@ Decisions for Erik:
 | C8 | P0 | Skill use with the hook-only plugin | Claude | local | done ([#25](https://github.com/erik-hedstrom/loadout/pull/25)): headless, the hook injected a skill's text in 6 of 10; Claude opened 0 of 10, none of the 4 it was only pointed to (D13) |
 | C9 | P1 | Host-model fallback router when there is no TypeSafe key | Claude (design) | cloud (code) + local (bench) | todo |
 | C10 | P2 | Bench quick fixes: sequential outcome judge, tier fixed across arms, stale A2 number | Claude | cloud | done ([#40](https://github.com/erik-hedstrom/loadout/pull/40)) |
-| C14 | P1 | A/B pilot: three prompts with and without loadout in the stock CLIs, tokens (cached apart from uncached) and quality | Claude (harness) + Erik (runs) | cloud (harness) + local (runs) | review ([#47](https://github.com/erik-hedstrom/loadout/pull/47)): harness, plan and tests done, reviews addressed (resume refuses other settings or a batch-stopping row; credentials and keyword-routed loadout runs stop the batch, as RESULTS "What stops the batch" defines); the paid pilot has not run (needs `CLAUDE_CODE_OAUTH_TOKEN` and the TypeSafe key in a key file, from WSL) |
+| C14 | P1 | A/B pilot: three prompts with and without loadout in the stock CLIs, tokens (cached apart from uncached) and quality | Claude (harness) + Erik (runs) | cloud (harness) + local (runs) | review ([#47](https://github.com/erik-hedstrom/loadout/pull/47)): harness, plan and tests done; explicit Codex effort and resume checks added, reviews addressed (resume refuses other settings or a batch-stopping row; credentials and keyword-routed loadout runs stop the batch, as RESULTS "What stops the batch" defines); the paid pilot has not run (needs `CLAUDE_CODE_OAUTH_TOKEN` and the TypeSafe key in a key file, from WSL) |
 
 **C13. Pure-Jev baseline without more model spend.**
 
@@ -803,6 +803,10 @@ Learnings (2026-10-19):
 - The working folder is one fixed path for every run (emptied each time),
   because both hosts put it in the prompt and a different path per run would
   break the shared cache prefix.
+
+Learnings (2026-10-26):
+- Codex effort is part of the persisted study settings and printed argv; changing or removing it refuses resume. The pilot pins medium explicitly because the model default is not a study setting.
+- The harness accepts the nine named effort levels in codex-cli 0.163.0; custom model-defined strings are outside this study interface.
 
 Learnings (2026-10-20):
 - **The first Codex pilot (2026-10-20, at e9d7239) is confounded.** Codex loaded
