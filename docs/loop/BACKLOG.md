@@ -35,7 +35,6 @@ Each PR body's **Review state** section has the round-by-round record.
 
 | PR | Item | State on 2026-10-22 |
 |---|---|---|
-| [#47](https://github.com/erik-hedstrom/loadout/pull/47) | C14 A/B pilot harness; adds B10 | final review round; explicit Codex effort is pinned and recorded; the clean Codex-only rerun needs a separately logged-in `CODEX_HOME` |
 
 ## A. Adoption and ease of use
 
@@ -429,7 +428,7 @@ Decisions for Erik:
 | C8 | P0 | Skill use with the hook-only plugin | Claude | local | done ([#25](https://github.com/erik-hedstrom/loadout/pull/25)): headless, the hook injected a skill's text in 6 of 10; Claude opened 0 of 10, none of the 4 it was only pointed to (D13) |
 | C9 | P1 | Host-model fallback router when there is no TypeSafe key | Claude (design) | cloud (code) + local (bench) | todo |
 | C10 | P2 | Bench quick fixes: sequential outcome judge, tier fixed across arms, stale A2 number | Claude | cloud | done ([#40](https://github.com/erik-hedstrom/loadout/pull/40)) |
-| C14 | P1 | A/B pilot: three prompts with and without loadout in the stock CLIs, tokens (cached apart from uncached) and quality | Claude (harness) + Erik (runs) | cloud (harness) + local (runs) | review ([#47](https://github.com/erik-hedstrom/loadout/pull/47)): harness, plan and tests done; explicit Codex effort and resume checks added, reviews addressed (resume refuses other settings or a batch-stopping row; credentials and keyword-routed loadout runs stop the batch, as RESULTS "What stops the batch" defines); the paid pilot has not run (needs `CLAUDE_CODE_OAUTH_TOKEN` and the TypeSafe key in a key file, from WSL) |
+| C14 | P1 | A/B pilot: three prompts with and without loadout in the stock CLIs, tokens (cached apart from uncached) and quality | Claude (harness) + Erik (runs) | cloud (harness) + local (runs) | partial ([#47](https://github.com/erik-hedstrom/loadout/pull/47)): harness merged; the Codex-only pilot (gpt-6-luna, medium effort) is next, the Claude host needs `CLAUDE_CODE_OAUTH_TOKEN` |
 
 **C13. Pure-Jev baseline without more model spend.**
 
@@ -1415,7 +1414,7 @@ Learnings (2026-10-09):
 | E16 | P2 | Hygiene from #30's audit: control characters, `git ls-files` env, config symlink, echoed arguments | Codex | local | done ([#50](https://github.com/erik-hedstrom/loadout/pull/50)); key inheritance waits on Erik's decision |
 | E17 | P3 | One entry-point guard for bench scripts that survives symlinked paths | Codex + Claude review | cloud | done ([#51](https://github.com/erik-hedstrom/loadout/pull/51)); converting #47's guard follows that PR |
 | E18 | P1 | Patch the Vite advisories in the development lockfile | Codex | cloud | done ([#56](https://github.com/erik-hedstrom/loadout/pull/56)) |
-| E19 | P1 | Patch the production dependency advisories (zod, body-parser, fast-uri, ip-address) | Codex | cloud | review |
+| E19 | P1 | Patch the production dependency advisories (zod, body-parser, fast-uri, ip-address) | Codex | cloud | done ([#61](https://github.com/erik-hedstrom/loadout/pull/61)) |
 
 **E18. npm advisories.** `npm audit` on main reported six advisories against
 Vite 8.3.2 (GHSA-698v-4r3x-3vcv, GHSA-r825-w8mm-5pxw, GHSA-587h-7wmj-h5pm,
@@ -1456,12 +1455,7 @@ all four are production dependencies, not development-only.
   and SDK tool-list/result arrays (`src/mcp.ts:311`, `src/mcp.ts:333`);
   oversized-collection exposure is possible through those upstream inputs.
 
-The audit itself is the regression check; no probes or exploits were run.
-Verification (Windows, Node 24.16.0, npm 11.13.0): both `npm audit --omit=dev`
-and `npm audit` report 0 vulnerabilities; `npm ci` installs 173 packages
-(174 audited); build and typecheck pass. `npm test`: 1,093 passed, 114 skipped
-(33 files passed, 4 skipped). Jev/API spend: $0. Independent review remains
-with the orchestrator; no push or PR from this implementation task.
+The audit itself is the regression check.
 
 **E16. Terminal, config and git hygiene.** From the reviews of #30 (A3);
 all older than it.
