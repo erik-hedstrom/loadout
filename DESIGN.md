@@ -6,11 +6,12 @@ Installed skill listings add context even when the skills are irrelevant.
 What that cost in Claude Code and Codex, as measured by B1, is summarised in
 the [README](README.md).
 
-**loadout aims to decouple library size from per-request cost.** A very cheap
-System One model ([Jev](https://typesafe.ai/blog/introducing-system-one-models-and-jev))
-looks at the task and the repo, then picks the model and a deliberately
-over-inclusive shortlist of skills and MCP servers from a library that can be
-arbitrarily large. The agent still makes the final call from the shortlist.
+**loadout aims to decouple library size from per-request cost.**
+[Jev](https://typesafe.ai/blog/introducing-system-one-models-and-jev) selects
+skills per substantive prompt in stock Claude Code and Codex. MCP servers are
+found on demand through loadout's MCP tools. The launcher additionally picks
+a model tier once per session. Tier-choice quality is not evaluated
+([RESULTS](bench/RESULTS.md#threats-to-validity)).
 
 How this differs from native skill loading, tool search, MCP gateways, model
 routers and skills directories: [docs/comparison.md](docs/comparison.md).

@@ -17,6 +17,13 @@ makes the prediction, for about $0.001 per routing decision on the v4
 benchmark's requests
 ([RESULTS](bench/RESULTS.md#v4-2026-10-06-realistic-requests-on-the-real-library-judged)).
 
+In the stock hosts, the hook selects skills per substantive prompt. MCP
+servers are found on demand through loadout's [MCP tools](docs/mcp.md).
+The [launcher](docs/launcher.md) additionally picks a model tier once per
+session; tier-choice quality is not evaluated
+([RESULTS](bench/RESULTS.md#threats-to-validity)). Host checks and untested
+paths: [hosts](docs/hosts.md).
+
 ## Quickstart
 
 Needs Node 22.12+, a TypeSafe API key, and the `claude` or `codex` CLI. The

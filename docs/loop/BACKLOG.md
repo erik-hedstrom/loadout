@@ -1415,6 +1415,16 @@ Learnings (2026-10-09):
 | E16 | P2 | Hygiene from #30's audit: control characters, `git ls-files` env, config symlink, echoed arguments | Codex | local | done ([#50](https://github.com/erik-hedstrom/loadout/pull/50)); key inheritance waits on Erik's decision |
 | E17 | P3 | One entry-point guard for bench scripts that survives symlinked paths | Codex + Claude review | cloud | done ([#51](https://github.com/erik-hedstrom/loadout/pull/51)); converting #47's guard follows that PR |
 | E18 | P1 | Patch the Vite advisories in the development lockfile | Codex | cloud | done ([#56](https://github.com/erik-hedstrom/loadout/pull/56)) |
+| E20 | P2 | Docs match the evidence: HANDOFF state and the per-prompt scope claim | Codex | cloud | review |
+
+**E20.** Verify main's merge history and the implementation before updating
+HANDOFF's state and scope wording in README, AGENTS, host docs, package and
+plugin descriptions. Distinguish per-prompt skill selection in stock hosts,
+on-demand MCP discovery, and the launcher's per-session model tier. Link
+measured studies and unshown outcomes to RESULTS; link C14's Codex-only pilot,
+B11's quota-stopped pilot and unrun full study, and the caching track instead
+of restating them. Preserve candid limitations and line endings. Run typecheck,
+tests, diff and encoding checks, and resolve every touched relative link and anchor.
 
 **E18. npm advisories.** `npm audit` on main reported six advisories against
 Vite 8.3.2 (GHSA-698v-4r3x-3vcv, GHSA-r825-w8mm-5pxw, GHSA-587h-7wmj-h5pm,

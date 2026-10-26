@@ -6,8 +6,11 @@ Codex reads this file directly; Claude Code reads it through CLAUDE.md. Read
 
 ## What this is
 
-loadout picks the skills, MCP servers and model tier for each coding-agent
-session or prompt, using TypeSafe's Jev, a cheap System One model.
+In stock Claude Code and Codex, loadout uses TypeSafe's Jev to select skills
+per substantive prompt. MCP servers are found on demand through loadout's
+MCP tools. The `loadout claude|codex` launcher additionally picks a model tier
+once per session; tier-choice quality is not evaluated
+([RESULTS](bench/RESULTS.md#threats-to-validity)).
 TypeScript, Node ≥ 22.12, ESM, strict.
 
 It runs inside the stock `claude` and `codex` CLIs, through the plugin, hooks

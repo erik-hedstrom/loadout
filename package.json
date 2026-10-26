@@ -1,7 +1,7 @@
 {
   "name": "loadout",
   "version": "0.1.0",
-  "description": "Pick the model, skills and MCP servers for each coding-agent session from an unlimited library, using a cheap System One router.",
+  "description": "Select skills per prompt with Jev, discover MCP servers on demand, and pick a model tier per session with the launcher.",
   "type": "module",
   "bin": {
     "loadout": "dist/cli.js"
