@@ -235,15 +235,23 @@ function heldSecretLeak(work: string, secrets: string[], dir = work): Leak | nul
  * Held secrets stop any run; token shapes stop only files that would reach the judge. The copy is the judge's view
  * (`deliverables` in pairwise.ts): binary files and files over JUDGE_MAX_BYTES are left out there, so they are here too.
  */
-export function copyOutputs(work: string, dest: string, folders: [string, string][], secrets: string[]): Leak | null {
+export function copyOutputs(work: string, dest: string, folders: [string, string][], secrets: string[], finalMessage?: string, warmup = false): Leak | null {
   rmSync(dest, { recursive: true, force: true });
+  if (finalMessage !== undefined && holdsSecret(finalMessage, secrets)) return { file: '<final message>', rule: 'held secret' };
   const leak = heldSecretLeak(work, secrets);
   if (leak) return leak;
-  const files = deliverableFiles(work).flatMap((p) => {
+  const files = (warmup ? [] : deliverableFiles(work)).flatMap((p) => {
     if (statSync(p).size > JUDGE_MAX_BYTES) return [];
     const buf = readFileSync(p);
     return buf.includes(0) ? [] : [{ file: relative(work, p), text: buf.toString('utf8') }];
   });
+  if (finalMessage !== undefined && !finalMessage.includes('\0') && Buffer.byteLength(finalMessage, 'utf8') <= JUDGE_MAX_BYTES) {
+    if (CREDENTIAL_SHAPE.test(finalMessage)) return { file: '<final message>', rule: 'token shape' };
+    // The response is harness metadata; never overwrite a deliverable with the same name (or a directory).
+    let file = 'agent-final-message.txt';
+    while (existsSync(join(work, file))) file = `_${file}`;
+    files.push({ file, text: finalMessage });
+  }
   for (const { file, text } of files) {
     const pathHit = CREDENTIAL_SHAPE.test(file);
     if (pathHit || CREDENTIAL_SHAPE.test(text)) return { file: pathHit ? '<credential-bearing path>' : file.replace(/\\/g, '/'), rule: 'token shape' };
@@ -386,6 +394,7 @@ async function execute1(job: Job, prompt: string, spec: PromptSpec | undefined, 
   const { out, previous, token, secrets, versions } = study;
   resetWork(ctx.work);
   if (spec?.fixture) cpSync(join(FIXTURES, spec.fixture), ctx.work, { recursive: true });
+  const beforeFiles = new Map(deliverableFiles(ctx.work).map((p) => [p, readFileSync(p)]));
   const id = jobId(job);
   const marker = join(ctx.shimDir, `${id.replace(/\//g, '_')}.invocations`);
   const capture = `${marker}.out`;
@@ -398,15 +407,16 @@ async function execute1(job: Job, prompt: string, spec: PromptSpec | undefined, 
   const startedAt = Date.now();
   const proc = await run(command.bin, command.args, ctx.work, o.timeoutS * 1000, command.env);
   const endedAt = Date.now();
+  const wroteFile = deliverableFiles(ctx.work).some((p) => !beforeFiles.get(p)?.equals(readFileSync(p)));
 
   const folders: [string, string][] = [[ctx.work, '<work>'], [homedir(), '~'], [tmpdir(), '<tmp>']];
   const dest = join(out, 'outputs', job.host, job.prompt, `${job.arm}-${job.repeat}`);
   const capturedRaw = readFileSync(capture, 'utf8');
   const hookStderr = readFileSync(`${capture}.err`, 'utf8');
+  const stream = toolEvents(proc.stdout);
   const streamLeak = holdsSecret([proc.stdout, proc.stderr, capturedRaw, hookStderr].join('\n'), secrets);
   const leak: Leak | null = streamLeak ? { file: '<stream>', rule: 'held secret' }
-    : job.warmup ? heldSecretLeak(ctx.work, secrets) : copyOutputs(ctx.work, dest, folders, secrets);
-  const stream = toolEvents(proc.stdout);
+    : copyOutputs(ctx.work, dest, folders, secrets, stream.finalMessage, job.warmup);
   let usage: RunUsage | null = null;
   try { usage = (job.host === 'claude' ? claudeUsage : codexUsage)(proc.stdout); } catch { /* checkRun says why */ }
   const marks = readFileSync(marker, 'utf8').split('\n');
@@ -446,7 +456,7 @@ async function execute1(job: Job, prompt: string, spec: PromptSpec | undefined, 
     unreconciled: usage?.unreconciled ?? [], modelUsage: usage?.modelUsage ?? null,
     coldCacheRisk: requests.some((r) => (r.gapMs ?? 0) > CACHE_TTL_MS),
     toolCalls: tools.length, toolErrors: tools.filter((t) => t.endsWith('(failed)')).length, loadoutTools: [...new Set(tools.filter((t) => t.startsWith(`mcp__${SEARCH_SERVER}__`)))],
-    skillsOpened: openedSkills(stream.events), hook, hiddenTest, ...(leak ? { leak } : {}), ...(streamWithheld ? { streamWithheld: 'token shape' as const } : {}),
+    skillsOpened: openedSkills(stream.events), hook, hiddenTest, wroteFile, ...(leak ? { leak } : {}), ...(streamWithheld ? { streamWithheld: 'token shape' as const } : {}),
     // A Codex run that timed out reports no usage: it cannot count, but it is not a broken arm.
     ...(invalid ? { invalid } : !usage ? { invalid: proc.timedOut ? UNUSABLE[0] : UNUSABLE[1] } : {}),
   };

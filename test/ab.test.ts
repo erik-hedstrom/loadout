@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CREDENTIAL_SHAPE, persistJson, redact, report, type RunRow, type Verdict } from '../bench/ab-report.js';
-import { JUDGE_MAX_BYTES, judgePair } from '../bench/pairwise.js';
+import { deliverables, JUDGE_MAX_BYTES, judgePair } from '../bench/pairwise.js';
 import { AB_MODELS, blockers, buildCommand, checkRun, copyOutputs, hiddenResult, hookFacts, main, openedSkills, planLines, promptText, provenance, redactNames, refuseOtherSettings, refuseStopped, routedByKeyword, runEnv, schedule, scrub, type Ctx, type Evidence, type Job, type Options } from '../bench/ab.js';
 import { DEFAULT_CONFIG } from '../src/config.js';
 import { JEV_FALLBACK_NOTE, NO_KEY_WARNING } from '../src/hook.js';
@@ -419,6 +419,56 @@ describe('validity', () => {
 });
 
 describe('what a run shows', () => {
+  it('extracts only the last completed Codex agent message or Claude result text', () => {
+    expect(toolEvents(codexStream).finalMessage).toBe('Done.');
+    expect(toolEvents(claudeStream).finalMessage).toBe('Done.');
+    const stream = [
+      { type: 'item.completed', item: { type: 'agent_message', text: 'Earlier' } },
+      { type: 'item.completed', item: { type: 'reasoning', text: 'Private reasoning' } },
+      { type: 'item.updated', item: { type: 'agent_message', text: 'Partial' } },
+      { type: 'item.completed', item: { type: 'agent_message', text: 'Final' } },
+    ].map((e) => JSON.stringify(e)).join('\n');
+    expect(toolEvents(stream + '\n{"type":').finalMessage).toBe('Final');
+    expect(toolEvents('{"type":"result","result":42}').finalMessage).toBeUndefined();
+    expect(toolEvents('').finalMessage).toBeUndefined();
+  });
+
+  it.each(['codex', 'claude'] as const)('adds the %s final message to the bounded, scrubbed and blinded judge view without replacing an agent file', (host) => {
+    const work = temp('loadout-ab-message-');
+    const dest = join(temp('loadout-ab-view-'), 'outputs');
+    writeFileSync(join(work, 'agent-final-message.txt'), 'Agent file');
+    const text = `Used ux-copy in ${work}`;
+    const event = host === 'codex' ? { type: 'item.completed', item: { type: 'agent_message', text } } : { type: 'result', result: text };
+    expect(copyOutputs(work, dest, [[work, '<work>']], [], toolEvents(JSON.stringify(event)).finalMessage)).toBeNull();
+    const view = redactNames(deliverables(dest), ['ux-copy']).text;
+    expect(view).toContain('Agent file');
+    expect(view).toContain('Used [skill] in <work>');
+    expect(view).not.toContain(work);
+    expect(readdirSync(dest)).toHaveLength(2);
+    expect(deliverables(dest, 8)).not.toContain('Used ux-copy');
+  });
+
+  it.each(['held', 'shape'] as const)('screens %s credentials in the final message before copying any files', (kind) => {
+    const work = temp('loadout-ab-message-');
+    const dest = join(temp('loadout-ab-view-'), 'outputs');
+    const secret = kind === 'held' ? 'synthetic-held-key' : `sk-${'a1B2'.repeat(8)}`;
+    writeFileSync(join(work, 'safe.md'), 'safe');
+    expect(copyOutputs(work, dest, [], kind === 'held' ? [secret] : [], `Answer: ${secret}`))
+      .toEqual({ file: '<final message>', rule: kind === 'held' ? 'held secret' : 'token shape' });
+    expect(existsSync(dest)).toBe(false);
+  });
+
+  it('uses the same binary and byte limits for final messages, but still checks held secrets', () => {
+    const work = temp('loadout-ab-message-');
+    const dest = join(temp('loadout-ab-view-'), 'outputs');
+    for (const message of ['binary\0text', 'é'.repeat(JUDGE_MAX_BYTES / 2 + 1)]) {
+      expect(copyOutputs(work, dest, [], [], message)).toBeNull();
+      expect(readdirSync(dest)).toEqual([]);
+    }
+    expect(copyOutputs(work, dest, [], ['held-key'], 'held-key' + 'x'.repeat(JUDGE_MAX_BYTES)))
+      .toEqual({ file: '<final message>', rule: 'held secret' });
+  });
+
   it('names the skills the hook listed and injected, and counts its characters', () => {
     const output = JSON.stringify({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: '<skill_relevance>\nMost relevant:\n- "ux-copy" (fit 0.91): d\n- "brand--acme" (fit 0.5): d\n</skill_relevance>\n<skill name="ux-copy" trust="third-party">\nbody\n</skill>' } });
     const facts = hookFacts(`${output}\n\n`);
@@ -545,6 +595,15 @@ describe('the c1-debug-13 fixture', () => {
     expect(hiddenResult(dir, hidden)).toMatchObject({ passed: true, failed: 0 });
   });
 
+  it('accepts Escape focus return and focusing the panel without requiring either', () => {
+    const dir = copy();
+    const fix = REFERENCE_FIX
+      .replace("if (event.key === 'Escape') close();", "if (event.key === 'Escape') { close(); button.focus(); if (doc.activeElement !== button) throw new Error('focus not recorded'); }")
+      .replace('isOpen = true; render();', 'isOpen = true; render(); panel.focus();');
+    writeFileSync(join(dir, 'menu.js'), fix);
+    expect(hiddenResult(dir, hidden)).toMatchObject({ passed: true, tests: 8, failed: 0 });
+  });
+
   it('also passes a fix that tells the button apart with button.contains', () => {
     const dir = copy();
     writeFileSync(join(dir, 'menu.js'), REFERENCE_FIX.replace('if (event.target === button || panel.contains(event.target)) return;', 'if (panel.contains(event.target) || button.contains(event.target)) return;'));
@@ -588,6 +647,14 @@ it('keeps judge usage and diagnostics with each blind order', async () => {
 });
 
 describe('report', () => {
+  it('reports file-writing separately from final messages and leaves historical rows unknown', () => {
+    const text = report([row({ wroteFile: true }), row({ repeat: 2, wroteFile: false }), row({ arm: 'loadout' })], [], []);
+    const header = text.split('\n').find((l) => l.startsWith('| Host | Prompt | Arm | Runs |'))!.split('|').map((s) => s.trim());
+    const column = header.indexOf('Wrote a file');
+    expect(column).toBeGreaterThan(0);
+    const cells = text.split('\n').filter((l) => l.startsWith('| claude | p1 |') && l.split('|').length === header.length);
+    expect(cells.map((l) => l.split('|')[column]!.trim())).toEqual(['1 of 2', 'not shown']);
+  });
   const rows: RunRow[] = [
     row({ id: 'w', warmup: true, repeat: 0, prompt: 'warmup', totals: { uncached: 20, cacheWrite: 30000, cacheRead: 0, output: 5, effectiveInput: 40000, costUsd: 0.2, turns: 1 } }),
     row({ id: 'b1' }), row({ id: 'b2', repeat: 2, totals: { uncached: 14, cacheWrite: 1300, cacheRead: 41000, output: 170, effectiveInput: 6000, costUsd: 0.12, turns: 2 } }),
@@ -868,8 +935,8 @@ describe('subprocess stderr isolation', () => {
 
 describe('credential screening before persistence', () => {
   const cases: { when: string; where: string; kind: string; prefix?: string }[] = ['warmup', 'measured'].flatMap((when) => [
-    ...['binary', 'node_modules', '.env', 'path', 'stdout', 'stderr', 'hook', 'hook stderr'].map((where) => ({ when, where, kind: 'held' })),
-    ...['binary', 'node_modules', '.env', 'excluded path', 'stderr', 'hook', 'hook stderr', 'stdout', 'deliverable text', 'deliverable path'].map((where) => ({ when, where, kind: 'shape' })),
+    ...['binary', 'node_modules', '.env', 'path', 'stdout', 'stderr', 'hook', 'hook stderr', 'final message'].map((where) => ({ when, where, kind: 'held' })),
+    ...['binary', 'node_modules', '.env', 'excluded path', 'stderr', 'hook', 'hook stderr', 'stdout', 'deliverable text', 'deliverable path', 'final message'].map((where) => ({ when, where, kind: 'shape' })),
   ]);
   cases.push({ when: 'measured code', where: '.env', kind: 'held' });
   cases.push({ when: 'measured', where: 'shaped filename', kind: 'held' });
@@ -907,7 +974,7 @@ describe('credential screening before persistence', () => {
     const lead = prefix ? leads[prefix]! : '';
     const value = lead + secret;
     const target = when === 'warmup' ? 0 : 2;
-    const stops = kind === 'held' || (when !== 'warmup' && where.startsWith('deliverable'));
+    const stops = kind === 'held' || where === 'final message' || (when !== 'warmup' && where.startsWith('deliverable'));
     let runs = 0;
     vi.spyOn(benchLib, 'run').mockImplementation(async (_bin, _args, work) => {
       const tainted = runs++ === target;
@@ -934,6 +1001,7 @@ describe('credential screening before persistence', () => {
       let stdout = codexStream + (tainted && where === 'stdout'
         ? '\n' + JSON.stringify({ type: 'item.completed', item: kind === 'held'
           ? { type: 'mcp_tool_call', server: 'loadout', tool: secret, status: 'completed' } : { type: 'mcp_tool_call', server: 'loadout', tool: 'load_skill', arguments: { skill: value }, status: 'completed' } }) + (kind === 'shape' ? '\n' + JSON.stringify({ type: 'item.completed', item: { type: 'mcp_tool_call', server: 'loadout', tool: value, status: 'completed' } }) : '') : '');
+      if (tainted && where === 'final message') stdout += '\n' + JSON.stringify({ type: 'item.completed', item: { type: 'agent_message', text: value } });
       if (prefix === 'slash') stdout = stdout.replaceAll('/sk-', String.raw`\/sk-`);
       return { stdout, stderr: tainted && where === 'stderr' ? secret : '', code: 0, timedOut: false };
     });
@@ -970,7 +1038,7 @@ describe('credential screening before persistence', () => {
       const streamFile = join(out, 'streams', row.id.replace(/\//g, '_') + '.jsonl');
       expect(existsSync(streamFile)).toBe(!stops && !withheld);
       const dest = join(out, 'outputs', row.host, row.prompt, `${row.arm}-${row.repeat}`);
-      expect(existsSync(dest)).toBe(!stops && when !== 'warmup');
+      expect(existsSync(dest)).toBe(!stops);
       if (!stops && when !== 'warmup') expect(readFileSync(join(dest, 'notes.md'), 'utf8')).toBe('safe deliverable');
       const files = (readdirSync(out, { recursive: true }) as string[]).filter((f) => statSync(join(out, f)).isFile());
       const persisted = files.map((f) => readFileSync(join(out, f), 'utf8')).join('\n');
@@ -995,7 +1063,10 @@ describe('credential screening before persistence', () => {
       }
       if (stops) {
         expect(files.filter((f) => f.startsWith('streams'))).toHaveLength(target);
-        expect(files.some((f) => f.startsWith('outputs'))).toBe(false);
+        // Safe earlier warm-up responses remain; the stopped run persisted no output.
+        const outputs = files.filter((f) => f.startsWith('outputs'));
+        expect(outputs).toHaveLength(target);
+        expect(outputs.every((f) => f.endsWith('agent-final-message.txt'))).toBe(true);
       }
     } finally {
       Object.defineProperty(process, 'platform', platform);
@@ -1011,8 +1082,8 @@ describe.skipIf(process.platform === 'win32')('bench/ab.ts --run against stand-i
   const wrapper = (script: string) => `#!/bin/sh\nexec "${NODE}" "${script}" "$@"\n`;
 
   // `leak`: the loadout arm's agent writes the TypeSafe key it was given into a deliverable.
-  const claudeScript = (log: string, leak = false) => `
-import { appendFileSync, writeFileSync } from 'node:fs';
+  const claudeScript = (log: string, leak = false, writes = true) => `
+import { appendFileSync, existsSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 const args = process.argv.slice(2);
 const ev = (o) => console.log(JSON.stringify(o));
@@ -1030,18 +1101,21 @@ if (args.includes('--json-schema')) {
     ev({ type: 'system', subtype: 'hook_response', hook_id: 'h1', hook_name: 'UserPromptSubmit', hook_event: 'UserPromptSubmit', stdout: r.stdout, exit_code: 0, outcome: 'success' });
   }
   ev({ type: 'system', subtype: 'init', model: 'claude-sonnet-5', claude_code_version: '2.1.281', tools: ['Bash'], mcp_servers: mcp.map((name) => ({ name, status: 'connected' })), plugins: [...(plugin ? [{ name: 'loadout', path: plugin, source: 'loadout@inline' }] : []), { name: 'agents-md', path: 'builtin', source: 'agents-md@builtin' }] });
-  writeFileSync('notes.md', 'A short deliverable for ' + process.cwd() + '\\n');
+  if (${writes}) {
+    if (existsSync('menu.js')) appendFileSync('menu.js', '\\n');
+    else writeFileSync('notes.md', 'A short deliverable for ' + process.cwd() + '\\n');
+  }
   if (${leak} && process.env.TYPESAFE_API_KEY) writeFileSync('setup.md', 'export TYPESAFE_API_KEY=' + process.env.TYPESAFE_API_KEY + '\\n');
   const usage = (i, w, r, o) => ({ input_tokens: i, cache_creation_input_tokens: w, cache_read_input_tokens: r, output_tokens: o });
   ev({ type: 'assistant', message: { id: 'm1', model: 'claude-sonnet-5', content: [{ type: 'text', text: 'ok' }], usage: usage(2, plugin ? 900 : 400, 5000, 50) }, timestamp: new Date().toISOString() });
   ev({ type: 'assistant', message: { id: 'm2', model: 'claude-sonnet-5', content: [{ type: 'text', text: 'done' }], usage: usage(1, 50, 6000, 20) }, timestamp: new Date().toISOString() });
-  ev({ type: 'result', subtype: 'success', is_error: false, num_turns: 2, total_cost_usd: 0.01, usage: usage(3, plugin ? 950 : 450, 11000, 70) });
+  ev({ type: 'result', result: 'Final using ux-copy in ' + process.cwd(), subtype: 'success', is_error: false, num_turns: 2, total_cost_usd: 0.01, usage: usage(3, plugin ? 950 : 450, 11000, 70) });
 }
 `;
 
   // `unifiedExec`: the install keeps unified_exec on whatever is set (E12), so it cannot judge tool-less.
-  const codexScript = (log: string, unifiedExec = false) => `
-import { appendFileSync, writeFileSync } from 'node:fs';
+  const codexScript = (log: string, unifiedExec = false, writes = true) => `
+import { appendFileSync, existsSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 const args = process.argv.slice(2);
 const ev = (o) => console.log(JSON.stringify(o));
@@ -1053,9 +1127,12 @@ if (args.includes('--output-schema')) {
 } else {
   appendFileSync(${JSON.stringify(log)}, JSON.stringify({ host: 'codex', args, env: Object.keys(process.env).sort(), cwd: process.cwd() }) + '\\n');
   if (args.some((a) => a.startsWith('hooks.UserPromptSubmit='))) spawnSync('loadout', ['hook', 'codex'], { input: JSON.stringify({ session_id: 'fake-' + process.pid, prompt: 'Please use $ux-copy for this', cwd: process.cwd() }), encoding: 'utf8' });
-  writeFileSync('notes.md', 'A short deliverable for ' + process.cwd() + '\\n');
+  if (${writes}) {
+    if (existsSync('menu.js')) appendFileSync('menu.js', '\\n');
+    else writeFileSync('notes.md', 'A short deliverable for ' + process.cwd() + '\\n');
+  }
   ev({ type: 'thread.started', thread_id: 't' }); ev({ type: 'turn.started' });
-  ev({ type: 'item.completed', item: { id: 'i', type: 'agent_message', text: 'done' } });
+  ev({ type: 'item.completed', item: { id: 'i', type: 'agent_message', text: 'Final using ux-copy in ' + process.cwd() } });
   ev({ type: 'turn.completed', usage: { input_tokens: 8000, cached_input_tokens: 6000, cache_write_input_tokens: 0, output_tokens: 100, reasoning_output_tokens: 10 } });
 }
 `;
@@ -1078,7 +1155,7 @@ if (args.includes('--output-schema')) {
   });
 
   /** Stand-in CLIs on PATH, a loadout home with one skill, and a way to start bench/ab.ts against them. */
-  const stage = (leak = false, unifiedExec = false) => {
+  const stage = (leak = false, unifiedExec = false, writes = true) => {
     const dir = temp('loadout-ab-smoke-');
     const bin = join(dir, 'bin');
     const home = join(dir, 'home');
@@ -1088,8 +1165,8 @@ if (args.includes('--output-schema')) {
     for (const d of [bin, home, join(loadoutHome, 'library', 'skills', 'ux-copy')]) mkdirSync(d, { recursive: true });
     writeFileSync(join(loadoutHome, 'config.json'), JSON.stringify({ router: 'lexical', embeddings: false }));
     writeFileSync(join(loadoutHome, 'library', 'skills', 'ux-copy', 'SKILL.md'), '---\nname: ux-copy\ndescription: Write interface copy such as error pages and button labels.\n---\nKeep it short.\n');
-    writeFileSync(join(dir, 'claude.mjs'), claudeScript(log, leak));
-    writeFileSync(join(dir, 'codex.mjs'), codexScript(log, unifiedExec));
+    writeFileSync(join(dir, 'claude.mjs'), claudeScript(log, leak, writes));
+    writeFileSync(join(dir, 'codex.mjs'), codexScript(log, unifiedExec, writes));
     writeFileSync(join(bin, 'claude'), wrapper(join(dir, 'claude.mjs')), { mode: 0o755 });
     writeFileSync(join(bin, 'codex'), wrapper(join(dir, 'codex.mjs')), { mode: 0o755 });
     const start = (args: string[], tmp?: string) => new Promise<{ code: number | null; text: string }>((resolve) => {
@@ -1124,6 +1201,8 @@ if (args.includes('--output-schema')) {
     expect(claudeMeasured.map((r) => r.arm)).toEqual(['loadout', 'bare', 'bare', 'loadout']);
     for (const r of rows) {
       expect(r.invalid).toBeUndefined();
+      expect(r.wroteFile).toBe(true);
+      expect(readFileSync(join(out, 'outputs', r.host, r.prompt, `${r.arm}-${r.repeat}`, 'agent-final-message.txt'), 'utf8')).toBe('Final using ux-copy in <work>');
       expect(r.hook.invocations).toBe(r.arm === 'loadout' ? 1 : 0);
     }
     const loadoutClaude = rows.find((r) => r.host === 'claude' && r.arm === 'loadout' && !r.warmup)!;
@@ -1152,6 +1231,7 @@ if (args.includes('--output-schema')) {
     // Judged across families, both orders, in a finished folder with no credential in it.
     const verdicts = readFileSync(join(out, 'verdicts.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
     expect(verdicts).toHaveLength(4);
+    expect(verdicts.every((v) => v.redactions.bare > 0 && v.redactions.loadout > 0)).toBe(true);
     expect(verdicts.find((v) => v.host === 'claude' && v.prompt === 'c1-web-14').judge).toEqual({ backend: 'codex', model: 'gpt-6.1-sol' });
     expect(verdicts.find((v) => v.host === 'codex' && v.prompt === 'c1-web-14').judge).toEqual({ backend: 'claude', model: 'opus' });
     expect(existsSync(join(out, 'INCOMPLETE'))).toBe(false);
@@ -1250,5 +1330,19 @@ if (args.includes('--output-schema')) {
     }
     expect((await start([...args, '--codex-effort', 'medium'])).code).toBe(0);
     expect(calls()).toEqual(before);
+  }, 180_000);
+
+  it('saves final-only responses for both hosts without counting them or unchanged fixtures as file writes', async () => {
+    const { out, start, rowsOf } = stage(false, false, false);
+    const result = await start(['--repeats', '1', '--ids', 'c1-web-14,c1-debug-13']);
+    expect(result.code, result.text).toBe(0);
+    const rows = rowsOf();
+    expect(rows).toHaveLength(12);
+    expect(rows.every((r) => r.wroteFile === false)).toBe(true);
+    for (const r of rows) {
+      const view = deliverables(join(out, 'outputs', r.host, r.prompt, `${r.arm}-${r.repeat}`));
+      expect(view).toContain('Final using ux-copy in <work>');
+    }
+    expect(readFileSync(join(out, 'report.md'), 'utf8')).toContain('0 of 1');
   }, 180_000);
 });

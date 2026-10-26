@@ -69,6 +69,8 @@ export interface RunRow {
   skillsOpened: string[];
   hook: { invocations: number; contextChars: number; listed: string[]; injected: string[] };
   hiddenTest: { passed: boolean; tests: number; failed: number } | null;
+  /** New or changed deliverable file, excluding the synthetic final response and unchanged fixture files. Absent on legacy rows. */
+  wroteFile?: boolean;
   invalid?: string;
   /** Set with `invalid: 'credential in output'`: the source and rule that stopped persistence, never the matched text. */
   leak?: Leak;
@@ -114,13 +116,14 @@ export function report(rows: RunRow[], verdicts: Verdict[], secrets: string[]): 
 
   out.push('## 1. Per run, measured runs only (warm-ups excluded)', '',
     'Mean (min–max) over repeats. Cache share = cache read / (uncached + write + read). Effective input = uncached + 1.25 × 5-minute write + 2 × 1-hour write + 0.1 × read (Anthropic\'s published multipliers; Claude only). Cost is the stream\'s `total_cost_usd`, a nominal API price. Codex reports a thread total only.', '',
-    '| Host | Prompt | Arm | Runs | Uncached in | Cache write | Cache read | Output | Cache share | Effective in | Cost | Turns | Time | Hidden test | Judge (loadout vs bare) |',
-    '| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |');
+    '| Host | Prompt | Arm | Runs | Uncached in | Cache write | Cache read | Output | Cache share | Effective in | Cost | Turns | Time | Hidden test | Judge (loadout vs bare) | Wrote a file |',
+    '| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- |');
   for (const host of hosts) for (const prompt of prompts) for (const arm of ['bare', 'loadout'] as const) {
     const rs = cell(rows, host, prompt, arm);
     if (!rs.length) continue;
     const hidden = rs.filter((r) => r.hiddenTest);
-    out.push(`| ${host} | ${prompt} | ${arm} | ${rs.length} | ${show(spread(rs.map((r) => r.totals.uncached)))} | ${show(spread(rs.map((r) => r.totals.cacheWrite)))} | ${show(spread(rs.map((r) => r.totals.cacheRead)))} | ${show(spread(rs.map((r) => r.totals.output)))} | ${show(spread(rs.map(cacheShare)), percent)} | ${show(spread(rs.flatMap((r) => (r.totals.effectiveInput === null ? [] : [r.totals.effectiveInput]))))} | ${show(spread(rs.flatMap((r) => (r.totals.costUsd === null ? [] : [r.totals.costUsd]))), usd)} | ${show(spread(rs.flatMap((r) => (r.totals.turns === null ? [] : [r.totals.turns]))))} | ${show(spread(rs.map((r) => r.ms)), secs)} | ${hidden.length ? `${hidden.filter((r) => r.hiddenTest!.passed).length} of ${hidden.length}` : '—'} | ${arm === 'loadout' ? judged(host, prompt) : ''} |`);
+    const writing = rs.filter((r) => r.wroteFile !== undefined);
+    out.push(`| ${host} | ${prompt} | ${arm} | ${rs.length} | ${show(spread(rs.map((r) => r.totals.uncached)))} | ${show(spread(rs.map((r) => r.totals.cacheWrite)))} | ${show(spread(rs.map((r) => r.totals.cacheRead)))} | ${show(spread(rs.map((r) => r.totals.output)))} | ${show(spread(rs.map(cacheShare)), percent)} | ${show(spread(rs.flatMap((r) => (r.totals.effectiveInput === null ? [] : [r.totals.effectiveInput]))))} | ${show(spread(rs.flatMap((r) => (r.totals.costUsd === null ? [] : [r.totals.costUsd]))), usd)} | ${show(spread(rs.flatMap((r) => (r.totals.turns === null ? [] : [r.totals.turns]))))} | ${show(spread(rs.map((r) => r.ms)), secs)} | ${hidden.length ? `${hidden.filter((r) => r.hiddenTest!.passed).length} of ${hidden.length}` : '—'} | ${arm === 'loadout' ? judged(host, prompt) : ''} | ${writing.length ? `${writing.filter((r) => r.wroteFile).length} of ${writing.length}${writing.length < rs.length ? ' known' : ''}` : 'not shown'} |`);
   }
 
   out.push('', '## 2. loadout − bare (mean of the repeats; negative is cheaper)', '',
@@ -166,7 +169,7 @@ export function report(rows: RunRow[], verdicts: Verdict[], secrets: string[]): 
 
   out.push('', '## 6. Not shown', '',
     '- Per-request usage for Codex, its model name and its cost: `codex exec --json` gives a thread total only.',
-    '- Quality beyond the blind pairwise judge and the hidden test; the judge sees file contents only, with skill names removed, so a skill\'s own template can still reveal the arm.',
+    '- Quality beyond the blind pairwise judge and the hidden test; the judge sees saved files and final responses (when captured), with skill names removed, so a skill\'s own template can still reveal the arm.',
     '- Anything about prompts other than these three, or about a random sample of requests.');
   return redact(out.join('\n') + '\n', secrets);
 }

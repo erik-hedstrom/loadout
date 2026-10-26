@@ -9,7 +9,7 @@ export interface Inventory { plugins: { name: string; path?: string; source?: st
 export interface HookExecution { id: string; name: string; exit_code?: number; outcome?: string; context: boolean; injected: string[] }
 
 /** Tool calls from Claude's stream-json or Codex's --json event stream. */
-export function toolEvents(stream: string): { events: Event[]; hooks: HookExecution[]; costUsd?: number; inventory?: Inventory; failedBeforeModel: boolean; result?: { isError: boolean; subtype?: string } } {
+export function toolEvents(stream: string): { events: Event[]; hooks: HookExecution[]; costUsd?: number; inventory?: Inventory; failedBeforeModel: boolean; result?: { isError: boolean; subtype?: string }; finalMessage?: string } {
   const events: Event[] = [];
   const hooks = new Map<string, HookExecution>();
   let costUsd: number | undefined;
@@ -17,6 +17,7 @@ export function toolEvents(stream: string): { events: Event[]; hooks: HookExecut
   let modelResponded = false;
   let result: { isError: boolean; subtype?: string } | undefined;
   let inventory: Inventory | undefined;
+  let finalMessage: string | undefined;
   for (const line of stream.split('\n')) {
     let e: any;
     try {
@@ -53,6 +54,7 @@ export function toolEvents(stream: string): { events: Event[]; hooks: HookExecut
         }
       }
     } else if (e.type === 'result') {
+      if (typeof e.result === 'string') finalMessage = e.result;
       costUsd = e.total_cost_usd;
       // An expired login ends as is_error at $0 (seen 2026-10-12). It would otherwise read as a miss.
       // A run that used its turns has a cost, so it stays a valid miss as in the earlier arms.
@@ -61,6 +63,7 @@ export function toolEvents(stream: string): { events: Event[]; hooks: HookExecut
       result = { isError: e.is_error === true, subtype: e.subtype };
     } else if (e.type === 'item.completed') {
       const it = e.item ?? {};
+      if (it.type === 'agent_message' && typeof it.text === 'string') finalMessage = it.text;
       const toolError = it.result?.isError === true || it.result?.is_error === true;
       const ok = it.status === 'completed' && !it.error && !toolError && (it.exit_code === undefined || it.exit_code === null || it.exit_code === 0);
       if (it.type === 'command_execution') events.push({ tool: 'shell', detail: String(it.command ?? ''), ok });
@@ -69,7 +72,7 @@ export function toolEvents(stream: string): { events: Event[]; hooks: HookExecut
   }
   // A run killed before any model response (a stall after init and the hook) sends no result event.
   if (!result) failedBeforeModel = !modelResponded;
-  return { events, hooks: [...hooks.values()], costUsd, inventory, failedBeforeModel, result };
+  return { events, hooks: [...hooks.values()], costUsd, inventory, failedBeforeModel, result, finalMessage };
 }
 
 const quote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
