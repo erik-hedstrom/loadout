@@ -234,7 +234,7 @@ a user installs them) in the stock `claude` and `codex`: per-request token usage
 with cached and uncached input apart, a blind cross-family judge and, for the
 code prompt, a hidden test. `--run` needs Linux or WSL and Erik's go-ahead (it
 spends subscription quota); an interrupted run resumes with the same `--out`.
-Method and caveats: [RESULTS](RESULTS.md#c14-method-not-run-yet-three-prompts-with-and-without-loadout).
+Method and caveats: [RESULTS](RESULTS.md#c14-method-three-prompts-with-and-without-loadout).
 
 ## MCP overhead (B7)
 

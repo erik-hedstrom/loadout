@@ -22,10 +22,13 @@ class Counted extends EventTarget {
 
 function page() {
   const doc = new Counted();
-  const button = Object.assign(new Counted(), { contains: (node) => node === button });
-  const item = new EventTarget();
-  const panel = Object.assign(new Counted(), { hidden: true, contains: (node) => node === panel || node === item });
-  const outside = new EventTarget();
+  doc.activeElement = null;
+  // Correct implementations may move focus on open or return it on Escape; neither is required here.
+  const element = () => Object.assign(new Counted(), { focus() { doc.activeElement = this; } });
+  const button = Object.assign(element(), { contains: (node) => node === button });
+  const item = element();
+  const panel = Object.assign(element(), { hidden: true, contains: (node) => node === panel || node === item });
+  const outside = element();
   // Node's EventTarget does not bubble: repeat the event on `doc` unless a handler stopped it.
   const fire = (target, type, props = {}) => {
     const make = () => Object.defineProperty(Object.assign(new Event(type, { cancelable: true }), props), 'target', { value: target });

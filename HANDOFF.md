@@ -50,8 +50,9 @@ All numbers, caveats, raw-result links and recorded costs are in
   and [WSL MCP startup](bench/RESULTS.md#mcp-start-up-under-wsl-d17-2026-10-15)
   timings have their recorded scope and limitations.
 - **Better work: not shown.** The [eight-request outcome pilot](bench/RESULTS.md#is-the-work-better-outcome-pilot-2026-10-07)
-  does not establish an improvement. [C14](bench/RESULTS.md#c14-method-not-run-yet-three-prompts-with-and-without-loadout)
-  has no usable measurement; its first pilot was confounded.
+  does not establish an improvement. [C14's first clean pilot](bench/RESULTS.md#c14-results-2026-10-26-codex-luna-pilot-inconclusive)
+  is inconclusive: two measurement defects, now fixed, invalidate its quality
+  readings.
 - **Not shown:** [B7's configured-MCP overhead study](bench/RESULTS.md#b7-method-not-run-yet-what-configured-mcp-servers-cost-per-request)
   has not run; [model-tier choice](bench/RESULTS.md#threats-to-validity)
   is not evaluated. [B11's completed replacement pilot](bench/RESULTS.md#b11-replacement-pilot-2026-10-23-completed-2026-10-26)
@@ -60,10 +61,10 @@ All numbers, caveats, raw-result links and recorded costs are in
 
 ## Pick up here
 
-1. **C14's Codex-only pilot:** the harness is merged; a clean rerun needs a
+1. **C14's Codex-only pilot:** rerun it with the measurement fixes, from a
    separately logged-in `CODEX_HOME` without global instructions. The Claude
    arm is blocked until a tool-less Codex judge is available (E12).
-   [Method and limits](bench/RESULTS.md#c14-method-not-run-yet-three-prompts-with-and-without-loadout);
+   [Method and limits](bench/RESULTS.md#c14-method-three-prompts-with-and-without-loadout);
    [run command](bench/README.md#ab-pilot-c14).
 2. **B11:** the replacement pilot completed. Run the 792-session full study
    in its own output folder (never the pilot's) as the free quota allows.
