@@ -219,6 +219,23 @@ are then routed and judged as above, with `--requests bench/data/requests-c1.jso
 - `invoke.ts` runs the real agents headless, which takes minutes per request
   and uses your subscriptions.
 
+## A/B pilot (C14)
+
+```bash
+npx tsx bench/ab.ts                                                  # the plan, the estimate and what each host may write; $0
+CLAUDE_CODE_OAUTH_TOKEN=... npx tsx bench/ab.ts --run [--repeats 2] [--hosts claude,codex] [--ids c1-web-14,c1-apps-08,c1-debug-13] [--out <dir>]
+npx tsx bench/ab.ts --judge-only bench/results/<run>-ab-pilot        # judge and write report.md again
+```
+
+The Codex pilot runs `--hosts codex --codex-model gpt-6-luna --codex-effort medium`, judged by Claude per the cross-family rule.
+
+Three prompts, each with and without loadout (the plugin, MCP server and hook as
+a user installs them) in the stock `claude` and `codex`: per-request token usage
+with cached and uncached input apart, a blind cross-family judge and, for the
+code prompt, a hidden test. `--run` needs Linux or WSL and Erik's go-ahead (it
+spends subscription quota); an interrupted run resumes with the same `--out`.
+Method and caveats: [RESULTS](RESULTS.md#c14-method-not-run-yet-three-prompts-with-and-without-loadout).
+
 ## MCP overhead (B7)
 
 `npx tsx bench/mcp-overhead.ts --offline` prints the characters each arm puts

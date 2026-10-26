@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join, posix, win32 } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -239,8 +239,8 @@ describe('plan', () => {
     expect(files('claude', 'refuse')).not.toContain(join(homedir(), '.claude', 'policy-limits.json'));
     expect(files('claude', 'identical')).toContain('/etc/claude-code/CLAUDE.md');
     expect(files('claude', 'identical')).toContain('/etc/claude-code/.claude/skills');
-    expect(files('claude', 'refuse')).toContain(join(tmpdir(), 'CLAUDE.local.md'));
-    expect(files('codex', 'refuse')).toContain(join(tmpdir(), 'AGENTS.override.md'));
+    expect(files('claude', 'refuse')).toContain(join(realpathSync(tmpdir()), 'CLAUDE.local.md'));
+    expect(files('codex', 'refuse')).toContain(join(realpathSync(tmpdir()), 'AGENTS.override.md'));
     expect(files('codex', 'identical')).toContain('/etc/codex/skills');
     expect(files('codex', 'identical')).toContain('/etc/codex/agents');
     expect(hostState({ ProgramData: 'D:\\PD' }, 'win32').flatMap((i) => i.files)).toContain(win32.join('D:\\PD', 'OpenAI', 'Codex', 'skills'));
@@ -275,6 +275,21 @@ describe('plan', () => {
     expect(found('claude')).toContain(join(homedir(), 'AGENTS.md'));
     expect(found('claude')).not.toContain(join(homedir(), '.claude', 'rules'));
     expect(found('codex')).not.toContain(join(homedir(), '.codex'));
+  });
+
+  it('refuses canonical ancestors when the default temp parent is a symlink', () => {
+    const top = realpathSync(temp());
+    const real = join(top, 'project', 'tmp');
+    const link = join(top, 'alias');
+    mkdirSync(real, { recursive: true });
+    symlinkSync(real, link, process.platform === 'win32' ? 'junction' : 'dir');
+    const instruction = join(top, 'project', 'AGENTS.md');
+    writeFileSync(instruction, 'synthetic instructions');
+    for (const name of ['TMPDIR', 'TMP', 'TEMP']) vi.stubEnv(name, link);
+    for (const host of ['claude', 'codex'] as const) {
+      expect(hostState().filter((i) => i.host === host).flatMap((i) => i.files)).toContain(instruction);
+      expect(refusedFiles(host)).toContain(instruction);
+    }
   });
 
   it('records the presence of the items that stay identical across arms, by name only', () => {

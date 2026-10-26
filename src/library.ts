@@ -102,7 +102,7 @@ export function copySkillConfined(source: string, destination: string): void {
 }
 
 /** A skill's SKILL.md text, or undefined if it is missing, a link, outside the folder or oversized. */
-function readManifest(dir: string): string | undefined {
+export function readManifest(dir: string): string | undefined {
   try {
     return readConfined(dir, 'SKILL.md', LIMITS.manifestBytes).toString('utf8');
   } catch {
