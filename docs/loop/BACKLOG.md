@@ -1691,13 +1691,13 @@ in the prose, so they are stated once.
 Its own track, with the boundary to the core in
 [CACHE-TRACK.md](CACHE-TRACK.md): this track measures what complete cached
 sessions cost and keeps loadout's requests cache-friendly. What to select stays
-with the core (section C). Changes to the shared contract (MCP facade, hook
-output, launcher composition) name their cache effect in the PR.
+with the core (section C). Changes to the shared contract follow
+[its rule](CACHE-TRACK.md#boundary).
 
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
 | B11 | P1 | OpenCode session cost and task checks with automatic prompt caching | Codex | local | partial ([#57](https://github.com/erik-hedstrom/loadout/pull/57)): harness, dataset and two quota-stopped pilots merged; the 792-session study is unrun |
-| F1 | P1 | Prefix continuity on real hosts: loadout keeps the cached prefix turn after turn | Codex | local | todo |
+| F1 | P1 | Prefix continuity on real hosts: loadout keeps the cached prefix turn after turn | Codex | local | todo (after F2) |
 | F2 | P1 | Session-cost capture: per-request usage in outcome runs and session columns in B7 | Codex | local | todo (C11's deferred part) |
 | F3 | P2 | Shorter constant MCP text and fewer discovery requests, at unchanged recall | Codex | local | todo (after F2) |
 | F4 | P2 | `loadout audit` reports cache-aware cost from measured numbers | Codex | cloud | todo (after B11, F1) |
@@ -1714,9 +1714,12 @@ in-process; nothing shows that a real host keeps reading loadout's prefix from
 cache across turns.
 
 Acceptance: sessions of at least five turns on Claude Code, Codex and
-OpenCode, with loadout's hook and MCP on and off. From the host's own
-per-request usage, cache reads continue every turn in the loadout arm wherever
-they do in the off arm; a turn where they stop is traced to its cause. Codex
+OpenCode, with loadout on and off (the hook and MCP on Claude Code and Codex;
+MCP only on OpenCode, which has no loadout hook). From the host's own
+per-request usage, each turn's cached tokens cover the previous request's
+input up to the host's cache granularity, as in the off arm. Any shortfall,
+partial or total, is traced to its cause: nonzero reads alone do not show
+continuity. Codex
 runs gpt-6-luna at medium effort; Claude runs Haiku; OpenCode runs the free
 models. Raw results committed; a RESULTS section either way.
 
@@ -1728,21 +1731,27 @@ write and output from the host's own report (a fixture test per host; no
 proxy, AGENTS.md rule 1), and `bench/mcp-overhead.ts` reports per session:
 request count, the token buckets, Jev cost, latency and completion, for native
 default against the gateway, short and long sessions, and a gap past the cache
-lifetime. C11's learnings list what each host exposes today.
+lifetime. C11's learnings list what each host exposes today; reuse #47's
+`bench/usage.ts` for Claude if it merges. Decision for Erik: the Codex usage
+source (`exec --json` has turn totals only; the alternatives read a Codex home,
+see C11). Until then Codex per-request usage is "not shown".
 
 **F3. Lower fixed and discovery overhead.** Candidates: shorter constant
 descriptions and server instructions in `createServer()`, and loading a named
 skill without a search first.
 
 Acceptance: measured against current main on F2's columns: loadout's fixed
-tokens, extra discovery requests per session, and recall on C1 dev (core
-review required, since it changes the facade). Keep only what lowers session
+tokens and extra discovery requests per session. The host's agent must still
+discover and use the right resources and finish the tasks (B11 checks or C14
+runs): select on the dev split, then report the kept change once on test. C1 recall alone cannot show this, because the sweep calls
+`route()` directly. Core review is required, since the change touches the
+facade. Keep only what lowers session
 cost with recall unchanged; record the rest as negative results.
 
-**F4. Cache-aware audit.** `loadout audit` (A2) reports what installed skills
-and MCP servers cost on the first request only.
+**F4. Cache-aware audit.** `loadout audit` (A2) estimates skill-listing tokens
+per host; it does not count MCP schemas and puts no price on either.
 
-Acceptance: it also reports the cost on cached turns per host price profile,
+Acceptance: it reports first-request and cached-turn cost per host price profile,
 using numbers measured in B11 or F1 and linked from RESULTS, with dated
 prices. No figure without a RESULTS entry; "not shown" where none exists.
 
