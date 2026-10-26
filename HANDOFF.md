@@ -1,4 +1,4 @@
-# Handoff: loadout, 2026-10-15
+# Handoff: loadout, 2026-10-26
 
 Read this first if you are joining the project, human or agent. Then read
 [AGENTS.md](AGENTS.md) (rules), [docs/loop/ORCHESTRATOR.md](docs/loop/ORCHESTRATOR.md)
@@ -12,10 +12,11 @@ Read this first if you are joining the project, human or agent. Then read
 
 ## The one-paragraph version
 
-loadout selects skills, MCP servers and a model tier from a separate library,
-using documented extension points. It is meant to run inside the stock
-`claude` and `codex` CLIs people already use. See [README.md](README.md) for
-usage and [DESIGN.md](DESIGN.md) for the architecture.
+In stock `claude` and `codex`, loadout uses Jev to add the skills that fit
+each substantive prompt, and its MCP tools let the agent search the library.
+The `loadout claude|codex` launcher instead makes one decision per session:
+skills, MCP servers and a model tier. It uses documented extension points. See [README.md](README.md)
+for usage and [DESIGN.md](DESIGN.md) for the architecture.
 
 ## Where it stands
 
@@ -25,10 +26,10 @@ usage and [DESIGN.md](DESIGN.md) for the architecture.
   decisions below).
 - **Owner:** Erik Hedström (GitHub `erik-hedstrom`). Commits use
   `63313283+erik-hedstrom@users.noreply.github.com`.
-- **Main** is at `fbee5cb` (D12, 2026-10-12). Nothing has merged since.
-  The open PRs are listed with their state under "In review" in
-  [BACKLOG](docs/loop/BACKLOG.md#in-review). Each PR body has a
-  **Review state** section.
+- **Main snapshot (2026-10-26):** `99fc000`. It includes the C14 A/B
+  harness (#47), B11's OpenCode harness and quota-stopped pilots (#57),
+  D21's cache-stable request prefix (#59), the separate caching track (#60)
+  and the production dependency patches (#61). Current work and review state: [BACKLOG](docs/loop/BACKLOG.md).
 
 ### What exists
 
@@ -38,61 +39,43 @@ Router steps: [DESIGN.md](DESIGN.md#router).
 
 ### Evidence so far
 
-All numbers, caveats and negative results are in [bench/RESULTS.md](bench/RESULTS.md).
+All numbers, caveats, raw-result links and recorded costs are in
+[bench/RESULTS.md](bench/RESULTS.md).
 
-| Question | Result |
-|---|---|
-| **Is the work better?** (Codex, 8 requests, blind pairwise) | **Not shown yet:** loadout 4, bare 3, split 1. Wins where skills encode conventions; two losses timed out while following the skill |
+- **Measured:** [B1's fresh-session listing overhead](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request),
+  [C1's held-out skill decisions](bench/RESULTS.md#c1-2026-10-08-new-held-out-requests),
+  [C13's repeated router baseline](bench/RESULTS.md#c13-2026-10-16-pure-jev-baseline-on-main),
+  and [agent skill use](bench/RESULTS.md#do-agents-use-what-they-are-given).
+  [Hook](bench/RESULTS.md#routed-prompts-with-the-library-scan-cache-d11-2026-10-12)
+  and [WSL MCP startup](bench/RESULTS.md#mcp-start-up-under-wsl-d17-2026-10-15)
+  timings have their recorded scope and limitations.
+- **Better work: not shown.** The [eight-request outcome pilot](bench/RESULTS.md#is-the-work-better-outcome-pilot-2026-10-07)
+  does not establish an improvement. [C14](bench/RESULTS.md#c14-method-not-run-yet-three-prompts-with-and-without-loadout)
+  has no usable measurement; its first pilot was confounded.
+- **Not shown:** [B7's configured-MCP overhead study](bench/RESULTS.md#b7-method-not-run-yet-what-configured-mcp-servers-cost-per-request)
+  has not run; [model-tier choice](bench/RESULTS.md#threats-to-validity)
+  is not evaluated. [B11](bench/RESULTS.md#b11-replacement-pilot-2026-10-23-quota-stopped)
+  does not establish retained quality or size break-even; the full study is unrun.
 
-### Spend
+## Pick up here
 
-- **Jev:** about $5 of the $10 TypeSafe credit (estimate; there is no usage
-  endpoint).
-- **Claude subscription:** the judges and agent runs hit the session limit
-  twice. Run judges sequentially, so the catalog prompt stays cached.
-- **Codex subscription:** used for reviews, request generation and outcome
-  runs.
-- **2026-10-13 to 15:** Jev $0. The cloud session ran Claude subagents and
-  GitHub Codex reviews on plan quota.
-- **Cloud-session credit:** $100, expires 2026-11-05. It pays for Claude
-  cloud sessions only, not Routines, Projects or API calls.
-- **GitHub Actions:** free on standard runners since the repo went public.
-  As a private repo it used up Pro's 3,000 monthly minutes on 2026-10-12:
-  about 3,400 billed minutes since 2026-10-01, about 62% of them macOS
-  (counted ten times).
-
-## Pick up here (2026-10-15)
-
-A cloud session ran the loop from 2026-10-12 to 2026-10-15 and opened
-#35–#40. It merged nothing. The next orchestrator is local.
-
-1. **Merge the loop files.** E13 is
-   [#41](https://github.com/erik-hedstrom/loadout/pull/41). The rest of
-   these four files is on `agent/loop-handoff-1015`, cut from #41: merge
-   #41 first. The handoff PR supersedes #35, the iteration 8 row.
-2. **Read the private handoff** at `../loadout-private/HANDOFF-2026-10-15.md`,
-   outside the repo. It has the detail behind each open finding, Erik's
-   local Codex A/B run with its analysis and $0 checks, and how to handle
-   the launch-readiness review (2026-10-13). Never commit, paste or quote
-   it ([private material](docs/loop/ORCHESTRATOR.md#local-the-default)).
-3. **Drive whatever the [In review](docs/loop/BACKLOG.md#in-review) table
-   lists as open** ([ORCHESTRATOR](docs/loop/ORCHESTRATOR.md#handling-review-findings)).
-4. **Run the merge gate** on the clean PRs, one at a time. Two order traps:
-   - **#36 before #28.**
-   - **D15 renamed the search tool `find_skills` to `find_tools`.** B7
-     follows it ([#38](https://github.com/erik-hedstrom/loadout/pull/38)).
-     C8's plugin arm and any local
-     `-c mcp_servers.loadout.tools.find_skills…` approval still name the old
-     tool; update them before they merge or run.
-5. **Then new work, MCP token cost first:** D17 (measured 2026-10-15;
-   what is left is docs and `required = true`), B8 (backlog items from the launch-readiness review),
-   then the BACKLOG order.
+1. **C14's Codex-only pilot:** the harness is merged; a clean rerun needs a
+   separately logged-in `CODEX_HOME` without global instructions. The Claude
+   arm is blocked until a tool-less Codex judge is available (E12).
+   [Method and limits](bench/RESULTS.md#c14-method-not-run-yet-three-prompts-with-and-without-loadout);
+   [run command](bench/README.md#ab-pilot-c14).
+2. **B11:** the replacement pilot stopped at the free usage limit. Resume
+   when quota allows before attempting the full study.
+   [Evidence](bench/RESULTS.md#b11-replacement-pilot-2026-10-23-quota-stopped);
+   [commands and handoff](docs/loop/B11-HANDOFF.md).
+3. **Prompt caching:** [CACHE-TRACK.md](docs/loop/CACHE-TRACK.md) defines the
+   boundary and [BACKLOG section F](docs/loop/BACKLOG.md#f-prompt-caching)
+   holds the work queue. Complete cached-session savings remain not shown.
 
 ## How the work continues
 
 The work continues as a loop in which Sol (Codex) builds and Claude reviews.
-It is run by a Claude Code session on Erik's machine. Cloud sessions fill in
-when local usage runs out and leave merging to the next local run. The
+Cloud sessions fill in when local usage runs out. The
 topology, merge gate, prompts and budgets are in
 [docs/loop/ORCHESTRATOR.md](docs/loop/ORCHESTRATOR.md). Shared state lives in
 branches, PRs and `docs/loop/BACKLOG.md`.
@@ -166,22 +149,10 @@ branches, PRs and `docs/loop/BACKLOG.md`.
    - Jev: more credit when the $10 runs out.
 4. **Launch channels and timing.** Show HN, Reddit, X, LinkedIn, awesome
    lists. Agents draft; Erik posts.
-5. **Open PR decisions (2026-10-15).**
-   - **C2 #37:**
-     - the margin, 0.10 or 0.05;
-     - whether to run in a VM;
-     - the licence question;
-     - E14, the key redaction, which the loadout arm needs;
-     - scope: this protocol, or a smaller pilot first.
-
-     Two threads are left for you: the Jev key, and the shared prompt cache.
-   - **D13** (in #25): how the plugin opens what its hook routes to.
-   - **#27:** your questions. **#34:** the skills.sh threads. **#36:** the
-     `/proc` thread. **#26, #30, #32:** declined or partly fixed Codex
-     threads (accept the rebuttal or override; see
-     [In review](docs/loop/BACKLOG.md#in-review)).
-   - **Stale branches:** the `wip/*` branches and worktrees from cloud
-     sessions. Delete them or keep them.
+5. **Study prerequisites and remaining decisions.** See
+   [BACKLOG](docs/loop/BACKLOG.md) for C2's run prerequisites, D13's skill
+   loading path and the remaining review decisions. Stale cloud branches and
+   worktrees stay until Erik decides whether to keep them.
 
 ## Setting up on the new Linux machine
 
@@ -215,7 +186,7 @@ native machine:
 | `src/diagnostic.ts` | Fixed-text transport diagnostics |
 | `src/audit.ts` | Installed-skill listing and tool overhead audit |
 | `src/doctor.ts` | Read-only setup check (`loadout doctor`) |
-| `plugins/` | Hook-only Claude Code plugin: the main way in |
+| `plugins/` | Claude Code hook plugin and Codex hook + MCP plugin |
 | `docs/hosts.md` | What works in which host, verified or not |
 | `src/library.ts` | Library scan, safe `add` from dirs/GitHub, confined reads, sources |
 | `src/jev.ts`, `src/embed.ts`, `src/prefilter.ts`, `src/retrieve.ts` | Jev client and validation, embeddings, BM25, fusion |
@@ -232,10 +203,9 @@ native machine:
   generic `call_server_tool`. Native per-tool approvals need `tools/list_changed`.
 - **Host verification:** [docs/hosts.md](docs/hosts.md) tracks what is not yet
   verified per host.
-- **Native Windows:** `which()` ignores PATHEXT, so `claude.exe` and `.cmd`
-  shims read as not on PATH, in `loadout run` and `doctor` (D7).
-- **Outcome evaluation:** the arms invent their own inputs, the runs inherit
-  the user's Codex config, and the sample is tiny.
+- **Outcome evaluation:** the [original pilot](bench/RESULTS.md#is-the-work-better-outcome-pilot-2026-10-07)
+  used agent-invented inputs and inherited the user's Codex config. Better
+  outcomes remain not shown; C14's clean rerun is pending.
 - **Router precision on new requests:** lower on C1's held-out requests than
   on v4's, with the numbers in
   [RESULTS](bench/RESULTS.md#c1-2026-10-08-new-held-out-requests), mostly on
