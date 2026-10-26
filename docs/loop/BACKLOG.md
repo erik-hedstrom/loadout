@@ -1699,7 +1699,7 @@ with the core (section C). Changes to the shared contract follow
 | B11 | P1 | OpenCode session cost and task checks with automatic prompt caching | Codex | local | partial ([#57](https://github.com/erik-hedstrom/loadout/pull/57)): harness, dataset and two quota-stopped pilots merged; the 792-session study is unrun |
 | F1 | P1 | Prefix continuity on real hosts: loadout keeps the cached prefix turn after turn | Codex | local | todo (after F2) |
 | F2 | P1 | Session-cost capture: per-request usage in outcome runs and session columns in B7 | Codex | local | todo (C11's deferred part) |
-| F3 | P2 | Shorter constant MCP text and fewer discovery requests, at unchanged recall | Codex | local | todo (after F2) |
+| F3 | P2 | Shorter constant MCP text and fewer discovery requests, at unchanged task success | Codex | local | todo (after F2) |
 | F4 | P2 | `loadout audit` reports cache-aware cost from measured numbers | Codex | cloud | todo (after B11, F1) |
 | F5 | P3 | Start-up and path variability: Codex first-request tools, launcher session paths | Codex | local | todo |
 
@@ -1731,8 +1731,8 @@ write and output from the host's own report (a fixture test per host; no
 proxy, AGENTS.md rule 1), and `bench/mcp-overhead.ts` reports per session:
 request count, the token buckets, Jev cost, latency and completion, for native
 default against the gateway, short and long sessions, and a gap past the cache
-lifetime. C11's learnings list what each host exposes today; reuse #47's
-`bench/usage.ts` for Claude if it merges. Decision for Erik: the Codex usage
+lifetime. C11's learnings list what each host exposes today; reuse the per-message
+Claude usage that #47 adds to `bench/usage.ts`, if it merges. Decision for Erik: the Codex usage
 source (`exec --json` has turn totals only; the alternatives read a Codex home,
 see C11). Until then Codex per-request usage is "not shown".
 
@@ -1746,7 +1746,7 @@ discover and use the right resources and finish the tasks (B11 checks or C14
 runs): select on the dev split, then report the kept change once on test. C1 recall alone cannot show this, because the sweep calls
 `route()` directly. Core review is required, since the change touches the
 facade. Keep only what lowers session
-cost with recall unchanged; record the rest as negative results.
+cost with task success unchanged; record the rest as negative results.
 
 **F4. Cache-aware audit.** `loadout audit` (A2) estimates skill-listing tokens
 per host; it does not count MCP schemas and puts no price on either.
