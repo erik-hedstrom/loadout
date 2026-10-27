@@ -52,8 +52,8 @@ All numbers, caveats, raw-result links and recorded costs are in
   timings have their recorded scope and limitations.
 - **Better work: not shown.** The [eight-request outcome pilot](bench/RESULTS.md#is-the-work-better-outcome-pilot-2026-10-07)
   does not establish an improvement. [C14's rerun with the measurement fixes](bench/RESULTS.md#c14-rerun-2026-10-26-codex-luna-with-the-fixes)
-  compares loadout with a setup that has no skills: loadout added input tokens
-  on all three prompts and won the one prompt where it opened skills.
+  compares loadout with a setup that has no skills: loadout added uncached
+  input tokens on all three prompts and won the one prompt where it opened skills.
 - **Not shown:** [B7's configured-MCP overhead study](bench/RESULTS.md#b7-method-not-run-yet-what-configured-mcp-servers-cost-per-request)
   has not run; [model-tier choice](bench/RESULTS.md#threats-to-validity)
   is not evaluated. [B11's completed replacement pilot](bench/RESULTS.md#b11-replacement-pilot-2026-10-23-completed-2026-10-26)
@@ -209,7 +209,8 @@ native machine:
   verified per host.
 - **Outcome evaluation:** the [original pilot](bench/RESULTS.md#is-the-work-better-outcome-pilot-2026-10-07)
   used agent-invented inputs and inherited the user's Codex config. Better
-  outcomes remain not shown; C14's clean rerun is pending.
+  outcomes remain not shown; [C14's rerun](bench/RESULTS.md#c14-rerun-2026-10-26-codex-luna-with-the-fixes) compares only against
+  bare, and the Claude arm waits on E12.
 - **Router precision on new requests:** lower on C1's held-out requests than
   on v4's, with the numbers in
   [RESULTS](bench/RESULTS.md#c1-2026-10-08-new-held-out-requests), mostly on

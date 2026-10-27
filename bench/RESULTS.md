@@ -332,10 +332,11 @@ The [rerun with the fixes](#c14-rerun-2026-10-26-codex-luna-with-the-fixes) is r
 
 ## C14 rerun (2026-10-26): Codex Luna with the fixes
 
-**With both measurement fixes, loadout used more input tokens than bare on all
-three prompts. It won both pairs of the one prompt where it changed the work
-(`c1-apps-08`). This design adds loadout to a setup with no skills, so it
-measures what loadout adds, not what it could replace; a saving is not shown.**
+**With both measurement fixes, loadout used more uncached input tokens than
+bare on all three prompts; cache reads rose on two and fell on `c1-debug-13`.
+It won both pairs of the one prompt where it changed the work (`c1-apps-08`).
+This design adds loadout to a setup with no skills, so it cannot show the saving
+loadout is meant to make; a saving is not shown.**
 
 At main `781090a` (#64), with the first pilot's setup: WSL, Codex CLI 0.163.0,
 requested model `gpt-6-luna`, explicit medium effort, a dedicated logged-in
@@ -392,24 +393,30 @@ prompts, not population samples.
 2. **Loadout changed the work on one prompt.** On `c1-apps-08` the hook
    added context in both runs, and in one the agent opened three skills
    through `load_skill` (`to-questionnaire`, `user-research`,
-   `brainstorming`), the only skill use in the study. Loadout won both
-   pairs. It cost +6,431 uncached input, +36,224 cache read and +775 output
+   `brainstorming`), the only skills opened in the study; in the other run
+   the hook injected `user-research` itself. Loadout won both pairs. It cost +6,431 uncached input, +36,224 cache read and +775 output
    tokens per run.
 3. **On the other two it mostly did not.** On `c1-debug-13` the hook added
-   nothing in either run, both arms wrote the same fix, and the judge
-   preferred bare once and split once. With no loadout text in those
-   requests, the token differences come from what the agent did; two repeats
-   cannot separate that from run-to-run variation. On `c1-web-14` the hook
+   nothing in either run, and both arms found the same root cause. In repeat
+   1 only bare returned focus on Escape, which the judge cited for preferring
+   bare; in repeat 2 the fixes were identical and the pair split on the tests.
+   With no loadout text in those requests, the token differences come from
+   what the agent did; two repeats cannot separate that from run-to-run
+   variation. On `c1-web-14` the hook
    added context in one run, and the pairs split one each on format
    adherence.
-4. **The configured MCP server cost nothing measurable when idle.** The two
-   warm-ups (one neutral prompt, no hook context) used identical tokens in
-   both arms: 1,833 uncached, 0 written, 11,392 cache read. On this Codex
+4. **In the one warm-up per arm, the configured MCP server added no tokens.**
+   The server is `required = true`, so a run that completes had it connected;
+   the two warm-ups (one neutral prompt, no hook context) used identical
+   tokens in both arms: 1,833 uncached, 0 written, 11,392 cache read. On this Codex
    version, loadout's MCP tool definitions did not enlarge the request. That
    fits Codex deferring MCP tool definitions until the agent searches for
    them; the mechanism is not verified from source here.
-5. **What this design cannot show.** The bare arm has no skills or MCP
-   servers, so loadout can only add tokens. A token saving needs a baseline
+5. **What this design cannot show.** Loadout adds context and tools to a
+   setup that has none, so this design cannot show the saving loadout is
+   meant to make: replacing a natively installed library. Differences here
+   come from the added context or from the agent's own work. A token saving
+   needs a baseline
    with the same library installed natively (as in
    [B1](#b1-results-2026-10-07-what-installed-skills-cost-per-request) and
    B11's [heavy arms](#b11-replacement-pilot-2026-10-23-completed-2026-10-26)).

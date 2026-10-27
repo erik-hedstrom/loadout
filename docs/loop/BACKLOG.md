@@ -827,12 +827,13 @@ Learnings (2026-10-26):
 - The rerun at 781090a with both fixes
   ([RESULTS](../../bench/RESULTS.md#c14-rerun-2026-10-26-codex-luna-with-the-fixes)): all four code runs pass
   the hidden test, and the judge decided chat-only answers on content. Loadout
-  used more input tokens than bare on all three prompts; the hook added context
+  used more uncached input tokens than bare on all three prompts; the hook added context
   on 3 of 6 measured loadout runs, and a skill was opened on one prompt only
   (`c1-apps-08`, which loadout won 2 of 2). The idle MCP server added nothing
   to the warm-up request.
-- Against a bare setup, loadout can only add tokens. Measuring a saving needs a
-  native-library baseline in the stock hosts, not a longer run of this design.
+- Against a setup with no skills, this design cannot show the saving loadout is
+  meant to make. Measuring one needs a native-library baseline in the stock
+  hosts, not a longer run of this design.
 
 Left: the Claude arm (blocked on E12).
 
