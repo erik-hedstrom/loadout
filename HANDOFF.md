@@ -12,7 +12,7 @@ Read this first if you are joining the project, human or agent. Then read
 
 ## The one-paragraph version
 
-In stock `claude` and `codex`, loadout uses Jev to add the skills that fit
+In stock `claude` and `codex`, loadout uses Jev to add the skills predicted to fit
 each substantive prompt, and its MCP tools let the agent search the library.
 The `loadout claude|codex` launcher instead makes one decision per session:
 skills, MCP servers and a model tier. It uses documented extension points. See [README.md](README.md)
@@ -26,10 +26,11 @@ for usage and [DESIGN.md](DESIGN.md) for the architecture.
   decisions below).
 - **Owner:** Erik Hedström (GitHub `erik-hedstrom`). Commits use
   `63313283+erik-hedstrom@users.noreply.github.com`.
-- **Main snapshot (2026-10-26):** `99fc000`. It includes the C14 A/B
-  harness (#47), B11's OpenCode harness and quota-stopped pilots (#57),
-  D21's cache-stable request prefix (#59), the separate caching track (#60)
-  and the production dependency patches (#61). Current work and review state: [BACKLOG](docs/loop/BACKLOG.md).
+- **Main snapshot (2026-10-26):** `781090a`. It includes the C14 A/B
+  harness (#47) and its measurement fixes (#64), B11's OpenCode harness
+  (#57) and completed replacement pilot (#63), D21's cache-stable request
+  prefix (#59), the separate caching track (#60), the production dependency
+  patches (#61) and the docs-evidence pass (#62). Current work and review state: [BACKLOG](docs/loop/BACKLOG.md).
 
 ### What exists
 
@@ -50,9 +51,9 @@ All numbers, caveats, raw-result links and recorded costs are in
   and [WSL MCP startup](bench/RESULTS.md#mcp-start-up-under-wsl-d17-2026-10-15)
   timings have their recorded scope and limitations.
 - **Better work: not shown.** The [eight-request outcome pilot](bench/RESULTS.md#is-the-work-better-outcome-pilot-2026-10-07)
-  does not establish an improvement. [C14's first clean pilot](bench/RESULTS.md#c14-results-2026-10-26-codex-luna-pilot-inconclusive)
-  is inconclusive: two measurement defects, now fixed, invalidate its quality
-  readings.
+  does not establish an improvement. [C14's rerun with the measurement fixes](bench/RESULTS.md#c14-rerun-2026-10-26-codex-luna-with-the-fixes)
+  compares loadout with a setup that has no skills: loadout added uncached
+  input tokens on all three prompts and won the one prompt where it opened skills.
 - **Not shown:** [B7's configured-MCP overhead study](bench/RESULTS.md#b7-method-not-run-yet-what-configured-mcp-servers-cost-per-request)
   has not run; [model-tier choice](bench/RESULTS.md#threats-to-validity)
   is not evaluated. [B11's completed replacement pilot](bench/RESULTS.md#b11-replacement-pilot-2026-10-23-completed-2026-10-26)
@@ -61,9 +62,11 @@ All numbers, caveats, raw-result links and recorded costs are in
 
 ## Pick up here
 
-1. **C14's Codex-only pilot:** rerun it with the measurement fixes, from a
-   separately logged-in `CODEX_HOME` without global instructions. The Claude
-   arm is blocked until a tool-less Codex judge is available (E12).
+1. **C14** is done for Codex
+   ([rerun](bench/RESULTS.md#c14-rerun-2026-10-26-codex-luna-with-the-fixes)). Measuring the saving
+   loadout is meant to make, replacing a natively installed library, needs a
+   comparison against that library, not against bare.
+   The Claude arm is blocked until a tool-less Codex judge is available (E12).
    [Method and limits](bench/RESULTS.md#c14-method-three-prompts-with-and-without-loadout);
    [run command](bench/README.md#ab-pilot-c14).
 2. **B11:** the replacement pilot completed. Run the 792-session full study
@@ -207,7 +210,8 @@ native machine:
   verified per host.
 - **Outcome evaluation:** the [original pilot](bench/RESULTS.md#is-the-work-better-outcome-pilot-2026-10-07)
   used agent-invented inputs and inherited the user's Codex config. Better
-  outcomes remain not shown; C14's clean rerun is pending.
+  outcomes remain not shown; [C14's rerun](bench/RESULTS.md#c14-rerun-2026-10-26-codex-luna-with-the-fixes) compares only against
+  bare, and the Claude arm waits on E12.
 - **Router precision on new requests:** lower on C1's held-out requests than
   on v4's, with the numbers in
   [RESULTS](bench/RESULTS.md#c1-2026-10-08-new-held-out-requests), mostly on

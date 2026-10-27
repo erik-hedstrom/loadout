@@ -1,0 +1,5 @@
+**Root cause:** outside taps were handled by a click listener on the panel, which could not see clicks outside it. Escape was listened for only on the button. Also, `close()` tried to remove a newly created callback, so it could not remove the listener that `open()` registered.
+
+I moved both dismissal listeners to the document and made sure taps on the button or inside the panel do not close the menu. `close()` now removes the same callbacks that `open()` registered. Escape also returns focus to the button.
+
+Added coverage for opening, inside and outside taps, Escape, and reopening after closing. `npm test` passes.

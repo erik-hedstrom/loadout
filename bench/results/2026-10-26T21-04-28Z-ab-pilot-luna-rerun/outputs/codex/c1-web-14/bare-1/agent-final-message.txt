@@ -1,0 +1,19 @@
+### Option 1 — Recommended
+
+**Page not found**  
+We couldn’t find the page you were looking for.  
+**Button:** Go to homepage
+
+### Option 2
+
+**This page isn’t here**  
+The page may have moved or the link may be out of date.  
+**Button:** Return home
+
+### Option 3
+
+**We can’t find that page**  
+Sorry, the page you’re looking for isn’t available.  
+**Button:** Visit the homepage
+
+I recommend **Option 1**: it’s clear, warm, and gives visitors a straightforward next step.

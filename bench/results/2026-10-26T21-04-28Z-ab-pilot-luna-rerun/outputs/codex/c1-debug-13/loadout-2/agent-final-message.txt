@@ -1,0 +1,5 @@
+**Root cause:** outside-click handling was attached to the panel, so taps outside it never reached the handler. Escape was listened for only on the button. Cleanup also used a new callback reference, leaving the original listeners registered.
+
+I moved both dismissal listeners to the document, kept taps on the button and inside the panel from dismissing it, and removed the exact listener references on close. Escape now closes the menu and returns focus to the button. Regression tests cover opening, inside interactions, outside taps, Escape, and listener cleanup.
+
+**Verification:** `npm test` passes. `git diff --check` could not run because this folder is not a Git repository.

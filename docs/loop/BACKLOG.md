@@ -428,7 +428,7 @@ Decisions for Erik:
 | C8 | P0 | Skill use with the hook-only plugin | Claude | local | done ([#25](https://github.com/erik-hedstrom/loadout/pull/25)): headless, the hook injected a skill's text in 6 of 10; Claude opened 0 of 10, none of the 4 it was only pointed to (D13) |
 | C9 | P1 | Host-model fallback router when there is no TypeSafe key | Claude (design) | cloud (code) + local (bench) | todo |
 | C10 | P2 | Bench quick fixes: sequential outcome judge, tier fixed across arms, stale A2 number | Claude | cloud | done ([#40](https://github.com/erik-hedstrom/loadout/pull/40)) |
-| C14 | P1 | A/B pilot: three prompts with and without loadout in the stock CLIs, tokens (cached apart from uncached) and quality | Claude (harness) + Erik (runs) | cloud (harness) + local (runs) | in progress: harness merged ([#47](https://github.com/erik-hedstrom/loadout/pull/47)); clean Codex Luna pilot recorded (2026-10-26), inconclusive; hidden-test and missing-response measurement fixes in review ([#64](https://github.com/erik-hedstrom/loadout/pull/64)); rerun after merge |
+| C14 | P1 | A/B pilot: three prompts with and without loadout in the stock CLIs, tokens (cached apart from uncached) and quality | Claude (harness) + Erik (runs) | cloud (harness) + local (runs) | Codex done: harness ([#47](https://github.com/erik-hedstrom/loadout/pull/47)), first pilot and measurement fixes ([#64](https://github.com/erik-hedstrom/loadout/pull/64)), rerun recorded (2026-10-26): loadout added uncached input tokens against a bare setup; the Claude arm waits on E12 |
 
 **C13. Pure-Jev baseline without more model spend.**
 
@@ -818,13 +818,24 @@ Learnings (2026-10-26):
   14 runs (2 warm-ups), 0 excluded, 6 Opus-judged pairs. It is
   [inconclusive](../../bench/RESULTS.md#c14-results-2026-10-26-codex-luna-pilot-inconclusive):
   a missing fake `focus()` invalidated the hidden-test advantage, and three
-  bare copy runs had no files for the file-only judge. Final responses now
+  bare copy and document runs had no files for the file-only judge. Final responses now
   join the screened, bounded judge view; rows distinguish file writes from
   final responses and unchanged fixture files. No MCP tools were called;
   only one skill was opened. Uncached tokens rose for all three prompts;
   neither quality improvement nor cost saving is shown.
 
-Left: rerun the Codex pilot with the fixes.
+- The rerun at 781090a with both fixes
+  ([RESULTS](../../bench/RESULTS.md#c14-rerun-2026-10-26-codex-luna-with-the-fixes)): all four code runs pass
+  the hidden test, and the judge decided chat-only answers on content. Loadout
+  used more uncached input tokens than bare on all three prompts; the hook added context
+  on 3 of 6 measured loadout runs, and a skill was opened on one prompt only
+  (`c1-apps-08`, which loadout won 2 of 2). The idle MCP server added nothing
+  to the warm-up request.
+- Against a setup with no skills, this design cannot show the saving loadout is
+  meant to make. Measuring one needs a native-library baseline in the stock
+  hosts, not a longer run of this design.
+
+Left: the Claude arm (blocked on E12).
 
 ## D. Integrations and robustness
 

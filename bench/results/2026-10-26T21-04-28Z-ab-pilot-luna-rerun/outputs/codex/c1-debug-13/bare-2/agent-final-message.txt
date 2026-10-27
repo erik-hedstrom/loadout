@@ -1,0 +1,5 @@
+The menu’s handlers were attached to the wrong elements: outside clicks were listened for on the panel, and Escape was listened for on the button. Cleanup also used a new anonymous function, so it could not remove the original handler.
+
+I moved both handlers to the document and remove them using the same function references. The outside-click handler ignores clicks inside the panel or on the toggle button, so menu interactions still work. Escape closes the menu and returns focus to the button.
+
+Added tests cover opening, inside clicks, outside taps, Escape, focus return, and toggling. **Verification:** `npm test` passed; both JavaScript files passed `node --check`.
