@@ -63,8 +63,9 @@ All numbers, caveats, raw-result links and recorded costs are in
 ## Pick up here
 
 1. **C14** is done for Codex
-   ([rerun](bench/RESULTS.md#c14-rerun-2026-10-26-codex-luna-with-the-fixes)). A token saving needs a
-   comparison against the same library installed natively, not against bare.
+   ([rerun](bench/RESULTS.md#c14-rerun-2026-10-26-codex-luna-with-the-fixes)). Measuring the saving
+   loadout is meant to make, replacing a natively installed library, needs a
+   comparison against that library, not against bare.
    The Claude arm is blocked until a tool-less Codex judge is available (E12).
    [Method and limits](bench/RESULTS.md#c14-method-three-prompts-with-and-without-loadout);
    [run command](bench/README.md#ab-pilot-c14).

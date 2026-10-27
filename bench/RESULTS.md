@@ -415,8 +415,8 @@ prompts, not population samples.
 5. **What this design cannot show.** Loadout adds context and tools to a
    setup that has none, so this design cannot show the saving loadout is
    meant to make: replacing a natively installed library. Differences here
-   come from the added context or from the agent's own work. A token saving
-   needs a baseline
+   come from the added context or from the agent's own work. Measuring that
+   saving needs a baseline
    with the same library installed natively (as in
    [B1](#b1-results-2026-10-07-what-installed-skills-cost-per-request) and
    B11's [heavy arms](#b11-replacement-pilot-2026-10-23-completed-2026-10-26)).
