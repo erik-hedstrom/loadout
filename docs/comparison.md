@@ -87,7 +87,7 @@ requests (`src/route.ts`). Both carry:
 The second request adds the opening of shortlisted `SKILL.md` files. The hook
 routes every prompt of 3 words or more, and shorter ones with a word starting
 with `/`, `@` or `$` (`isFollowUp` in `src/hook.ts`), in every project
-([README](../README.md#search-mid-session-from-any-mcp-host), Privacy).
+([hook privacy](hook.md#privacy)).
 `"router": "lexical"` in loadout's config keeps all of it local.
 
 ## What loadout does not do, or does not show

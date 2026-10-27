@@ -1,0 +1,1 @@
+Created the ready-to-send, eight-question questionnaire in [family-calendar-questionnaire.md](<work>/family-calendar-questionnaire.md). It should take about 3–4 minutes and covers current coordination, frustrations, tech comfort, essential needs, nice-to-haves, and a single top priority.

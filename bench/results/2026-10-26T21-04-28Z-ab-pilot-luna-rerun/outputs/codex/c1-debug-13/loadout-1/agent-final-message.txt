@@ -1,0 +1,5 @@
+The menu’s closing handlers were wired to the wrong targets: outside clicks were checked only on the panel, and Escape was listened for only on the button. Cleanup also passed a new callback instead of removing the registered one, so listeners could remain attached.
+
+I moved both handlers to the document and remove them with the same callback references used to register them. Clicks inside the panel or on the button are ignored by the outside-click handler, preserving menu interactions and button toggling. I added tests for opening, inside clicks, outside clicks, and Escape in [menu.test.mjs](<work>/menu.test.mjs). The menu does not change focus or trap it, so no focus handling needed changing.
+
+**Verification:** `npm test` passes. The tests use Node `EventTarget`s with simulated bubbling; no browser-level test was available.

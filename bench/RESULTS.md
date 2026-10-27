@@ -114,7 +114,8 @@ backlog, B7).
 ## C14 method: three prompts with and without loadout
 
 The first clean Codex pilot is recorded [below](#c14-results-2026-10-26-codex-luna-pilot-inconclusive).
-Its quality readings are invalidated by two measurement defects. An earlier Codex pilot (2026-10-20,
+Its quality readings are invalidated by two measurement defects; the
+[rerun with the fixes](#c14-rerun-2026-10-26-codex-luna-with-the-fixes) follows it. An earlier Codex pilot (2026-10-20,
 at e9d7239) is confounded: Codex loaded the global `$CODEX_HOME/AGENTS.md` into
 every run of both arms, and the loadout agent's search query repeated its text
 (see the backlog, C14). It is not a result; the harness now refuses a study
@@ -327,7 +328,96 @@ and the measurement defects prevent a quality interpretation.
 skill use; generalization beyond these selected prompts; results for Claude,
 other models or effort levels; per-request Codex caching behavior; Codex's
 actual resolved model name, monetary cost or effective-input price.
-Left: rerun the Codex pilot with the fixes, in a fresh output folder.
+The [rerun with the fixes](#c14-rerun-2026-10-26-codex-luna-with-the-fixes) is recorded next.
+
+## C14 rerun (2026-10-26): Codex Luna with the fixes
+
+**With both measurement fixes, loadout used more input tokens than bare on all
+three prompts. It won both pairs of the one prompt where it changed the work
+(`c1-apps-08`). This design adds loadout to a setup with no skills, so it
+measures what loadout adds, not what it could replace; a saving is not shown.**
+
+At main `781090a` (#64), with the first pilot's setup: WSL, Codex CLI 0.163.0,
+requested model `gpt-6-luna`, explicit medium effort, a dedicated logged-in
+`CODEX_HOME` without global instructions, and a fresh output folder. Same
+command. Fourteen runs: two warm-ups, twelve measured, zero excluded; six pairs
+judged by Claude Opus in both orders. Cost: Jev under $0.05 (operator-reported);
+agent and judge subscription quota otherwise.
+
+Raw [rows](results/2026-10-26T21-04-28Z-ab-pilot-luna-rerun/rows.jsonl), [outputs](results/2026-10-26T21-04-28Z-ab-pilot-luna-rerun/outputs/),
+[verdicts](results/2026-10-26T21-04-28Z-ab-pilot-luna-rerun/verdicts.jsonl) and [report](results/2026-10-26T21-04-28Z-ab-pilot-luna-rerun/report.md), with no raw
+streams.
+
+Mean tokens per measured run (min–max), two repeats per cell; warm-ups
+excluded. Codex reports thread totals, not individual requests. All
+cache-write counters were zero.
+
+| Prompt | Arm | Uncached input | Cache write | Cache read | Output |
+|---|---|---:|---:|---:|---:|
+| c1-web-14 | bare | 2,349 (1,972–2,726) | 0 | 24,640 (11,392–37,888) | 262 (126–397) |
+| c1-web-14 | loadout | 6,827 (3,780–9,873) | 0 | 35,008 (30,720–39,296) | 394 (374–413) |
+| c1-apps-08 | bare | 1,967 | 0 | 11,392 | 544 (473–615) |
+| c1-apps-08 | loadout | 8,398 (4,534–12,262) | 0 | 47,616 (39,552–55,680) | 1,319 (1,275–1,363) |
+| c1-debug-13 | bare | 8,834 (8,174–9,493) | 0 | 166,976 (164,736–169,216) | 2,446 (2,221–2,671) |
+| c1-debug-13 | loadout | 15,759 (12,984–18,533) | 0 | 102,208 (95,872–108,544) | 2,131 (1,849–2,412) |
+
+Loadout − bare, difference of means:
+
+| Prompt | Uncached input | Cache write | Cache read | Output | Loadout runs with hook context | Skills opened |
+|---|---:|---:|---:|---:|---|---|
+| c1-web-14 | +4,478 | 0 | +10,368 | +132 | 1 of 2 | none |
+| c1-apps-08 | +6,431 | 0 | +36,224 | +775 | 2 of 2 | 3, in one run |
+| c1-debug-13 | +6,925 | 0 | −64,768 | −315 | 0 of 2 | none |
+
+Judge outcomes, descriptive counts only:
+
+| Prompt | Loadout | Bare | Tie | Split | Wrote a file, bare / loadout | Hidden test, bare / loadout |
+|---|---:|---:|---:|---:|---|---|
+| c1-web-14 | 1 | 1 | 0 | 0 | 1 of 2 / 2 of 2 | — |
+| c1-apps-08 | 2 | 0 | 0 | 0 | 0 of 2 / 2 of 2 | — |
+| c1-debug-13 | 0 | 1 | 0 | 1 | 2 of 2 / 2 of 2 | 2 of 2 / 2 of 2 |
+
+Across the six pairs: loadout 3 (50%, Wilson 95% 19–81%), bare 2 (33%,
+10–70%), split 1 (17%, 3–56%). As before, these are repeats on three selected
+prompts, not population samples.
+
+1. **The fixes worked.** All four code runs pass the hidden test; focus
+   return no longer crashes it. The judge now sees final responses:
+   `c1-web-14/bare-1` wrote no file and won both orders on its chat answer,
+   which kept the one-sentence-per-option format. Both `c1-apps-08` bare runs
+   answered in chat only and lost mainly on content: the missing essential
+   and nice-to-have split in one repeat, the missing technology-comfort
+   question in the other. One order also credited loadout's ready-to-send
+   file.
+2. **Loadout changed the work on one prompt.** On `c1-apps-08` the hook
+   added context in both runs, and in one the agent opened three skills
+   through `load_skill` (`to-questionnaire`, `user-research`,
+   `brainstorming`), the only skill use in the study. Loadout won both
+   pairs. It cost +6,431 uncached input, +36,224 cache read and +775 output
+   tokens per run.
+3. **On the other two it mostly did not.** On `c1-debug-13` the hook added
+   nothing in either run, both arms wrote the same fix, and the judge
+   preferred bare once and split once. With no loadout text in those
+   requests, the token differences come from what the agent did; two repeats
+   cannot separate that from run-to-run variation. On `c1-web-14` the hook
+   added context in one run, and the pairs split one each on format
+   adherence.
+4. **The configured MCP server cost nothing measurable when idle.** The two
+   warm-ups (one neutral prompt, no hook context) used identical tokens in
+   both arms: 1,833 uncached, 0 written, 11,392 cache read. On this Codex
+   version, loadout's MCP tool definitions did not enlarge the request. That
+   fits Codex deferring MCP tool definitions until the agent searches for
+   them; the mechanism is not verified from source here.
+5. **What this design cannot show.** The bare arm has no skills or MCP
+   servers, so loadout can only add tokens. A token saving needs a baseline
+   with the same library installed natively (as in
+   [B1](#b1-results-2026-10-07-what-installed-skills-cost-per-request) and
+   B11's [heavy arms](#b11-replacement-pilot-2026-10-23-completed-2026-10-26)).
+
+**Not shown:** a cost saving; a quality difference beyond these six pairs; a
+causal benefit from skill use; generalization beyond these selected prompts;
+results for Claude, other models or effort levels; per-request Codex caching;
+Codex's resolved model name, monetary cost or effective-input price.
 
 ## B1 results (2026-10-07): what installed skills cost per request
 

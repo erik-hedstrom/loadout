@@ -7,7 +7,7 @@ Codex reads this file directly; Claude Code reads it through CLAUDE.md. Read
 ## What this is
 
 In stock Claude Code and Codex, a prompt hook uses TypeSafe's Jev to add the
-skills that fit each substantive prompt, and loadout's MCP tools let the agent
+skills predicted to fit each substantive prompt, and loadout's MCP tools let the agent
 search the library. The `loadout claude|codex` launcher instead makes one
 decision per session: skills, MCP servers and a model tier. Tier-choice
 quality is not evaluated ([RESULTS](bench/RESULTS.md#threats-to-validity)).

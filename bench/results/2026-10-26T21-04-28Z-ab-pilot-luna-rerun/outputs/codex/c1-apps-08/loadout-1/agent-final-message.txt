@@ -1,0 +1,3 @@
+Created a 7-question questionnaire with an estimated 3–4 minute completion time. It asks how relatives coordinate plans, what frustrates them, which features are essential or nice to have, and what they’d prioritize first. The last question is optional.
+
+[family-calendar-questionnaire.md](<work>/family-calendar-questionnaire.md)
