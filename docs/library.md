@@ -63,7 +63,8 @@ effective local settings file.
 Shared project settings come from the session directory, even when skills
 are discovered in an ancestor directory. The local file also stays there on
 Windows, outside Git, or when the repository root is home; otherwise it lives
-at the Git root (the main checkout's root for a linked worktree).
+at the Git root (the main checkout's root for a linked worktree, or the
+worktree root with a warning if its metadata cannot be resolved).
 An existing legacy local file in the session directory is read before the
 root-local file, so root-local values win. See the official
 [local-file location rules](https://code.claude.com/docs/en/settings#where-claude-code-keeps-the-local-file-in-a-git-repository).

@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, truncateSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parse as parseToml } from 'smol-toml';
 import { audit, claudeSettingsScopes, formatAudit } from '../src/audit.js';
@@ -238,28 +238,60 @@ describe('audit', () => {
     expect(report.disable?.claude.settings).toEqual([]);
   });
 
-  it.skipIf(process.platform === 'win32')('uses the main checkout local file for a linked worktree with a newline in its path', async () => {
-    const git = (...args: string[]) => {
-      const result = spawnSync('git', ['-C', project, ...args], { env: { ...process.env, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: join(home, 'no-global-config') }, encoding: 'utf8' });
-      expect(result.status, result.stderr).toBe(0);
-    };
-    git('init', '--quiet');
-    git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '--allow-empty', '--no-verify', '-m', 'fixture');
-    const linked = join(home, 'linked\ncheckout');
-    git('worktree', 'add', '--quiet', '--detach', linked);
+  it.skipIf(process.platform === 'win32').each(['relative', 'absolute'])('resolves a worktree through %s metadata paths without Git', async (mode) => {
+    const main = join(home, 'main\ncheckout ');
+    const common = join(main, '.git');
+    const gitdir = join(common, 'worktrees', 'linked');
+    const linked = join(home, 'linked');
+    file(join(linked, '.git'), `gitdir: ${mode === 'relative' ? relative(linked, gitdir) : gitdir}\n`);
+    file(join(gitdir, 'commondir'), `${mode === 'relative' ? relative(gitdir, common) : common}\n`);
     skill(join(linked, '.claude', 'skills'), 'example');
     const report = await audit(linked, true);
-    const localFile = join(project, '.claude', 'settings.local.json');
+    const localFile = join(main, '.claude', 'settings.local.json');
+    expect(report.hosts[0]!.warnings).toEqual([]);
     expect(report.disable?.claude.settings.map((s) => s.file)).toEqual([localFile]);
     applyClaudeSnippets(formatAudit(report));
     expect(mergedOverrides([join(linked, '.claude', 'settings.json'), join(linked, '.claude', 'settings.local.json'), localFile]).example).toBe('user-invocable-only');
     expect((await audit(linked)).hosts[0]!.skills).toEqual([]);
   });
 
-  it.skipIf(process.platform === 'win32')('redacts Git errors rather than guessing linked-worktree settings', async () => {
+  it.skipIf(process.platform === 'win32').each([
+    'malformed gitfile', 'empty gitdir', 'missing gitdir', 'gitdir is a file',
+    'missing commondir', 'empty commondir', 'common is a file', 'common is not .git',
+    'linked gitfile', 'linked commondir', 'oversized gitfile', 'oversized commondir',
+  ])('returns inventory and one fixed warning for %s', async (failure) => {
     const linked = join(home, 'linked');
-    file(join(linked, '.git'), 'gitdir: TOP-SECRET-METADATA\n');
-    await expect(audit(linked)).rejects.toThrow('Could not resolve the main checkout for Claude settings; check Git metadata and access.');
+    const gitfile = join(linked, '.git');
+    const gitdir = join(home, 'main', '.git', 'worktrees', 'linked');
+    const commonFile = join(gitdir, 'commondir');
+    file(gitfile, `gitdir: ${gitdir}\n`);
+    file(commonFile, '../..\n');
+    const sentinel = join(home, 'sentinel');
+    file(sentinel, 'TOP-SECRET-METADATA\u001b[31m');
+    switch (failure) {
+      case 'malformed gitfile': file(gitfile, 'TOP-SECRET-METADATA\u001b[31m\n'); break;
+      case 'empty gitdir': file(gitfile, 'gitdir: \n'); break;
+      case 'missing gitdir': file(gitfile, 'gitdir: missing\n'); break;
+      case 'gitdir is a file': file(gitfile, `gitdir: ${sentinel}\n`); break;
+      case 'missing commondir': rmSync(commonFile); break;
+      case 'empty commondir': file(commonFile, '\n'); break;
+      case 'common is a file': file(join(home, 'file', '.git'), 'not a directory'); file(commonFile, `${join(home, 'file', '.git')}\n`); break;
+      case 'common is not .git': file(commonFile, `${home}\n`); break;
+      case 'linked gitfile': rmSync(gitfile); symlinkSync(sentinel, gitfile); break;
+      case 'linked commondir': rmSync(commonFile); symlinkSync(sentinel, commonFile); break;
+      case 'oversized gitfile': truncateSync(gitfile, 4 * 1024 * 1024 + 1); break;
+      case 'oversized commondir': truncateSync(commonFile, 4 * 1024 * 1024 + 1); break;
+    }
+    skill(join(linked, '.claude', 'skills'), 'example');
+    const warning = 'Could not resolve the main checkout of this Git worktree; local settings are assumed at the worktree root.';
+    const report = await audit(linked);
+    expect(report.hosts[0]!.skills.map((s) => s.name)).toEqual(['example']);
+    expect(report.hosts[0]!.warnings).toEqual([warning]);
+    expect(formatAudit(report).split(warning)).toHaveLength(2);
+    expect(JSON.stringify(report) + formatAudit(report)).not.toContain('TOP-SECRET-METADATA');
+    const adopted = await audit(linked, true);
+    expect(adopted.hosts[0]!.warnings).toEqual([warning]);
+    expect(adopted.disable?.claude.settings.map((s) => s.file)).toEqual([join(linked, '.claude', 'settings.local.json')]);
   });
 
   it.each([false, true])('reads home local on and prints an effective hide change (home is Git root: %s)', async (gitRootIsHome) => {

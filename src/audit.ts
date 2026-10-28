@@ -1,4 +1,3 @@
-import { execFileSync } from 'node:child_process';
 import { existsSync, lstatSync, readdirSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, join, posix, relative, resolve, win32 } from 'node:path';
@@ -301,15 +300,21 @@ export async function audit(cwd = process.cwd(), adopt = false): Promise<AuditRe
   const serverMaps = hosts.map(() => new Map<string, unknown>());
   const [claudeServers, codexServers, openServers, cursorServers] = serverMaps as [Map<string, unknown>, Map<string, unknown>, Map<string, unknown>, Map<string, unknown>];
   let gitRoot = dirs.find((dir) => existsSync(join(dir, '.git')));
-  if (gitRoot && process.platform !== 'win32' && lstatSync(join(gitRoot, '.git')).isFile()) {
-    // Linked worktrees share the main checkout's local settings on POSIX.
-    // NUL output preserves paths containing newlines without Git's display quoting.
+  if (gitRoot && process.platform !== 'win32') {
     try {
-      const first = execFileSync('git', ['-C', gitRoot, 'worktree', 'list', '--porcelain', '-z'], { encoding: 'utf8', timeout: 5_000, stdio: ['ignore', 'pipe', 'ignore'] }).split('\0')[0]!;
-      if (!first.startsWith('worktree ') || !isAbsolute(first.slice(9))) throw new Error('invalid worktree path');
-      gitRoot = first.slice(9);
+      if (!lstatSync(join(gitRoot, '.git')).isDirectory()) {
+        const pointer = readConfined(gitRoot, '.git', MAX_CONFIG_BYTES).toString('utf8');
+        const gitdirPath = pointer.slice('gitdir: '.length).replace(/\r?\n$/, '');
+        if (!pointer.startsWith('gitdir: ') || !gitdirPath) throw new Error('invalid Git worktree metadata');
+        const gitdir = resolve(gitRoot, gitdirPath);
+        const common = readConfined(gitdir, 'commondir', MAX_CONFIG_BYTES).toString('utf8').replace(/\r?\n$/, '');
+        if (!common) throw new Error('invalid Git worktree metadata');
+        const commonGit = resolve(gitdir, common);
+        if (basename(commonGit) !== '.git' || !lstatSync(commonGit).isDirectory()) throw new Error('invalid Git worktree metadata');
+        gitRoot = dirname(commonGit);
+      }
     } catch {
-      throw new Error('Could not resolve the main checkout for Claude settings; check Git metadata and access.');
+      claude.warnings.push('Could not resolve the main checkout of this Git worktree; local settings are assumed at the worktree root.');
     }
   }
   const scopes = claudeSettingsScopes({ cwd: resolve(cwd), gitRoot, home: resolve(home), claudeHome: resolve(claudeHome), platform: process.platform });
