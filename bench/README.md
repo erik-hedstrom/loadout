@@ -1,5 +1,49 @@
 # loadout benchmark
 
+## B12 native listing remeasurement
+
+`listing.ts` measures 0, 50, 250 and all valid library skills, ordered by
+SHA-256 of normalized names so smaller arms are prefixes. Only confined
+manifest names/descriptions enter temporary skills; bodies, hooks, scripts
+and references are replaced with a fixed third-party placeholder. It needs
+at least 250 distinct valid manifests. Claude also compares default tools
+without MCP against loadout's lexical MCP server with the full sanitized
+library in a temporary `LOADOUT_HOME`.
+
+```sh
+node --import tsx bench/listing.ts --plan --host claude --library <public-library> --claude-command <native-executable>
+node --import tsx bench/listing.ts --plan --host codex --library <public-library> --codex-command codex
+```
+
+Commands are executable paths; quote paths containing spaces in your shell.
+Repeat `--claude-arg` or `--codex-arg` for literal command-prefix arguments
+(for example `--codex-command node --codex-arg /tools/codex.js`). No shell is used. For
+Windows Claude, pass its native `.exe`, not an npm `.cmd` shim. Run each host
+from Node in its own OS (Claude on Windows, Codex in WSL on this machine),
+with paths native to that OS. Use a clean, logged-in benchmark `CODEX_HOME`;
+never put credentials in command arguments. Model defaults are `haiku` and
+`gpt-6-luna` (low effort); override with `--claude-model`/`--codex-model`.
+
+Planning starts no children, prints exact argv/cwd, paid-call counts and an
+illustrative dollar estimate with its assumptions, then removes temporary
+files. Without either mode flag it also plans. An authorized measurement
+replaces `--plan` with `--run --out <new-results-directory>`; both flags
+together are refused. There are 12 Claude and 8 Codex calls, two sequential
+fresh sessions per arm, and free version probes. No Jev calls. The estimate
+ignores cache discounts and is neither a cap nor a current price quote.
+
+`rows.jsonl` stores host version, requested/reported model, corpus hashes,
+counts, exit/duration, invalid status and separate uncached/cache-write/
+cache-read/output counters. It stores no transcripts, context, raw errors
+or ambient plugin names. Claude init discovery counts do not prove rendered
+description visibility; Codex exec does not expose initial-list counts, so
+those fields are null. Repeat calls need not hit cache. Invalid measurements
+are recorded and stop further paid calls. Host cache/auth/diagnostic writes
+remain possible; the harness never edits host configuration.
+
+[Method and live-run caveats](../docs/loop/B12-HANDOFF.md).
+Results will follow in [RESULTS](RESULTS.md#b12-method-native-listing-remeasurement).
+
 ## B11 OpenCode sessions
 
 `b11.ts` measures completed model requests and checks generated files. It

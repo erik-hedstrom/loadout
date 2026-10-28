@@ -6,6 +6,35 @@ of 1,000 to 20,000 real skills from GitSkills. Method and caveats:
 they measure what reaches the agent, not whether the agent then finishes the
 task.
 
+## B12 method: native listing remeasurement
+
+Harness added 2026-10-28; **results follow after an authorized run**. The
+uncommitted sandbox pilot is not a result. B1's generated-name measurement
+remains historical evidence in its original scope; B12 will remeasure real
+names/descriptions under current host budgets.
+
+`bench/listing.ts` installs placeholder-only skill prefixes of size 0, 50,
+250 and the full valid library in deterministic name-hash order. Two
+sequential fresh sessions per arm use the fixed B1 no-tool prompt. Claude
+uses B1's isolated Skill-only argv for size arms, then a separate default-tools
+pair without MCP versus loadout's lexical MCP with a temporary home and the
+full sanitized library. Codex uses ephemeral exec sessions. Versions, models,
+counts and four usage buckets are recorded; no context or ambient plugin
+names are retained. Claude's init counts are discovery, not description
+visibility. Codex initial-list visibility is not exposed and remains unknown.
+
+Current host documentation describes [Claude's listing budget](https://code.claude.com/docs/en/skills#skill-descriptions-are-cut-short)
+and [Codex's listing budget](https://learn.chatgpt.com/docs/build-skills).
+These motivate the size arms; a token plateau alone does not establish its
+cause. Claude's default tool search can defer MCP schemas, so the MCP pair
+records ToolSearch presence, expected loadout tools in init and connection
+status. Cache hits are observed, not assumed from call order. No quality,
+router or model-tier claim is tested.
+
+[Run instructions](README.md#b12-native-listing-remeasurement) and
+[limits/handoff](../docs/loop/B12-HANDOFF.md). No B12 paid calls have run from
+the committed harness and no new result numbers are reported here.
+
 ## B1 method (preregistered)
 
 Revised 2026-10-07 after PR #6 round 4, before any paid call. Results: [B1 results](#b1-results-2026-10-07-what-installed-skills-cost-per-request).
