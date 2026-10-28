@@ -1,6 +1,7 @@
+import { execFileSync } from 'node:child_process';
 import { existsSync, lstatSync, readdirSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, posix, relative, resolve, win32 } from 'node:path';
 import { parse as parseToml, stringify as stringifyToml } from 'smol-toml';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
@@ -51,7 +52,7 @@ export interface AuditReport {
   adopted?: { added: number; updated: number; skipped: number };
   disable?: {
     notice: string;
-    claude: { settings: { file: string; skillOverrides: Record<string, 'user-invocable-only'> }[]; plugins: string[] };
+    claude: { sessionDirectory: string; settings: { file: string; skillOverrides: Record<string, 'user-invocable-only'> }[]; plugins: string[] };
     codex: { file: string; skills: { path: string; enabled: false }[] };
     guidance: string[];
   };
@@ -91,6 +92,23 @@ function projectDirs(cwd: string): string[] {
     dirs.unshift(dir);
     if (existsSync(join(dir, '.git')) || dir === resolve(homedir()) || dirname(dir) === dir) return dirs;
   }
+}
+
+/** Absolute inputs; gitRoot names the main checkout for a linked worktree. */
+export function claudeSettingsScopes({ cwd, gitRoot, home, claudeHome, platform }: {
+  cwd: string; gitRoot?: string; home: string; claudeHome: string; platform: string;
+}): string[] {
+  const path = platform === 'win32' ? win32 : posix;
+  const localDir = platform !== 'win32' && gitRoot && path.relative(home, gitRoot) !== '' ? gitRoot : cwd;
+  const files = [
+    path.resolve(claudeHome, 'settings.json'),
+    path.resolve(cwd, '.claude', 'settings.json'),
+    path.resolve(cwd, '.claude', 'settings.local.json'),
+    path.resolve(localDir, '.claude', 'settings.local.json'),
+  ];
+  // A legacy cwd-local file is read before root-local. The same file can also
+  // be both user and shared settings when the session starts in home.
+  return files.filter((file, index) => files.findIndex((other) => path.relative(other, file) === '') === index);
 }
 
 function addSkillRoot(root: string, host: HostAudit, found: Map<string, FoundSkill>, prefix = '', settingsFile?: string) {
@@ -275,7 +293,6 @@ export async function audit(cwd = process.cwd(), adopt = false): Promise<AuditRe
   const codexHome = process.env.CODEX_HOME || join(home, '.codex');
   const openHome = join(process.env.XDG_CONFIG_HOME || join(home, '.config'), 'opencode');
   const dirs = projectDirs(cwd);
-  const claudeDirs = dirs.filter((dir) => relative(resolve(claudeHome), resolve(dir, '.claude')) !== '');
   const found = new Map<string, FoundSkill>();
   const seenDescriptions = new Set<string>();
   const hosts = ['Claude Code', 'Codex', 'OpenCode', 'Cursor'].map((host): HostAudit => ({ host, skills: [], listings: [], servers: [], descriptionCharacters: 0, estimatedTokens: 0, warnings: [] }));
@@ -283,19 +300,29 @@ export async function audit(cwd = process.cwd(), adopt = false): Promise<AuditRe
   const [claude, codex, open, cursor] = hosts as [HostAudit, HostAudit, HostAudit, HostAudit];
   const serverMaps = hosts.map(() => new Map<string, unknown>());
   const [claudeServers, codexServers, openServers, cursorServers] = serverMaps as [Map<string, unknown>, Map<string, unknown>, Map<string, unknown>, Map<string, unknown>];
-  const userSettings = readJson(join(claudeHome, 'settings.json'), claude, 'user settings');
-  const claudeSettings = object(userSettings.enabledPlugins);
-  // Retain the scope files in precedence order so project-level "on" entries
-  // can be hidden through local settings without changing shared settings.
-  const overrideScopes = [{ file: resolve(claudeHome, 'settings.json'), overrides: object(userSettings.skillOverrides) }];
-  for (const settings of ['settings.json', 'settings.local.json']) for (const dir of claudeDirs) {
-    const file = join(dir, '.claude', settings);
-    const config = readJson(file, claude, 'project settings');
-    Object.assign(claudeSettings, object(config.enabledPlugins));
-    overrideScopes.push({ file, overrides: object(config.skillOverrides) });
+  let gitRoot = dirs.find((dir) => existsSync(join(dir, '.git')));
+  if (gitRoot && process.platform !== 'win32' && lstatSync(join(gitRoot, '.git')).isFile()) {
+    // Linked worktrees share the main checkout's local settings on POSIX.
+    // NUL output preserves paths containing newlines without Git's display quoting.
+    try {
+      const first = execFileSync('git', ['-C', gitRoot, 'worktree', 'list', '--porcelain', '-z'], { encoding: 'utf8', timeout: 5_000, stdio: ['ignore', 'pipe', 'ignore'] }).split('\0')[0]!;
+      if (!first.startsWith('worktree ') || !isAbsolute(first.slice(9))) throw new Error('invalid worktree path');
+      gitRoot = first.slice(9);
+    } catch {
+      throw new Error('Could not resolve the main checkout for Claude settings; check Git metadata and access.');
+    }
   }
+  const scopes = claudeSettingsScopes({ cwd: resolve(cwd), gitRoot, home: resolve(home), claudeHome: resolve(claudeHome), platform: process.platform });
+  const userSettingsFile = resolve(claudeHome, 'settings.json');
+  const localSettingsFile = scopes.at(-1)!;
+  const claudeSettings: Record<string, unknown> = {};
+  const overrideScopes = scopes.map((file) => {
+    const config = readJson(file, claude, 'Claude settings');
+    Object.assign(claudeSettings, object(config.enabledPlugins));
+    return { file, overrides: object(config.skillOverrides) };
+  });
   const skillOverrides = Object.fromEntries(overrideScopes.flatMap(({ overrides }) => Object.entries(overrides)));
-  addSkillRoot(join(claudeHome, 'skills'), claude, found, '', resolve(claudeHome, 'settings.json'));
+  addSkillRoot(join(claudeHome, 'skills'), claude, found, '', userSettingsFile);
   addMarkdown(join(claudeHome, 'commands'), claude, seenDescriptions, 'commands', '', skillOverrides);
   addMarkdown(join(claudeHome, 'agents'), claude, seenDescriptions, 'agents');
   addSkillRoot(join(codexHome, 'skills'), codex, found);
@@ -310,7 +337,7 @@ export async function audit(cwd = process.cwd(), adopt = false): Promise<AuditRe
   addServers(readJson(join(home, '.cursor', 'mcp.json'), cursor, 'user MCP config').mcpServers, cursorServers);
   const openConfigs = [join(openHome, 'opencode.json'), join(openHome, 'opencode.jsonc')];
   for (const dir of dirs) {
-    if (claudeDirs.includes(dir)) addSkillRoot(join(dir, '.claude', 'skills'), claude, found, '', join(dir, '.claude', 'settings.local.json'));
+    addSkillRoot(join(dir, '.claude', 'skills'), claude, found, '', relative(resolve(claudeHome), resolve(dir, '.claude')) === '' ? undefined : localSettingsFile);
     addMarkdown(join(dir, '.claude', 'commands'), claude, seenDescriptions, 'commands', '', skillOverrides);
     addMarkdown(join(dir, '.claude', 'agents'), claude, seenDescriptions, 'agents');
     addSkillRoot(join(dir, '.agents', 'skills'), codex, found);
@@ -397,12 +424,7 @@ export async function audit(cwd = process.cwd(), adopt = false): Promise<AuditRe
         if (identity === 'Claude Code:') {
           if (Object.hasOwn(skillOverrides, skill.name) && skillOverrides[skill.name] !== 'on') continue;
           const destinations = new Set(settingsFiles);
-          for (const file of settingsFiles) {
-            const precedence = overrideScopes.findIndex((scope) => scope.file === file);
-            for (const scope of overrideScopes.slice(precedence + 1)) {
-              if (scope.overrides[skill.name] === 'on') destinations.add(join(dirname(scope.file), 'settings.local.json'));
-            }
-          }
+          if (settingsFiles.has(userSettingsFile) && overrideScopes.some((scope) => scope.file !== userSettingsFile && scope.overrides[skill.name] === 'on')) destinations.add(localSettingsFile);
           for (const file of destinations) {
             const overrides = claudeOverrides.get(file) ?? new Map<string, 'user-invocable-only'>();
             overrides.set(skill.name, 'user-invocable-only');
@@ -414,7 +436,7 @@ export async function audit(cwd = process.cwd(), adopt = false): Promise<AuditRe
     }
     report.disable = {
       notice: 'Printed only; no host configs were changed.',
-      claude: { settings: [...claudeOverrides].map(([file, overrides]) => ({ file, skillOverrides: Object.fromEntries(overrides) })), plugins: [...plugins] },
+      claude: { sessionDirectory: resolve(cwd), settings: [...claudeOverrides].map(([file, overrides]) => ({ file, skillOverrides: Object.fromEntries(overrides) })), plugins: [...plugins] },
       codex: { file: resolve(codexHome, 'config.toml'), skills: codexSkills },
       guidance: [
         'OpenCode: deny adopted skill names under permission.skill, or move their folders out of discovery directories.',
@@ -444,6 +466,7 @@ export function formatAudit(report: AuditReport): string {
   if (report.disable) {
     const { notice, claude, codex, guidance } = report.disable;
     lines.push(notice);
+    if (claude.settings.length) lines.push(`Project entries apply to Claude sessions started in ${escapeControls(JSON.stringify(claude.sessionDirectory))}.`);
     for (const { file, skillOverrides } of claude.settings) lines.push(
       `\nClaude Code: merge into ${escapeControls(JSON.stringify(file))} (keep other settings and overrides). /name stays available:`,
       '```json', formatAuditJson({ skillOverrides }), '```',

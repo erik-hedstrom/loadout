@@ -89,7 +89,8 @@ Document the replacement step without uncommitted measurement claims.
 
 Learnings: Claude overrides are keyed by name; plugin skills need `/plugin`;
 local project settings outrank shared project settings, which outrank user
-settings, so a higher scope's explicit `"on"` also needs a local-project hide entry.
+settings. Reads and hide destinations follow the session cwd and its
+platform/Git local-file rules, not the directory where a skill was discovered.
 
 **A1. README rewrite.**
 

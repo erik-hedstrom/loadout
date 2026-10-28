@@ -40,9 +40,9 @@ listing tokens; loadout's hook and `load_skill` serve them when needed. It
 never edits host configs. It refuses a `LOADOUT_HOME` outside `~/.loadout`.
 
 For Claude Code personal skills, merge the printed JSON into
-`~/.claude/settings.json`. For project skills, use the printed path to that
-project directory's `.claude/settings.local.json`. Keep other settings and
-existing overrides:
+`~/.claude/settings.json`. For project skills, use the printed effective
+local settings path for a Claude session started in the audited directory.
+Keep other settings and existing overrides:
 
 ```json
 {
@@ -58,8 +58,20 @@ Skill tool. Overrides match skill names, so same-named skills share the
 override. Entries already set to anything other than `"on"` are left out of
 the printed changes, including `"name-only"`, which still lists the name.
 Because [local project settings override shared project settings, which override user settings](https://code.claude.com/docs/en/settings#settings-precedence),
-an effective `"on"` in a higher scope also gets a hide entry in that project's
-`.claude/settings.local.json`.
+an effective `"on"` in a higher scope also gets a hide entry in the session's
+effective local settings file.
+Shared project settings come from the session directory, even when skills
+are discovered in an ancestor directory. The local file also stays there on
+Windows, outside Git, or when the repository root is home; otherwise it lives
+at the Git root (the main checkout's root for a linked worktree).
+An existing legacy local file in the session directory is read before the
+root-local file, so root-local values win. See the official
+[local-file location rules](https://code.claude.com/docs/en/settings#where-claude-code-keeps-the-local-file-in-a-git-repository).
+Managed settings and command-line `--settings` are not modeled; managed
+values outrank everything, and `--settings` outranks these files.
+Ownership is not modeled; when the Git root or its `.git` or `.claude` entry
+is not owned by the user, Claude keeps the local file in the session directory
+instead.
 Plugin skills are unaffected by `skillOverrides`: disable the named plugins
 via `/plugin` instead. This disables the whole plugin, including its other
 components. The `/skills` menu also saves visibility changes to
@@ -79,7 +91,8 @@ Already-disabled skills are left out. Restart Codex afterwards. See the official
 [Codex skill configuration](https://learn.chatgpt.com/docs/build-skills#enable-or-disable-local-codex-skills).
 If `CLAUDE_CONFIG_DIR` or `CODEX_HOME` is set, the audit prints that host home's
 settings path instead. `--json --adopt` includes the same changes as structured
-data under `disable` (`claude.settings`, `claude.plugins`, `codex` and `guidance`).
+data under `disable` (`claude.sessionDirectory`, `claude.settings`,
+`claude.plugins`, `codex` and `guidance`).
 OpenCode and Cursor receive folder/permission guidance.
 
 ## MCP servers
