@@ -39,7 +39,10 @@ session sent one "Reply with exactly OK" request; two fresh sessions per arm.
 Skills carried real names and descriptions from the 1,262-skill library (1,235
 valid and distinct) with placeholder bodies. Input is uncached plus cache-write
 plus cache-read tokens. All 20 calls were valid, and both sessions of every arm
-had the same input total.
+had the same input total. The Claude skill arms ran B1's isolated
+configuration with built-in tools removed (`--tools Skill`); the MCP pair
+below ran with the default tools. The Claude rows came from the harness at
+bd01181, the Codex rows from 376b0a6 (which added the budget-notice parsing).
 
 | Skills installed | Claude Code 2.1.308, Haiku | Codex 0.163.0, gpt-6-luna |
 |---|---:|---:|
@@ -52,10 +55,11 @@ had the same input total.
   50 skills added 8,049 input tokens to every request in Claude Code and 4,484
   in Codex. From 250 to 1,235 skills, Claude Code grew by 5,362 tokens (about
   5.4 per added skill) and Codex by 518.
-- **Codex drops skills.** At 1,235 skills Codex reported that it removed every
-  skill description and left 888 skills out of the model-visible list, so at
-  most 347 names remained, without descriptions. At 50 and 250 skills it
-  reported nothing. Claude Code reports no such notice. Its init listed all
+- **Codex drops skills.** With the 1,235 probe skills installed, Codex
+  reported that it removed every skill description and left 888 skills out of
+  the model-visible list. Its catalog may also hold built-in or ambient skills
+  that were not counted, so how many probe names remained is not shown. At 50
+  and 250 skills it reported nothing. Claude Code reports no such notice. Its init listed all
   1,235 probe skills, which shows discovery, not what the model saw.
 - **Caching.** Claude Code's second session read almost the whole prompt from
   cache (20,774 of 20,776 tokens at 1,235 skills). Codex reported 11,392 cached
@@ -65,14 +69,15 @@ had the same input total.
 - **loadout's own tools.** With Claude Code's default tools (ToolSearch
   present), adding loadout's MCP server (lexical, with the full library behind
   it) raised input from 15,536 to 15,694, **+158 per request**. Init listed
-  `find_tools` and `load_skill`. This supersedes B1's +546, which was measured
-  with built-in tools removed (`--tools Skill`). In Codex, loadout's tool cost
-  is not measured.
+  `find_tools` and `load_skill`. For default-tools sessions this replaces B1's
+  +546, which was measured with built-in tools removed (`--tools Skill`), where
+  tool search cannot defer. In Codex, loadout's tool cost is not measured.
 - **Compared with B1.** B1 listed generated names on an older Claude Code: +477
   tokens at 50 skills, rising to +12,283 at 1,232. With real names and
-  descriptions the cost arrives far earlier (+8,049 at 50). B1's finding that
-  loadout's tools cost more than a 50-skill listing does not hold on Claude
-  Code 2.1.308.
+  descriptions the cost arrives far earlier (+8,049 at 50). The two figures
+  come from different tool configurations (skill arms `--tools Skill`, MCP
+  pair default tools), so a matched default-tools comparison of loadout's tools
+  against 50 native skills is not shown.
 
 Not shown:
 - what loadout's hook adds per routed prompt in these hosts. The

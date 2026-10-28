@@ -173,10 +173,13 @@ How to run: `node --import tsx bench/listing.ts --plan --host <claude|codex>
 `--run --out <new-results-directory>`. [Commands and caveats](../../bench/README.md#b12-native-listing-remeasurement).
 Results: [RESULTS](../../bench/RESULTS.md#b12-results-2026-10-28-what-installed-skills-cost-per-request-on-current-hosts). Learnings: real
 descriptions make the native listing a large cost from 50 skills (Claude Code
-+8,049, Codex +4,484 per request); Codex 0.163 removes every description and
-omits 888 of 1,235 skills, reporting it as a non-fatal `error` item that
-B1's parser rejects; loadout's tools cost +158 per request in Claude Code with
-tool search on, so B1's small-library caveat no longer holds there.
++8,049, Codex +4,484 per request); with 1,235 probe skills Codex 0.163 removes every description and omits 888
+skills, reporting it as a non-fatal `error` item that B1's parser rejects;
+loadout's tools cost +158 per request in Claude Code with tool search on (a
+matched default-tools comparison against native skills is not shown).
+Follow-ups (Low, from review): tests that trigger the probe-discovery,
+version-drift and mcp-startup gates; print argument errors raised before the
+first paid call.
 
 **B8. Items from the launch-readiness review.** The review (2026-10-13) is
 private ([ORCHESTRATOR](ORCHESTRATOR.md#local-the-default)).

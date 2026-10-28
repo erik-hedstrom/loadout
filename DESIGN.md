@@ -361,10 +361,11 @@ library itself, in its own words, through MCP:
   `server_tools` with `tool` returns any one tool's full schema. The tool text
   is escaped like other third-party text.
 
-The search tools added **546 input tokens** to a fresh Claude Code session's
-first request. A native listing of 50 skills with generated names adds about
-477; B1 interpolates the crossover near 57 such skills. Real-name costs, later
-turns, other hosts, router calls and returned skills are not included ([B1](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request)).
+The search tools added **158 input tokens** per request in Claude Code 2.1.308
+with its default tool search. A native listing of 50 skills with real names and
+descriptions added 8,049, measured with the built-in tools removed, so the two
+are not a matched comparison. Later turns, Codex, router calls and returned
+skills are not included ([B12](bench/RESULTS.md#b12-results-2026-10-28-what-installed-skills-cost-per-request-on-current-hosts)).
 
 Approvals: the launcher pre-approves `find_tools` and `load_skill`
 (Claude `--allowedTools`, Codex `tools.<tool>.approval_mode = "approve"`), and

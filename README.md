@@ -3,11 +3,12 @@
 [![CI](https://github.com/erik-hedstrom/loadout/actions/workflows/ci.yml/badge.svg)](https://github.com/erik-hedstrom/loadout/actions/workflows/ci.yml) [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 Claude Code and Codex list your installed skills in every request, needed or
-not. With 50 real skills installed, Claude Code 2.1.308 (Haiku) added
+not. With 50 skills installed (real names and descriptions), Claude Code
+2.1.308 (Haiku) added
 **8,049 input tokens** to each request and Codex 0.163 (gpt-6-luna) 4,484.
 At 1,235 skills Claude Code added 15,030, and Codex removed every
 description and left 888 skills out of its list. loadout's own search tools
-added 158 tokens per request in Claude Code. These are single requests in
+added 158 tokens per request in Claude Code with its default tool search. These are single requests in
 fresh sessions; whole sessions are not measured
 ([B12](bench/RESULTS.md#b12-results-2026-10-28-what-installed-skills-cost-per-request-on-current-hosts)).
 
