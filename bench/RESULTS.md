@@ -6,6 +6,95 @@ of 1,000 to 20,000 real skills from GitSkills. Method and caveats:
 they measure what reaches the agent, not whether the agent then finishes the
 task.
 
+## B12 method: native listing remeasurement
+
+Harness added 2026-10-28; [results](#b12-results-2026-10-28-what-installed-skills-cost-per-request-on-current-hosts). B1's generated-name
+measurement remains historical evidence in its original scope.
+
+`bench/listing.ts` installs placeholder-only skill prefixes of size 0, 50,
+250 and the full valid library in deterministic name-hash order. Two
+sequential fresh sessions per arm use the fixed B1 no-tool prompt. Claude
+uses B1's isolated Skill-only argv for size arms, then a separate default-tools
+pair without MCP versus loadout's lexical MCP with a temporary home and the
+full sanitized library. Codex uses ephemeral exec sessions. Versions, models,
+counts and four usage buckets are recorded; no context or ambient plugin
+names are retained. Claude's init counts are discovery, not description
+visibility. Codex initial-list visibility is not exposed and remains unknown.
+
+Current host documentation describes [Claude's listing budget](https://code.claude.com/docs/en/skills#skill-descriptions-are-cut-short)
+and [Codex's listing budget](https://learn.chatgpt.com/docs/build-skills).
+These motivate the size arms; a token plateau alone does not establish its
+cause. Claude's default tool search can defer MCP schemas, so the MCP pair
+records ToolSearch presence, expected loadout tools in init and connection
+status. Cache hits are observed, not assumed from call order. No quality,
+router or model-tier claim is tested.
+
+[Run instructions and limits](README.md#b12-native-listing-remeasurement).
+
+## B12 results (2026-10-28): what installed skills cost per request on current hosts
+
+Raw rows: [Claude](results/2026-10-28T03-49-08Z-b12-listing-claude/rows.jsonl),
+[Codex](results/2026-10-28T04-01-09Z-b12-listing-codex/rows.jsonl). Each
+session sent one "Reply with exactly OK" request; two fresh sessions per arm.
+Skills carried real names and descriptions from the 1,262-skill library (1,235
+valid and distinct) with placeholder bodies. Input is uncached plus cache-write
+plus cache-read tokens. All 20 calls were valid, and both sessions of every arm
+had the same input total. The Claude skill arms ran B1's isolated
+configuration with built-in tools removed (`--tools Skill`); the MCP pair
+below ran with the default tools. The Claude rows came from the harness at
+bd01181, the Codex rows from 376b0a6 (which added the budget-notice parsing).
+
+| Skills installed | Claude Code 2.1.308, Haiku | Codex 0.163.0, gpt-6-luna |
+|---|---:|---:|
+| 0 (baseline input) | 5,746 | 13,020 |
+| 50 | +8,049 | +4,484 |
+| 250 | +9,668 | +6,226 |
+| 1,235 | +15,030 | +6,744 |
+
+- **A native listing is a large cost from the first few dozen real skills.**
+  50 skills added 8,049 input tokens to every request in Claude Code and 4,484
+  in Codex. From 250 to 1,235 skills, Claude Code grew by 5,362 tokens (about
+  5.4 per added skill) and Codex by 518.
+- **Codex drops skills.** With the 1,235 probe skills installed, Codex
+  reported that it removed every skill description and left 888 skills out of
+  the model-visible list. Its catalog may also hold built-in or ambient skills
+  that were not counted, so how many probe names remained is not shown. At 50
+  and 250 skills it reported nothing. Claude Code reports no such notice. Its init listed all
+  1,235 probe skills, which shows discovery, not what the model saw.
+- **Caching.** Claude Code's second session read almost the whole prompt from
+  cache (20,774 of 20,776 tokens at 1,235 skills). Codex reported 11,392 cached
+  tokens in both sessions of every arm, so the listing was not reported as
+  cached across separate ephemeral sessions. Caching within one session is not
+  measured here.
+- **loadout's own tools.** With Claude Code's default tools (ToolSearch
+  present), adding loadout's MCP server (lexical, with the full library behind
+  it) raised input from 15,536 to 15,694, **+158 per request**. Init listed
+  `find_tools` and `load_skill`. For default-tools sessions this replaces B1's
+  +546, which was measured with built-in tools removed (`--tools Skill`), where
+  tool search cannot defer. In Codex, loadout's tool cost is not measured.
+- **Compared with B1.** B1 listed generated names on an older Claude Code: +477
+  tokens at 50 skills, rising to +12,283 at 1,232. With real names and
+  descriptions the cost arrives far earlier (+8,049 at 50). The two figures
+  come from different tool configurations (skill arms `--tools Skill`, MCP
+  pair default tools), so a matched default-tools comparison of loadout's tools
+  against 50 native skills is not shown.
+
+Not shown:
+- what loadout's hook adds per routed prompt in these hosts. The
+  [C14 rerun](#c14-rerun-2026-10-26-codex-luna-with-the-fixes) saw 1,006 to
+  3,211 characters on the prompts where it fired;
+- the cost of a whole multi-turn session;
+- other models, whose context windows set different budgets;
+- whether hiding skills from the native listing keeps task quality.
+
+Spend:
+- 12 Haiku and 8 Luna calls with committed rows;
+- 7 Luna calls in a first Codex run, stopped when the harness rejected Codex's
+  budget notice, and one diagnostic Luna call;
+- the uncommitted sandbox pilot: 12 Haiku and 10 Luna calls.
+
+All on the subscriptions. No Jev.
+
 ## B1 method (preregistered)
 
 Revised 2026-10-07 after PR #6 round 4, before any paid call. Results: [B1 results](#b1-results-2026-10-07-what-installed-skills-cost-per-request).
@@ -427,6 +516,10 @@ results for Claude, other models or effort levels; per-request Codex caching;
 Codex's resolved model name, monetary cost or effective-input price.
 
 ## B1 results (2026-10-07): what installed skills cost per request
+
+Note (2026-10-28): for current hosts, real names and loadout's current tools,
+use [B12](#b12-results-2026-10-28-what-installed-skills-cost-per-request-on-current-hosts). The figures below describe generated names on Claude Code as
+of 2026-10-07.
 
 Note (2026-10-14): B1 measured the earlier `find_skills` tool text. The tool is now `find_tools` with a changed description (skills-only: 336 and 492 characters for the server instructions and the tool description, instead of 337 and 473), so the figures below describe the earlier text and are not remeasured.
 

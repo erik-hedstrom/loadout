@@ -312,7 +312,7 @@ export function hostSetup(host: Host, windows: boolean): { where: string; snippe
             'claude plugin install loadout@loadout',
           ]),
           '',
-          '# Optional library search: +546 input tokens/request (https://github.com/erik-hedstrom/loadout/blob/main/bench/RESULTS.md).',
+          '# Optional library search: +158 input tokens/request with default tool search (https://github.com/erik-hedstrom/loadout/blob/main/bench/RESULTS.md).',
           `claude mcp add --scope user${Object.entries(s.env ?? {}).map(([k, v]) => ` -e ${k}=${quote(v)}`).join('')} loadout -- ${cmd.map(quote).join(' ')}`,
         ].join('\n'),
       };

@@ -1153,7 +1153,7 @@ describe('launch', () => {
     expect(JSON.parse(hostSetup('claude-desktop', true).snippet).mcpServers.loadout.command).toBe('wsl.exe');
     const claudeCode = hostSetup('claude-code', false).snippet;
     expect(claudeCode).toContain('claude plugin marketplace add erik-hedstrom/loadout\nclaude plugin install loadout@loadout');
-    expect(claudeCode).toContain('+546 input tokens/request');
+    expect(claudeCode).toContain('+158 input tokens/request with default tool search');
     expect(claudeCode).toContain('https://github.com/erik-hedstrom/loadout/blob/main/bench/RESULTS.md');
     expect(claudeCode).toMatch(/claude mcp add --scope user loadout -- \S+ .* mcp$/);
     expect(claudeCode).not.toContain('UserPromptSubmit');

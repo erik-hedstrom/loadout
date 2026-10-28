@@ -139,6 +139,7 @@ Acceptance:
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
 | B1 | P0 | Token-waste study: measured per-request overhead of popular skill packs | Claude | local (measure) + cloud (analysis) | done ([PR #6](https://github.com/erik-hedstrom/loadout/pull/6); follow-ups under "Left" in its learnings) |
+| B12 | P0 | Remeasure native skill listing and loadout MCP cost on current hosts | Codex | local | in review ([#67](https://github.com/erik-hedstrom/loadout/pull/67)): harness and results |
 | B3 | P1 | Fact-checked comparison with alternatives | Claude | cloud | done ([#34](https://github.com/erik-hedstrom/loadout/pull/34); [docs/comparison.md](../comparison.md)) |
 | B2 | P1 | Launch kit drafts | Claude | cloud | todo (after A1, B1) |
 | B4 | P1 | Repo polish: description, topics, social preview, badges | Claude | cloud + erik | blocked: Erik applies settings and uploads the preview (drafts merged in [#33](https://github.com/erik-hedstrom/loadout/pull/33)) |
@@ -148,6 +149,37 @@ Acceptance:
 | B8 | P0 | Backlog items from the launch-readiness review, 2026-10-13, MCP token cost first | Claude | local + erik | todo (the review is private, on Erik's machine) |
 | B9 | P1 | Savings from an adopted library: what a user saves after moving skills and MCP servers into loadout | Claude | local | todo (after B7) |
 | B10 | P1 | B7: Claude 2.1.281's init lists `@builtin` plugins even with `--setting-sources ""` and a fresh config dir, so `plugins.length !== 0` (`bench/mcp-overhead.ts`, the "Claude init plugins must be empty" check) would refuse every B7 Claude run; ignore `@builtin` plugins as the A/B harness does (`isBuiltin` in `bench/ab.ts`) | Claude | cloud | todo. Seen on 2.1.281 by C14 in a free probe (`claude -p` with HTTPS_PROXY pointed at a closed port prints the init event and makes no model call); not reproduced by review, so confirm with the same probe first |
+
+**B12. Native listing remeasurement.** B1 and the README headline describe
+generated names on an older host. Current hosts budget skill listings, and
+Claude defers MCP definitions by default; remeasure before updating claims.
+
+Acceptance:
+- Reproducible 0/50/250/full-library prefixes for Claude and Codex, two
+  sequential calls each; Claude also gets the default-tools no-MCP/loadout
+  lexical-MCP pair with a temporary home.
+- Confined reads and escaped name/description-only placeholder skills;
+  no downloaded bodies, hooks, scripts or references execute or get copied.
+- A free `--plan` prints exact argv, paid-call counts and an estimate;
+  no paid execution without `--run`. No new dependency.
+- Per-call versions/models, skill counts, four usage buckets, exit/duration
+  and validity status; no transcripts, context or ambient plugin names.
+  Host commands and library paths are arguments, with allowlisted child envs.
+- Offline tests for argv, security boundaries, usage parsing and the plan gate.
+  Results and headline updates wait for the coordinator's paid measurement.
+
+How to run: `node --import tsx bench/listing.ts --plan --host <claude|codex>
+--library <public-library>`. After authorization replace `--plan` with
+`--run --out <new-results-directory>`. [Commands and caveats](../../bench/README.md#b12-native-listing-remeasurement).
+Results: [RESULTS](../../bench/RESULTS.md#b12-results-2026-10-28-what-installed-skills-cost-per-request-on-current-hosts). Learnings: real
+descriptions make the native listing a large cost from 50 skills (Claude Code
++8,049, Codex +4,484 per request); with 1,235 probe skills Codex 0.163 removes every description and omits 888
+skills, reporting it as a non-fatal `error` item that B1's parser rejects;
+loadout's tools cost +158 per request in Claude Code with tool search on (a
+matched default-tools comparison against native skills is not shown).
+Follow-ups (Low, from review): tests that trigger the probe-discovery,
+version-drift and mcp-startup gates; print argument errors raised before the
+first paid call.
 
 **B8. Items from the launch-readiness review.** The review (2026-10-13) is
 private ([ORCHESTRATOR](ORCHESTRATOR.md#local-the-default)).
