@@ -5,6 +5,7 @@ import { execFileSync } from 'node:child_process';
 import { afterAll, afterEach, expect, it, vi } from 'vitest';
 import { parse as yaml } from 'yaml';
 import { buildListingPlan, main, parseListingUsage, readListingLibrary, writeProbeSkills } from '../bench/listing.js';
+import { parseCodex } from '../bench/overhead.js';
 
 const roots: string[] = [];
 function temp() { const root = mkdtempSync(join(tmpdir(), 'loadout-listing-test-')); roots.push(root); return root; }
@@ -26,6 +27,8 @@ const claude = jsonl(
   { type: 'result', subtype: 'success', num_turns: 1, usage: { input_tokens: 999 } },
 );
 const codex = jsonl({ type: 'thread.started', thread_id: 'PRIVATE THREAD' }, { type: 'item.completed', item: { type: 'agent_message', text: 'PRIVATE CONTEXT' } }, { type: 'turn.completed', usage: { input_tokens: 60, cached_input_tokens: 30, output_tokens: 1 } });
+const budgetRemoved = 'Exceeded skills context budget. All skill descriptions were removed and 888 additional skills were not included in the model-visible skills list.';
+const budgetShortened = 'Skill descriptions were shortened to fit the skills context budget. Codex can still see every skill, but some descriptions are shorter. Disable unused skills or plugins to leave more room for the rest.';
 
 it('writes only escaped listing fields and a framed placeholder, never bodies or executable metadata', () => {
   const source = temp();
@@ -105,7 +108,8 @@ it('parses fixture streams into counts and usage only, using Claude request coun
   const c = parseListingUsage('claude', claude);
   expect(c).toMatchObject({ version: '2.1.308', model: 'resolved-haiku', initSkills: 2, initProbeSkills: 1, ambientPlugins: 1, probePluginLoaded: true, usage: { input: 60, uncached: 10, cacheCreation: 20, cacheRead: 30, output: 1 } });
   expect(JSON.stringify(c)).not.toContain('PRIVATE');
-  expect(parseListingUsage('codex', codex)).toMatchObject({ initSkills: null, initProbeSkills: null, usage: { input: 60, uncached: 30, cacheCreation: 0, cacheRead: 30, output: 1 } });
+  expect(c.skillsBudget).toBeNull();
+  expect(parseListingUsage('codex', codex)).toMatchObject({ skillsBudget: null, initSkills: null, initProbeSkills: null, usage: { input: 60, uncached: 30, cacheCreation: 0, cacheRead: 30, output: 1 } });
   expect(() => parseListingUsage('codex', codex.replace('"cached_input_tokens":30', '"cached_input_tokens":80'))).toThrow();
   expect(() => parseListingUsage('claude', claude.replace('"type":"text"', '"type":"tool_use"'))).toThrow();
   expect(() => parseListingUsage('codex', codex + '\n' + JSON.stringify({ type: 'turn.failed' }))).toThrow();
@@ -114,6 +118,35 @@ it('parses fixture streams into counts and usage only, using Claude request coun
   expect(() => parseListingUsage('claude', claude.replace('"num_turns":1', '"num_turns":2'))).toThrow();
   const withWrite = codex.replace('"cached_input_tokens":30', '"cached_input_tokens":30,"cache_write_input_tokens":5');
   expect(parseListingUsage('codex', withWrite).usage).toMatchObject({ input: 60, uncached: 25, cacheCreation: 5, cacheRead: 30 });
+});
+
+it.each([
+  [budgetRemoved, { descriptionsRemoved: true, omitted: 888 }],
+  [budgetRemoved.replace('888 additional skills were', '1 additional skill was'), { descriptionsRemoved: true, omitted: 1 }],
+  [budgetShortened, { descriptionsRemoved: false, omitted: 0 }],
+])('records the recognized Codex budget warning as fields: %s', (message, skillsBudget) => {
+  const stream = jsonl({ type: 'item.completed', item: { type: 'error', message } }) + '\n' + codex;
+  const parsed = parseListingUsage('codex', stream);
+  expect(parsed).toMatchObject({ skillsBudget, usage: { input: 60, uncached: 30, cacheRead: 30, output: 1 } });
+  expect(JSON.stringify(parsed)).not.toContain(message);
+  expect(() => parseCodex(stream)).toThrow();
+});
+
+it.each([
+  'PRIVATE unrelated error', budgetRemoved + ' extra text', budgetRemoved + '\n', 'prefix ' + budgetRemoved,
+  budgetRemoved.replace('888', '0'), budgetRemoved.replace('888', '1'), budgetRemoved.replace('888', '-8'),
+  budgetRemoved.replace('888', '8.5'), budgetRemoved.replace('888', '9007199254740992'),
+  budgetShortened + ' extra text', budgetShortened + '\n',
+])('keeps nonmatching Codex error items invalid: %s', (message) => {
+  const stream = jsonl({ type: 'item.completed', item: { type: 'error', message } }) + '\n' + codex;
+  expect(() => parseListingUsage('codex', stream)).toThrow();
+});
+
+it('does not suppress fatal events or tool use alongside a recognized budget warning', () => {
+  const warning = { type: 'item.completed', item: { type: 'error', message: budgetRemoved } };
+  for (const fatal of [{ type: 'error', message: budgetRemoved }, { type: 'turn.failed' }, { type: 'item.completed', item: { type: 'command_execution' } }]) {
+    expect(() => parseListingUsage('codex', jsonl(warning, fatal) + '\n' + codex)).toThrow();
+  }
 });
 
 it('plan and default invocation execute nothing, and --plan --run is refused', async () => {
@@ -133,6 +166,7 @@ it('records complete fake runs without private text, with versions and unknown C
     const isCodex = command.cwd.includes('codex');
     let stdout = isCodex ? codex : claude;
     if (command.args.includes('--version')) stdout = isCodex ? 'codex-cli 0.163.0\n' : '2.1.308 (Claude Code)\n';
+    else if (isCodex && command.cwd.endsWith(join('all', 'cwd'))) stdout = jsonl({ type: 'item.completed', item: { type: 'error', message: budgetRemoved } }) + '\n' + stdout;
     else if (!isCodex) {
       const plugin = command.args[command.args.indexOf('--plugin-dir') + 1];
       const entries = plugin && command.args.includes('--plugin-dir') ? readdirSync(join(plugin, 'skills')) : [];
@@ -151,6 +185,10 @@ it('records complete fake runs without private text, with versions and unknown C
   expect(rows.every((r) => r.invalid === null && r.exit === 0 && r.durationMs === 7)).toBe(true);
   expect(rows[0]).toMatchObject({ hostVersion: '2.1.308', model: 'resolved-haiku', modelSource: 'init' });
   expect(rows[12]).toMatchObject({ hostVersion: '0.163.0', model: null, requestedModel: 'gpt-6-luna', modelSource: 'configured-only', initSkills: null, initProbeSkills: null });
+  expect(rows[18].skillsBudget).toEqual({ descriptionsRemoved: true, omitted: 888 });
+  expect(rows[19].skillsBudget).toEqual({ descriptionsRemoved: true, omitted: 888 });
+  expect(rows[12].skillsBudget).toBeNull();
+  expect(text).not.toContain(budgetRemoved);
   expect(text).not.toMatch(/PRIVATE|Reply with|SKILL.md|argv|cwd/);
 });
 
@@ -162,7 +200,7 @@ it('records exit failures and stops subsequent spending; never persists raw erro
   await expect(main(['--library', library(), '--host', 'codex', '--run', '--out', out], { run, print: () => {} })).rejects.toThrow('stopped');
   expect(run).toHaveBeenCalledTimes(2);
   const text = readFileSync(join(out, 'rows.jsonl'), 'utf8');
-  expect(JSON.parse(text)).toMatchObject({ exit: 42, durationMs: 9, invalid: 'usage-or-protocol', hostVersion: '0.163.0' });
+  expect(JSON.parse(text)).toMatchObject({ skillsBudget: null, exit: 42, durationMs: 9, invalid: 'usage-or-protocol', hostVersion: '0.163.0' });
   expect(text).not.toContain('PRIVATE');
 });
 

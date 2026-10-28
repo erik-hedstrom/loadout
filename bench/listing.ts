@@ -118,18 +118,32 @@ export function buildListingPlan(corpus: Corpus, root: string, options: Options)
 /** Drop every name except our fixed tool identifiers; never return ambient inventory or context. */
 export function parseListingUsage(host: Host, stdout: string) {
   if (host === 'codex') {
-    const usage = parseCodex(stdout);
-    const u = events(stdout).find((e) => e.type === 'turn.completed').usage;
+    let skillsBudget: { descriptionsRemoved: boolean; omitted: number } | null = null;
+    const es = events(stdout).filter((e) => {
+      if (e.type !== 'item.completed' || e.item?.type !== 'error' || typeof e.item.message !== 'string') return true;
+      const message = e.item.message;
+      const removed = /^Exceeded skills context budget\. All skill descriptions were removed and ([1-9][0-9]*) additional (skill was|skills were) not included in the model-visible skills list\.$/.exec(message);
+      const shortened = /^Skill descriptions were shortened to fit the skills context budget\. Codex can still see every skill, but some descriptions are shorter\. Disable unused skills or plugins to leave more room for the rest\.$/.exec(message);
+      // Match the complete message, including rejecting the final newline that JavaScript's $ permits.
+      if (removed && removed[0] === message && removed[2] === (removed[1] === '1' ? 'skill was' : 'skills were')) {
+        skillsBudget = { descriptionsRemoved: true, omitted: counter(Number(removed[1]), 'omitted skills') };
+      } else if (shortened && shortened[0] === message) {
+        skillsBudget = { descriptionsRemoved: false, omitted: 0 };
+      } else return true;
+      return false;
+    });
+    const usage = parseCodex(es.map((e) => JSON.stringify(e)).join('\n'));
+    const u = es.find((e) => e.type === 'turn.completed').usage;
     usage.cacheCreation = u.cache_write_input_tokens === undefined ? 0 : counter(u.cache_write_input_tokens, 'cache_write_input_tokens');
     if (usage.cacheCreation > usage.uncached) throw new Error('cache write exceeds uncached input');
     usage.uncached -= usage.cacheCreation;
-    return { version: null, model: null, initSkills: null, initProbeSkills: null, ambientPlugins: null, probePluginLoaded: null,
+    return { skillsBudget, version: null, model: null, initSkills: null, initProbeSkills: null, ambientPlugins: null, probePluginLoaded: null,
       initTools: null, toolSearch: null, loadoutTools: null, loadoutConnected: null, usage: { input: usage.input, uncached: usage.uncached, cacheCreation: usage.cacheCreation, cacheRead: usage.cacheRead, output: usage.output } };
   }
   const session = parseClaudeTurns(stdout, 1);
   const requests = new Set(events(stdout).filter((e) => e.type === 'assistant' && e.message?.model !== '<synthetic>').map((e) => e.message?.id));
   if (requests.size !== 1) throw new Error('Claude did not produce exactly one request');
-  return { version: session.version, model: session.model, initSkills: session.inventory.skills.length,
+  return { skillsBudget: null, version: session.version, model: session.model, initSkills: session.inventory.skills.length,
     initProbeSkills: session.inventory.skills.filter((s) => s.startsWith('lst:')).length,
     ambientPlugins: session.inventory.plugins.filter((s) => s !== 'lst').length, probePluginLoaded: session.inventory.plugins.includes('lst'),
     initTools: session.tools.length, toolSearch: session.tools.includes('ToolSearch'), loadoutTools: ['find_tools', 'load_skill'].filter((s) => session.tools.includes(`mcp__loadout__${s}`)),
@@ -211,6 +225,7 @@ export async function main(args: string[], deps: { run?: typeof runHost; print?:
         if (c.arm === 'default-mcp' && !parsed.loadoutConnected) invalid ??= 'mcp-startup';
       }
       const row = { host: c.host, arm: c.arm, repeat: c.repeat, at, exit: result.exit, durationMs: result.durationMs, invalid,
+        skillsBudget: parsed?.skillsBudget ?? null,
         requestedModel: c.model, hostVersion: versions.get(c.host), modelSource: c.host === 'claude' ? 'init' : 'configured-only',
         probeSkills: c.probeSkills, mcpLibrarySkills: c.arm === 'default-mcp' ? corpus.skills.length : 0,
         corpusHash: plan.corpusHash, manifestHash: c.manifestHash, rejected: plan.rejected, normalized: plan.normalized,

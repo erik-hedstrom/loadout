@@ -41,7 +41,19 @@ those fields are null. Repeat calls need not hit cache. Invalid measurements
 are recorded and stop further paid calls. Host cache/auth/diagnostic writes
 remain possible; the harness never edits host configuration.
 
-[Method and live-run caveats](../docs/loop/B12-HANDOFF.md).
+Recognized Codex skills-budget notices are recorded as `skillsBudget`:
+`descriptionsRemoved: true` with the reported omitted count, or `false`
+with `omitted: 0` when the notice says some descriptions were shortened and
+every skill remains listed. The field is null when no notice occurs. Only
+the exact known messages are accepted; other error items still invalidate
+the measurement. Notice text is never stored, and B1's parser is unchanged.
+
+Use a deliberately selected public library. The benchmark `CODEX_HOME`
+must have no `.env`, user skills, hooks or alternate provider setup; the
+exec overrides do not isolate managed/system configuration. Claude retains
+its logged-in ambient home; plugin counts cannot establish identical plugin
+contents. A token plateau alone does not prove that a host budget caused it.
+
 Results will follow in [RESULTS](RESULTS.md#b12-method-native-listing-remeasurement).
 
 ## B11 OpenCode sessions

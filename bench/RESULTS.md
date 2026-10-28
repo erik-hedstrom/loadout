@@ -8,7 +8,7 @@ task.
 
 ## B12 method: native listing remeasurement
 
-Harness added 2026-10-28; **results follow after an authorized run**. The
+Harness added 2026-10-28; **analysis follows the Codex rerun**. The
 uncommitted sandbox pilot is not a result. B1's generated-name measurement
 remains historical evidence in its original scope; B12 will remeasure real
 names/descriptions under current host budgets.
@@ -31,9 +31,10 @@ records ToolSearch presence, expected loadout tools in init and connection
 status. Cache hits are observed, not assumed from call order. No quality,
 router or model-tier claim is tested.
 
-[Run instructions](README.md#b12-native-listing-remeasurement) and
-[limits/handoff](../docs/loop/B12-HANDOFF.md). No B12 paid calls have run from
-the committed harness and no new result numbers are reported here.
+[Run instructions and limits](README.md#b12-native-listing-remeasurement).
+The coordinator's [Claude raw rows](results/2026-10-28T03-49-08Z-b12-listing-claude/rows.jsonl)
+are committed unchanged. Codex awaits a rerun after the listing-only parser
+fix for non-fatal skills-budget notices; analysis and headline updates follow.
 
 ## B1 method (preregistered)
 
