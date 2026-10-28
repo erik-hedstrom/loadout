@@ -315,6 +315,10 @@ export async function audit(cwd = process.cwd(), adopt = false): Promise<AuditRe
           if (!common) throw new Error('invalid Git worktree metadata');
           const commonGit = realpathSync(resolve(gitdir, common));
           if (basename(commonGit) !== '.git' || !lstatSync(commonGit).isDirectory()) throw new Error('invalid Git worktree metadata');
+          // A common directory alone does not establish that this checkout belongs to it.
+          if (dirname(gitdir) !== join(commonGit, 'worktrees')) throw new Error('invalid Git worktree metadata');
+          const backlink = readConfined(gitdir, 'gitdir', MAX_CONFIG_BYTES).toString('utf8').trim();
+          if (realpathSync(resolve(gitdir, backlink)) !== realpathSync(join(gitRoot, '.git'))) throw new Error('invalid Git worktree metadata');
           gitRoot = dirname(commonGit);
         }
       }
