@@ -255,11 +255,61 @@ describe('audit', () => {
     expect((await audit(linked)).hosts[0]!.skills).toEqual([]);
   });
 
+  it.skipIf(process.platform === 'win32').each(['gitdir', 'commondir'])('canonicalizes a symlinked %s before selecting the main checkout', async (component) => {
+    const main = join(home, 'main');
+    const common = join(main, '.git');
+    const gitdir = join(common, 'worktrees', 'linked');
+    const linked = join(home, 'linked');
+    file(join(gitdir, 'commondir'), '../..\n');
+    let pointer = gitdir;
+    if (component === 'gitdir') {
+      pointer = join(home, 'alias', '.git', 'worktrees', 'linked');
+      mkdirSync(dirname(pointer), { recursive: true });
+      symlinkSync(gitdir, pointer, 'dir');
+    } else {
+      const alias = join(home, 'common-alias');
+      symlinkSync(common, alias, 'dir');
+      file(join(gitdir, 'commondir'), `${relative(gitdir, alias)}\n`);
+    }
+    file(join(linked, '.git'), `gitdir: ${pointer}\n`);
+    skill(join(linked, '.claude', 'skills'), 'example');
+    const localFile = join(main, '.claude', 'settings.local.json');
+    json(localFile, { skillOverrides: { example: 'off' } });
+    const hidden = await audit(linked);
+    expect(hidden.hosts[0]!.warnings).toEqual([]);
+    expect(hidden.hosts[0]!.skills).toEqual([]);
+    json(localFile, { skillOverrides: { example: 'on' } });
+    const adopted = await audit(linked, true);
+    expect(adopted.hosts[0]!.warnings).toEqual([]);
+    expect(adopted.disable?.claude.settings.map((s) => s.file)).toEqual([localFile]);
+    applyClaudeSnippets(formatAudit(adopted));
+    expect(mergedOverrides([localFile]).example).toBe('user-invocable-only');
+    expect((await audit(linked)).hosts[0]!.skills).toEqual([]);
+  });
+
+  it.skipIf(process.platform === 'win32').each(['.git', 'commondir'])('rejects a %s FIFO without hanging inventory', (component) => {
+    const linked = join(home, 'linked');
+    const gitdir = join(home, 'main', '.git', 'worktrees', 'linked');
+    mkdirSync(gitdir, { recursive: true });
+    mkdirSync(linked);
+    const fifo = component === '.git' ? join(linked, '.git') : join(gitdir, 'commondir');
+    if (component === 'commondir') file(join(linked, '.git'), `gitdir: ${gitdir}\n`);
+    expect(spawnSync('mkfifo', [fifo], { timeout: 5_000 }).status).toBe(0);
+    skill(join(linked, '.claude', 'skills'), 'example');
+    const script = `import { audit } from ${JSON.stringify(import.meta.resolve('../src/audit.ts'))}; console.log(JSON.stringify(await audit(${JSON.stringify(linked)})));`;
+    const result = spawnSync(process.execPath, ['--import', import.meta.resolve('tsx'), '--input-type=module', '-e', script], { env: process.env, encoding: 'utf8', timeout: 10_000, killSignal: 'SIGKILL' });
+    expect(result.error).toBeUndefined();
+    expect(result.status, result.stderr).toBe(0);
+    const report = JSON.parse(result.stdout);
+    expect(report.hosts[0].skills.map((s: { name: string }) => s.name)).toEqual(['example']);
+    expect(report.hosts[0].warnings).toEqual(['Could not resolve the main checkout of this Git worktree; local settings are assumed at the worktree root.']);
+  });
+
   it.skipIf(process.platform === 'win32').each([
     'malformed gitfile', 'empty gitdir', 'missing gitdir', 'gitdir is a file',
     'missing commondir', 'empty commondir', 'common is a file', 'common is not .git',
     'linked gitfile', 'linked commondir', 'oversized gitfile', 'oversized commondir',
-  ])('returns inventory and one fixed warning for %s', async (failure) => {
+  ])('returns inventory with the appropriate warning for %s', async (failure) => {
     const linked = join(home, 'linked');
     const gitfile = join(linked, '.git');
     const gitdir = join(home, 'main', '.git', 'worktrees', 'linked');
@@ -285,12 +335,13 @@ describe('audit', () => {
     skill(join(linked, '.claude', 'skills'), 'example');
     const warning = 'Could not resolve the main checkout of this Git worktree; local settings are assumed at the worktree root.';
     const report = await audit(linked);
+    const warnings = failure === 'missing commondir' ? [] : [warning];
     expect(report.hosts[0]!.skills.map((s) => s.name)).toEqual(['example']);
-    expect(report.hosts[0]!.warnings).toEqual([warning]);
-    expect(formatAudit(report).split(warning)).toHaveLength(2);
+    expect(report.hosts[0]!.warnings).toEqual(warnings);
+    expect(formatAudit(report).split(warning)).toHaveLength(warnings.length + 1);
     expect(JSON.stringify(report) + formatAudit(report)).not.toContain('TOP-SECRET-METADATA');
     const adopted = await audit(linked, true);
-    expect(adopted.hosts[0]!.warnings).toEqual([warning]);
+    expect(adopted.hosts[0]!.warnings).toEqual(warnings);
     expect(adopted.disable?.claude.settings.map((s) => s.file)).toEqual([join(linked, '.claude', 'settings.local.json')]);
   });
 

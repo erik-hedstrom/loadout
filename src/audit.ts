@@ -306,12 +306,17 @@ export async function audit(cwd = process.cwd(), adopt = false): Promise<AuditRe
         const pointer = readConfined(gitRoot, '.git', MAX_CONFIG_BYTES).toString('utf8');
         const gitdirPath = pointer.slice('gitdir: '.length).replace(/\r?\n$/, '');
         if (!pointer.startsWith('gitdir: ') || !gitdirPath) throw new Error('invalid Git worktree metadata');
-        const gitdir = resolve(gitRoot, gitdirPath);
-        const common = readConfined(gitdir, 'commondir', MAX_CONFIG_BYTES).toString('utf8').replace(/\r?\n$/, '');
-        if (!common) throw new Error('invalid Git worktree metadata');
-        const commonGit = resolve(gitdir, common);
-        if (basename(commonGit) !== '.git' || !lstatSync(commonGit).isDirectory()) throw new Error('invalid Git worktree metadata');
-        gitRoot = dirname(commonGit);
+        const gitdir = realpathSync(resolve(gitRoot, gitdirPath));
+        if (!lstatSync(gitdir).isDirectory()) throw new Error('invalid Git worktree metadata');
+        // Submodules and separate Git directories need no commondir; lstat
+        // still detects dangling links so malformed metadata is not hidden.
+        if (lstatSync(join(gitdir, 'commondir'), { throwIfNoEntry: false })) {
+          const common = readConfined(gitdir, 'commondir', MAX_CONFIG_BYTES).toString('utf8').replace(/\r?\n$/, '');
+          if (!common) throw new Error('invalid Git worktree metadata');
+          const commonGit = realpathSync(resolve(gitdir, common));
+          if (basename(commonGit) !== '.git' || !lstatSync(commonGit).isDirectory()) throw new Error('invalid Git worktree metadata');
+          gitRoot = dirname(commonGit);
+        }
       }
     } catch {
       claude.warnings.push('Could not resolve the main checkout of this Git worktree; local settings are assumed at the worktree root.');
