@@ -28,11 +28,11 @@ know-how when the work drifts away from what the session started with:
 
 ## Cost and privacy
 
-The tool definitions cost input tokens. Measured only in the first request of
-fresh Claude Code sessions, with generated skill names and before the rename
-to `find_tools`, they cost more than a native listing of 50 skills
-([B1](../bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request));
-later turns and Codex are not measured. In the headless runs, agents searched
+The tool definitions cost input tokens: 158 per request in Claude Code
+2.1.308 with its default tool search, against 8,049 for a native listing of 50
+real skills. That was measured in single requests of fresh sessions
+([B12](../bench/RESULTS.md#b12-results-2026-10-28-what-installed-skills-cost-per-request-on-current-hosts)); whole sessions and Codex are not
+measured. In the headless runs, agents searched
 on their own mainly for tasks that felt unfamiliar
 ([RESULTS](../bench/RESULTS.md#do-agents-use-what-they-are-given)). See
 [routing and search roles](../DESIGN.md#search-server-loadout-mcp).

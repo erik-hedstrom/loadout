@@ -2,13 +2,14 @@
 
 [![CI](https://github.com/erik-hedstrom/loadout/actions/workflows/ci.yml/badge.svg)](https://github.com/erik-hedstrom/loadout/actions/workflows/ci.yml) [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-Claude Code and Codex list your installed skills in their requests, needed or
-not. In Claude Code (Haiku, isolated config), 1,232 skills under generated
-names added **12,283 input tokens** to a fresh session's first request, about
-10 per skill between 50 and 1,232 skills. Real names, later turns and other
-hosts: not shown. Codex 0.160.1 caps its listing instead: of 1,262 installed
-skills, it showed 424 in an offline render, and its token cost is not shown
-([B1](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request)).
+Claude Code and Codex list your installed skills in every request, needed or
+not. With 50 real skills installed, Claude Code 2.1.308 (Haiku) added
+**8,049 input tokens** to each request and Codex 0.163 (gpt-6-luna) 4,484.
+At 1,235 skills Claude Code added 15,030, and Codex removed every
+description and left 888 skills out of its list. loadout's own search tools
+added 158 tokens per request in Claude Code. These are single requests in
+fresh sessions; whole sessions are not measured
+([B12](bench/RESULTS.md#b12-results-2026-10-28-what-installed-skills-cost-per-request-on-current-hosts)).
 
 loadout keeps your skills in a separate library, and a prompt hook in Claude
 Code or Codex adds the ones predicted to fit each substantive prompt. A cheap

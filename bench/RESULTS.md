@@ -8,10 +8,8 @@ task.
 
 ## B12 method: native listing remeasurement
 
-Harness added 2026-10-28; **analysis follows the Codex rerun**. The
-uncommitted sandbox pilot is not a result. B1's generated-name measurement
-remains historical evidence in its original scope; B12 will remeasure real
-names/descriptions under current host budgets.
+Harness added 2026-10-28; [results](#b12-results-2026-10-28-what-installed-skills-cost-per-request-on-current-hosts). B1's generated-name
+measurement remains historical evidence in its original scope.
 
 `bench/listing.ts` installs placeholder-only skill prefixes of size 0, 50,
 250 and the full valid library in deterministic name-hash order. Two
@@ -32,9 +30,65 @@ status. Cache hits are observed, not assumed from call order. No quality,
 router or model-tier claim is tested.
 
 [Run instructions and limits](README.md#b12-native-listing-remeasurement).
-The coordinator's [Claude raw rows](results/2026-10-28T03-49-08Z-b12-listing-claude/rows.jsonl)
-are committed unchanged. Codex awaits a rerun after the listing-only parser
-fix for non-fatal skills-budget notices; analysis and headline updates follow.
+
+## B12 results (2026-10-28): what installed skills cost per request on current hosts
+
+Raw rows: [Claude](results/2026-10-28T03-49-08Z-b12-listing-claude/rows.jsonl),
+[Codex](results/2026-10-28T04-01-09Z-b12-listing-codex/rows.jsonl). Each
+session sent one "Reply with exactly OK" request; two fresh sessions per arm.
+Skills carried real names and descriptions from the 1,262-skill library (1,235
+valid and distinct) with placeholder bodies. Input is uncached plus cache-write
+plus cache-read tokens. All 20 calls were valid, and both sessions of every arm
+had the same input total.
+
+| Skills installed | Claude Code 2.1.308, Haiku | Codex 0.163.0, gpt-6-luna |
+|---|---:|---:|
+| 0 (baseline input) | 5,746 | 13,020 |
+| 50 | +8,049 | +4,484 |
+| 250 | +9,668 | +6,226 |
+| 1,235 | +15,030 | +6,744 |
+
+- **A native listing is a large cost from the first few dozen real skills.**
+  50 skills added 8,049 input tokens to every request in Claude Code and 4,484
+  in Codex. From 250 to 1,235 skills, Claude Code grew by 5,362 tokens (about
+  5.4 per added skill) and Codex by 518.
+- **Codex drops skills.** At 1,235 skills Codex reported that it removed every
+  skill description and left 888 skills out of the model-visible list, so at
+  most 347 names remained, without descriptions. At 50 and 250 skills it
+  reported nothing. Claude Code reports no such notice. Its init listed all
+  1,235 probe skills, which shows discovery, not what the model saw.
+- **Caching.** Claude Code's second session read almost the whole prompt from
+  cache (20,774 of 20,776 tokens at 1,235 skills). Codex reported 11,392 cached
+  tokens in both sessions of every arm, so the listing was not reported as
+  cached across separate ephemeral sessions. Caching within one session is not
+  measured here.
+- **loadout's own tools.** With Claude Code's default tools (ToolSearch
+  present), adding loadout's MCP server (lexical, with the full library behind
+  it) raised input from 15,536 to 15,694, **+158 per request**. Init listed
+  `find_tools` and `load_skill`. This supersedes B1's +546, which was measured
+  with built-in tools removed (`--tools Skill`). In Codex, loadout's tool cost
+  is not measured.
+- **Compared with B1.** B1 listed generated names on an older Claude Code: +477
+  tokens at 50 skills, rising to +12,283 at 1,232. With real names and
+  descriptions the cost arrives far earlier (+8,049 at 50). B1's finding that
+  loadout's tools cost more than a 50-skill listing does not hold on Claude
+  Code 2.1.308.
+
+Not shown:
+- what loadout's hook adds per routed prompt in these hosts. The
+  [C14 rerun](#c14-rerun-2026-10-26-codex-luna-with-the-fixes) saw 1,006 to
+  3,211 characters on the prompts where it fired;
+- the cost of a whole multi-turn session;
+- other models, whose context windows set different budgets;
+- whether hiding skills from the native listing keeps task quality.
+
+Spend:
+- 12 Haiku and 8 Luna calls with committed rows;
+- 7 Luna calls in a first Codex run, stopped when the harness rejected Codex's
+  budget notice, and one diagnostic Luna call;
+- the uncommitted sandbox pilot: 12 Haiku and 10 Luna calls.
+
+All on the subscriptions. No Jev.
 
 ## B1 method (preregistered)
 
@@ -457,6 +511,10 @@ results for Claude, other models or effort levels; per-request Codex caching;
 Codex's resolved model name, monetary cost or effective-input price.
 
 ## B1 results (2026-10-07): what installed skills cost per request
+
+Note (2026-10-28): for current hosts, real names and loadout's current tools,
+use [B12](#b12-results-2026-10-28-what-installed-skills-cost-per-request-on-current-hosts). The figures below describe generated names on Claude Code as
+of 2026-10-07.
 
 Note (2026-10-14): B1 measured the earlier `find_skills` tool text. The tool is now `find_tools` with a changed description (skills-only: 336 and 492 characters for the server instructions and the tool description, instead of 337 and 473), so the figures below describe the earlier text and are not remeasured.
 

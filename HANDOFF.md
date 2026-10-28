@@ -43,7 +43,8 @@ Router steps: [DESIGN.md](DESIGN.md#router).
 All numbers, caveats, raw-result links and recorded costs are in
 [bench/RESULTS.md](bench/RESULTS.md).
 
-- **Measured:** [B1's fresh-session listing overhead](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request),
+- **Measured:** [B12's listing and tool cost on current hosts](bench/RESULTS.md#b12-results-2026-10-28-what-installed-skills-cost-per-request-on-current-hosts),
+  [B1's fresh-session listing overhead](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request) (historical),
   [C1's held-out skill decisions](bench/RESULTS.md#c1-2026-10-08-new-held-out-requests),
   [C13's repeated router baseline](bench/RESULTS.md#c13-2026-10-16-pure-jev-baseline-on-main),
   and [agent skill use](bench/RESULTS.md#do-agents-use-what-they-are-given).
@@ -89,10 +90,10 @@ branches, PRs and `docs/loop/BACKLOG.md`.
 
 1. **Wide adoption.** The audience is people who install hyped skill packs
    and plugins. Pitch only with
-   [B1](bench/RESULTS.md#b1-results-2026-10-07-what-installed-skills-cost-per-request)
-   numbers, in their scope: Claude Code's first request, generated names. The
-   scoped summary is in the [README](README.md); real libraries are not
-   measured.
+   [B12](bench/RESULTS.md#b12-results-2026-10-28-what-installed-skills-cost-per-request-on-current-hosts)
+   numbers, in their scope: one request per fresh session, Haiku and
+   gpt-6-luna, real names with placeholder bodies. The scoped summary is in
+   the [README](README.md); whole sessions are not measured.
 2. **Ease of use, in the user's own CLI.** Get from zero to loadout running
    inside `claude` or `codex` in three commands, with no new command to
    start the agent. Show a GIF in the README. Make `loadout audit` show

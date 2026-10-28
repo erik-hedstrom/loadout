@@ -139,7 +139,7 @@ Acceptance:
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
 | B1 | P0 | Token-waste study: measured per-request overhead of popular skill packs | Claude | local (measure) + cloud (analysis) | done ([PR #6](https://github.com/erik-hedstrom/loadout/pull/6); follow-ups under "Left" in its learnings) |
-| B12 | P0 | Remeasure native skill listing and loadout MCP cost on current hosts | Codex | local | in progress: Codex rerun pending |
+| B12 | P0 | Remeasure native skill listing and loadout MCP cost on current hosts | Codex | local | in review: harness and results |
 | B3 | P1 | Fact-checked comparison with alternatives | Claude | cloud | done ([#34](https://github.com/erik-hedstrom/loadout/pull/34); [docs/comparison.md](../comparison.md)) |
 | B2 | P1 | Launch kit drafts | Claude | cloud | todo (after A1, B1) |
 | B4 | P1 | Repo polish: description, topics, social preview, badges | Claude | cloud + erik | blocked: Erik applies settings and uploads the preview (drafts merged in [#33](https://github.com/erik-hedstrom/loadout/pull/33)) |
@@ -171,11 +171,12 @@ Acceptance:
 How to run: `node --import tsx bench/listing.ts --plan --host <claude|codex>
 --library <public-library>`. After authorization replace `--plan` with
 `--run --out <new-results-directory>`. [Commands and caveats](../../bench/README.md#b12-native-listing-remeasurement).
-The coordinator's Claude rows are committed unchanged. Codex's full-library
-arm awaits a rerun with the listing-only budget-notice parser fix; recognized
-notices record removal/omission fields without message text. B1's parser
-remains unchanged. Implementation spending: $0. Branch push authorized;
-no PR yet. Cross-model review and results analysis remain with the coordinator.
+Results: [RESULTS](../../bench/RESULTS.md#b12-results-2026-10-28-what-installed-skills-cost-per-request-on-current-hosts). Learnings: real
+descriptions make the native listing a large cost from 50 skills (Claude Code
++8,049, Codex +4,484 per request); Codex 0.163 removes every description and
+omits 888 of 1,235 skills, reporting it as a non-fatal `error` item that
+B1's parser rejects; loadout's tools cost +158 per request in Claude Code with
+tool search on, so B1's small-library caveat no longer holds there.
 
 **B8. Items from the launch-readiness review.** The review (2026-10-13) is
 private ([ORCHESTRATOR](ORCHESTRATOR.md#local-the-default)).

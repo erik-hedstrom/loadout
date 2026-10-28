@@ -54,7 +54,7 @@ exec overrides do not isolate managed/system configuration. Claude retains
 its logged-in ambient home; plugin counts cannot establish identical plugin
 contents. A token plateau alone does not prove that a host budget caused it.
 
-Results will follow in [RESULTS](RESULTS.md#b12-method-native-listing-remeasurement).
+Results: [RESULTS](RESULTS.md#b12-results-2026-10-28-what-installed-skills-cost-per-request-on-current-hosts).
 
 ## B11 OpenCode sessions
 
