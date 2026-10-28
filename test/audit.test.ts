@@ -1,8 +1,9 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, truncateSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { parse as parseToml } from 'smol-toml';
 import { audit, formatAudit } from '../src/audit.js';
 import { addSkills, findSkillDirs, parseFrontmatter, parseSkill } from '../src/library.js';
 
@@ -136,8 +137,106 @@ describe('audit', () => {
     expect(JSON.parse(readFileSync(join(destination, '.loadout-source.json'), 'utf8')).origin).toBe(join(root, 'adopted'));
     expect(readFileSync(join(root, 'adopted', 'SKILL.md'), 'utf8')).toBe(before);
     expect(readdirSync(join(home, '.loadout'))).toEqual(['library']);
-    expect(formatAudit(result)).toMatch(/Disable|disable/);
+    expect(formatAudit(result)).toContain('user-invocable-only');
     expect((await audit(project, true)).adopted).toEqual({ added: 0, updated: 1, skipped: 0 });
+  });
+
+  it('prints scoped Claude hide snippets only for adopted skills without a restrictive override', async () => {
+    const root = join(home, 'claude-custom', 'skills');
+    for (const name of ['personal', 'explicit-on', 'short', 'manual', 'off', '__proto__']) skill(root, name);
+    skill(join(project, '.claude', 'skills'), 'project');
+    const nested = join(project, 'packages', 'app');
+    skill(join(nested, '.claude', 'skills'), 'nested');
+    const userFile = join(home, 'claude-custom', 'settings.json');
+    const projectFile = join(project, '.claude', 'settings.local.json');
+    json(userFile, { skillOverrides: { 'explicit-on': 'on', short: 'name-only', manual: 'user-invocable-only', off: 'off' } });
+    json(projectFile, { permissions: { allow: [] } });
+    const before = [userFile, projectFile].map((f) => readFileSync(f, 'utf8'));
+    const result = await audit(nested, true);
+    expect(result.disable?.claude.settings).toEqual([
+      { file: userFile, skillOverrides: { ['__proto__']: 'user-invocable-only', 'explicit-on': 'user-invocable-only', personal: 'user-invocable-only' } },
+      { file: projectFile, skillOverrides: { project: 'user-invocable-only' } },
+      { file: join(nested, '.claude', 'settings.local.json'), skillOverrides: { nested: 'user-invocable-only' } },
+    ]);
+    const output = formatAudit(result);
+    for (const setting of result.disable!.claude.settings) {
+      expect(output).toContain(JSON.stringify({ skillOverrides: setting.skillOverrides }, null, 2));
+      expect(output).toContain(setting.file);
+    }
+    expect(output).toContain('Printed only; no host configs were changed.');
+    expect([userFile, projectFile].map((f) => readFileSync(f, 'utf8'))).toEqual(before);
+    expect(existsSync(join(nested, '.claude', 'settings.local.json'))).toBe(false);
+  });
+
+  it.each(['pack', 'pa"ck\n\u001b[31m\u202e'])('names Claude plugin %j once in /plugin guidance rather than adding skillOverrides', async (name) => {
+    const plugin = join(home, 'plugins', 'pack');
+    skill(join(plugin, 'skills'), 'first');
+    skill(join(plugin, 'skills'), 'second');
+    json(join(home, 'claude-custom', 'plugins', 'installed_plugins.json'), { plugins: { [`${name}@market`]: [{ scope: 'user', installPath: plugin }] } });
+    json(join(home, 'claude-custom', 'settings.json'), { enabledPlugins: { [`${name}@market`]: true }, skillOverrides: { [`${name}:first`]: 'off' } });
+    const result = await audit(project, true);
+    expect(result.disable?.claude).toEqual({ settings: [], plugins: [name] });
+    expect(formatAudit(result)).toContain('Disable these plugins via /plugin (skillOverrides does not apply):');
+    const printed = formatAudit(result).split('does not apply):\n  ')[1]!.split('\n')[0]!;
+    expect(JSON.parse(printed)).toBe(name);
+    expect(formatAudit(result)).not.toMatch(/[\u001b\u202e]/);
+  });
+
+  it('prints parseable Codex entries for active adopted skills and leaves config untouched', async () => {
+    const root = join(home, 'codex-custom', 'skills');
+    for (const name of ['active', 'hidden']) skill(root, name);
+    skill(join(project, '.agents', 'skills'), 'project');
+    const configFile = join(home, 'codex-custom', 'config.toml');
+    const config = `[[skills.config]]\npath = ${JSON.stringify(join(root, 'hidden', 'SKILL.md'))}\nenabled = false\n`;
+    file(configFile, config);
+    const result = await audit(project, true);
+    const entries = [join(root, 'active', 'SKILL.md'), join(project, '.agents', 'skills', 'project', 'SKILL.md')].map((path) => ({ path, enabled: false }));
+    expect(result.disable?.codex).toEqual({ file: configFile, skills: entries });
+    const snippet = formatAudit(result).split('```toml\n')[1]!.split('\n```')[0]!;
+    expect(parseToml(snippet)).toEqual({ skills: { config: entries } });
+    expect(formatAudit(result)).toContain('Restart Codex');
+    expect(readFileSync(configFile, 'utf8')).toBe(config);
+  });
+
+  it('round-trips hostile names and paths without terminal controls or snippet injection', async () => {
+    const name = 'quo"te\\\n\u001b[31m\u0007\u202e\u2028\u{e0001}" : { "injected" : "off" }';
+    file(join(home, 'claude-custom', 'skills', 'safe-folder', 'SKILL.md'), `---\nname: ${JSON.stringify(name)}\ndescription: normal\n---\nbody`);
+    const folder = process.platform === 'win32' ? "quo'te [skills.config] # \u202e\u{e0001}" : 'quo"te\n\u001b[31m\u0007\u202e\u{e0001} [skills.config] #';
+    skill(join(home, 'codex-custom', 'skills'), folder);
+    const result = await audit(project, true);
+    const output = formatAudit(result);
+    expect(output).not.toMatch(/[\p{Cf}\p{Zl}\p{Zp}]/u);
+    expect(output).not.toMatch(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u202e\u2028]/);
+    const claude = JSON.parse(output.split('```json\n')[1]!.split('\n```')[0]!);
+    expect(claude).toEqual({ skillOverrides: { [name]: 'user-invocable-only' } });
+    const codex = parseToml(output.split('```toml\n')[1]!.split('\n```')[0]!);
+    expect(codex).toEqual({ skills: { config: [{ path: join(home, 'codex-custom', 'skills', folder, 'SKILL.md'), enabled: false }] } });
+    expect(JSON.parse(JSON.stringify(result)).disable.claude.settings[0].skillOverrides).toEqual(claude.skillOverrides);
+    const cliResult = run('--json', '--adopt');
+    expect(cliResult.status, cliResult.stderr).toBe(0);
+    expect(cliResult.stdout).not.toMatch(/[\p{Cf}\p{Zl}\p{Zp}\u001b\u0007]/u);
+    expect(JSON.parse(cliResult.stdout).disable).toEqual(result.disable);
+  });
+
+  it('does not suggest hiding a skill whose adoption was skipped', async () => {
+    const root = join(home, 'claude-custom', 'skills');
+    skill(root, 'oversized');
+    const resource = join(root, 'oversized', 'large.bin');
+    file(resource, '');
+    truncateSync(resource, 21 * 1024 * 1024);
+    const result = await audit(project, true);
+    expect(result.adopted).toEqual({ added: 0, updated: 0, skipped: 1 });
+    expect(result.disable?.claude.settings).toEqual([]);
+  });
+
+  it('targets the default user settings files when host homes are not overridden', async () => {
+    vi.stubEnv('CLAUDE_CONFIG_DIR', '');
+    vi.stubEnv('CODEX_HOME', '');
+    skill(join(home, '.claude', 'skills'), 'personal');
+    skill(join(home, '.agents', 'skills'), 'shared');
+    const result = await audit(project, true);
+    expect(result.disable?.claude.settings[0]?.file).toBe(join(home, '.claude', 'settings.json'));
+    expect(result.disable?.codex.file).toBe(join(home, '.codex', 'config.toml'));
   });
 
   it('refuses adoption through a redirected loadout directory or an outside LOADOUT_HOME', async () => {
@@ -195,6 +294,15 @@ await new Promise(setImmediate);`;
     const adopted = run('--json', '--adopt');
     expect(adopted.status, adopted.stderr).toBe(0);
     expect(JSON.parse(adopted.stdout).adopted.added).toBe(1);
+    expect(JSON.parse(adopted.stdout).disable).toEqual({
+      notice: 'Printed only; no host configs were changed.',
+      claude: { settings: [], plugins: [] },
+      codex: { file: join(home, 'codex-custom', 'config.toml'), skills: [{ path: join(home, 'codex-custom', 'skills', 'safe', 'SKILL.md'), enabled: false }] },
+      guidance: [
+        'OpenCode: deny adopted skill names under permission.skill, or move their folders out of discovery directories.',
+        'Cursor: move adopted folders out of .cursor/.claude/.codex/.agents skill directories at user and project scope.',
+      ],
+    });
     expect(existsSync(join(home, '.loadout', 'library', 'skills', 'safe', 'SKILL.md'))).toBe(true);
   });
 

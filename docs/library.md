@@ -33,10 +33,51 @@ bge-small-en-v1.5).
 - Symlinks are never followed; repos are cloned with `core.symlinks=false`.
 - Oversized skills are skipped with a reason.
 
-`audit --adopt` copies the skills it finds into the library and prints how to
-turn them off in each host. It never edits host configs: skills left in the
-agents' own folders stay listed by the agents. It refuses a `LOADOUT_HOME`
-outside `~/.loadout`.
+`audit --adopt` copies the skills it finds into the library, then prints the
+exact changes to hide the adopted skills that are still listed natively.
+Copying alone leaves the native listing in place. Hidden skills stop costing
+listing tokens; loadout's hook and `load_skill` serve them when needed. It
+never edits host configs. It refuses a `LOADOUT_HOME` outside `~/.loadout`.
+
+For Claude Code personal skills, merge the printed JSON into
+`~/.claude/settings.json`. For project skills, use the printed path to that
+project directory's `.claude/settings.local.json`. Keep other settings and
+existing overrides:
+
+```json
+{
+  "skillOverrides": {
+    "example-skill": "user-invocable-only"
+  }
+}
+```
+
+This hides the skill from Claude's listing while keeping `/example-skill`
+available to the user. Claude does not invoke it on its own through the native
+Skill tool. Overrides match skill names, so same-named skills share the
+override. Entries already set to anything other than `"on"` are left out of
+the printed changes, including `"name-only"`, which still lists the name.
+Plugin skills are unaffected by `skillOverrides`: disable the named plugins
+via `/plugin` instead. This disables the whole plugin, including its other
+components. The `/skills` menu also saves visibility changes to
+`.claude/settings.local.json`. See the official
+[Claude Code visibility settings](https://code.claude.com/docs/en/skills#override-skill-visibility-from-settings).
+
+For Codex, merge the printed entries into `~/.codex/config.toml`, updating
+an existing entry for the same path rather than adding a duplicate:
+
+```toml
+[[skills.config]]
+path = "/absolute/path/to/example-skill/SKILL.md"
+enabled = false
+```
+
+Already-disabled skills are left out. Restart Codex afterwards. See the official
+[Codex skill configuration](https://learn.chatgpt.com/docs/build-skills#enable-or-disable-local-codex-skills).
+If `CLAUDE_CONFIG_DIR` or `CODEX_HOME` is set, the audit prints that host home's
+settings path instead. `--json --adopt` includes the same changes as structured
+data under `disable` (`claude.settings`, `claude.plugins`, `codex` and `guidance`).
+OpenCode and Cursor receive folder/permission guidance.
 
 ## MCP servers
 

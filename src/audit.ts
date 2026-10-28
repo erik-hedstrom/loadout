@@ -1,7 +1,7 @@
 import { existsSync, lstatSync, readdirSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
-import { parse as parseToml } from 'smol-toml';
+import { parse as parseToml, stringify as stringifyToml } from 'smol-toml';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { DEFAULT_CONFIG, paths } from './config.js';
@@ -14,6 +14,11 @@ const MAX_MANIFEST_BYTES = 256 * 1024;
 const MAX_DESCRIPTION_ENTRIES = 20_000;
 const MAX_DESCRIPTION_DEPTH = 8;
 const clean = (text: string) => text.replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, '');
+// Serializers escape C0 controls; escape the remaining terminal controls while
+// preserving the original configuration values (TOML uses \U for astral code points).
+const escapeControls = (text: string, toml = false) => text.replace(/[\p{Cf}\p{Zl}\p{Zp}\u007f-\u009f]/gu, (c) => toml && c.length === 2
+  ? `\\U${c.codePointAt(0)!.toString(16).padStart(8, '0')}`
+  : c.split('').map((unit) => `\\u${unit.charCodeAt(0).toString(16).padStart(4, '0')}`).join(''));
 const tokens = (text: string) => Math.ceil(text.length / 4);
 const object = (value: unknown): Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 
@@ -26,6 +31,7 @@ interface Listing {
 interface FoundSkill {
   capability: Capability;
   listings: Map<string, Listing>;
+  claudeSettings: Set<string>;
 }
 interface HostAudit {
   host: string;
@@ -43,7 +49,12 @@ export interface AuditReport {
   summary: string;
   caveats: string[];
   adopted?: { added: number; updated: number; skipped: number };
-  disable?: string[];
+  disable?: {
+    notice: string;
+    claude: { settings: { file: string; skillOverrides: Record<string, 'user-invocable-only'> }[]; plugins: string[] };
+    codex: { file: string; skills: { path: string; enabled: false }[] };
+    guidance: string[];
+  };
 }
 
 function readText(file: string, host: HostAudit, label: string): string | undefined {
@@ -82,7 +93,7 @@ function projectDirs(cwd: string): string[] {
   }
 }
 
-function addSkillRoot(root: string, host: HostAudit, found: Map<string, FoundSkill>, prefix = '') {
+function addSkillRoot(root: string, host: HostAudit, found: Map<string, FoundSkill>, prefix = '', settingsFile?: string) {
   try {
     for (const dir of findSkillDirs(root, MAX_DESCRIPTION_DEPTH, host.host === 'Codex')) {
       const skill = parseSkill(dir);
@@ -92,8 +103,9 @@ function addSkillRoot(root: string, host: HostAudit, found: Map<string, FoundSki
       }
       if (host.host === 'Claude Code' && skill.disableModelInvocation) continue;
       const key = realpathSync(dir);
-      const discovered = found.get(key) ?? { capability: skill, listings: new Map<string, Listing>() };
+      const discovered = found.get(key) ?? { capability: skill, listings: new Map<string, Listing>(), claudeSettings: new Set<string>() };
       found.set(key, discovered);
+      if (settingsFile) discovered.claudeSettings.add(settingsFile);
       const identity = `${host.host}:${prefix}`;
       if (discovered.listings.has(identity)) continue;
       const entry = listing(prefix + skill.name, skill.description);
@@ -278,7 +290,7 @@ export async function audit(cwd = process.cwd(), adopt = false): Promise<AuditRe
     Object.assign(claudeSettings, object(config.enabledPlugins));
     Object.assign(skillOverrides, object(config.skillOverrides));
   }
-  addSkillRoot(join(claudeHome, 'skills'), claude, found);
+  addSkillRoot(join(claudeHome, 'skills'), claude, found, '', resolve(claudeHome, 'settings.json'));
   addMarkdown(join(claudeHome, 'commands'), claude, seenDescriptions, 'commands', '', skillOverrides);
   addMarkdown(join(claudeHome, 'agents'), claude, seenDescriptions, 'agents');
   addSkillRoot(join(codexHome, 'skills'), codex, found);
@@ -293,7 +305,7 @@ export async function audit(cwd = process.cwd(), adopt = false): Promise<AuditRe
   addServers(readJson(join(home, '.cursor', 'mcp.json'), cursor, 'user MCP config').mcpServers, cursorServers);
   const openConfigs = [join(openHome, 'opencode.json'), join(openHome, 'opencode.jsonc')];
   for (const dir of dirs) {
-    addSkillRoot(join(dir, '.claude', 'skills'), claude, found);
+    addSkillRoot(join(dir, '.claude', 'skills'), claude, found, '', join(dir, '.claude', 'settings.local.json'));
     addMarkdown(join(dir, '.claude', 'commands'), claude, seenDescriptions, 'commands', '', skillOverrides);
     addMarkdown(join(dir, '.claude', 'agents'), claude, seenDescriptions, 'agents');
     addSkillRoot(join(dir, '.agents', 'skills'), codex, found);
@@ -357,7 +369,10 @@ export async function audit(cwd = process.cwd(), adopt = false): Promise<AuditRe
     checkAdoptTarget(paths.library());
     const destination = canonicalSkillPath(paths.library());
     report.adopted = { added: 0, updated: 0, skipped: 0 };
-    for (const [source, { capability: skill, listings }] of found) {
+    const claudeOverrides = new Map<string, Map<string, 'user-invocable-only'>>();
+    const plugins = new Set<string>();
+    const codexSkills: { path: string; enabled: false }[] = [];
+    for (const [source, { capability: skill, listings, claudeSettings }] of found) {
       if (![...listings.values()].some((s) => active.has(s))) continue;
       const rel = relative(destination, source);
       if (!isAbsolute(rel) && !rel.split(/[\\/]/).includes('..')) {
@@ -371,16 +386,36 @@ export async function audit(cwd = process.cwd(), adopt = false): Promise<AuditRe
       report.adopted.added += result.added.length;
       report.adopted.updated += result.updated.length;
       report.adopted.skipped += result.skipped.length;
+      if (!result.added.length && !result.updated.length) continue;
+      for (const [identity, entry] of listings) {
+        if (!active.has(entry)) continue;
+        if (identity === 'Claude Code:') {
+          if (Object.hasOwn(skillOverrides, skill.name) && skillOverrides[skill.name] !== 'on') continue;
+          for (const file of claudeSettings) {
+            const overrides = claudeOverrides.get(file) ?? new Map<string, 'user-invocable-only'>();
+            overrides.set(skill.name, 'user-invocable-only');
+            claudeOverrides.set(file, overrides);
+          }
+        } else if (identity.startsWith('Claude Code:')) plugins.add(identity.slice('Claude Code:'.length, -1));
+        else if (identity === 'Codex:') codexSkills.push({ path: resolve(skill.source, 'SKILL.md'), enabled: false });
+      }
     }
-    report.disable = [
-      'Claude Code: move adopted skill folders out of discovery directories; disable their plugins in /plugin or enabledPlugins.',
-      'Codex: disable adopted skills with [[skills.config]] path and enabled=false entries.',
-      'OpenCode: deny adopted skill names under permission.skill, or move their folders out of discovery directories.',
-      'Cursor: move adopted folders out of .cursor/.claude/.codex/.agents skill directories at user and project scope.',
-    ];
+    report.disable = {
+      notice: 'Printed only; no host configs were changed.',
+      claude: { settings: [...claudeOverrides].map(([file, overrides]) => ({ file, skillOverrides: Object.fromEntries(overrides) })), plugins: [...plugins] },
+      codex: { file: resolve(codexHome, 'config.toml'), skills: codexSkills },
+      guidance: [
+        'OpenCode: deny adopted skill names under permission.skill, or move their folders out of discovery directories.',
+        'Cursor: move adopted folders out of .cursor/.claude/.codex/.agents skill directories at user and project scope.',
+      ],
+    };
   }
   report.summary = hosts.map((h) => `${h.host}: ${h.skills.length} skills installed, ~${h.estimatedTokens.toLocaleString('en-US')} description tokens ${h.host === 'Claude Code' ? 'before its listing cap (1% of context)' : h.host === 'Codex' ? 'before its listing cap (2% or 8,000 characters)' : '(listing budget not documented)'}; ${h.servers.length} MCP servers configured; MCP schemas not counted.`).join('\n');
   return report;
+}
+
+export function formatAuditJson(value: object): string {
+  return escapeControls(JSON.stringify(value, null, 2));
 }
 
 export function formatAudit(report: AuditReport): string {
@@ -393,6 +428,20 @@ export function formatAudit(report: AuditReport): string {
     for (const warning of host.warnings) lines.push(`  warning: ${warning}`);
   }
   lines.push('', ...report.caveats);
-  if (report.adopted) lines.push(`\nAdopted: ${report.adopted.added} added, ${report.adopted.updated} updated, ${report.adopted.skipped} skipped.`, ...report.disable!);
+  if (report.adopted) lines.push(`\nAdopted: ${report.adopted.added} added, ${report.adopted.updated} updated, ${report.adopted.skipped} skipped.`);
+  if (report.disable) {
+    const { notice, claude, codex, guidance } = report.disable;
+    lines.push(notice);
+    for (const { file, skillOverrides } of claude.settings) lines.push(
+      `\nClaude Code: merge into ${clean(file)} (keep other settings and overrides). /name stays available:`,
+      '```json', formatAuditJson({ skillOverrides }), '```',
+    );
+    if (claude.plugins.length) lines.push('\nClaude Code: Disable these plugins via /plugin (skillOverrides does not apply):', ...claude.plugins.map((name) => `  ${escapeControls(JSON.stringify(name))}`));
+    if (codex.skills.length) lines.push(
+      `\nCodex: merge these entries into ${clean(codex.file)} (update any existing entry for the same path). Restart Codex afterwards:`,
+      '```toml', escapeControls(stringifyToml({ skills: { config: codex.skills } }).trimEnd(), true), '```',
+    );
+    lines.push(...guidance);
+  }
   return lines.join('\n');
 }

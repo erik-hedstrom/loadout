@@ -214,9 +214,9 @@ async function main(): Promise<number> {
   if (command === 'hook') return runHook(rest);
   if (command === 'audit') {
     const { values } = parseArgs({ args: rest, options: { json: { type: 'boolean' }, adopt: { type: 'boolean' } } });
-    const { audit, formatAudit } = await import('./audit.js');
+    const { audit, formatAudit, formatAuditJson } = await import('./audit.js');
     const report = await audit(process.cwd(), Boolean(values.adopt));
-    console.log(values.json ? JSON.stringify(report, null, 2) : formatAudit(report));
+    console.log(values.json ? formatAuditJson(report) : formatAudit(report));
     return 0;
   }
   if (command === 'mcp-launch') {
