@@ -96,6 +96,57 @@ session, not a guaranteed cache hit. Other arms can share cache prefixes.
 
 ## Review and remaining work
 
+Implementation commit: `9eef40983bebf12184d194de114a453975676944`.
+Its tree is `d978c489425d5cc1bc20fa732125882fd840e07a`. The WSL clone
+tested that identical tree before a local author-metadata correction;
+`git rev-parse` confirmed both tree IDs match. No independent review has run.
+
+Verification (2026-10-28, all free):
+
+```text
+Windows npm ci:
+added 173 packages, and audited 174 packages in 27s
+found 0 vulnerabilities
+
+npm run typecheck (Windows and WSL): tsc --noEmit, exit 0
+
+Windows npm test:
+Test Files  34 passed | 4 skipped (38)
+Tests       1113 passed | 116 skipped (1229)
+
+WSL npm test (Git checkout outside /tmp):
+Test Files  38 passed (38)
+Tests       1180 passed | 50 skipped (1230)
+
+WSL npx vitest run test/listing.test.ts:
+Test Files  1 passed (1)
+Tests       9 passed (9)
+
+Claude --plan: 12 paid calls planned; estimate $4.64
+Codex --plan: 8 paid calls planned; estimate $3.83
+Both: Plan only: no child processes started.
+```
+
+Plan estimates use the printed illustrative assumptions, not actual spending.
+Commands were `node --import tsx bench/listing.ts --plan --host <host>
+--library <selected-library> --<host>-command <native-executable>`, using
+Windows Claude and WSL Codex respectively. The final plans accepted the same
+corpus hash. No planned paid command was executed.
+
+Three mutations in the disposable WSL checkout each failed their targeted
+test: removing the plan gate, metadata escaping, and destination confinement.
+Source was restored and all nine B12 tests passed afterward. Staged diff
+checks passed; added lines contained no mojibake or personal absolute paths,
+and all 114 local Markdown link targets existed.
+
+An earlier WSL full-suite attempt in a file-only snapshot failed (69 failed,
+1110 passed, 50 skipped): missing Git metadata, inherited CRLF shell files,
+and a test requiring the repository to be outside the system temp directory.
+The proper Git checkout fixed these setup issues without repository changes.
+WSL npm ci reported three blocked optional/package install scripts; tests
+and typecheck still passed. An initial PowerShell JSON-command plan failed
+before starting any host; the executable/argument flags above fixed it.
+
 Cross-model review and the repository's merge reviews remain pending: the
 $0 cap prohibits starting additional paid Claude/Codex runs. No public
 action or merge is authorized. The coordinator should review the local
