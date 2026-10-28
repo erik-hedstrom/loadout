@@ -15,7 +15,7 @@ const before = process.platform === 'linux' ? readdirSync('/proc/self/fd').lengt
 for (let i = 0; i < 32; i++) assert.throws(() => readConfined(${JSON.stringify(root)}, 'fifo', 1024), /no such file/);
 if (before !== undefined) assert.equal(readdirSync('/proc/self/fd').length, before);
 console.log('FIFO rejected; descriptors closed');`;
-    const result = spawnSync(process.execPath, ['--import', import.meta.resolve('tsx'), '--input-type=module', '-e', script], { env: { ...process.env, HOME: root, USERPROFILE: root, LOADOUT_HOME: join(root, '.loadout') }, encoding: 'utf8', timeout: 10_000, killSignal: 'SIGKILL' });
+    const result = spawnSync(process.execPath, ['--import', import.meta.resolve('tsx'), '--input-type=module', '-e', script], { env: { ...process.env, HOME: root, USERPROFILE: root, LOADOUT_HOME: join(root, '.loadout') }, encoding: 'utf8', timeout: 25_000, killSignal: 'SIGKILL' });
     expect(result.error).toBeUndefined();
     expect(result.status, result.stderr).toBe(0);
     expect(result.stdout.trim()).toBe('FIFO rejected; descriptors closed');

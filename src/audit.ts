@@ -306,7 +306,8 @@ export async function audit(cwd = process.cwd(), adopt = false): Promise<AuditRe
         const pointer = readConfined(gitRoot, '.git', MAX_CONFIG_BYTES).toString('utf8');
         const gitdirPath = pointer.slice('gitdir: '.length).replace(/\r?\n$/, '');
         if (!pointer.startsWith('gitdir: ') || !gitdirPath) throw new Error('invalid Git worktree metadata');
-        const gitdir = realpathSync(resolve(gitRoot, gitdirPath));
+        const lexicalGitdir = resolve(gitRoot, gitdirPath);
+        const gitdir = realpathSync(lexicalGitdir);
         if (!lstatSync(gitdir).isDirectory()) throw new Error('invalid Git worktree metadata');
         // Submodules and separate Git directories need no commondir; lstat
         // still detects dangling links so malformed metadata is not hidden.
@@ -315,8 +316,9 @@ export async function audit(cwd = process.cwd(), adopt = false): Promise<AuditRe
           if (!common) throw new Error('invalid Git worktree metadata');
           const commonGit = realpathSync(resolve(gitdir, common));
           if (basename(commonGit) !== '.git' || !lstatSync(commonGit).isDirectory()) throw new Error('invalid Git worktree metadata');
-          // A common directory alone does not establish that this checkout belongs to it.
-          if (dirname(gitdir) !== join(commonGit, 'worktrees')) throw new Error('invalid Git worktree metadata');
+          // Claude checks the lexical parent layout even when the admin directory is a symlink.
+          const lexicalCommon = resolve(lexicalGitdir, common);
+          if (dirname(lexicalGitdir) !== join(lexicalCommon, 'worktrees')) throw new Error('invalid Git worktree metadata');
           const backlink = readConfined(gitdir, 'gitdir', MAX_CONFIG_BYTES).toString('utf8').trim();
           if (realpathSync(resolve(gitdir, backlink)) !== realpathSync(join(gitRoot, '.git'))) throw new Error('invalid Git worktree metadata');
           gitRoot = dirname(commonGit);

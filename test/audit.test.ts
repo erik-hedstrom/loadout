@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, truncateSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, truncateSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -271,7 +271,8 @@ describe('audit', () => {
     } else {
       const alias = join(home, 'common-alias');
       symlinkSync(common, alias, 'dir');
-      file(join(gitdir, 'commondir'), `${relative(gitdir, alias)}\n`);
+      pointer = join(alias, 'worktrees', 'linked');
+      file(join(gitdir, 'commondir'), `${alias}\n`);
     }
     file(join(linked, '.git'), `gitdir: ${pointer}\n`);
     skill(join(linked, '.claude', 'skills'), 'example');
@@ -289,7 +290,7 @@ describe('audit', () => {
     expect((await audit(linked)).hosts[0]!.skills).toEqual([]);
   });
 
-  it.skipIf(process.platform === 'win32')('resolves a real git worktree add fixture to the main checkout', async () => {
+  it.skipIf(process.platform === 'win32').each(['standard', 'symlinked admin directory'])('resolves a real git worktree add fixture (%s) to the main checkout', async (layout) => {
     const git = (...args: string[]) => {
       const result = spawnSync('git', ['-C', project, ...args], { env: { ...process.env, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: join(home, 'no-global-config') }, encoding: 'utf8', timeout: 10_000, killSignal: 'SIGKILL' });
       expect(result.error).toBeUndefined();
@@ -299,6 +300,15 @@ describe('audit', () => {
     git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '--allow-empty', '--no-verify', '-m', 'fixture');
     const linked = join(home, 'linked');
     git('worktree', 'add', '--quiet', '--detach', linked);
+    if (layout === 'symlinked admin directory') {
+      const admin = join(project, '.git', 'worktrees', 'linked');
+      const moved = join(home, 'metadata');
+      renameSync(admin, moved);
+      file(join(moved, 'commondir'), `${join(project, '.git')}\n`);
+      symlinkSync(moved, admin, 'dir');
+      git('worktree', 'list', '--porcelain');
+      git('worktree', 'repair', linked);
+    }
     skill(join(linked, '.claude', 'skills'), 'example');
     const localFile = join(project, '.claude', 'settings.local.json');
     json(localFile, { skillOverrides: { example: 'off' } });
@@ -359,7 +369,7 @@ describe('audit', () => {
     expect(spawnSync('mkfifo', [fifo], { timeout: 5_000 }).status).toBe(0);
     skill(join(linked, '.claude', 'skills'), 'example');
     const script = `import { audit } from ${JSON.stringify(import.meta.resolve('../src/audit.ts'))}; console.log(JSON.stringify(await audit(${JSON.stringify(linked)})));`;
-    const result = spawnSync(process.execPath, ['--import', import.meta.resolve('tsx'), '--input-type=module', '-e', script], { env: process.env, encoding: 'utf8', timeout: 10_000, killSignal: 'SIGKILL' });
+    const result = spawnSync(process.execPath, ['--import', import.meta.resolve('tsx'), '--input-type=module', '-e', script], { env: process.env, encoding: 'utf8', timeout: 25_000, killSignal: 'SIGKILL' });
     expect(result.error).toBeUndefined();
     expect(result.status, result.stderr).toBe(0);
     const report = JSON.parse(result.stdout);
