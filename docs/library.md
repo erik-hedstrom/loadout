@@ -57,6 +57,9 @@ available to the user. Claude does not invoke it on its own through the native
 Skill tool. Overrides match skill names, so same-named skills share the
 override. Entries already set to anything other than `"on"` are left out of
 the printed changes, including `"name-only"`, which still lists the name.
+Because [local project settings override shared project settings, which override user settings](https://code.claude.com/docs/en/settings#settings-precedence),
+an effective `"on"` in a higher scope also gets a hide entry in that project's
+`.claude/settings.local.json`.
 Plugin skills are unaffected by `skillOverrides`: disable the named plugins
 via `/plugin` instead. This disables the whole plugin, including its other
 components. The `/skills` menu also saves visibility changes to

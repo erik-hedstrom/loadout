@@ -31,7 +31,7 @@ interface Listing {
 interface FoundSkill {
   capability: Capability;
   listings: Map<string, Listing>;
-  claudeSettings: Set<string>;
+  settingsFiles: Set<string>;
 }
 interface HostAudit {
   host: string;
@@ -103,9 +103,9 @@ function addSkillRoot(root: string, host: HostAudit, found: Map<string, FoundSki
       }
       if (host.host === 'Claude Code' && skill.disableModelInvocation) continue;
       const key = realpathSync(dir);
-      const discovered = found.get(key) ?? { capability: skill, listings: new Map<string, Listing>(), claudeSettings: new Set<string>() };
+      const discovered = found.get(key) ?? { capability: skill, listings: new Map<string, Listing>(), settingsFiles: new Set<string>() };
       found.set(key, discovered);
-      if (settingsFile) discovered.claudeSettings.add(settingsFile);
+      if (settingsFile) discovered.settingsFiles.add(settingsFile);
       const identity = `${host.host}:${prefix}`;
       if (discovered.listings.has(identity)) continue;
       const entry = listing(prefix + skill.name, skill.description);
@@ -275,6 +275,7 @@ export async function audit(cwd = process.cwd(), adopt = false): Promise<AuditRe
   const codexHome = process.env.CODEX_HOME || join(home, '.codex');
   const openHome = join(process.env.XDG_CONFIG_HOME || join(home, '.config'), 'opencode');
   const dirs = projectDirs(cwd);
+  const claudeDirs = dirs.filter((dir) => relative(resolve(claudeHome), resolve(dir, '.claude')) !== '');
   const found = new Map<string, FoundSkill>();
   const seenDescriptions = new Set<string>();
   const hosts = ['Claude Code', 'Codex', 'OpenCode', 'Cursor'].map((host): HostAudit => ({ host, skills: [], listings: [], servers: [], descriptionCharacters: 0, estimatedTokens: 0, warnings: [] }));
@@ -284,12 +285,16 @@ export async function audit(cwd = process.cwd(), adopt = false): Promise<AuditRe
   const [claudeServers, codexServers, openServers, cursorServers] = serverMaps as [Map<string, unknown>, Map<string, unknown>, Map<string, unknown>, Map<string, unknown>];
   const userSettings = readJson(join(claudeHome, 'settings.json'), claude, 'user settings');
   const claudeSettings = object(userSettings.enabledPlugins);
-  const skillOverrides = object(userSettings.skillOverrides);
-  for (const settings of ['settings.json', 'settings.local.json']) for (const dir of dirs) {
-    const config = readJson(join(dir, '.claude', settings), claude, 'project settings');
+  // Retain the scope files in precedence order so project-level "on" entries
+  // can be hidden through local settings without changing shared settings.
+  const overrideScopes = [{ file: resolve(claudeHome, 'settings.json'), overrides: object(userSettings.skillOverrides) }];
+  for (const settings of ['settings.json', 'settings.local.json']) for (const dir of claudeDirs) {
+    const file = join(dir, '.claude', settings);
+    const config = readJson(file, claude, 'project settings');
     Object.assign(claudeSettings, object(config.enabledPlugins));
-    Object.assign(skillOverrides, object(config.skillOverrides));
+    overrideScopes.push({ file, overrides: object(config.skillOverrides) });
   }
+  const skillOverrides = Object.fromEntries(overrideScopes.flatMap(({ overrides }) => Object.entries(overrides)));
   addSkillRoot(join(claudeHome, 'skills'), claude, found, '', resolve(claudeHome, 'settings.json'));
   addMarkdown(join(claudeHome, 'commands'), claude, seenDescriptions, 'commands', '', skillOverrides);
   addMarkdown(join(claudeHome, 'agents'), claude, seenDescriptions, 'agents');
@@ -305,7 +310,7 @@ export async function audit(cwd = process.cwd(), adopt = false): Promise<AuditRe
   addServers(readJson(join(home, '.cursor', 'mcp.json'), cursor, 'user MCP config').mcpServers, cursorServers);
   const openConfigs = [join(openHome, 'opencode.json'), join(openHome, 'opencode.jsonc')];
   for (const dir of dirs) {
-    addSkillRoot(join(dir, '.claude', 'skills'), claude, found, '', join(dir, '.claude', 'settings.local.json'));
+    if (claudeDirs.includes(dir)) addSkillRoot(join(dir, '.claude', 'skills'), claude, found, '', join(dir, '.claude', 'settings.local.json'));
     addMarkdown(join(dir, '.claude', 'commands'), claude, seenDescriptions, 'commands', '', skillOverrides);
     addMarkdown(join(dir, '.claude', 'agents'), claude, seenDescriptions, 'agents');
     addSkillRoot(join(dir, '.agents', 'skills'), codex, found);
@@ -372,7 +377,7 @@ export async function audit(cwd = process.cwd(), adopt = false): Promise<AuditRe
     const claudeOverrides = new Map<string, Map<string, 'user-invocable-only'>>();
     const plugins = new Set<string>();
     const codexSkills: { path: string; enabled: false }[] = [];
-    for (const [source, { capability: skill, listings, claudeSettings }] of found) {
+    for (const [source, { capability: skill, listings, settingsFiles }] of found) {
       if (![...listings.values()].some((s) => active.has(s))) continue;
       const rel = relative(destination, source);
       if (!isAbsolute(rel) && !rel.split(/[\\/]/).includes('..')) {
@@ -391,7 +396,14 @@ export async function audit(cwd = process.cwd(), adopt = false): Promise<AuditRe
         if (!active.has(entry)) continue;
         if (identity === 'Claude Code:') {
           if (Object.hasOwn(skillOverrides, skill.name) && skillOverrides[skill.name] !== 'on') continue;
-          for (const file of claudeSettings) {
+          const destinations = new Set(settingsFiles);
+          for (const file of settingsFiles) {
+            const precedence = overrideScopes.findIndex((scope) => scope.file === file);
+            for (const scope of overrideScopes.slice(precedence + 1)) {
+              if (scope.overrides[skill.name] === 'on') destinations.add(join(dirname(scope.file), 'settings.local.json'));
+            }
+          }
+          for (const file of destinations) {
             const overrides = claudeOverrides.get(file) ?? new Map<string, 'user-invocable-only'>();
             overrides.set(skill.name, 'user-invocable-only');
             claudeOverrides.set(file, overrides);
@@ -433,12 +445,12 @@ export function formatAudit(report: AuditReport): string {
     const { notice, claude, codex, guidance } = report.disable;
     lines.push(notice);
     for (const { file, skillOverrides } of claude.settings) lines.push(
-      `\nClaude Code: merge into ${clean(file)} (keep other settings and overrides). /name stays available:`,
+      `\nClaude Code: merge into ${escapeControls(JSON.stringify(file))} (keep other settings and overrides). /name stays available:`,
       '```json', formatAuditJson({ skillOverrides }), '```',
     );
     if (claude.plugins.length) lines.push('\nClaude Code: Disable these plugins via /plugin (skillOverrides does not apply):', ...claude.plugins.map((name) => `  ${escapeControls(JSON.stringify(name))}`));
     if (codex.skills.length) lines.push(
-      `\nCodex: merge these entries into ${clean(codex.file)} (update any existing entry for the same path). Restart Codex afterwards:`,
+      `\nCodex: merge these entries into ${escapeControls(JSON.stringify(codex.file))} (update any existing entry for the same path). Restart Codex afterwards:`,
       '```toml', escapeControls(stringifyToml({ skills: { config: codex.skills } }).trimEnd(), true), '```',
     );
     lines.push(...guidance);

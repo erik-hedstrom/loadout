@@ -41,7 +41,7 @@ Each PR body's **Review state** section has the round-by-round record.
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
 | A2 | P0 | `loadout audit`: what your installed skills cost you | Claude | cloud | done ([PR #3](https://github.com/erik-hedstrom/loadout/pull/3)) |
-| A6 | P0 | Paste-ready host hide snippets after `audit --adopt` | Codex | cloud | in progress |
+| A6 | P0 | Paste-ready host hide snippets after `audit --adopt` | Codex | cloud | in review ([#66](https://github.com/erik-hedstrom/loadout/pull/66)) |
 | A1 | P0 | README rewrite around the problem, 3-command quickstart, GIF | Claude | cloud | partial ([#28](https://github.com/erik-hedstrom/loadout/pull/28)): README merged; the GIF waits on A5 |
 | A3 | P1 | `loadout init` wizard + starter packs | Codex | cloud | done ([#30](https://github.com/erik-hedstrom/loadout/pull/30)) |
 | A4 | P1 | npm package under an available name + release workflow | Codex | cloud + erik | blocked: npm name decision |
@@ -86,6 +86,10 @@ Codex `[[skills.config]]` entries with absolute manifest paths and
 keep OpenCode/Cursor guidance. Include the same data in `--json`. Print only,
 with safe serialization and adversarial fixture tests; never edit host configs.
 Document the replacement step without uncommitted measurement claims.
+
+Learnings: Claude overrides are keyed by name; plugin skills need `/plugin`;
+local project settings outrank shared project settings, which outrank user
+settings, so a higher scope's explicit `"on"` also needs a local-project hide entry.
 
 **A1. README rewrite.**
 

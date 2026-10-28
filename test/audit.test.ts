@@ -161,11 +161,74 @@ describe('audit', () => {
     const output = formatAudit(result);
     for (const setting of result.disable!.claude.settings) {
       expect(output).toContain(JSON.stringify({ skillOverrides: setting.skillOverrides }, null, 2));
-      expect(output).toContain(setting.file);
+      expect(output).toContain(JSON.stringify(setting.file));
     }
     expect(output).toContain('Printed only; no host configs were changed.');
     expect([userFile, projectFile].map((f) => readFileSync(f, 'utf8'))).toEqual(before);
     expect(existsSync(join(nested, '.claude', 'settings.local.json'))).toBe(false);
+  });
+
+  it.each(['settings.json', 'settings.local.json'])('hides a personal skill after applying snippets despite project %s setting it on', async (settings) => {
+    skill(join(home, 'claude-custom', 'skills'), 'example');
+    const userFile = join(home, 'claude-custom', 'settings.json');
+    const projectFile = join(project, '.claude', settings);
+    const localFile = join(project, '.claude', 'settings.local.json');
+    json(userFile, { skillOverrides: { preserved: 'off' } });
+    json(projectFile, { skillOverrides: { example: 'on' }, permissions: { allow: [] } });
+    const before = [userFile, projectFile].map((path) => readFileSync(path, 'utf8'));
+    const report = await audit(project, true);
+    expect(report.disable?.claude.settings.map((s) => s.file)).toEqual([userFile, localFile]);
+    expect([userFile, projectFile].map((path) => readFileSync(path, 'utf8'))).toEqual(before);
+    const snippets = [...formatAudit(report).matchAll(/```json\n([\s\S]*?)\n```/g)].map((match) => JSON.parse(match[1]!));
+    for (const [index, { file: path }] of report.disable!.claude.settings.entries()) {
+      const existing = existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : {};
+      json(path, { ...existing, skillOverrides: { ...existing.skillOverrides, ...snippets[index].skillOverrides } });
+    }
+    expect((await audit(project)).hosts[0]!.skills).toEqual([]);
+    expect(JSON.parse(readFileSync(userFile, 'utf8')).skillOverrides.preserved).toBe('off');
+  });
+
+  it('adds higher-precedence local destinations for an ancestor project skill', async () => {
+    skill(join(project, '.claude', 'skills'), 'example');
+    const nested = join(project, 'package');
+    json(join(nested, '.claude', 'settings.local.json'), { skillOverrides: { example: 'on' } });
+    const report = await audit(nested, true);
+    expect(report.disable?.claude.settings.map((s) => s.file)).toEqual([
+      join(project, '.claude', 'settings.local.json'), join(nested, '.claude', 'settings.local.json'),
+    ]);
+    for (const { file: path, skillOverrides } of report.disable!.claude.settings) json(path, { skillOverrides });
+    expect((await audit(nested)).hosts[0]!.skills).toEqual([]);
+  });
+
+  it('skips hide instructions when the effective project override is already restrictive', async () => {
+    skill(join(home, 'claude-custom', 'skills'), 'example');
+    json(join(project, '.claude', 'settings.json'), { skillOverrides: { example: 'on' } });
+    json(join(project, '.claude', 'settings.local.json'), { skillOverrides: { example: 'name-only' } });
+    expect((await audit(project, true)).disable?.claude.settings).toEqual([]);
+  });
+
+  it('displays reversible terminal-safe destination labels for Claude and Codex', async () => {
+    const claudeHome = join(home, 'claude\u202e-home');
+    const codexHome = join(home, 'codex\u202e-home');
+    vi.stubEnv('CLAUDE_CONFIG_DIR', claudeHome);
+    vi.stubEnv('CODEX_HOME', codexHome);
+    skill(join(claudeHome, 'skills'), 'example');
+    skill(join(codexHome, 'skills'), 'checks');
+    const output = formatAudit(await audit(project, true));
+    expect(output).not.toMatch(/[\p{Cf}\p{Zl}\p{Zp}]/u);
+    const claudeLabel = output.match(/Claude Code: merge into (.*?) \(keep other settings/)!;
+    const codexLabel = output.match(/Codex: merge these entries into (.*?) \(update any existing entry/)!;
+    expect(JSON.parse(claudeLabel[1]!)).toBe(join(claudeHome, 'settings.json'));
+    expect(JSON.parse(codexLabel[1]!)).toBe(join(codexHome, 'config.toml'));
+  });
+
+  it('does not treat the Claude home as a second project settings destination', async () => {
+    vi.stubEnv('CLAUDE_CONFIG_DIR', join(home, '.claude'));
+    skill(join(home, '.claude', 'skills'), 'example');
+    const report = await audit(home, true);
+    expect(report.disable?.claude.settings).toEqual([
+      { file: join(home, '.claude', 'settings.json'), skillOverrides: { example: 'user-invocable-only' } },
+    ]);
   });
 
   it.each(['pack', 'pa"ck\n\u001b[31m\u202e'])('names Claude plugin %j once in /plugin guidance rather than adding skillOverrides', async (name) => {
