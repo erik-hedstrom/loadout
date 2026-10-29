@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, truncateSync, writeFileSync } from 'node:fs';
+import fs, { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, truncateSync, writeFileSync } from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -238,125 +239,64 @@ describe('audit', () => {
     expect(report.disable?.claude.settings).toEqual([]);
   });
 
-  it.skipIf(process.platform === 'win32').each(['relative', 'absolute'])('resolves a worktree through %s metadata paths without Git', async (mode) => {
-    const main = join(home, 'main\ncheckout ');
-    const common = join(main, '.git');
-    const gitdir = join(common, 'worktrees', 'linked');
-    const linked = join(home, 'linked');
-    file(join(linked, '.git'), `gitdir: ${mode === 'relative' ? relative(linked, gitdir) : gitdir}\n`);
-    file(join(gitdir, 'commondir'), `${mode === 'relative' ? relative(gitdir, common) : common}\n`);
-    file(join(gitdir, 'gitdir'), `  ${mode === 'relative' ? relative(gitdir, join(linked, '.git')) : join(linked, '.git')}\r\n`);
-    skill(join(linked, '.claude', 'skills'), 'example');
-    const report = await audit(linked, true);
-    const localFile = join(main, '.claude', 'settings.local.json');
-    expect(report.hosts[0]!.warnings).toEqual([]);
-    expect(report.disable?.claude.settings.map((s) => s.file)).toEqual([localFile]);
-    applyClaudeSnippets(formatAudit(report));
-    expect(mergedOverrides([join(linked, '.claude', 'settings.json'), join(linked, '.claude', 'settings.local.json'), localFile]).example).toBe('user-invocable-only');
-    expect((await audit(linked)).hosts[0]!.skills).toEqual([]);
-  });
-
-  it.skipIf(process.platform === 'win32').each(['gitdir', 'commondir'])('canonicalizes a symlinked %s before selecting the main checkout', async (component) => {
-    const main = join(home, 'main');
-    const common = join(main, '.git');
-    const gitdir = join(common, 'worktrees', 'linked');
-    const linked = join(home, 'linked');
+  it.skipIf(process.platform === 'win32')('omits linked-worktree project settings while retaining user snippets and certain settings reads', async () => {
+    rmSync(join(project, '.git'), { recursive: true });
+    const outside = join(home, 'main');
+    const gitdir = join(outside, '.git', 'worktrees', 'linked');
+    file(join(project, '.git'), `gitdir: ${relative(project, gitdir)}\n`);
     file(join(gitdir, 'commondir'), '../..\n');
-    file(join(gitdir, 'gitdir'), `${join(linked, '.git')}\n`);
-    let pointer = gitdir;
-    if (component === 'gitdir') {
-      pointer = join(home, 'alias', '.git', 'worktrees', 'linked');
-      mkdirSync(dirname(pointer), { recursive: true });
-      symlinkSync(gitdir, pointer, 'dir');
-    } else {
-      const alias = join(home, 'common-alias');
-      symlinkSync(common, alias, 'dir');
-      pointer = join(alias, 'worktrees', 'linked');
-      file(join(gitdir, 'commondir'), `${alias}\n`);
+    file(join(gitdir, 'gitdir'), `${join(project, '.git')}\n`);
+    const outsideSettings = join(outside, '.claude', 'settings.local.json');
+    json(outsideSettings, { skillOverrides: { personal: 'on', project: 'off' }, sentinel: 'UNREAD-SETTINGS-SENTINEL' });
+    const before = readFileSync(outsideSettings, 'utf8');
+    skill(join(home, 'claude-custom', 'skills'), 'personal');
+    skill(join(home, 'claude-custom', 'skills'), 'user-hidden');
+    skill(join(project, '.claude', 'skills'), 'project');
+    skill(join(project, '.claude', 'skills'), 'shared-hidden');
+    const userSettings = join(home, 'claude-custom', 'settings.json');
+    json(userSettings, { skillOverrides: { 'user-hidden': 'off' } });
+    json(join(project, '.claude', 'settings.json'), { skillOverrides: { personal: 'on', project: 'on', 'shared-hidden': 'off' } });
+    json(join(project, '.claude', 'settings.local.json'), { skillOverrides: { personal: 'off', project: 'off' } });
+    const warning = 'This is a linked Git worktree; loadout does not resolve its main checkout or read its project-local overrides. Personal snippets may be overridden there. Run loadout audit --adopt from the main checkout to get project-scope settings.';
+    const reads = vi.spyOn(fs, 'openSync');
+    syncBuiltinESMExports();
+    let report: Awaited<ReturnType<typeof audit>>;
+    try {
+      report = await audit(project, true);
+      const opened = reads.mock.calls.map(([path]) => String(path));
+      expect(opened).toContain(join(project, '.git'));
+      for (const sentinel of [outsideSettings, join(gitdir, 'commondir'), join(gitdir, 'gitdir')]) expect(opened).not.toContain(sentinel);
+    } finally {
+      reads.mockRestore();
+      syncBuiltinESMExports();
     }
-    file(join(linked, '.git'), `gitdir: ${pointer}\n`);
-    skill(join(linked, '.claude', 'skills'), 'example');
-    const localFile = join(main, '.claude', 'settings.local.json');
-    json(localFile, { skillOverrides: { example: 'off' } });
-    const hidden = await audit(linked);
-    expect(hidden.hosts[0]!.warnings).toEqual([]);
-    expect(hidden.hosts[0]!.skills).toEqual([]);
-    json(localFile, { skillOverrides: { example: 'on' } });
-    const adopted = await audit(linked, true);
-    expect(adopted.hosts[0]!.warnings).toEqual([]);
-    expect(adopted.disable?.claude.settings.map((s) => s.file)).toEqual([localFile]);
-    applyClaudeSnippets(formatAudit(adopted));
-    expect(mergedOverrides([localFile]).example).toBe('user-invocable-only');
-    expect((await audit(linked)).hosts[0]!.skills).toEqual([]);
+    expect(report.hosts[0]!.skills.map((s) => s.name).sort()).toEqual(['personal', 'project']);
+    expect(report.hosts[0]!.warnings).toEqual([warning]);
+    expect(report.disable?.claude.settings).toEqual([{ file: userSettings, skillOverrides: { personal: 'user-invocable-only' } }]);
+    const output = formatAudit(report);
+    expect(output.split(warning)).toHaveLength(2);
+    expect(output).not.toContain('UNREAD-');
+    expect(readFileSync(outsideSettings, 'utf8')).toBe(before);
+    applyClaudeSnippets(output);
+    expect(mergedOverrides([userSettings]).personal).toBe('user-invocable-only');
+    expect(mergedOverrides([userSettings, outsideSettings]).personal).toBe('on');
   });
 
-  it.skipIf(process.platform === 'win32').each(['standard', 'symlinked admin directory'])('resolves a real git worktree add fixture (%s) to the main checkout', async (layout) => {
-    const git = (...args: string[]) => {
-      const result = spawnSync('git', ['-C', project, ...args], { env: { ...process.env, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: join(home, 'no-global-config') }, encoding: 'utf8', timeout: 10_000, killSignal: 'SIGKILL' });
-      expect(result.error).toBeUndefined();
-      expect(result.status, result.stderr).toBe(0);
-    };
-    git('init', '--quiet');
-    git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '--allow-empty', '--no-verify', '-m', 'fixture');
-    const linked = join(home, 'linked');
-    git('worktree', 'add', '--quiet', '--detach', linked);
-    if (layout === 'symlinked admin directory') {
-      const admin = join(project, '.git', 'worktrees', 'linked');
-      const moved = join(home, 'metadata');
-      renameSync(admin, moved);
-      file(join(moved, 'commondir'), `${join(project, '.git')}\n`);
-      symlinkSync(moved, admin, 'dir');
-      git('worktree', 'list', '--porcelain');
-      // Git 2.56 repair rewrites .git to the moved path, removing the lexical layout under test.
-    }
-    skill(join(linked, '.claude', 'skills'), 'example');
-    const localFile = join(project, '.claude', 'settings.local.json');
-    json(localFile, { skillOverrides: { example: 'off' } });
-    const hidden = await audit(linked);
+  it.each(['submodule', 'separate-git-dir'])('keeps normal settings behavior for a %s without commondir', async (layout) => {
+    rmSync(join(project, '.git'), { recursive: true });
+    const gitdir = layout === 'submodule' ? join(project, 'metadata') : join(home, 'metadata');
+    mkdirSync(gitdir);
+    file(join(project, '.git'), `gitdir: ${relative(project, gitdir)}\n`);
+    skill(join(project, '.claude', 'skills'), 'example');
+    const localSettings = join(project, '.claude', 'settings.local.json');
+    json(localSettings, { skillOverrides: { example: 'off' } });
+    const hidden = await audit(project);
     expect(hidden.hosts[0]!.warnings).toEqual([]);
     expect(hidden.hosts[0]!.skills).toEqual([]);
-    json(localFile, { skillOverrides: { example: 'on' } });
-    const adopted = await audit(linked, true);
-    expect(adopted.hosts[0]!.warnings).toEqual([]);
-    expect(adopted.disable?.claude.settings.map((s) => s.file)).toEqual([localFile]);
-  });
-
-  it.skipIf(process.platform === 'win32').each([
-    'commondir redirect', 'gitdir outside worktrees', 'wrong backlink', 'missing backlink',
-  ])('keeps this checkout when metadata has a %s', async (failure) => {
-    const linked = join(home, 'linked');
-    const target = join(home, failure === 'commondir redirect' ? 'unrelated' : 'main');
-    const common = join(target, '.git');
-    mkdirSync(common, { recursive: true });
-    const gitdir = failure === 'commondir redirect' ? join(linked, 'metadata')
-      : failure === 'gitdir outside worktrees' ? join(home, 'metadata')
-      : join(common, 'worktrees', 'linked');
-    file(join(linked, '.git'), `gitdir: ${relative(linked, gitdir)}\n`);
-    file(join(gitdir, 'commondir'), `${relative(gitdir, common)}\n`);
-    file(join(gitdir, 'gitdir'), `${relative(gitdir, join(linked, '.git'))}\n`);
-    if (failure === 'commondir redirect') {
-      symlinkSync(common, join(gitdir, 'redirect'), 'dir');
-      file(join(gitdir, 'commondir'), 'redirect\n');
-    } else if (failure === 'wrong backlink') {
-      const other = join(home, 'other', '.git');
-      file(other, 'not this checkout');
-      file(join(gitdir, 'gitdir'), `${other}\n`);
-    } else if (failure === 'missing backlink') rmSync(join(gitdir, 'gitdir'));
-    skill(join(linked, '.claude', 'skills'), 'example');
-    const targetSettings = join(target, '.claude', 'settings.local.json');
-    const localSettings = join(linked, '.claude', 'settings.local.json');
-    const warnings = ['Could not resolve the main checkout of this Git worktree; local settings are assumed at the worktree root.'];
-    for (const override of ['off', 'on']) {
-      json(targetSettings, { skillOverrides: { example: override } });
-      const before = readFileSync(targetSettings, 'utf8');
-      const report = await audit(linked);
-      expect(report.hosts[0]!.skills.map((s) => s.name)).toEqual(['example']);
-      expect(report.hosts[0]!.warnings).toEqual(warnings);
-      const adopted = await audit(linked, true);
-      expect(adopted.hosts[0]!.warnings).toEqual(warnings);
-      expect(adopted.disable?.claude.settings.map((s) => s.file)).toEqual([localSettings]);
-      expect(readFileSync(targetSettings, 'utf8')).toBe(before);
-    }
+    json(localSettings, { skillOverrides: { example: 'on' } });
+    const report = await audit(project, true);
+    expect(report.hosts[0]!.warnings).toEqual([]);
+    expect(report.disable?.claude.settings.map((s) => s.file)).toEqual([localSettings]);
   });
 
   it.skipIf(process.platform === 'win32').each(['.git', 'commondir'])('rejects a %s FIFO without hanging inventory', (component) => {
@@ -375,47 +315,6 @@ describe('audit', () => {
     const report = JSON.parse(result.stdout);
     expect(report.hosts[0].skills.map((s: { name: string }) => s.name)).toEqual(['example']);
     expect(report.hosts[0].warnings).toEqual(['Could not resolve the main checkout of this Git worktree; local settings are assumed at the worktree root.']);
-  });
-
-  it.skipIf(process.platform === 'win32').each([
-    'malformed gitfile', 'empty gitdir', 'missing gitdir', 'gitdir is a file',
-    'missing commondir', 'empty commondir', 'common is a file', 'common is not .git',
-    'linked gitfile', 'linked commondir', 'oversized gitfile', 'oversized commondir',
-  ])('returns inventory with the appropriate warning for %s', async (failure) => {
-    const linked = join(home, 'linked');
-    const gitfile = join(linked, '.git');
-    const gitdir = join(home, 'main', '.git', 'worktrees', 'linked');
-    const commonFile = join(gitdir, 'commondir');
-    file(gitfile, `gitdir: ${gitdir}\n`);
-    file(commonFile, '../..\n');
-    file(join(gitdir, 'gitdir'), `${gitfile}\n`);
-    const sentinel = join(home, 'sentinel');
-    file(sentinel, 'TOP-SECRET-METADATA\u001b[31m');
-    switch (failure) {
-      case 'malformed gitfile': file(gitfile, 'TOP-SECRET-METADATA\u001b[31m\n'); break;
-      case 'empty gitdir': file(gitfile, 'gitdir: \n'); break;
-      case 'missing gitdir': file(gitfile, 'gitdir: missing\n'); break;
-      case 'gitdir is a file': file(gitfile, `gitdir: ${sentinel}\n`); break;
-      case 'missing commondir': rmSync(commonFile); break;
-      case 'empty commondir': file(commonFile, '\n'); break;
-      case 'common is a file': file(join(home, 'file', '.git'), 'not a directory'); file(commonFile, `${join(home, 'file', '.git')}\n`); break;
-      case 'common is not .git': file(commonFile, `${home}\n`); break;
-      case 'linked gitfile': rmSync(gitfile); symlinkSync(sentinel, gitfile); break;
-      case 'linked commondir': rmSync(commonFile); symlinkSync(sentinel, commonFile); break;
-      case 'oversized gitfile': truncateSync(gitfile, 4 * 1024 * 1024 + 1); break;
-      case 'oversized commondir': truncateSync(commonFile, 4 * 1024 * 1024 + 1); break;
-    }
-    skill(join(linked, '.claude', 'skills'), 'example');
-    const warning = 'Could not resolve the main checkout of this Git worktree; local settings are assumed at the worktree root.';
-    const report = await audit(linked);
-    const warnings = failure === 'missing commondir' ? [] : [warning];
-    expect(report.hosts[0]!.skills.map((s) => s.name)).toEqual(['example']);
-    expect(report.hosts[0]!.warnings).toEqual(warnings);
-    expect(formatAudit(report).split(warning)).toHaveLength(warnings.length + 1);
-    expect(JSON.stringify(report) + formatAudit(report)).not.toContain('TOP-SECRET-METADATA');
-    const adopted = await audit(linked, true);
-    expect(adopted.hosts[0]!.warnings).toEqual(warnings);
-    expect(adopted.disable?.claude.settings.map((s) => s.file)).toEqual([join(linked, '.claude', 'settings.local.json')]);
   });
 
   it.each([false, true])('reads home local on and prints an effective hide change (home is Git root: %s)', async (gitRootIsHome) => {

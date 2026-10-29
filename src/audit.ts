@@ -93,7 +93,7 @@ function projectDirs(cwd: string): string[] {
   }
 }
 
-/** Absolute inputs; gitRoot names the main checkout for a linked worktree. */
+/** Absolute inputs for sessions outside linked worktrees. */
 export function claudeSettingsScopes({ cwd, gitRoot, home, claudeHome, platform }: {
   cwd: string; gitRoot?: string; home: string; claudeHome: string; platform: string;
 }): string[] {
@@ -299,38 +299,29 @@ export async function audit(cwd = process.cwd(), adopt = false): Promise<AuditRe
   const [claude, codex, open, cursor] = hosts as [HostAudit, HostAudit, HostAudit, HostAudit];
   const serverMaps = hosts.map(() => new Map<string, unknown>());
   const [claudeServers, codexServers, openServers, cursorServers] = serverMaps as [Map<string, unknown>, Map<string, unknown>, Map<string, unknown>, Map<string, unknown>];
-  let gitRoot = dirs.find((dir) => existsSync(join(dir, '.git')));
+  const gitRoot = dirs.find((dir) => existsSync(join(dir, '.git')));
+  let linkedWorktree = false;
   if (gitRoot && process.platform !== 'win32') {
     try {
       if (!lstatSync(join(gitRoot, '.git')).isDirectory()) {
         const pointer = readConfined(gitRoot, '.git', MAX_CONFIG_BYTES).toString('utf8');
         const gitdirPath = pointer.slice('gitdir: '.length).replace(/\r?\n$/, '');
         if (!pointer.startsWith('gitdir: ') || !gitdirPath) throw new Error('invalid Git worktree metadata');
-        const lexicalGitdir = resolve(gitRoot, gitdirPath);
-        const gitdir = realpathSync(lexicalGitdir);
-        if (!lstatSync(gitdir).isDirectory()) throw new Error('invalid Git worktree metadata');
-        // Submodules and separate Git directories need no commondir; lstat
-        // still detects dangling links so malformed metadata is not hidden.
-        if (lstatSync(join(gitdir, 'commondir'), { throwIfNoEntry: false })) {
-          const common = readConfined(gitdir, 'commondir', MAX_CONFIG_BYTES).toString('utf8').replace(/\r?\n$/, '');
-          if (!common) throw new Error('invalid Git worktree metadata');
-          const commonGit = realpathSync(resolve(gitdir, common));
-          if (basename(commonGit) !== '.git' || !lstatSync(commonGit).isDirectory()) throw new Error('invalid Git worktree metadata');
-          // Claude checks the lexical parent layout even when the admin directory is a symlink.
-          const lexicalCommon = resolve(lexicalGitdir, common);
-          if (dirname(lexicalGitdir) !== join(lexicalCommon, 'worktrees')) throw new Error('invalid Git worktree metadata');
-          const backlink = readConfined(gitdir, 'gitdir', MAX_CONFIG_BYTES).toString('utf8').trim();
-          if (realpathSync(resolve(gitdir, backlink)) !== realpathSync(join(gitRoot, '.git'))) throw new Error('invalid Git worktree metadata');
-          gitRoot = dirname(commonGit);
-        }
+        // Only inspect the marker; never read commondir or follow its target.
+        const common = lstatSync(join(resolve(gitRoot, gitdirPath), 'commondir'), { throwIfNoEntry: false });
+        if (common && !common.isFile()) throw new Error('invalid Git worktree metadata');
+        linkedWorktree = !!common;
       }
     } catch {
       claude.warnings.push('Could not resolve the main checkout of this Git worktree; local settings are assumed at the worktree root.');
     }
   }
-  const scopes = claudeSettingsScopes({ cwd: resolve(cwd), gitRoot, home: resolve(home), claudeHome: resolve(claudeHome), platform: process.platform });
+  if (linkedWorktree) claude.warnings.push('This is a linked Git worktree; loadout does not resolve its main checkout or read its project-local overrides. Personal snippets may be overridden there. Run loadout audit --adopt from the main checkout to get project-scope settings.');
+  const scopes = linkedWorktree
+    ? [...new Set([resolve(claudeHome, 'settings.json'), resolve(cwd, '.claude', 'settings.json')])]
+    : claudeSettingsScopes({ cwd: resolve(cwd), gitRoot, home: resolve(home), claudeHome: resolve(claudeHome), platform: process.platform });
   const userSettingsFile = resolve(claudeHome, 'settings.json');
-  const localSettingsFile = scopes.at(-1)!;
+  const localSettingsFile = linkedWorktree ? undefined : scopes.at(-1)!;
   const claudeSettings: Record<string, unknown> = {};
   const overrideScopes = scopes.map((file) => {
     const config = readJson(file, claude, 'Claude settings');
@@ -440,7 +431,7 @@ export async function audit(cwd = process.cwd(), adopt = false): Promise<AuditRe
         if (identity === 'Claude Code:') {
           if (Object.hasOwn(skillOverrides, skill.name) && skillOverrides[skill.name] !== 'on') continue;
           const destinations = new Set(settingsFiles);
-          if (settingsFiles.has(userSettingsFile) && overrideScopes.some((scope) => scope.file !== userSettingsFile && scope.overrides[skill.name] === 'on')) destinations.add(localSettingsFile);
+          if (localSettingsFile && settingsFiles.has(userSettingsFile) && overrideScopes.some((scope) => scope.file !== userSettingsFile && scope.overrides[skill.name] === 'on')) destinations.add(localSettingsFile);
           for (const file of destinations) {
             const overrides = claudeOverrides.get(file) ?? new Map<string, 'user-invocable-only'>();
             overrides.set(skill.name, 'user-invocable-only');
