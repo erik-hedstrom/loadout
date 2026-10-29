@@ -239,12 +239,17 @@ describe('audit', () => {
     expect(report.disable?.claude.settings).toEqual([]);
   });
 
-  it.skipIf(process.platform === 'win32')('omits linked-worktree project settings while retaining user snippets and certain settings reads', async () => {
+  it.skipIf(process.platform === 'win32').each(['regular', 'symlink', 'dangling symlink', 'FIFO', 'lstat failure'])('omits project settings for a non-directory Git marker (%s) without opening metadata', async (kind) => {
     rmSync(join(project, '.git'), { recursive: true });
     const outside = join(home, 'main');
     const gitdir = join(outside, '.git', 'worktrees', 'linked');
-    file(join(project, '.git'), `gitdir: ${relative(project, gitdir)}\n`);
-    file(join(gitdir, 'commondir'), '../..\n');
+    const marker = join(project, '.git');
+    const target = join(gitdir, 'pointer');
+    file(target, `gitdir: ${relative(project, gitdir)}\n\n`);
+    if (kind === 'symlink' || kind === 'dangling symlink') symlinkSync(kind === 'symlink' ? target : join(gitdir, 'missing'), marker);
+    else if (kind === 'FIFO') expect(spawnSync('mkfifo', [marker], { timeout: 5_000 }).status).toBe(0);
+    else file(marker, readFileSync(target, 'utf8'));
+    if (kind !== 'regular') file(join(gitdir, 'commondir'), '../..\n');
     file(join(gitdir, 'gitdir'), `${join(project, '.git')}\n`);
     const outsideSettings = join(outside, '.claude', 'settings.local.json');
     json(outsideSettings, { skillOverrides: { personal: 'on', project: 'off' }, sentinel: 'UNREAD-SETTINGS-SENTINEL' });
@@ -257,17 +262,19 @@ describe('audit', () => {
     json(userSettings, { skillOverrides: { 'user-hidden': 'off' } });
     json(join(project, '.claude', 'settings.json'), { skillOverrides: { personal: 'on', project: 'on', 'shared-hidden': 'off' } });
     json(join(project, '.claude', 'settings.local.json'), { skillOverrides: { personal: 'off', project: 'off' } });
-    const warning = 'This is a linked Git worktree; loadout does not resolve its main checkout or read its project-local overrides. Personal snippets may be overridden there. Run loadout audit --adopt from the main checkout to get project-scope settings.';
+    const warning = "This checkout's .git is not a directory (a linked worktree, submodule or separate Git directory); loadout does not resolve where Claude keeps its local settings here. Run loadout audit --adopt from the main checkout for project-scope settings; local overrides there are not read and may defeat personal snippets.";
+    const stats = kind === 'lstat failure' ? vi.spyOn(fs, 'lstatSync').mockImplementationOnce(() => { throw Object.assign(new Error('unreadable marker'), { code: 'EACCES' }); }) : undefined;
     const reads = vi.spyOn(fs, 'openSync');
     syncBuiltinESMExports();
     let report: Awaited<ReturnType<typeof audit>>;
     try {
       report = await audit(project, true);
       const opened = reads.mock.calls.map(([path]) => String(path));
-      expect(opened).toContain(join(project, '.git'));
-      for (const sentinel of [outsideSettings, join(gitdir, 'commondir'), join(gitdir, 'gitdir')]) expect(opened).not.toContain(sentinel);
+      expect(opened).toContain(userSettings);
+      for (const sentinel of [marker, target, outsideSettings, join(gitdir, 'commondir'), join(gitdir, 'gitdir')]) expect(opened).not.toContain(sentinel);
     } finally {
       reads.mockRestore();
+      stats?.mockRestore();
       syncBuiltinESMExports();
     }
     expect(report.hosts[0]!.skills.map((s) => s.name).sort()).toEqual(['personal', 'project']);
@@ -280,41 +287,6 @@ describe('audit', () => {
     applyClaudeSnippets(output);
     expect(mergedOverrides([userSettings]).personal).toBe('user-invocable-only');
     expect(mergedOverrides([userSettings, outsideSettings]).personal).toBe('on');
-  });
-
-  it.each(['submodule', 'separate-git-dir'])('keeps normal settings behavior for a %s without commondir', async (layout) => {
-    rmSync(join(project, '.git'), { recursive: true });
-    const gitdir = layout === 'submodule' ? join(project, 'metadata') : join(home, 'metadata');
-    mkdirSync(gitdir);
-    file(join(project, '.git'), `gitdir: ${relative(project, gitdir)}\n`);
-    skill(join(project, '.claude', 'skills'), 'example');
-    const localSettings = join(project, '.claude', 'settings.local.json');
-    json(localSettings, { skillOverrides: { example: 'off' } });
-    const hidden = await audit(project);
-    expect(hidden.hosts[0]!.warnings).toEqual([]);
-    expect(hidden.hosts[0]!.skills).toEqual([]);
-    json(localSettings, { skillOverrides: { example: 'on' } });
-    const report = await audit(project, true);
-    expect(report.hosts[0]!.warnings).toEqual([]);
-    expect(report.disable?.claude.settings.map((s) => s.file)).toEqual([localSettings]);
-  });
-
-  it.skipIf(process.platform === 'win32').each(['.git', 'commondir'])('rejects a %s FIFO without hanging inventory', (component) => {
-    const linked = join(home, 'linked');
-    const gitdir = join(home, 'main', '.git', 'worktrees', 'linked');
-    mkdirSync(gitdir, { recursive: true });
-    mkdirSync(linked);
-    const fifo = component === '.git' ? join(linked, '.git') : join(gitdir, 'commondir');
-    if (component === 'commondir') file(join(linked, '.git'), `gitdir: ${gitdir}\n`);
-    expect(spawnSync('mkfifo', [fifo], { timeout: 5_000 }).status).toBe(0);
-    skill(join(linked, '.claude', 'skills'), 'example');
-    const script = `import { audit } from ${JSON.stringify(import.meta.resolve('../src/audit.ts'))}; console.log(JSON.stringify(await audit(${JSON.stringify(linked)})));`;
-    const result = spawnSync(process.execPath, ['--import', import.meta.resolve('tsx'), '--input-type=module', '-e', script], { env: process.env, encoding: 'utf8', timeout: 25_000, killSignal: 'SIGKILL' });
-    expect(result.error).toBeUndefined();
-    expect(result.status, result.stderr).toBe(0);
-    const report = JSON.parse(result.stdout);
-    expect(report.hosts[0].skills.map((s: { name: string }) => s.name)).toEqual(['example']);
-    expect(report.hosts[0].warnings).toEqual(['Could not resolve the main checkout of this Git worktree; local settings are assumed at the worktree root.']);
   });
 
   it.each([false, true])('reads home local on and prints an effective hide change (home is Git root: %s)', async (gitRootIsHome) => {

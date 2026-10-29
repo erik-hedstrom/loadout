@@ -85,15 +85,25 @@ function listing(name: string, description?: string): Listing {
   return { name: clean(name), description: clean(description ?? ''), characters, tokens: Math.ceil(characters / 4) };
 }
 
-function projectDirs(cwd: string): string[] {
+function projectDirs(cwd: string): { dirs: string[]; gitRoot?: string; unmodeledCheckout: boolean } {
   const dirs: string[] = [];
   for (let dir = resolve(cwd);; dir = dirname(dir)) {
     dirs.unshift(dir);
-    if (existsSync(join(dir, '.git')) || dir === resolve(homedir()) || dirname(dir) === dir) return dirs;
+    let gitDirectory: boolean | undefined;
+    try {
+      gitDirectory = process.platform === 'win32'
+        ? existsSync(join(dir, '.git')) ? true : undefined
+        : lstatSync(join(dir, '.git'), { throwIfNoEntry: false })?.isDirectory();
+    } catch {
+      // An unreadable marker cannot establish a safe local-settings destination.
+      gitDirectory = false;
+    }
+    if (gitDirectory !== undefined) return { dirs, gitRoot: dir, unmodeledCheckout: !gitDirectory };
+    if (dir === resolve(homedir()) || dirname(dir) === dir) return { dirs, unmodeledCheckout: false };
   }
 }
 
-/** Absolute inputs for sessions outside linked worktrees. */
+/** Absolute inputs for sessions with modeled local-settings locations. */
 export function claudeSettingsScopes({ cwd, gitRoot, home, claudeHome, platform }: {
   cwd: string; gitRoot?: string; home: string; claudeHome: string; platform: string;
 }): string[] {
@@ -291,7 +301,7 @@ export async function audit(cwd = process.cwd(), adopt = false): Promise<AuditRe
   const claudeHome = process.env.CLAUDE_CONFIG_DIR || join(home, '.claude');
   const codexHome = process.env.CODEX_HOME || join(home, '.codex');
   const openHome = join(process.env.XDG_CONFIG_HOME || join(home, '.config'), 'opencode');
-  const dirs = projectDirs(cwd);
+  const { dirs, gitRoot, unmodeledCheckout } = projectDirs(cwd);
   const found = new Map<string, FoundSkill>();
   const seenDescriptions = new Set<string>();
   const hosts = ['Claude Code', 'Codex', 'OpenCode', 'Cursor'].map((host): HostAudit => ({ host, skills: [], listings: [], servers: [], descriptionCharacters: 0, estimatedTokens: 0, warnings: [] }));
@@ -299,29 +309,12 @@ export async function audit(cwd = process.cwd(), adopt = false): Promise<AuditRe
   const [claude, codex, open, cursor] = hosts as [HostAudit, HostAudit, HostAudit, HostAudit];
   const serverMaps = hosts.map(() => new Map<string, unknown>());
   const [claudeServers, codexServers, openServers, cursorServers] = serverMaps as [Map<string, unknown>, Map<string, unknown>, Map<string, unknown>, Map<string, unknown>];
-  const gitRoot = dirs.find((dir) => existsSync(join(dir, '.git')));
-  let linkedWorktree = false;
-  if (gitRoot && process.platform !== 'win32') {
-    try {
-      if (!lstatSync(join(gitRoot, '.git')).isDirectory()) {
-        const pointer = readConfined(gitRoot, '.git', MAX_CONFIG_BYTES).toString('utf8');
-        const gitdirPath = pointer.slice('gitdir: '.length).replace(/\r?\n$/, '');
-        if (!pointer.startsWith('gitdir: ') || !gitdirPath) throw new Error('invalid Git worktree metadata');
-        // Only inspect the marker; never read commondir or follow its target.
-        const common = lstatSync(join(resolve(gitRoot, gitdirPath), 'commondir'), { throwIfNoEntry: false });
-        if (common && !common.isFile()) throw new Error('invalid Git worktree metadata');
-        linkedWorktree = !!common;
-      }
-    } catch {
-      claude.warnings.push('Could not resolve the main checkout of this Git worktree; local settings are assumed at the worktree root.');
-    }
-  }
-  if (linkedWorktree) claude.warnings.push('This is a linked Git worktree; loadout does not resolve its main checkout or read its project-local overrides. Personal snippets may be overridden there. Run loadout audit --adopt from the main checkout to get project-scope settings.');
-  const scopes = linkedWorktree
+  if (unmodeledCheckout) claude.warnings.push("This checkout's .git is not a directory (a linked worktree, submodule or separate Git directory); loadout does not resolve where Claude keeps its local settings here. Run loadout audit --adopt from the main checkout for project-scope settings; local overrides there are not read and may defeat personal snippets.");
+  const scopes = unmodeledCheckout
     ? [...new Set([resolve(claudeHome, 'settings.json'), resolve(cwd, '.claude', 'settings.json')])]
     : claudeSettingsScopes({ cwd: resolve(cwd), gitRoot, home: resolve(home), claudeHome: resolve(claudeHome), platform: process.platform });
   const userSettingsFile = resolve(claudeHome, 'settings.json');
-  const localSettingsFile = linkedWorktree ? undefined : scopes.at(-1)!;
+  const localSettingsFile = unmodeledCheckout ? undefined : scopes.at(-1)!;
   const claudeSettings: Record<string, unknown> = {};
   const overrideScopes = scopes.map((file) => {
     const config = readJson(file, claude, 'Claude settings');

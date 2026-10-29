@@ -91,7 +91,7 @@ Learnings: Claude overrides are keyed by name; plugin skills need `/plugin`;
 local project settings outrank shared project settings, which outrank user
 settings. Reads and hide destinations follow the session cwd and its
 platform/Git local-file rules, not the directory where a skill was discovered.
-Linked-worktree resolution was removed after resolver edge cases (Erik's decision, 2026-10-29); audit warns and omits project destinations there.
+Resolver edge cases led to Erik's 2026-10-29 decision: on POSIX, inspect `.git` with lstat only; non-directory or unreadable entries warn and omit project destinations, including submodules/separate Git dirs.
 
 **A1. README rewrite.**
 

@@ -63,8 +63,9 @@ effective local settings file.
 Shared project settings come from the session directory, even when skills
 are discovered in an ancestor directory. The local file also stays there on
 Windows, outside Git, or when the repository root is home; otherwise it lives
-at the Git root. On POSIX, linked worktrees are not modeled: audit reads only
-user/shared settings, omits project destinations, and advises running from the
+at the Git root. On POSIX, a non-directory or unreadable `.git` entry is not modeled
+(including linked worktrees, submodules and separate Git directories): audit reads
+only user/shared settings, omits project destinations, and advises running from the
 main checkout. Its project-local overrides are not read and may defeat printed
 personal-skill snippets.
 An existing legacy local file in the session directory is read before the
