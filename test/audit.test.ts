@@ -307,7 +307,7 @@ describe('audit', () => {
       file(join(moved, 'commondir'), `${join(project, '.git')}\n`);
       symlinkSync(moved, admin, 'dir');
       git('worktree', 'list', '--porcelain');
-      git('worktree', 'repair', linked);
+      // Git 2.56 repair rewrites .git to the moved path, removing the lexical layout under test.
     }
     skill(join(linked, '.claude', 'skills'), 'example');
     const localFile = join(project, '.claude', 'settings.local.json');
