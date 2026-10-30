@@ -63,11 +63,12 @@ effective local settings file.
 Shared project settings come from the session directory, even when skills
 are discovered in an ancestor directory. The local file also stays there on
 Windows, outside Git, or when the repository root is home; otherwise it lives
-at the Git root. On POSIX, a non-directory or unreadable `.git` entry is not modeled
-(including linked worktrees, submodules and separate Git directories): audit reads
-only user/shared settings, omits project destinations, and advises running from the
-main checkout. Its project-local overrides are not read and may defeat printed
-personal-skill snippets.
+at the Git root. On POSIX, a `.git` entry that is not a plain directory or could
+not be inspected is not modeled (for example a linked worktree, submodule or
+separate Git directory): audit reads only user/shared settings and prints no
+project-local destinations. Its local settings are not read; they, or a shared
+`"on"` here, may defeat personal snippets. For a linked worktree, run
+`loadout audit --adopt` from the main checkout.
 An existing legacy local file in the session directory is read before the
 root-local file, so root-local values win. See the official
 [local-file location rules](https://code.claude.com/docs/en/settings#where-claude-code-keeps-the-local-file-in-a-git-repository).

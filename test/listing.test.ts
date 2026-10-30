@@ -1,7 +1,7 @@
 import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { join, resolve } from 'node:path';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { afterAll, afterEach, expect, it, vi } from 'vitest';
 import { parse as yaml } from 'yaml';
 import { buildListingPlan, main, parseListingUsage, readListingLibrary, writeProbeSkills } from '../bench/listing.js';
@@ -29,6 +29,8 @@ const claude = jsonl(
 const codex = jsonl({ type: 'thread.started', thread_id: 'PRIVATE THREAD' }, { type: 'item.completed', item: { type: 'agent_message', text: 'PRIVATE CONTEXT' } }, { type: 'turn.completed', usage: { input_tokens: 60, cached_input_tokens: 30, output_tokens: 1 } });
 const budgetRemoved = 'Exceeded skills context budget. All skill descriptions were removed and 888 additional skills were not included in the model-visible skills list.';
 const budgetShortened = 'Skill descriptions were shortened to fit the skills context budget. Codex can still see every skill, but some descriptions are shorter. Disable unused skills or plugins to leave more room for the rest.';
+
+const invoke = (args: string[]) => spawnSync(process.execPath, ['--import', import.meta.resolve('tsx'), resolve(import.meta.dirname, '../bench/listing.ts'), ...args], { encoding: 'utf8', timeout: 30_000 });
 
 it('writes only escaped listing fields and a framed placeholder, never bodies or executable metadata', () => {
   const source = temp();
@@ -202,6 +204,62 @@ it('records exit failures and stops subsequent spending; never persists raw erro
   const text = readFileSync(join(out, 'rows.jsonl'), 'utf8');
   expect(JSON.parse(text)).toMatchObject({ skillsBudget: null, exit: 42, durationMs: 9, invalid: 'usage-or-protocol', hostVersion: '0.163.0' });
   expect(text).not.toContain('PRIVATE');
+});
+
+it('prints CLI errors before the first run, but suppresses host failures', () => {
+  const root = temp();
+  manifest(root, 'only', 'only');
+  const invalid = invoke(['--library', root, '--plan']);
+  expect(invalid.status).toBe(1);
+  expect(invalid.stderr).toContain('listing study requires at least 250 valid, distinct skills');
+  const host = invoke(['--library', library(), '--host', 'claude', '--run', '--out', join(temp(), 'results'), '--claude-command', join(root, 'PRIVATE-MISSING-HOST')]);
+  expect(host.status).toBe(1);
+  expect(host.stderr).toContain('Host details suppressed.');
+  expect(host.stderr).not.toMatch(/PRIVATE|host version preflight/);
+});
+
+it.each([
+  { args: [], message: '--library <directory> is required' },
+  { args: ['--plan', '--run'], message: 'choose --plan or --run' },
+  { args: ['--library', 'unused', '--host', 'invalid'], message: '--host must be all, claude or codex' },
+  { args: ['--library', 'unused', '--run'], message: '--run requires --out <new directory>' },
+])('prints the fixed validation message: $message', ({ args, message }) => {
+  const result = invoke(args);
+  expect(result.status).toBe(1);
+  expect(result.stdout).toBe('');
+  expect(result.stderr.trim()).toBe(message);
+});
+
+it.each(['positional', 'library'])('suppresses untrusted %s error details before the first run', (kind) => {
+  const sentinel = 'PRIVATE-CREDENTIAL-OR-PATH-SENTINEL';
+  const result = invoke(kind === 'positional' ? [sentinel] : ['--library', join(temp(), sentinel)]);
+  expect(result.status).toBe(1);
+  expect(result.stdout).toBe('');
+  expect(result.stderr.trim()).toBe('Listing study could not start; check arguments and the library path. Details suppressed.');
+  expect(result.stdout + result.stderr).not.toContain(sentinel);
+});
+
+it.each(['probe-discovery', 'version-drift', 'mcp-startup'])('records %s and stops further paid calls', async (gate) => {
+  const out = join(temp(), 'results');
+  const run = vi.fn(async (command: { args: string[]; cwd: string }) => {
+    if (command.args.includes('--version')) return { stdout: '2.1.308 (Claude Code)', exit: 0, durationMs: 1, failure: null };
+    const es = claude.split('\n').map((line) => JSON.parse(line));
+    const plugin = command.args.includes('--plugin-dir') ? command.args[command.args.indexOf('--plugin-dir') + 1] : undefined;
+    const entries = plugin ? readdirSync(join(plugin, 'skills')) : [];
+    es[0].skills = entries.map((name) => `lst:${name}`);
+    es[0].plugins = entries.length ? [{ name: 'lst' }] : [];
+    if (gate === 'probe-discovery' && entries.length) es[0].skills.pop();
+    if (gate === 'version-drift') es[0].claude_code_version = '2.1.309';
+    if (gate === 'mcp-startup') es[0].mcp_servers = [];
+    return { stdout: jsonl(...es), exit: 0, durationMs: 1, failure: null };
+  });
+  await expect(main(['--library', library(), '--host', 'claude', '--run', '--out', out], { run, print: () => {} })).rejects.toThrow('stopped before further paid calls');
+  const rows = readFileSync(join(out, 'rows.jsonl'), 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+  const expected = gate === 'version-drift' ? 1 : gate === 'probe-discovery' ? 3 : 11;
+  expect(rows).toHaveLength(expected);
+  expect(rows.slice(0, -1).every((row) => row.invalid === null)).toBe(true);
+  expect(rows.at(-1)).toMatchObject({ invalid: gate });
+  expect(run).toHaveBeenCalledTimes(expected + 1);
 });
 
 it('refuses unsafe writer names and existing destination files', () => {

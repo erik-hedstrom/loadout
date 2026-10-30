@@ -26,7 +26,9 @@ for usage and [DESIGN.md](DESIGN.md) for the architecture.
   decisions below).
 - **Owner:** Erik Hedström (GitHub `erik-hedstrom`). Commits use
   `63313283+erik-hedstrom@users.noreply.github.com`.
-- **Main snapshot (2026-10-26):** `781090a`. It includes the C14 A/B
+- **Main snapshot (2026-10-30):** `89e637c`. It includes A6's paste-ready
+  audit adoption snippets (#66), B12's current-host listing harness and results
+  (#67), the C14 A/B
   harness (#47) and its measurement fixes (#64), B11's OpenCode harness
   (#57) and completed replacement pilot (#63), D21's cache-stable request
   prefix (#59), the separate caching track (#60), the production dependency
