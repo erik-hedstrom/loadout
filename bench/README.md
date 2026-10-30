@@ -286,10 +286,10 @@ From WSL, using the dedicated logged-in Codex home without global instructions:
 
 ```bash
 # Primary: 250 skills, ten frozen C1 TEST prompts, two repeats.
-CODEX_HOME=~/codex-bench-home node --import tsx bench/ab.ts --plan --study c15 --arms native,loadout --library ~/.loadout/library --library-size 250 --codex-model gpt-6-luna --codex-effort medium --repeats 2
+CODEX_HOME=~/codex-bench-home node --import tsx bench/ab.ts --plan --study c15 --library ~/.loadout/library --library-size 250 --codex-model gpt-6-luna --codex-effort medium --repeats 2
 
 # Secondary: whole valid corpus, one repeat, tokens only; zero judge calls.
-CODEX_HOME=~/codex-bench-home node --import tsx bench/ab.ts --plan --study c15 --arms native,loadout --library ~/.loadout/library --library-size all --codex-model gpt-6-luna --codex-effort medium --repeats 1 --no-judge
+CODEX_HOME=~/codex-bench-home node --import tsx bench/ab.ts --plan --study c15 --library ~/.loadout/library --library-size all --codex-model gpt-6-luna --codex-effort medium --repeats 1 --no-judge
 ```
 
 Plans read the library and print the exact IDs, hashes, schedule, argv,
@@ -300,6 +300,19 @@ secondary plans 22 runs (two warm-ups) and zero judges. These are future quota
 costs, not authorization to spend. Jev costs are estimated and recorded
 separately; effective input assumes cached tokens cost 0.1 of uncached input,
 with output reported separately.
+
+`--study c15` fixes the arms to `native,loadout` and effort to medium; there
+is no arm-order flag. Free discovery preflight uses the measured HOME,
+CODEX_HOME and cwd before any paid turn. Native discovery and loadout's
+library scan must exactly match the manifest; loadout native discovery must
+contain no non-builtin skills. Only system-scoped `skills/.system` entries
+under CODEX_HOME are allowed. Move ambient skills aside yourself if needed;
+the harness never edits the user's skill setup.
+
+Nine prompts are hash-selected using request text alone. The tenth,
+`c1-debug-13`, was previously selected using Jev and judge results; it
+contributes 2 of 20 pairs and the only hidden-test gate. Reports include a
+paired sensitivity median/range and win/loss counts excluding that fixture.
 
 Only the coordinator, after authorizing spending, replaces `--plan` with
 `--run --out bench/results/<timestamp>-c15-primary` or a distinct

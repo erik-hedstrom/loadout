@@ -212,9 +212,12 @@ flowchart LR
   Source[Confined source SKILL.md reads] --> Manifest[Sanitized name-hash ordered manifest]
   Manifest --> Native[Temporary repo .agents/skills]
   Manifest --> Library[Temporary LOADOUT_HOME/library/skills]
-  Native --> Rows[Native rows with manifest hash]
+  Native --> Preflight[Free exact discovery and isolation checks]
+  Library --> Preflight
+  Preflight --> Rows[Native rows with manifest hash]
   Library --> Loadout[Loadout hook and MCP, no native copies]
-  Loadout --> Rows2[Loadout rows with the same manifest hash]
+  Loadout --> Preflight
+  Preflight --> Rows2[Loadout rows with the same manifest hash]
   Rows --> Judge[Blind both-order Opus judge]
   Rows2 --> Judge
 ```
@@ -223,8 +226,9 @@ flowchart LR
   prompts, two repeats, arms `native,loadout`: 40 measured runs plus one
   warm-up per arm. Claude Opus judges each pair blind in both orders:
   40 judge calls, sequential. Claude-host execution remains blocked on E12.
-- **Prompt rule:** freeze eligibility using only request text, without
-  reading Jev selections or usefulness judgments. Take the first nine eligible
+- **Prompt rule (review correction, before any C15 run):** freeze eligibility
+  for the nine hash-selected rows using only request text, without reading
+  Jev selections or usefulness judgments. Take the first nine eligible
   TEST rows in ascending SHA-256(request id) hexadecimal order, then include
   `c1-debug-13` as the tenth, and order all ten by the same hash. Eligibility
   is the self-contained writing, productivity, everyday and questions
@@ -232,8 +236,14 @@ flowchart LR
   These tasks need no private source material or fixture repository; only
   `c1-debug-13` uses the existing fixture. The plan prints the IDs and refuses
   dev rows. Never tune routing, prompts, eligibility or this rule on these
-  test rows. The nine-row sample plus a forced fixture is not a random
-  ten-row population sample.
+  test rows. The tenth, `c1-debug-13`, was selected earlier for C14 using
+  stable Jev rerun selections and a C1 judge's useful-skill rating. It is
+  not part of the unbiased hash-selected nine: it contributes **2 of 20
+  pairs and the only hidden-test gate**. The nine-row sample plus this
+  previously selected fixture is not a random ten-row population sample.
+  Report alongside the unchanged primary screen a sensitivity paired
+  effective-input median/range and win/loss/tie/split counts excluding
+  `c1-debug-13` (18 primary pairs). Do not change the primary rule.
   Frozen IDs in run order: `c1-questions-06`, `c1-business-26`,
   `c1-documents-22`, `c1-integrations-06`, `c1-business-27`,
   `c1-questions-07`, `c1-business-23`, `c1-business-20`,
@@ -243,10 +253,18 @@ flowchart LR
   third-party-framed bodies; discard hooks and all other metadata and files.
   Both arms get identical SKILL.md bytes and skill sets. Record library size,
   sanitized full-corpus hash and selected-manifest hash on every row.
+  Reject rebuilt manifests exceeding loadout's UTF-8 byte limit before
+  selection or hashing; the metadata-only B12 corpus is unchanged.
   Native installs under the temporary repo's `.agents/skills`, with a `.git`
   directory marker; loadout has no native copies and sees only a temporary
   library made from the same manifest. This measures SKILL.md-only libraries,
   not execution of downloaded scripts or access to references.
+  Before any paid turn, free Codex `skills/list` uses the measured cwd and
+  HOME/CODEX_HOME. It must discover exactly the native manifest names and
+  paths, and no non-builtin skill in loadout. Only system-scoped skills under
+  CODEX_HOME's `skills/.system` are allowed. Discovery errors, disabled native
+  copies, unexpected skills or a `scanLibrary` name-set mismatch stop the
+  study with fixed diagnostics. No thread or turn is created for this probe.
 - **Primary token metric:** per-run effective input, native minus loadout,
   paired by prompt and repeat. Report each prompt's pairs and the paired median
   and range over all 20 pairs. Effective input weights uncached input 1 and
@@ -262,9 +280,15 @@ flowchart LR
   for loadout. Report wins, ties, splits and missing pairs, plus the Wilson
   95% interval of the loadout-loses rate (native wins / pairs with both orders,
   including splits). Do not declare the screen passed with missing pairs or
-  hidden tests. At n=20 this is a screening rule, **not proof of
+  hidden tests. Rows and verdicts must uniquely match the 20 planned
+  prompt/repeat keys, the study must share one corpus/manifest/size, and both
+  hidden-test repeats must report tests > 0 in each arm. Duplicate keys and
+  mixed manifests invalidate the screen. Missing pairs and missing judgments
+  are reported separately. At n=20 this is a screening rule, **not proof of
   non-inferiority**; repeats of ten prompts are not independent population
-  samples. Both orders use C14's blind redaction and saved final responses.
+  samples. Both orders use saved final responses and symmetric skill-name
+  redaction; C15 additionally removes fixed tool/path clues. A skill's own
+  template can still reveal the arm.
 - **Secondary:** whole valid library, one repeat, same ten prompts and two
   arms: 20 measured runs plus two warm-ups; tokens only, unjudged.
 - **Against loadout:** zero or negative paired input savings, losses beyond
