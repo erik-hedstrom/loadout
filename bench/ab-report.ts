@@ -86,6 +86,7 @@ export interface RunRow {
   corpusHash?: string;
   manifestHash?: string;
   skillsBudget?: { descriptionsRemoved: boolean; omitted: number } | null;
+  codexRetries?: number;
 }
 
 export interface Verdict {
@@ -273,6 +274,10 @@ function reportNative(rows: RunRow[], verdicts: Verdict[]): string {
   out.push('', '## Cold starts and provenance', '');
   for (const r of rows.filter((r) => r.warmup)) out.push(`- ${r.id}: uncached ${num(r.totals.uncached)}, write ${num(r.totals.cacheWrite)}, cached ${num(r.totals.cacheRead)}, output ${num(r.totals.output)}; ${r.invalid ?? 'valid'}.`);
   for (const manifest of new Set(rows.map((r) => JSON.stringify({ librarySize: r.librarySize, corpusHash: r.corpusHash, manifestHash: r.manifestHash })))) out.push(`- ${manifest}`);
+  for (const arm of ['native', 'loadout']) {
+    const runs = rows.filter((r) => r.arm === arm);
+    out.push(`- ${arm}: codexRetries ${runs.length && runs.every((r) => r.codexRetries !== undefined) ? runs.reduce((n, r) => n + r.codexRetries!, 0) : 'not shown'} (including warm-up).`);
+  }
   for (const r of rows.filter((r) => r.invalid || r.coldCacheRisk || r.timedOut || r.unreconciled.length)) out.push(`- ${r.id}: ${[r.invalid, r.coldCacheRisk && 'coldCacheRisk', r.timedOut && 'timed out', ...r.unreconciled].filter(Boolean).join('; ')}`);
   out.push('', 'Not shown: general quality retention, actual subscription cost, per-request Codex usage, other hosts/models, whole-library quality, and Jev dollars (record separately). Ten prompts and an assumed cached price do not establish population savings.', '');
   return out.join('\n');

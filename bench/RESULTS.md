@@ -261,8 +261,11 @@ flowchart LR
   not execution of downloaded scripts or access to references.
   Before any paid turn, free Codex `skills/list` uses the measured cwd and
   HOME/CODEX_HOME. It must discover exactly the native manifest names and
-  paths, and no non-builtin skill in loadout. Only system-scoped skills under
-  CODEX_HOME's `skills/.system` are allowed. Discovery errors, disabled native
+  paths, and no non-builtin skill in loadout. System-scoped skills under
+  CODEX_HOME's `skills/.system` must match by name and SKILL.md content hash the
+  builtins initialized in fresh HOME/CODEX_HOME by the same Codex executable.
+  CODEX_HOME's `config.toml` must be absent: preflight cannot ignore it as exec
+  does. Discovery errors, extra or modified builtins, disabled native
   copies, unexpected skills or a `scanLibrary` name-set mismatch stop the
   study with fixed diagnostics. No thread or turn is created for this probe.
 - **Primary token metric:** per-run effective input, native minus loadout,
@@ -273,7 +276,8 @@ flowchart LR
   measured subscription billing or a verified Luna price. Cache writes, if
   reported separately, are included at weight 1 in this fixed assumption.
   Output tokens stay separate. Report raw buckets, tool calls, skills opened,
-  hook context characters and Codex's nonfatal skills-budget notice.
+  hook context characters, Codex's nonfatal skills-budget notice and
+  `codexRetries` reconnect-notice counts per arm (including warm-ups).
 - **Quality rule, fixed now:** among pairs with a both-orders verdict,
   loadout losses (native wins) minus loadout wins must be at most 2 of the
   20 planned pairs, and the `c1-debug-13` hidden test must not pass less often
@@ -287,8 +291,11 @@ flowchart LR
   are reported separately. At n=20 this is a screening rule, **not proof of
   non-inferiority**; repeats of ten prompts are not independent population
   samples. Both orders use saved final responses and symmetric skill-name
-  redaction; C15 additionally removes fixed tool/path clues. A skill's own
-  template can still reveal the arm.
+  redaction; C15 additionally removes `.agents/skills` paths, `SKILL.md`, bare
+  and `mcp__loadout__`-qualified `find_tools`/`load_skill`, and the standalone
+  word `loadout` (including `loadout.find_tools`). Word redaction preserves
+  compound identifiers containing letters, digits, underscores or hyphens.
+  A skill's own template can still reveal the arm.
 - **Secondary:** whole valid library, one repeat, same ten prompts and two
   arms: 20 measured runs plus two warm-ups; tokens only, unjudged.
 - **Against loadout:** zero or negative paired input savings, losses beyond
@@ -299,8 +306,10 @@ flowchart LR
   actual bills and whole-library quality are not shown. Jev routing/search
   costs are reported separately from host tokens and judge quota. Harness
   implementation and plans cost $0; the coordinator authorizes and runs the
-  paid study separately. C14 warm-ups, alternating order, cache-risk flags,
-  credential redaction and batch-stop rules apply unchanged.
+  paid study separately. C14 warm-ups, alternating order, cache-risk flags and
+  credential redaction apply unchanged. C15 tolerates documented Codex reconnect
+  notices when the run completes successfully, recording their count; other
+  batch-stop rules remain unchanged.
 
 ## C14 method: three prompts with and without loadout
 

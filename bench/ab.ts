@@ -22,7 +22,7 @@ import { fileURLToPath } from 'node:url';
 import { DEFAULT_CONFIG, jevBaseUrl, loadConfig, paths, resolveApiKey } from '../src/config.js';
 import { JEV_FALLBACK_NOTE, NO_KEY_WARNING } from '../src/hook.js';
 import { hookCommand, SEARCH_SERVER, SEARCH_TOOLS, searchServer, toToml } from '../src/launch.js';
-import { capabilityKey, readManifest, scanLibrary } from '../src/library.js';
+import { capabilityKey, LIMITS, readConfined, readManifest, scanLibrary } from '../src/library.js';
 import { C15_IDS, CREDENTIAL_SHAPE, persistJson, redact, report, TOKEN_ANYWHERE, type Leak, type RunRow, type Verdict } from './ab-report.js';
 import { codexJudgeRefusal, DATA, isEntry, modelJson, readJsonl, RESULTS, run, splitOf } from './lib.js';
 import { readListingLibrary, stripCodexSkillsBudget, writeSkillFile } from './listing.js';
@@ -66,7 +66,6 @@ export function selectC15Prompts(rows = readJsonl<{ id: string; category: string
     .sort(order).slice(0, 9).map((r) => ({ id: r.id, kind: r.category }));
   if (chosen.length !== 9 || !rows.some((r) => r.id === 'c1-debug-13')) throw new Error('C15 requires nine eligible test prompts and c1-debug-13');
   chosen.push({ ...PILOT[2] });
-  assertTestPrompts(chosen.map((s) => s.id));
   chosen.sort(order);
   if (JSON.stringify(chosen.map((p) => p.id)) !== JSON.stringify(C15_IDS)) throw new Error('C15 selection differs from the preregistered IDs');
   return chosen;
@@ -346,7 +345,7 @@ export function redactNames(text: string, names: string[]): { text: string; coun
 /** C15-only arm clues, applied symmetrically; C14's redaction and its historical judge inputs stay unchanged. */
 function redactC15(text: string, names: string[]): { text: string; count: number } {
   const redacted = redactNames(text, names);
-  const clean = redacted.text.replace(/[^\s"'`<>]*\.agents[/\\]skills(?:[/\\][^\s"'`<>]*)?|(?:mcp__loadout__)?\b(?:find_tools|load_skill)\b|\bSKILL\.md\b/gi, () => {
+  const clean = redacted.text.replace(/[^\s"'`<>]*\.agents[/\\]skills(?:[/\\][^\s"'`<>]*)?|(?<![\w-])(?:(?:mcp__loadout__)?(?:find_tools|load_skill)|loadout)(?![\w-])|\bSKILL\.md\b/gi, () => {
     redacted.count++;
     return '[reference]';
   });
@@ -357,7 +356,7 @@ function redactC15(text: string, names: string[]): { text: string; count: number
 function codexRetryNotice(message: unknown): boolean {
   if (typeof message !== 'string') return false;
   const match = /^Reconnecting\.\.\. (?:waiting for network|([1-9][0-9]*)\/([1-9][0-9]*))(?: \([\s\S]*\))?$/.exec(message);
-  return !!match && match[0] === message && (match[1] === undefined || Number(match[1]) <= Number(match[2]));
+  return !!match && (match[1] === undefined || Number(match[1]) <= Number(match[2]));
 }
 
 // --- Plan -------------------------------------------------------------------------------------
@@ -378,6 +377,7 @@ export function blockers(o: Options, env: NodeJS.ProcessEnv = process.env): stri
     const refused = refusedFiles('codex');
     if (refused.length) out.push(`Codex state the study cannot isolate exists (${refused.map((f) => redacted(f)).join(', ')})`);
     const codexHome = env.CODEX_HOME || join(homedir(), '.codex');
+    if (o.study === 'c15' && lstatSync(join(codexHome, 'config.toml'), { throwIfNoEntry: false })) out.push('C15 requires CODEX_HOME without config.toml: preflight and exec must use the same configuration');
     const hooksJson = join(codexHome, 'hooks.json');
     if (o.codexHook && existsSync(hooksJson)) out.push(`${redacted(hooksJson)} exists: the loadout arm bypasses hook trust for this invocation, which would run it. Move it away or pass --no-codex-hook`);
     // Codex reads the first non-empty of these into every run's prompt (codex-rs/codex-home/src/instructions/mod.rs, rust-v0.160.1),
@@ -456,9 +456,10 @@ export function planLines(o: Options, env: NodeJS.ProcessEnv = process.env, root
   for (const write of hostWrites(env)) lines.push(`HOST STATE: ${write}`);
   lines.push(`HOST STATE: the loadout arm's hook and MCP server write under the loadout home (${o.studyLibrary ? '<work root>/study-home/sessions' : redacted(paths.sessions())}/hook state, the library scan cache), as in a user's install. Every run's folder, the shim directory and Claude's fresh homes are under one temporary work root, removed at the end.`);
   if (o.studyLibrary) {
-    lines.push('PRECONDITION: before any paid turn, free skills/list on the measured cwd with the same HOME/CODEX_HOME must discover exactly the native manifest names and paths, and no non-builtin skill in loadout; only system-scoped skills under CODEX_HOME/skills/.system are allowed. Any discovery error or mismatch stops the study. scanLibrary(study-home/library) must match the same manifest names. No thread or turn is created.');
+    lines.push(`PRECONDITION: ${CODEX_CLOUD_PRECONDITION}`);
+    lines.push('PRECONDITION: CODEX_HOME/config.toml must be absent so preflight and exec use the same configuration. Before any paid turn, free skills/list on the measured cwd with the same HOME/CODEX_HOME must discover exactly the native manifest names and paths, and no non-builtin skill in loadout. System-scoped skills under CODEX_HOME/skills/.system must match names and SKILL.md content hashes initialized in fresh HOME/CODEX_HOME by the same Codex executable. Any discovery error or mismatch stops the study. scanLibrary(study-home/library) must match the same manifest names. No thread or turn is created.');
     lines.push('SELECTION: nine test prompts are hash-selected from request text; c1-debug-13 was selected earlier using Jev and judge results and contributes 2 of 20 pairs plus the only hidden-test gate. Report sensitivity excluding that fixture.');
-    lines.push('C15 retains C14 batch-stop, credential checks, warm-ups and cache-gap flags. Jev costs are separate from host token metrics. Effective input = uncached input (including writes) x 1 + cached input x 0.1, a price-sheet assumption; output reported separately. --plan starts no child process and writes no files; paid runs and judging belong to the coordinator.');
+    lines.push('C15 retains C14 credential checks, warm-ups and cache-gap flags. Batch-stop rules tolerate documented Codex reconnect notices only on successful completion; codexRetries records their count. Jev costs are separate from host token metrics. Effective input = uncached input (including writes) x 1 + cached input x 0.1, a price-sheet assumption; output reported separately. --plan starts no child process and writes no files; paid runs and judging belong to the coordinator.');
     return lines;
   }
   for (const p of [CODEX_CLOUD_PRECONDITION, CLAUDE_MANAGED_PRECONDITION, CLAUDE_SCRUB_PRECONDITION, CLAUDE_SWITCH_PRECONDITION]) lines.push(`PRECONDITION: ${p}`);
@@ -509,13 +510,16 @@ async function execute1(job: Job, prompt: string, spec: PromptSpec | undefined, 
     : job.warmup ? heldSecretLeak(ctx.work, secrets) : copyOutputs(ctx.work, dest, folders, secrets, stream.finalMessage);
   let usage: RunUsage | null = null;
   let skillsBudget: RunRow['skillsBudget'] = null;
+  let codexRetries = 0;
   let codexProblem: string | undefined;
   try { usage = (job.host === 'claude' ? claudeUsage : codexUsage)(proc.stdout); } catch { /* checkRun says why */ }
   if (o.studyLibrary && job.host === 'codex') {
     try {
       const parsed = stripCodexSkillsBudget(proc.stdout);
       skillsBudget = parsed.skillsBudget;
-      if (events(parsed.stdout).some((e) => e.type === 'turn.failed' || e.item?.type === 'error'
+      const parsedEvents = events(parsed.stdout);
+      codexRetries = parsedEvents.filter((e) => e.type === 'error' && codexRetryNotice(e.message)).length;
+      if (parsedEvents.some((e) => e.type === 'turn.failed' || e.item?.type === 'error'
         || e.type === 'error' && !(proc.code === 0 && !proc.timedOut && usage && codexRetryNotice(e.message)))) codexProblem = 'Codex reported an unexpected error; measurement invalid';
     } catch {
       if (usage && !proc.timedOut) codexProblem = 'invalid Codex JSONL; measurement invalid';
@@ -559,7 +563,7 @@ async function execute1(job: Job, prompt: string, spec: PromptSpec | undefined, 
     coldCacheRisk: requests.some((r) => (r.gapMs ?? 0) > CACHE_TTL_MS),
     toolCalls: tools.length, toolErrors: tools.filter((t) => t.endsWith('(failed)')).length, loadoutTools: [...new Set(tools.filter((t) => t.startsWith(`mcp__${SEARCH_SERVER}__`)))],
     skillsOpened: openedSkills(stream.events), hook, hiddenTest, wroteFile, ...(leak ? { leak } : {}), ...(streamWithheld ? { streamWithheld: 'token shape' as const } : {}),
-    ...(o.studyLibrary ? { librarySize: o.studyLibrary.librarySize, corpusHash: o.studyLibrary.corpusHash, manifestHash: o.studyLibrary.manifestHash, skillsBudget } : {}),
+    ...(o.studyLibrary ? { librarySize: o.studyLibrary.librarySize, corpusHash: o.studyLibrary.corpusHash, manifestHash: o.studyLibrary.manifestHash, skillsBudget, codexRetries } : {}),
     // A Codex run that timed out reports no usage: it cannot count, but it is not a broken arm.
     ...(invalid ? { invalid } : !usage ? { invalid: proc.timedOut ? UNUSABLE[0] : UNUSABLE[1] } : {}),
   };
@@ -661,18 +665,41 @@ export async function preflightC15(ctx: Ctx, library: StudyLibrary): Promise<voi
   const scanned = scanLibrary(join(ctx.studyHome!, 'library'));
   if (scanned.some((s) => s.kind !== 'skill') || !sameNames(scanned.map((s) => s.name))) throw new Error('C15 loadout library differs from manifest');
   const c = cli('codex');
-  const system = normalize(join(ctx.env.CODEX_HOME || join(ctx.env.HOME || homedir(), '.codex'), 'skills', '.system')) + '/';
+  // app-server has no --ignore-user-config/--ignore-rules switches; blockers require config.toml absent.
+  const discover = async (cwd: string, env: NodeJS.ProcessEnv, arm: 'native' | 'loadout') => {
+    const command: Command = { bin: c.bin, args: [...c.prefix, 'app-server', ...featuresOff(arm, ctx.codexHook).flatMap((f) => ['--disable', f]),
+      '-c', `model=${JSON.stringify(ctx.models.codex)}`, '-c', `model_reasoning_effort=${ctx.codexEffort ?? 'medium'}`, '-c', 'mcp_servers={}'], cwd, env };
+    let skills: DiscoveredSkill[] = [];
+    try { await inspectCodex(command, (found) => { skills = found; }); }
+    catch { throw new Error('C15 Codex discovery failed (details suppressed)'); }
+    return skills;
+  };
+  const systemRoot = (env: NodeJS.ProcessEnv) => join(env.CODEX_HOME || join(env.HOME || homedir(), '.codex'), 'skills', '.system');
+  const inSystem = (s: DiscoveredSkill, root: string) => s.scope === 'system' && typeof s.path === 'string' && normalize(resolve(s.path)).startsWith(normalize(resolve(root)) + '/');
+  const builtinHashes = (skills: DiscoveredSkill[], root: string) => {
+    try {
+      return JSON.stringify(skills.map((s) => [s.name, createHash('sha256').update(readConfined(root, relative(root, s.path), LIMITS.manifestBytes)).digest('hex')]).sort((a, b) => a[0]!.localeCompare(b[0]!)));
+    } catch { throw new Error('C15 builtin skills differ from clean installation'); }
+  };
+  const clean = mkdtempSync(join(tmpdir(), 'loadout-c15-builtins-'));
+  let expectedBuiltins: string;
+  try {
+    const env: NodeJS.ProcessEnv = { ...childEnv(ctx.env, 'codex'), HOME: join(clean, 'home'), USERPROFILE: join(clean, 'home'), CODEX_HOME: join(clean, 'codex') };
+    delete env.CODEX_SQLITE_HOME;
+    const cwd = join(clean, 'work');
+    for (const p of [env.HOME!, env.CODEX_HOME!, join(cwd, '.git')]) mkdirSync(p, { recursive: true });
+    const skills = await discover(cwd, env, 'native');
+    if (skills.some((s) => !inSystem(s, systemRoot(env)))) throw new Error('C15 builtin skills differ from clean installation');
+    expectedBuiltins = builtinHashes(skills, systemRoot(env));
+  } finally { rmSync(clean, { recursive: true, force: true }); }
+  const system = systemRoot(ctx.env);
   for (const arm of ['native', 'loadout'] as const) {
     resetWork(ctx.work);
     prepareStudyArm({ arm }, ctx.work, library);
     const env = runEnv({ host: 'codex', arm }, ctx);
-    // app-server has no --ignore-user-config/--ignore-rules switches. Disabled native skills still count as ambient.
-    const command: Command = { bin: c.bin, args: [...c.prefix, 'app-server', ...featuresOff(arm, ctx.codexHook).flatMap((f) => ['--disable', f]),
-      '-c', `model=${JSON.stringify(ctx.models.codex)}`, '-c', `model_reasoning_effort=${ctx.codexEffort ?? 'medium'}`, '-c', 'mcp_servers={}'], cwd: ctx.work, env };
-    let skills: DiscoveredSkill[] = [];
-    try { await inspectCodex(command, (found) => { skills = found; }); }
-    catch { throw new Error('C15 Codex discovery failed (details suppressed)'); }
-    const external = skills.filter((s) => !(s.scope === 'system' && typeof s.path === 'string' && normalize(resolve(s.path)).startsWith(system)));
+    const skills = await discover(ctx.work, env, arm);
+    if (builtinHashes(skills.filter((s) => inSystem(s, system)), system) !== expectedBuiltins) throw new Error('C15 builtin skills differ from clean installation');
+    const external = skills.filter((s) => !inSystem(s, system));
     if (arm === 'loadout' && external.length) throw new Error('C15 loadout discovered non-builtin skills');
     if (arm === 'native' && (!sameNames(external.map((s) => s.name)) || external.some((s) => s.enabled !== true || typeof s.path !== 'string'
       || normalize(s.path) !== normalize(join(ctx.work, '.agents', 'skills', s.name, 'SKILL.md'))))) throw new Error('C15 native discovery differs from manifest');

@@ -305,8 +305,9 @@ with output reported separately.
 is no arm-order flag. Free discovery preflight uses the measured HOME,
 CODEX_HOME and cwd before any paid turn. Native discovery and loadout's
 library scan must exactly match the manifest; loadout native discovery must
-contain no non-builtin skills. Only system-scoped `skills/.system` entries
-under CODEX_HOME are allowed. Move ambient skills aside yourself if needed;
+contain no non-builtin skills. System-scoped `skills/.system` entries under
+CODEX_HOME must match clean builtins from the same executable by name and
+SKILL.md content hash. CODEX_HOME's `config.toml` must be absent. Move ambient skills aside yourself if needed;
 the harness never edits the user's skill setup.
 
 Nine prompts are hash-selected using request text alone. The tenth,

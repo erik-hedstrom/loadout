@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, expect, it, vi } from 'vitest';
 import { parse as yaml } from 'yaml';
-import { AB_MODELS, buildCommand, main, prepareStudyArm, preflightC15, readStudyLibrary, schedule, selectC15Prompts, assertTestPrompts, type Ctx, type Job } from '../bench/ab.js';
+import { AB_MODELS, blockers, buildCommand, main, prepareStudyArm, preflightC15, readStudyLibrary, schedule, selectC15Prompts, assertTestPrompts, type Ctx, type Job } from '../bench/ab.js';
 import { readListingLibrary } from '../bench/listing.js';
 import { DATA, readJsonl, splitOf } from '../bench/lib.js';
 import { report, type RunRow, type Verdict } from '../bench/ab-report.js';
@@ -94,7 +94,7 @@ it('rejects a sanitized body that expands beyond the loadout limit, while B12 ke
   expect(scanLibrary(join(home, 'library')).map((s) => s.name).sort()).toEqual(library.skills.map((s) => s.name).sort());
 });
 
-it.each(['discovery-error', 'native-missing', 'native-wrong-name', 'native-disabled', 'native-ambient', 'loadout-ambient', 'fake-builtin', 'scan-missing', 'scan-extra', 'scan-wrong-name', 'pass'] as const)('C15 preflight handles %s before a model turn', async (failure) => {
+it.each(['discovery-error', 'native-missing', 'native-wrong-name', 'native-disabled', 'native-ambient', 'loadout-ambient', 'fake-builtin', 'system-extra', 'system-modified', 'scan-missing', 'scan-extra', 'scan-wrong-name', 'pass'] as const)('C15 preflight handles %s before a model turn', async (failure) => {
   const library = readStudyLibrary(source(), 'all');
   const root = temp(), work = join(root, 'work'), home = join(root, 'study-home');
   const ctx: Ctx = { work, studyHome: home, shimDir: temp(), configDir: '', env: { HOME: temp(), CODEX_HOME: temp(), PATH: process.env.PATH }, models: AB_MODELS, codexEffort: 'medium', maxTurns: 30, codexHook: true };
@@ -111,28 +111,48 @@ it.each(['discovery-error', 'native-missing', 'native-wrong-name', 'native-disab
   let calls = 0;
   vi.spyOn(overhead, 'inspectCodex').mockImplementation(async (command, onSkills) => {
     calls++;
-    expect(command.cwd).toBe(work);
-    expect(command.env?.HOME).toBe(ctx.env.HOME);
-    expect(command.env?.CODEX_HOME).toBe(ctx.env.CODEX_HOME);
+    const cleanHome = command.env?.CODEX_HOME !== ctx.env.CODEX_HOME;
+    if (cleanHome) {
+      expect(command.env?.HOME).not.toBe(ctx.env.HOME);
+      expect(command.cwd).not.toBe(work);
+    } else {
+      expect(command.cwd).toBe(work);
+      expect(command.env?.HOME).toBe(ctx.env.HOME);
+    }
     expect(command.args).toContain('app-server');
     expect(command.args).not.toEqual(expect.arrayContaining(['exec', 'turn/start', 'thread/start']));
     if (failure === 'discovery-error') throw new Error('PRIVATE SKILL TEXT');
-    const native = existsSync(join(work, '.agents'));
+    const native = !cleanHome && existsSync(join(work, '.agents'));
     const found = native ? library.skills.map((s) => ({ name: s.name, path: join(work, '.agents', 'skills', s.name, 'SKILL.md'), enabled: true, scope: 'repo' })) : [];
     const ambient = { name: 'PRIVATE-NAME', path: join(ctx.env.HOME!, '.agents', 'skills', 'ambient', 'SKILL.md'), enabled: true, scope: 'user' };
     if (native && failure === 'native-missing') found.pop();
     if (native && failure === 'native-wrong-name') found[0]!.name = 'PRIVATE-NAME';
     if (native && failure === 'native-disabled') found[0]!.enabled = false;
-    if (native && failure === 'native-ambient' || !native && failure === 'loadout-ambient') found.push(ambient);
-    if (failure === 'fake-builtin') found.push({ ...ambient, scope: 'system' });
-    found.push({ name: 'builtin', path: join(ctx.env.CODEX_HOME!, 'skills', '.system', 'builtin', 'SKILL.md'), scope: 'system', enabled: true });
+    if (native && failure === 'native-ambient' || !cleanHome && !native && failure === 'loadout-ambient') found.push(ambient);
+    if (!cleanHome && failure === 'fake-builtin') found.push({ ...ambient, scope: 'system' });
+    const system = join(command.env!.CODEX_HOME!, 'skills', '.system');
+    for (const name of !cleanHome && failure === 'system-extra' ? ['builtin', 'review-intruder'] : ['builtin']) {
+      const file = join(system, name, 'SKILL.md');
+      mkdirSync(join(system, name), { recursive: true });
+      writeFileSync(file, !cleanHome && failure === 'system-modified' ? 'PRIVATE MODIFIED BODY' : 'Clean builtin body');
+      found.push({ name, path: file, scope: 'system', enabled: true });
+    }
     onSkills?.(found);
     return { discoveredSkills: found.length, discoveredPackSkills: native ? library.skills.length : 0, tools: [] };
   });
   try {
-    if (failure === 'pass') { await preflightC15(ctx, library); expect(calls).toBe(2); }
-    else await expect(preflightC15(ctx, library)).rejects.toThrow(/^C15 (?:Codex discovery failed|native discovery differs|loadout discovered non-builtin skills|loadout library differs)/);
+    if (failure === 'pass') { await preflightC15(ctx, library); expect(calls).toBe(3); }
+    else await expect(preflightC15(ctx, library)).rejects.toThrow(/^C15 (?:Codex discovery failed|native discovery differs|loadout discovered non-builtin skills|loadout library differs|builtin skills differ)/);
   } finally { vi.restoreAllMocks(); }
+});
+
+it('blocks C15 with a Codex config that exec ignores, without changing C14', () => {
+  const codexHome = temp();
+  writeFileSync(join(codexHome, 'config.toml'), 'PRIVATE CONFIG CONTENT');
+  const options = { hosts: ['codex'] as const, ids: [], repeats: 2, models: AB_MODELS, maxTurns: 30, timeoutS: 180, codexHook: true };
+  const env = { CODEX_HOME: codexHome };
+  expect(blockers({ ...options, hosts: ['codex'], study: 'c15' }, env)).toContain('C15 requires CODEX_HOME without config.toml: preflight and exec must use the same configuration');
+  expect(blockers({ ...options, hosts: ['codex'] }, env).join('\n')).not.toContain('config.toml');
 });
 
 it('rejects non-medium C15 effort and removed --arms rather than reordering a study', async () => {
@@ -190,6 +210,7 @@ it('plans primary and secondary without invoking any host or writing output', as
     expect(text).toContain(secondary ? '22 paid runs (2 warm-ups)' : '42 paid runs (2 warm-ups)');
     expect(text).toContain(secondary ? 'Judging: 0 calls' : 'Judging: 40 calls');
     expect(text).toContain('Claude host blocked on E12');
+    expect(text).toContain('cloud');
     expect(text).toContain('manifestHash=');
     expect(text).toContain('Plan only: no child processes started');
     expect(existsSync(out)).toBe(false);
@@ -218,7 +239,7 @@ function row(arm: 'native' | 'loadout', repeat = 1): RunRow {
     unreconciled: [], modelUsage: null, coldCacheRisk: false, toolCalls: 3, toolErrors: 0, loadoutTools: [], skillsOpened: ['sample'],
     hook: { invocations: arm === 'native' ? 0 : 1, contextChars: arm === 'native' ? 0 : 123, listed: [], injected: [] },
     hiddenTest: { passed: true, tests: 5, failed: 0 }, librarySize: 250, corpusHash: 'corpus', manifestHash: 'manifest',
-    skillsBudget: arm === 'native' ? { descriptionsRemoved: true, omitted: 888 } : null };
+    skillsBudget: arm === 'native' ? { descriptionsRemoved: true, omitted: 888 } : null, codexRetries: arm === 'native' ? 2 : 0 };
 }
 
 it('reports actual paired native-minus-loadout buckets, 0.1 cached weighting, tools and budget notices', () => {
@@ -227,6 +248,8 @@ it('reports actual paired native-minus-loadout buckets, 0.1 cached weighting, to
   const verdict: Verdict = { host: 'codex', prompt: 'c1-debug-13', repeat: 1, winner: 'native', judge: { backend: 'claude', model: 'opus' }, redactions: { native: 0, loadout: 0 },
     orders: [{ winner: 'native', confidence: 'high', reasons: 'Correct' }, { winner: 'native', confidence: 'high', reasons: 'Correct' }] };
   const text = report(rows, [verdict], []);
+  expect(text).toContain('native: codexRetries 2');
+  expect(text).toContain('loadout: codexRetries 0');
   expect(text).toContain('native minus loadout');
   expect(text).toContain('| c1-debug-13 | 1 | 800 | 0 | 1,000 | 50 | 900 |');
   expect(text).toContain('median 900; range 900 to 900; n=1');
@@ -290,7 +313,7 @@ it('judge-only redacts native skill names and C15 arm clues in both orders and p
   writeFileSync(join(out, 'rows.jsonl'), [row('native'), row('loadout')].map((r) => JSON.stringify({ ...r, skillsOpened: r.arm === 'native' ? ['native-secret-skill'] : [] })).join('\n'));
   for (const arm of ['native', 'loadout']) {
     const dir = join(out, 'outputs', 'codex', prompt, `${arm}-1`); mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, 'answer.md'), 'native-secret-skill .agents/skills/unobserved/SKILL.md find_tools load_skill cd cd-only && cat SKILL.md');
+    writeFileSync(join(dir, 'answer.md'), 'native-secret-skill .agents/skills/unobserved/SKILL.md find_tools load_skill mcp__loadout__find_tools loadout.find_tools loadout cd cd-only && cat SKILL.md\nloadout-ready payloadout');
   }
   const prompts: string[] = [];
   vi.spyOn(benchLib, 'modelJson').mockImplementation(async (p) => {
@@ -300,7 +323,10 @@ it('judge-only redacts native skill names and C15 arm clues in both orders and p
   try {
     await main(['--judge-only', out], { print: () => {} });
     expect(prompts).toHaveLength(2);
-    expect(prompts.join('\n')).not.toMatch(/native-secret-skill|\.agents[\\/]skills|find_tools|load_skill|unobserved|cd-only|SKILL\.md/);
+    for (const p of prompts) {
+      expect(p).not.toMatch(/native-secret-skill|\.agents[\\/]skills|find_tools|load_skill|unobserved|cd-only|SKILL\.md|(?<![\w-])loadout(?![\w-])/);
+      expect(p).toContain('loadout-ready payloadout');
+    }
     const verdict = readJsonl<Verdict>(join(out, 'verdicts.jsonl'))[0]!;
     expect(verdict.winner).toBe('native');
     expect(Object.keys(verdict.redactions).sort()).toEqual(['loadout', 'native']);
@@ -369,6 +395,8 @@ it.skipIf(process.platform === 'win32').each(['budget', 'unexpected', 'retry', '
     expect(rows.every((r) => r.manifestHash === rows[0]!.manifestHash && r.corpusHash === rows[0]!.corpusHash && r.librarySize === 2 && !r.invalid)).toBe(true);
     expect(rows.filter((r) => r.arm === 'native').every((r) => (notice === 'retry' ? r.skillsBudget === null : r.skillsBudget?.omitted === 888) && r.hook.invocations === 0)).toBe(true);
     expect(rows.every((r) => r.totals.effectiveInput === 1100)).toBe(true);
+    expect(rows.every((r) => r.codexRetries === (notice === 'retry' && r.arm === 'native' ? 1 : 0))).toBe(true);
+    expect(readFileSync(join(out, 'report.md'), 'utf8')).toContain(notice === 'retry' ? 'native: codexRetries 11' : 'native: codexRetries 0');
     expect(existsSync(join(out, 'verdicts.jsonl'))).toBe(false);
     expect(existsSync(join(out, 'INCOMPLETE'))).toBe(false);
     await expect(main(['--judge-only', out], { print: () => {} })).rejects.toThrow('tokens-only');
