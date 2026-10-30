@@ -17,6 +17,8 @@ import { counter, events } from './usage.js';
 const PROMPT = 'Reply with exactly OK. Do not use tools, skills, commands, agents, or external services.';
 const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
 const hash = (text: string) => createHash('sha256').update(text).digest('hex');
+// Only fixed harness validation messages may reach stderr before a host starts.
+class ValidationError extends Error {}
 interface ProbeSkill { name: string; description: string }
 interface Corpus { skills: ProbeSkill[]; rejected: number; normalized: number }
 interface Options {
@@ -72,11 +74,11 @@ export function writeProbeSkills(skills: ProbeSkill[], destination: string) {
 
 export function buildListingPlan(corpus: Corpus, root: string, options: Options) {
   assertTemporary(root);
-  if (corpus.skills.length < 250) throw new Error('listing study requires at least 250 valid, distinct skills');
+  if (corpus.skills.length < 250) throw new ValidationError('listing study requires at least 250 valid, distinct skills');
   const calls: Call[] = [];
   for (const host of options.hosts) {
     const argv = host === 'claude' ? options.claudeCommand : options.codexCommand;
-    if (!Array.isArray(argv) || !argv.length || argv.some((arg) => typeof arg !== 'string') || !argv[0]) throw new Error('host command must be a nonempty JSON argv array');
+    if (!Array.isArray(argv) || !argv.length || argv.some((arg) => typeof arg !== 'string') || !argv[0]) throw new ValidationError('host command must be a nonempty JSON argv array');
     const model = host === 'claude' ? options.claudeModel : options.codexModel;
     const arms = [{ arm: 's0', n: 0 }, { arm: 's50', n: 50 }, { arm: 's250', n: 250 }, { arm: 'all', n: corpus.skills.length },
       ...(host === 'claude' ? [{ arm: 'default-none', n: 0 }, { arm: 'default-mcp', n: 0 }] : [])];
@@ -177,10 +179,10 @@ export async function main(args: string[], deps: { run?: typeof runHost; print?:
     'claude-arg': { type: 'string', multiple: true }, 'codex-arg': { type: 'string', multiple: true },
     'claude-model': { type: 'string', default: 'haiku' }, 'codex-model': { type: 'string', default: 'gpt-6-luna' },
   } });
-  if (values.plan && values.run) throw new Error('choose --plan or --run');
-  if (!values.library) throw new Error('--library <directory> is required');
-  if (!['all', 'claude', 'codex'].includes(values.host)) throw new Error('--host must be all, claude or codex');
-  if (values.run && !values.out) throw new Error('--run requires --out <new directory>');
+  if (values.plan && values.run) throw new ValidationError('choose --plan or --run');
+  if (!values.library) throw new ValidationError('--library <directory> is required');
+  if (!['all', 'claude', 'codex'].includes(values.host)) throw new ValidationError('--host must be all, claude or codex');
+  if (values.run && !values.out) throw new ValidationError('--run requires --out <new directory>');
   const print = deps.print ?? console.log;
   const corpus = readListingLibrary(resolve(values.library));
   const root = mkdtempSync(join(tmpdir(), 'loadout-listing-'));
@@ -248,7 +250,8 @@ if (isEntry(import.meta.url)) {
     startedRun = true;
     return runHost(command);
   } }).catch((error: unknown) => {
-    console.error(startedRun ? 'Listing study failed; check arguments, library and recorded status. Host details suppressed.' : error instanceof Error ? error.message : String(error));
+    console.error(startedRun ? 'Listing study failed; check arguments, library and recorded status. Host details suppressed.'
+      : error instanceof ValidationError ? error.message : 'Listing study could not start; check arguments and the library path. Details suppressed.');
     process.exitCode = 1;
   });
 }
