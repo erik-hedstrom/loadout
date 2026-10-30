@@ -242,4 +242,13 @@ export async function main(args: string[], deps: { run?: typeof runHost; print?:
   }
 }
 
-if (isEntry(import.meta.url)) main(process.argv.slice(2)).catch(() => { console.error('Listing study failed; check arguments, library and recorded status. Host details suppressed.'); process.exitCode = 1; });
+if (isEntry(import.meta.url)) {
+  let startedRun = false;
+  main(process.argv.slice(2), { run: (command) => {
+    startedRun = true;
+    return runHost(command);
+  } }).catch((error: unknown) => {
+    console.error(startedRun ? 'Listing study failed; check arguments, library and recorded status. Host details suppressed.' : error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  });
+}

@@ -161,6 +161,7 @@ describe('audit', () => {
     expect(JSON.parse(readFileSync(join(destination, '.loadout-source.json'), 'utf8')).origin).toBe(join(root, 'adopted'));
     expect(readFileSync(join(root, 'adopted', 'SKILL.md'), 'utf8')).toBe(before);
     expect(readdirSync(join(home, '.loadout'))).toEqual(['library']);
+    expect(formatAudit(result)).not.toContain('Project entries apply');
     expect(formatAudit(result)).toContain('user-invocable-only');
     expect((await audit(project, true)).adopted).toEqual({ added: 0, updated: 1, skipped: 0 });
   });
@@ -248,6 +249,7 @@ describe('audit', () => {
     file(target, `gitdir: ${relative(project, gitdir)}\n\n`);
     if (kind === 'symlink' || kind === 'dangling symlink') symlinkSync(kind === 'symlink' ? target : join(gitdir, 'missing'), marker);
     else if (kind === 'FIFO') expect(spawnSync('mkfifo', [marker], { timeout: 5_000 }).status).toBe(0);
+    else if (kind === 'lstat failure') mkdirSync(marker);
     else file(marker, readFileSync(target, 'utf8'));
     if (kind !== 'regular') file(join(gitdir, 'commondir'), '../..\n');
     file(join(gitdir, 'gitdir'), `${join(project, '.git')}\n`);
@@ -262,7 +264,7 @@ describe('audit', () => {
     json(userSettings, { skillOverrides: { 'user-hidden': 'off' } });
     json(join(project, '.claude', 'settings.json'), { skillOverrides: { personal: 'on', project: 'on', 'shared-hidden': 'off' } });
     json(join(project, '.claude', 'settings.local.json'), { skillOverrides: { personal: 'off', project: 'off' } });
-    const warning = "This checkout's .git is not a directory (a linked worktree, submodule or separate Git directory); loadout does not resolve where Claude keeps its local settings here. Run loadout audit --adopt from the main checkout for project-scope settings; local overrides there are not read and may defeat personal snippets.";
+    const warning = 'This checkout\'s .git is not a plain directory or could not be inspected (for example a linked worktree, submodule or separate Git directory), so loadout prints no project-local destinations here. Its local settings are not read; they, or a shared "on" here, may defeat personal snippets. For a linked worktree, run `loadout audit --adopt` from the main checkout.';
     const stats = kind === 'lstat failure' ? vi.spyOn(fs, 'lstatSync').mockImplementationOnce(() => { throw Object.assign(new Error('unreadable marker'), { code: 'EACCES' }); }) : undefined;
     const reads = vi.spyOn(fs, 'openSync');
     syncBuiltinESMExports();
@@ -333,6 +335,7 @@ describe('audit', () => {
     vi.stubEnv('CLAUDE_CONFIG_DIR', claudeHome);
     vi.stubEnv('CODEX_HOME', codexHome);
     skill(join(claudeHome, 'skills'), 'example');
+    skill(join(project, '.claude', 'skills'), 'project');
     skill(join(codexHome, 'skills'), 'checks');
     const session = join(project, 'session\u202e-dir');
     mkdirSync(session);

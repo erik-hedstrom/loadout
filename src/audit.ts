@@ -309,7 +309,7 @@ export async function audit(cwd = process.cwd(), adopt = false): Promise<AuditRe
   const [claude, codex, open, cursor] = hosts as [HostAudit, HostAudit, HostAudit, HostAudit];
   const serverMaps = hosts.map(() => new Map<string, unknown>());
   const [claudeServers, codexServers, openServers, cursorServers] = serverMaps as [Map<string, unknown>, Map<string, unknown>, Map<string, unknown>, Map<string, unknown>];
-  if (unmodeledCheckout) claude.warnings.push("This checkout's .git is not a directory (a linked worktree, submodule or separate Git directory); loadout does not resolve where Claude keeps its local settings here. Run loadout audit --adopt from the main checkout for project-scope settings; local overrides there are not read and may defeat personal snippets.");
+  if (unmodeledCheckout) claude.warnings.push('This checkout\'s .git is not a plain directory or could not be inspected (for example a linked worktree, submodule or separate Git directory), so loadout prints no project-local destinations here. Its local settings are not read; they, or a shared "on" here, may defeat personal snippets. For a linked worktree, run `loadout audit --adopt` from the main checkout.');
   const scopes = unmodeledCheckout
     ? [...new Set([resolve(claudeHome, 'settings.json'), resolve(cwd, '.claude', 'settings.json')])]
     : claudeSettingsScopes({ cwd: resolve(cwd), gitRoot, home: resolve(home), claudeHome: resolve(claudeHome), platform: process.platform });
@@ -466,7 +466,7 @@ export function formatAudit(report: AuditReport): string {
   if (report.disable) {
     const { notice, claude, codex, guidance } = report.disable;
     lines.push(notice);
-    if (claude.settings.length) lines.push(`Project entries apply to Claude sessions started in ${escapeControls(JSON.stringify(claude.sessionDirectory))}.`);
+    if (claude.settings.some(({ file }) => basename(file) === 'settings.local.json')) lines.push(`Project entries apply to Claude sessions started in ${escapeControls(JSON.stringify(claude.sessionDirectory))}.`);
     for (const { file, skillOverrides } of claude.settings) lines.push(
       `\nClaude Code: merge into ${escapeControls(JSON.stringify(file))} (keep other settings and overrides). /name stays available:`,
       '```json', formatAuditJson({ skillOverrides }), '```',

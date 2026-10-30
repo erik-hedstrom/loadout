@@ -41,7 +41,7 @@ Each PR body's **Review state** section has the round-by-round record.
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
 | A2 | P0 | `loadout audit`: what your installed skills cost you | Claude | cloud | done ([PR #3](https://github.com/erik-hedstrom/loadout/pull/3)) |
-| A6 | P0 | Paste-ready host hide snippets after `audit --adopt` | Codex | cloud | in review ([#66](https://github.com/erik-hedstrom/loadout/pull/66)) |
+| A6 | P0 | Paste-ready host hide snippets after `audit --adopt` | Codex | cloud | done ([#66](https://github.com/erik-hedstrom/loadout/pull/66)) |
 | A1 | P0 | README rewrite around the problem, 3-command quickstart, GIF | Claude | cloud | partial ([#28](https://github.com/erik-hedstrom/loadout/pull/28)): README merged; the GIF waits on A5 |
 | A3 | P1 | `loadout init` wizard + starter packs | Codex | cloud | done ([#30](https://github.com/erik-hedstrom/loadout/pull/30)) |
 | A4 | P1 | npm package under an available name + release workflow | Codex | cloud + erik | blocked: npm name decision |
@@ -91,7 +91,13 @@ Learnings: Claude overrides are keyed by name; plugin skills need `/plugin`;
 local project settings outrank shared project settings, which outrank user
 settings. Reads and hide destinations follow the session cwd and its
 platform/Git local-file rules, not the directory where a skill was discovered.
-Resolver edge cases led to Erik's 2026-10-29 decision: on POSIX, inspect `.git` with lstat only; non-directory or unreadable entries warn and omit project destinations, including submodules/separate Git dirs.
+Erik decided on 2026-10-29 to stop modeling linked worktrees. The coordinator
+extended the rule on POSIX to every non-directory `.git` (including submodules
+and separate Git directories), because parsing `.git` to distinguish them
+produced further review findings. Audit uses lstat only; non-directory or
+unreadable markers warn and omit project destinations. The trade-off is less
+project-scope coverage in exchange for avoiding Git metadata parsing and
+uncertain local-settings destinations.
 
 **A1. README rewrite.**
 
@@ -159,7 +165,7 @@ Acceptance:
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
 | B1 | P0 | Token-waste study: measured per-request overhead of popular skill packs | Claude | local (measure) + cloud (analysis) | done ([PR #6](https://github.com/erik-hedstrom/loadout/pull/6); follow-ups under "Left" in its learnings) |
-| B12 | P0 | Remeasure native skill listing and loadout MCP cost on current hosts | Codex | local | in review ([#67](https://github.com/erik-hedstrom/loadout/pull/67)): harness and results |
+| B12 | P0 | Remeasure native skill listing and loadout MCP cost on current hosts | Codex | local | done ([#67](https://github.com/erik-hedstrom/loadout/pull/67)) |
 | B3 | P1 | Fact-checked comparison with alternatives | Claude | cloud | done ([#34](https://github.com/erik-hedstrom/loadout/pull/34); [docs/comparison.md](../comparison.md)) |
 | B2 | P1 | Launch kit drafts | Claude | cloud | todo (after A1, B1) |
 | B4 | P1 | Repo polish: description, topics, social preview, badges | Claude | cloud + erik | blocked: Erik applies settings and uploads the preview (drafts merged in [#33](https://github.com/erik-hedstrom/loadout/pull/33)) |
@@ -197,9 +203,6 @@ descriptions make the native listing a large cost from 50 skills (Claude Code
 skills, reporting it as a non-fatal `error` item that B1's parser rejects;
 loadout's tools cost +158 per request in Claude Code with tool search on (a
 matched default-tools comparison against native skills is not shown).
-Follow-ups (Low, from review): tests that trigger the probe-discovery,
-version-drift and mcp-startup gates; print argument errors raised before the
-first paid call.
 
 **B8. Items from the launch-readiness review.** The review (2026-10-13) is
 private ([ORCHESTRATOR](ORCHESTRATOR.md#local-the-default)).
@@ -1985,3 +1988,4 @@ first; change start-up or paths only where the measurement shows a cost.
 | 2026-10-13 to 15 (iter 9, cloud + local) | — | Cloud: new PRs [#35](https://github.com/erik-hedstrom/loadout/pull/35) log row, [#36](https://github.com/erik-hedstrom/loadout/pull/36) D14, [#37](https://github.com/erik-hedstrom/loadout/pull/37) C2, [#38](https://github.com/erik-hedstrom/loadout/pull/38) B7, [#39](https://github.com/erik-hedstrom/loadout/pull/39) D15, [#40](https://github.com/erik-hedstrom/loadout/pull/40) C10; #26–#34 driven to clean (Codex up to 20 rounds, #29). Open findings on #37 and #38 (see "In review"). Local (Erik): E13, pushed on 2026-10-15 as [#41](https://github.com/erik-hedstrom/loadout/pull/41); a Codex A/B run; the launch-readiness review | Jev $0 / Claude: cloud-session credit, subagents on plan quota (they hit the session limit on 2026-10-14, about 23:30 UTC; three runs cut off, no partial work) / Codex: GitHub reviews (ChatGPT plan); Erik's local A/B on his plan | Erik: C2's margin, VM, licence and scope; B7's account and its plugin-agent root fix; D15's race threads; #27 questions; #34 skills.sh threads; #36 `/proc` thread; stale `wip/*` branches; the items under HANDOFF decisions. Learned: fix the class, not the instance (B7's rounds 12–16 each found one more place a plugin sets Claude's agent; patching places did not converge); restore mutation checks from a saved copy, never `git checkout <file>`; two PRs both took the ID E13, so check open PRs for the next free ID |
 | 2026-10-15 (iter 10, local) | none: the orchestrator's `gh pr merge` was blocked by the session's permission classifier, so merges wait for Erik | [#41](https://github.com/erik-hedstrom/loadout/pull/41) E13 and [#39](https://github.com/erik-hedstrom/loadout/pull/39) D15: both reviews approve, full matrix green, ready to merge; [#38](https://github.com/erik-hedstrom/loadout/pull/38) B7: root fix (no ambient plugins), both reviews approve, full matrix green; [#37](https://github.com/erik-hedstrom/loadout/pull/37) C2: round 15 and 16 findings fixed, both reviews approve, waits for Erik's C2 decisions; this file's PR [#42](https://github.com/erik-hedstrom/loadout/pull/42); D17 measured ($0) | Jev $0 / Claude: subagents on plan quota / Codex: Sol tasks and local reviews on plan quota; no `claude -p` or `codex exec` | Erik: merge #41, #39 (then update B7 and C8 to `find_tools`), #38; C2's margin, VM, licence and scope. Decided today: B7 no ambient plugins, personal account, Codex writes accepted; D15 race scope accepted. Learned: a policy restated in several files drifts; three review rounds on E13 each found a copy that had (fix: state it once, link elsewhere). Deny the parent directory, not its children (C2) |
 | 2026-10-16 to 20 (iter 11, local) | [#41](https://github.com/erik-hedstrom/loadout/pull/41) E13, [#42](https://github.com/erik-hedstrom/loadout/pull/42) handoff, [#39](https://github.com/erik-hedstrom/loadout/pull/39) D15, [#38](https://github.com/erik-hedstrom/loadout/pull/38) B7 harness, [#44](https://github.com/erik-hedstrom/loadout/pull/44) E15, [#43](https://github.com/erik-hedstrom/loadout/pull/43) D17, [#31](https://github.com/erik-hedstrom/loadout/pull/31) B6, [#40](https://github.com/erik-hedstrom/loadout/pull/40) C10, [#33](https://github.com/erik-hedstrom/loadout/pull/33) B4, [#45](https://github.com/erik-hedstrom/loadout/pull/45) C13, [#25](https://github.com/erik-hedstrom/loadout/pull/25) C8, [#34](https://github.com/erik-hedstrom/loadout/pull/34) B3, [#30](https://github.com/erik-hedstrom/loadout/pull/30) A3, [#32](https://github.com/erik-hedstrom/loadout/pull/32) D5, [#27](https://github.com/erik-hedstrom/loadout/pull/27) D16 | [#36](https://github.com/erik-hedstrom/loadout/pull/36) D14, [#37](https://github.com/erik-hedstrom/loadout/pull/37) C2, [#29](https://github.com/erik-hedstrom/loadout/pull/29) E6, [#28](https://github.com/erik-hedstrom/loadout/pull/28) A1, [#26](https://github.com/erik-hedstrom/loadout/pull/26) E8, [#46](https://github.com/erik-hedstrom/loadout/pull/46) C12, [#47](https://github.com/erik-hedstrom/loadout/pull/47) C14; follow-ups D19, D20, E16, E17 | Jev: $2.21 for the C13 sweeps plus about $1.14 for two gold runs ([RESULTS](../../bench/RESULTS.md#c13-2026-10-16-pure-jev-baseline-on-main)); C12 replayed stored answers, $0. Claude and Codex: reviews only, on subscriptions | From 2026-10-20 Erik merges every PR himself (his global instructions; the orchestrator brings PRs to merge-ready). Turn on private vulnerability reporting (#26). Look at the #29 diagram on GitHub in light and dark. C2's remaining run prerequisites. `CLAUDE_CODE_OAUTH_TOKEN` for the B7 pilots |
+| 2026-10-30 | A6 [#66](https://github.com/erik-hedstrom/loadout/pull/66), B12 [#67](https://github.com/erik-hedstrom/loadout/pull/67) | Local follow-ups: audit guidance and scope note, listing diagnostics and validity-gate tests, gateway tool-search docs | $0; offline checks only | No new decisions |
