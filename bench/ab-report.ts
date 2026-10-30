@@ -2,6 +2,8 @@
 import type { Host } from './overhead.js';
 import type { Arm } from './pairwise.js';
 import type { RequestUsage, RunUsage } from './usage.js';
+import { codexEffectiveInput } from './usage.js';
+import { wilson } from './lib.js';
 
 /**
  * What Codex's login tokens (JWTs) and API keys look like; they can occur in third-party skill text and parsed metadata.
@@ -75,6 +77,11 @@ export interface RunRow {
   /** Set with `invalid: 'credential in output'`: the source and rule that stopped persistence, never the matched text. */
   leak?: Leak;
   streamWithheld?: 'token shape';
+  /** C15 only; absent on historical C14 rows. Hashes cover the sanitized SKILL.md bytes. */
+  librarySize?: number;
+  corpusHash?: string;
+  manifestHash?: string;
+  skillsBudget?: { descriptionsRemoved: boolean; omitted: number } | null;
 }
 
 export interface Verdict {
@@ -84,7 +91,8 @@ export interface Verdict {
   winner: Arm | 'tie' | 'split';
   judge: { backend: string; model: string };
   /** Skill names removed from both arms' files before judging, per arm. */
-  redactions: Record<Arm, number>;
+  redactions: Partial<Record<Arm, number>>;
+  orders?: { winner: Arm | 'tie'; confidence: string; reasons: string }[];
 }
 
 interface Spread { mean: number; min: number; max: number; n: number }
@@ -105,6 +113,7 @@ const triple = (rs: RequestUsage[]) => {
 };
 
 export function report(rows: RunRow[], verdicts: Verdict[], secrets: string[]): string {
+  if (rows.some((r) => r.arm === 'native')) return redact(reportNative(rows, verdicts), secrets);
   const hosts = [...new Set(rows.map((r) => r.host))];
   const prompts = [...new Set(measured(rows).map((r) => r.prompt))];
   const judged = (host: Host, prompt: string) => {
@@ -171,4 +180,61 @@ export function report(rows: RunRow[], verdicts: Verdict[], secrets: string[]): 
     '- Quality beyond the blind pairwise judge and the hidden test; the judge sees saved files and final responses (when captured), with skill names removed, so a skill\'s own template can still reveal the arm.',
     '- Anything about prompts other than these three, or about a random sample of requests.');
   return redact(out.join('\n') + '\n', secrets);
+}
+
+/** C15 keeps individual repeats visible: differences of unpaired means cannot substitute for paired savings. */
+function reportNative(rows: RunRow[], verdicts: Verdict[]): string {
+  const measuredRows = measured(rows);
+  const metric = (n: number) => n.toLocaleString('en', { maximumFractionDigits: 2 });
+  const out = ['# C15 native library comparison', '',
+    `${measuredRows.length} measured runs; ${rows.filter((r) => r.warmup).length} warm-ups excluded; ${rows.filter((r) => r.invalid).length} invalid rows. Codex thread totals, not per-request usage.`, '',
+    'Effective input = uncached input x 1 + cache write x 1 + cached input x 0.1. The 0.1 multiplier is a fixed price-sheet assumption ([OpenAI pricing](https://developers.openai.com/api/docs/pricing)), not verified Luna subscription billing. Output tokens and Jev costs are separate. Positive native minus loadout means input savings for loadout.', '',
+    '| Prompt | Repeat | Arm | Uncached | Cache write | Cached | Output | Effective input | Tool calls | Skills opened | Hook context chars | skillsBudget |',
+    '| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | ---: | --- |'];
+  for (const r of measuredRows) out.push(`| ${r.prompt} | ${r.repeat} | ${r.arm} | ${num(r.totals.uncached)} | ${num(r.totals.cacheWrite)} | ${num(r.totals.cacheRead)} | ${num(r.totals.output)} | ${metric(codexEffectiveInput(r.totals))} | ${r.toolCalls} | ${r.skillsOpened.join(', ') || 'none observed'} | ${r.hook.contextChars} | ${r.skillsBudget === undefined ? 'not shown' : JSON.stringify(r.skillsBudget)} |`);
+  out.push('', '## Paired native minus loadout', '',
+    '| Prompt | Repeat | Uncached delta | Write delta | Cached delta | Output delta | Effective input delta |',
+    '| --- | ---: | ---: | ---: | ---: | ---: | ---: |');
+  const pairs: { native: RunRow; loadout: RunRow; delta: number }[] = [];
+  for (const native of measuredRows.filter((r) => r.arm === 'native')) {
+    const loadout = measuredRows.find((r) => r.arm === 'loadout' && r.host === native.host && r.prompt === native.prompt && r.repeat === native.repeat);
+    if (!loadout) continue;
+    if (!native.manifestHash || native.manifestHash !== loadout.manifestHash || native.corpusHash !== loadout.corpusHash || native.librarySize !== loadout.librarySize) {
+      out.push(`- ${native.prompt}/${native.repeat}: manifest mismatch; not paired.`);
+      continue;
+    }
+    const delta = codexEffectiveInput(native.totals) - codexEffectiveInput(loadout.totals);
+    pairs.push({ native, loadout, delta });
+    out.push(`| ${native.prompt} | ${native.repeat} | ${num(native.totals.uncached - loadout.totals.uncached)} | ${num(native.totals.cacheWrite - loadout.totals.cacheWrite)} | ${num(native.totals.cacheRead - loadout.totals.cacheRead)} | ${num(native.totals.output - loadout.totals.output)} | ${metric(delta)} |`);
+  }
+  const pairedSummary = (xs: number[]) => {
+    if (!xs.length) return 'not shown';
+    const sorted = [...xs].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    const median = sorted.length % 2 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2;
+    return `median ${metric(median)}; range ${metric(sorted[0]!)} to ${metric(sorted.at(-1)!)}; n=${xs.length}`;
+  };
+  out.push('', pairs.length ? `Paired effective-input ${pairedSummary(pairs.map((p) => p.delta))}.` : 'Paired effective-input median: not shown.');
+  for (const prompt of new Set(pairs.map((p) => p.native.prompt))) out.push(`- ${prompt}: ${pairedSummary(pairs.filter((p) => p.native.prompt === prompt).map((p) => p.delta))}.`);
+  out.push('', '## Blind quality, both orders', '',
+    '| Prompt | Repeat | First order winner | Reverse order winner | Both-orders verdict |',
+    '| --- | ---: | --- | --- | --- |');
+  const judged = verdicts.filter((v) => v.orders?.length === 2 && pairs.some((p) => p.native.host === v.host && p.native.prompt === v.prompt && p.native.repeat === v.repeat));
+  for (const v of judged) out.push(`| ${v.prompt} | ${v.repeat} | ${v.orders![0]!.winner} | ${v.orders![1]!.winner} | ${v.winner} |`);
+  const losses = judged.filter((v) => v.winner === 'native').length;
+  const wins = judged.filter((v) => v.winner === 'loadout').length;
+  out.push('', judged.length ? `Loadout wins ${wins}; native wins (loadout loses) ${losses}; ties ${judged.filter((v) => v.winner === 'tie').length}; splits ${judged.filter((v) => v.winner === 'split').length}. Loadout-loses rate ${losses}/${judged.length}; Wilson 95% ${wilson(losses, judged.length)}. Missing both-orders verdicts: ${pairs.length - judged.length} of ${pairs.length} available pairs.` : 'Quality: not shown (unjudged).');
+  const hidden = pairs.filter((p) => p.native.prompt === 'c1-debug-13');
+  const nativePasses = hidden.filter((p) => p.native.hiddenTest?.passed).length;
+  const loadoutPasses = hidden.filter((p) => p.loadout.hiddenTest?.passed).length;
+  out.push(`Hidden c1-debug-13 passes: native ${nativePasses}, loadout ${loadoutPasses}; ${hidden.length} paired repeats; missing tests ${hidden.filter((p) => !p.native.hiddenTest || !p.loadout.hiddenTest).length}.`);
+  const complete = pairs.length === 20 && judged.length === 20 && hidden.length === 2 && hidden.every((p) => p.native.hiddenTest && p.loadout.hiddenTest)
+    && pairs.every((p) => p.native.librarySize === 250 && p.native.requestedModel === 'gpt-6-luna' && p.loadout.requestedModel === 'gpt-6-luna');
+  out.push(`Primary quality screen: ${complete ? losses - wins <= 2 && loadoutPasses >= nativePasses ? 'passes' : 'fails' : 'not shown (incomplete or secondary study)'}. Fixed rule: native wins minus loadout wins <= 2 of 20, and loadout hidden passes >= native. This is a screening rule, not proof of non-inferiority; repeated prompts are not independent population samples.`);
+  out.push('', '## Cold starts and provenance', '');
+  for (const r of rows.filter((r) => r.warmup)) out.push(`- ${r.id}: uncached ${num(r.totals.uncached)}, write ${num(r.totals.cacheWrite)}, cached ${num(r.totals.cacheRead)}, output ${num(r.totals.output)}; ${r.invalid ?? 'valid'}.`);
+  for (const manifest of new Set(rows.map((r) => JSON.stringify({ librarySize: r.librarySize, corpusHash: r.corpusHash, manifestHash: r.manifestHash })))) out.push(`- ${manifest}`);
+  for (const r of rows.filter((r) => r.invalid || r.coldCacheRisk || r.timedOut || r.unreconciled.length)) out.push(`- ${r.id}: ${[r.invalid, r.coldCacheRisk && 'coldCacheRisk', r.timedOut && 'timed out', ...r.unreconciled].filter(Boolean).join('; ')}`);
+  out.push('', 'Not shown: general quality retention, actual subscription cost, per-request Codex usage, other hosts/models, whole-library quality, and Jev dollars (record separately). Ten prompts and an assumed cached price do not establish population savings.', '');
+  return out.join('\n');
 }

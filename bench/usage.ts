@@ -54,6 +54,9 @@ export const sumUsage = (rs: RequestUsage[]) => ({
 /** Anthropic's published prompt-caching multipliers on the base input price: 5-minute write 1.25, 1-hour write 2, read 0.1. */
 const CLAUDE_WEIGHTS = { write5m: 1.25, write1h: 2, read: 0.1 };
 
+/** C15's fixed price-sheet assumption, not a subscription bill; writes remain visible separately. */
+export const codexEffectiveInput = (u: Pick<RequestUsage, 'uncached' | 'cacheWrite' | 'cacheRead'>) => u.uncached + u.cacheWrite + 0.1 * u.cacheRead;
+
 /** Input as base-price tokens (Claude only): uncached + weighted writes + weighted reads. Compare with the stream's cost; the multipliers are Anthropic's, not read from the stream. */
 export function effectiveInput(u: Pick<RequestUsage, 'uncached' | 'cacheWrite' | 'cacheRead' | 'cacheWrite5m' | 'cacheWrite1h'>): number {
   const w1h = u.cacheWrite1h ?? 0;
