@@ -6,7 +6,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { z } from 'zod';
 
-export type Arm = 'bare' | 'loadout';
+export type Arm = 'bare' | 'native' | 'loadout';
 
 export const NOTE = '\n\n(Test run: nothing is attached and the folder is empty. Where the request refers to files or data you do not have, create small realistic sample inputs and carry on. Put every deliverable in this folder.)';
 
@@ -63,13 +63,14 @@ export const JUDGE_SYSTEM = `You compare two AI agents' work on the same request
 type Order<T extends Pref> = Omit<T, 'winner'> & { winner: Arm | 'tie' };
 
 /** One pair, asked in both orders and strictly one after the other (AGENTS.md rule 6: the judge's prompt stays cached). */
-export async function judgePair<T extends Pref>(request: string, files: Record<Arm, string>, ask: (prompt: string) => Promise<T>): Promise<{ winner: Arm | 'tie' | 'split'; orders: [Order<T>, Order<T>] }> {
+export async function judgePair<T extends Pref>(request: string, files: Partial<Record<Arm, string>>, ask: (prompt: string) => Promise<T>, baseline: 'bare' | 'native' = 'bare'): Promise<{ winner: Arm | 'tie' | 'split'; orders: [Order<T>, Order<T>] }> {
+  if (files[baseline] === undefined || files.loadout === undefined) throw new Error('both arms are required for judging');
   const once = async (first: Arm, second: Arm): Promise<Order<T>> => {
     const res = await ask(`Request:\n${request}\n\n<first_agent_files>\n${files[first]}\n</first_agent_files>\n\n<second_agent_files>\n${files[second]}\n</second_agent_files>\n\nWhich agent's work better fulfils the request?`);
     return { ...res, winner: res.winner === 'tie' ? 'tie' : res.winner === 'first' ? first : second };
   };
-  const a = await once('bare', 'loadout');
-  const b = await once('loadout', 'bare');
+  const a = await once(baseline, 'loadout');
+  const b = await once('loadout', baseline);
   // Only a preference that holds in both orders counts; otherwise the verdict is split (often position bias).
   return { winner: a.winner === b.winner ? a.winner : 'split', orders: [a, b] };
 }

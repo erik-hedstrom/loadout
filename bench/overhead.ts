@@ -436,10 +436,12 @@ export async function stopChild(child: Pick<ChildProcess, 'pid' | 'exitCode' | '
   if (alive()) throw new Error('Codex app-server did not exit after SIGKILL');
 }
 /** Only initialize, skills/list and MCP inventory: never create a thread or submit a turn. */
-export const inspectCodex = (command: Command): Promise<Discovery> => withAppServer(command, async (request) => {
+export interface DiscoveredSkill { name: string; path: string; scope: string; enabled: boolean }
+export const inspectCodex = (command: Command, onSkills?: (skills: DiscoveredSkill[]) => void): Promise<Discovery> => withAppServer(command, async (request) => {
   const discovered = await request('skills/list', { cwds: [command.cwd], forceReload: true });
   const entry = discovered?.data?.find((item: any) => item.cwd === command.cwd);
   if (!entry || !Array.isArray(entry.skills) || !Array.isArray(entry.errors) || entry.errors.length) throw new Error('Codex discovery errors; measurement invalid');
+  onSkills?.(entry.skills);
   const pack = entry.skills.filter((s: any) => typeof s.path === 'string' && inside(join(command.cwd, '.agents', 'skills'), resolve(s.path)));
   if (pack.some((s: any) => s.enabled !== true)) throw new Error('Codex copied skills are disabled');
   const inventory = await request('mcpServerStatus/list', { serverName: 'loadout', detail: 'toolsAndAuthOnly' });

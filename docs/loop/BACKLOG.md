@@ -483,6 +483,7 @@ Decisions for Erik:
 | C8 | P0 | Skill use with the hook-only plugin | Claude | local | done ([#25](https://github.com/erik-hedstrom/loadout/pull/25)): headless, the hook injected a skill's text in 6 of 10; Claude opened 0 of 10, none of the 4 it was only pointed to (D13) |
 | C9 | P1 | Host-model fallback router when there is no TypeSafe key | Claude (design) | cloud (code) + local (bench) | todo |
 | C10 | P2 | Bench quick fixes: sequential outcome judge, tier fixed across arms, stale A2 number | Claude | cloud | done ([#40](https://github.com/erik-hedstrom/loadout/pull/40)) |
+| C15 | P0 | Same library natively versus through loadout: task tokens, caching and retained quality | Codex (harness) + coordinator (runs) | local | harness in review ([#69](https://github.com/erik-hedstrom/loadout/pull/69)); study not run |
 | C14 | P1 | A/B pilot: three prompts with and without loadout in the stock CLIs, tokens (cached apart from uncached) and quality | Claude (harness) + Erik (runs) | cloud (harness) + local (runs) | Codex done: harness ([#47](https://github.com/erik-hedstrom/loadout/pull/47)), first pilot and measurement fixes ([#64](https://github.com/erik-hedstrom/loadout/pull/64)), rerun recorded (2026-10-26): loadout added uncached input tokens against a bare setup; the Claude arm waits on E12 |
 
 **C13. Pure-Jev baseline without more model spend.**
@@ -784,6 +785,46 @@ no paid calls.
 
 Learnings: a script that spawns the CLIs can be tested by putting a fake
 binary alone on `PATH`, so the `claude` judge needed no new seam.
+
+**C15. Native library baseline.**
+
+Why: C14 compares against bare and cannot show replacement savings. B12
+measures fixed native listing cost, including Codex's budget truncation;
+A6 prints how to hide adopted native listings. C15 compares the same library
+served natively and through loadout on real C1 test tasks, with caching and
+quality included. Status: **harness in review ([#69](https://github.com/erik-hedstrom/loadout/pull/69)); study not run**. No result yet.
+
+Acceptance:
+- Extend `bench/ab.ts` with opt-in `native,loadout` arms and deterministic
+  B12 name-hash library prefixes; keep C14 defaults and historical rows.
+- Confined, escaped, third-party-framed SKILL.md-only snapshots, with the
+  same manifest in native `.agents/skills` and temporary loadout library;
+  no downloaded scripts, hooks, references or extra files. Record size,
+  corpus/manifest hashes and nonfatal skills-budget notices on each row.
+- Preregister nine C1 TEST prompts by request-only hash selection plus
+  `c1-debug-13`, previously selected using Jev/judge results; disclose its
+  two pairs and only hidden-test gate, and report sensitivity without it.
+  Codex only; Claude waits on E12.
+  Preserve warm-ups, alternate arm order and C14 batch-stop/redaction rules.
+- Primary 250 skills, Luna, two repeats (40 measured + two warm-ups),
+  blind Opus judging both orders (40 sequential calls); paired effective
+  input at cached weight 0.1, output separately; fixed quality screen and
+  Wilson interval. Secondary whole library, one repeat, tokens only.
+- Read-only `--plan` prints IDs, arms, argv, env names, writes, counts and
+  estimate without starting a process. Offline adversarial tests, full
+  Windows/WSL verification. Implementation/plan budget $0; paid study belongs
+  to the coordinator. No push or PR during harness implementation.
+
+[Preregistered method and fixed quality rule](../../bench/RESULTS.md#c15-method-preregistered).
+[Commands](../../bench/README.md#native-library-comparison-c15).
+Savings and quality retention: **not shown**. Round 1 reviews at `806a2d1`
+requested changes. Learnings: ignore-user-config does not hide native home
+skills; discovery needs exact name/path sets under the measured homes.
+Escaping can expand a valid source past loadout's manifest limit. Counts
+alone do not establish the planned sample or a completed hidden test.
+The fixture's earlier Jev/judge selection needs disclosure and sensitivity.
+Review fixes and tests address these gates; re-review and the paid study
+remain with the coordinator. Implementation, tests and free probes cost $0.
 
 **C14. A/B pilot.** Erik, 2026-10-19: test three prompts with and without
 loadout, evaluate the output and compare token use; he asked about tokens in,
