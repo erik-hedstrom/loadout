@@ -23,11 +23,11 @@ import { DEFAULT_CONFIG, jevBaseUrl, loadConfig, paths, resolveApiKey } from '..
 import { JEV_FALLBACK_NOTE, NO_KEY_WARNING } from '../src/hook.js';
 import { hookCommand, SEARCH_SERVER, SEARCH_TOOLS, searchServer, toToml } from '../src/launch.js';
 import { capabilityKey, readManifest, scanLibrary } from '../src/library.js';
-import { CREDENTIAL_SHAPE, persistJson, redact, report, TOKEN_ANYWHERE, type Leak, type RunRow, type Verdict } from './ab-report.js';
+import { C15_IDS, CREDENTIAL_SHAPE, persistJson, redact, report, TOKEN_ANYWHERE, type Leak, type RunRow, type Verdict } from './ab-report.js';
 import { codexJudgeRefusal, DATA, isEntry, modelJson, readJsonl, RESULTS, run, splitOf } from './lib.js';
-import { readListingLibrary, stripCodexSkillsBudget } from './listing.js';
+import { readListingLibrary, stripCodexSkillsBudget, writeSkillFile } from './listing.js';
 import { CLAUDE_MANAGED_PRECONDITION, CLAUDE_SCRUB_PRECONDITION, CLAUDE_SETTINGS, CLAUDE_SWITCH_PRECONDITION, CODEX_CLOUD_PRECONDITION, childEnv, claudeEnv, envAllowlist, hostWrites, redacted, refusedFiles, resetWork } from './mcp-overhead.js';
-import { assertTemporary, claudeIsolation, cli, execute, validateFeatures, type Command, type Host } from './overhead.js';
+import { assertTemporary, claudeIsolation, cli, execute, inspectCodex, validateFeatures, type Command, type DiscoveredSkill, type Host } from './overhead.js';
 import { deliverableFiles, deliverables, JUDGE_MAX_BYTES, judgePair, JUDGE_SYSTEM, NOTE, PrefSchema, type Arm } from './pairwise.js';
 import { hookShim, toolEvents, type Event, type HookExecution, type Inventory } from './stream.js';
 import { claudeUsage, codexUsage, codexEffectiveInput, effectiveInput, events, sumUsage, type RunUsage } from './usage.js';
@@ -60,13 +60,16 @@ export function assertTestPrompts(ids: string[]): void {
 }
 
 export function selectC15Prompts(rows = readJsonl<{ id: string; category: string }>(join(DATA, 'requests-c1.jsonl'))): PromptSpec[] {
+  assertTestPrompts(C15_IDS);
   const order = (a: { id: string }, b: { id: string }) => sha256(a.id).localeCompare(sha256(b.id));
   const chosen: PromptSpec[] = rows.filter((r) => splitOf(r.id) === 'test' && (C15_CATEGORIES.includes(r.category) || C15_TASKS.includes(r.id)))
     .sort(order).slice(0, 9).map((r) => ({ id: r.id, kind: r.category }));
   if (chosen.length !== 9 || !rows.some((r) => r.id === 'c1-debug-13')) throw new Error('C15 requires nine eligible test prompts and c1-debug-13');
   chosen.push({ ...PILOT[2] });
   assertTestPrompts(chosen.map((s) => s.id));
-  return chosen.sort(order);
+  chosen.sort(order);
+  if (JSON.stringify(chosen.map((p) => p.id)) !== JSON.stringify(C15_IDS)) throw new Error('C15 selection differs from the preregistered IDs');
+  return chosen;
 }
 
 export interface StudyLibrary { skills: { name: string; text: string }[]; librarySize: number; corpusHash: string; manifestHash: string; rejected: number; normalized: number }
@@ -84,16 +87,9 @@ export function prepareStudyArm(job: Pick<Job, 'arm'>, work: string, library: St
   mkdirSync(join(work, '.git'), { recursive: true });
   const destination = job.arm === 'native' ? join(work, '.agents') : home ? join(home, 'library') : undefined;
   if (!destination) return;
-  assertTemporary(destination);
-  for (const skill of library.skills) {
-    if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(skill.name)) throw new Error('invalid study skill name');
-    const dir = join(destination, 'skills', skill.name);
-    assertTemporary(dir);
-    mkdirSync(dir, { recursive: true });
-    assertTemporary(join(dir, 'SKILL.md'));
-    writeFileSync(join(dir, 'SKILL.md'), skill.text, { flag: 'wx' });
-  }
+  for (const skill of library.skills) writeSkillFile(destination, skill.name, skill.text);
 }
+const studyArms = (o: Pick<Options, 'study'>): Arm[] => o.study === 'c15' ? ['native', 'loadout'] : ARMS;
 const promptSpecs = (o: Options) => o.study === 'c15' ? selectC15Prompts() : PILOT;
 /** Three or more words, or the hook treats it as a follow-up and adds nothing. */
 const WARMUP_PROMPT = 'Reply with the single word READY and nothing else. Do not use any tools.';
@@ -347,9 +343,26 @@ export function redactNames(text: string, names: string[]): { text: string; coun
   return { text, count };
 }
 
+/** C15-only arm clues, applied symmetrically; C14's redaction and its historical judge inputs stay unchanged. */
+function redactC15(text: string, names: string[]): { text: string; count: number } {
+  const redacted = redactNames(text, names);
+  const clean = redacted.text.replace(/[^\s"'`<>]*\.agents[/\\]skills(?:[/\\][^\s"'`<>]*)?|(?:mcp__loadout__)?\b(?:find_tools|load_skill)\b|\bSKILL\.md\b/gi, () => {
+    redacted.count++;
+    return '[reference]';
+  });
+  return { text: clean, count: redacted.count };
+}
+
+/** rust-v0.163.0 responses_retry.rs emits these; exec drops will_retry. A completed, successful turn is also required. */
+function codexRetryNotice(message: unknown): boolean {
+  if (typeof message !== 'string') return false;
+  const match = /^Reconnecting\.\.\. (?:waiting for network|([1-9][0-9]*)\/([1-9][0-9]*))(?: \([\s\S]*\))?$/.exec(message);
+  return !!match && match[0] === message && (match[1] === undefined || Number(match[1]) <= Number(match[2]));
+}
+
 // --- Plan -------------------------------------------------------------------------------------
 
-export interface Options { hosts: Host[]; ids: string[]; repeats: number; models: Record<Host, string>; codexEffort?: string; maxTurns: number; timeoutS: number; codexHook: boolean; arms?: Arm[]; study?: 'c15'; librarySize?: number | 'all'; judge?: boolean; studyLibrary?: StudyLibrary }
+export interface Options { hosts: Host[]; ids: string[]; repeats: number; models: Record<Host, string>; codexEffort?: string; maxTurns: number; timeoutS: number; codexHook: boolean; study?: 'c15'; librarySize?: number | 'all'; judge?: boolean; studyLibrary?: StudyLibrary }
 
 /** Set only by the harness's stand-in test; a real study never sets it. */
 const SELF_TEST = 'LOADOUT_AB_SELF_TEST';
@@ -417,9 +430,10 @@ export function judgeProblems(o: Options): string[] {
 }
 
 export function planLines(o: Options, env: NodeJS.ProcessEnv = process.env, root = '<work root>'): string[] {
-  const arms = o.arms ?? ARMS;
+  const arms = studyArms(o);
   const jobs = schedule(o.hosts, o.ids, o.repeats, arms);
-  const specs = o.ids.map((id) => promptSpecs(o).find((p) => p.id === id) as PromptSpec);
+  const availableSpecs = promptSpecs(o);
+  const specs = o.ids.map((id) => availableSpecs.find((p) => p.id === id) as PromptSpec);
   const lines: string[] = [];
   const loadoutRuns = jobs.filter((j) => j.arm === 'loadout').length;
   const claudeRuns = jobs.filter((j) => j.host === 'claude').length;
@@ -429,7 +443,7 @@ export function planLines(o: Options, env: NodeJS.ProcessEnv = process.env, root
     lines.push(`LIBRARY size=${o.studyLibrary.librarySize}; corpusHash=${o.studyLibrary.corpusHash}; manifestHash=${o.studyLibrary.manifestHash}; rejected=${o.studyLibrary.rejected}; normalized=${o.studyLibrary.normalized}. Identical sanitized SKILL.md-only bytes in both arms.`);
     lines.push(`WRITES: native <work root>/work/.git and .agents/skills/<name>/SKILL.md; loadout <work root>/study-home/library/skills/<name>/SKILL.md and config.json, hook state and scan cache; no native copies in loadout. Temporary root removed at exit. --run also writes --out/config.json, rows.jsonl, streams/, outputs/, report.md and ${o.judge === false ? 'no verdicts' : 'verdicts.jsonl'}; host cache/auth writes listed below.`);
   }
-  lines.push(`Estimate (assumptions, not measurements): Claude ${claudeRuns * 2} to ${claudeRuns * o.maxTurns} requests, each carrying roughly 15k to 40k input tokens that are mostly cache reads; Codex one thread total per run; up to ${Math.round(jobs.length * o.timeoutS / 60)} minutes at the timeout, typically a third of that. Subscription quota, not cash. Jev: about ${loadoutRuns} routing calls (under $0.05, RESULTS sweeps run near $0.001 each) plus any find_tools. Judging: ${o.judge === false ? 0 : o.hosts.length * o.ids.length * o.repeats * 2} calls, sequential (Claude Opus on Codex outputs, Sol on Claude outputs).`);
+  lines.push(`Estimate (assumptions, not measurements): ${claudeRuns ? `Claude ${claudeRuns * 2} to ${claudeRuns * o.maxTurns} requests, each carrying roughly 15k to 40k input tokens that are mostly cache reads; ` : ''}Codex one thread total per run; up to ${Math.round(jobs.length * o.timeoutS / 60)} minutes at the timeout, typically a third of that. Subscription quota, not cash. Jev: about ${loadoutRuns} routing calls (under $0.05, RESULTS sweeps run near $0.001 each) plus any find_tools. Judging: ${o.judge === false ? 0 : o.hosts.length * o.ids.length * o.repeats * 2} calls, sequential (Claude Opus on Codex outputs, Sol on Claude outputs).`);
   for (const s of specs) lines.push(`PROMPT ${s.id} (${s.kind}): ${promptText(s).length} characters with the note${s.fixture ? `; fixture ${s.fixture}, hidden test ${s.hidden}` : ''}`);
   for (const host of o.hosts) lines.push(`SCHEDULE ${host} (arm/prompt/repeat; warm-ups are repeat 0): ${jobs.filter((j) => j.host === host).map((j) => `${j.arm}/${j.prompt}/${j.repeat}`).join('  ')}`);
   const ctx: Ctx = { work: join(root, 'work'), shimDir: join(root, 'shim', '<host>'), configDir: '<fresh CLAUDE_CONFIG_DIR per run>', env: o.studyLibrary ? { ...env, TYPESAFE_API_KEY: '<resolved via resolveApiKey before run>' } : env, models: o.models, codexEffort: o.codexEffort, maxTurns: o.maxTurns, codexHook: o.codexHook, ...(o.studyLibrary ? { studyHome: join(root, 'study-home') } : {}) };
@@ -442,6 +456,8 @@ export function planLines(o: Options, env: NodeJS.ProcessEnv = process.env, root
   for (const write of hostWrites(env)) lines.push(`HOST STATE: ${write}`);
   lines.push(`HOST STATE: the loadout arm's hook and MCP server write under the loadout home (${o.studyLibrary ? '<work root>/study-home/sessions' : redacted(paths.sessions())}/hook state, the library scan cache), as in a user's install. Every run's folder, the shim directory and Claude's fresh homes are under one temporary work root, removed at the end.`);
   if (o.studyLibrary) {
+    lines.push('PRECONDITION: before any paid turn, free skills/list on the measured cwd with the same HOME/CODEX_HOME must discover exactly the native manifest names and paths, and no non-builtin skill in loadout; only system-scoped skills under CODEX_HOME/skills/.system are allowed. Any discovery error or mismatch stops the study. scanLibrary(study-home/library) must match the same manifest names. No thread or turn is created.');
+    lines.push('SELECTION: nine test prompts are hash-selected from request text; c1-debug-13 was selected earlier using Jev and judge results and contributes 2 of 20 pairs plus the only hidden-test gate. Report sensitivity excluding that fixture.');
     lines.push('C15 retains C14 batch-stop, credential checks, warm-ups and cache-gap flags. Jev costs are separate from host token metrics. Effective input = uncached input (including writes) x 1 + cached input x 0.1, a price-sheet assumption; output reported separately. --plan starts no child process and writes no files; paid runs and judging belong to the coordinator.');
     return lines;
   }
@@ -499,7 +515,8 @@ async function execute1(job: Job, prompt: string, spec: PromptSpec | undefined, 
     try {
       const parsed = stripCodexSkillsBudget(proc.stdout);
       skillsBudget = parsed.skillsBudget;
-      if (events(parsed.stdout).some((e) => e.type === 'turn.failed' || e.type === 'error' || e.item?.type === 'error')) codexProblem = 'Codex reported an unexpected error; measurement invalid';
+      if (events(parsed.stdout).some((e) => e.type === 'turn.failed' || e.item?.type === 'error'
+        || e.type === 'error' && !(proc.code === 0 && !proc.timedOut && usage && codexRetryNotice(e.message)))) codexProblem = 'Codex reported an unexpected error; measurement invalid';
     } catch {
       if (usage && !proc.timedOut) codexProblem = 'invalid Codex JSONL; measurement invalid';
     }
@@ -563,15 +580,16 @@ export function provenance(studyLibrary?: StudyLibrary): Provenance {
   const git = (...args: string[]) => execFileSync('git', args, { cwd: REPO, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
   const head = git('rev-parse', 'HEAD');
   const diff = git('diff', '--no-ext-diff', '--no-textconv', 'HEAD');
+  const commit = diff ? `${head}+dirty-${sha256(diff).slice(0, 12)}` : head;
   // Each capability's key, name and description, and a skill's SKILL.md text (read through readConfined), hashed and never
   // shown: editing a skill without renaming it still changes what the hook injects.
-  if (studyLibrary) return { commit: diff ? `${head}+dirty-${sha256(diff).slice(0, 12)}` : head, library: `${studyLibrary.librarySize} skills, corpus ${studyLibrary.corpusHash}, manifest ${studyLibrary.manifestHash}` };
+  if (studyLibrary) return { commit, library: `${studyLibrary.librarySize} skills, corpus ${studyLibrary.corpusHash}, manifest ${studyLibrary.manifestHash}` };
   const library = scanLibrary(paths.library()).map((c) => [capabilityKey(c), c.name, c.description, c.kind === 'skill' ? readManifest(c.source) ?? '' : ''].join('\0')).sort();
-  return { commit: diff ? `${head}+dirty-${createHash('sha256').update(diff).digest('hex').slice(0, 12)}` : head, library: `${library.length} capabilities, ${createHash('sha256').update(library.join('\n')).digest('hex').slice(0, 12)}` };
+  return { commit, library: `${library.length} capabilities, ${sha256(library.join('\n')).slice(0, 12)}` };
 }
 
 const studySettings = (s: Options & Partial<Provenance>) => ({ hosts: s.hosts, ids: s.ids, repeats: s.repeats, models: s.models, codexEffort: s.codexEffort, maxTurns: s.maxTurns, timeoutS: s.timeoutS, codexHook: s.codexHook, commit: s.commit, library: s.library,
-  ...(s.arms ? { arms: s.arms } : {}), ...(s.study ? { study: s.study, librarySize: s.librarySize, judge: s.judge } : {}) });
+  ...(s.study ? { arms: studyArms(s), study: s.study, librarySize: s.librarySize, judge: s.judge } : {}) });
 
 /** An --out folder is one study: resuming it with other settings (another model, other code or library) would pair rows measured under different ones. */
 export function refuseOtherSettings(out: string, o: Options, p: Provenance, secrets: string[]): void {
@@ -592,7 +610,7 @@ async function runAll(o: Options, out: string, deps: { token?: string; print: (s
   // Derived from --out, not random: a resumed study then works in the same folder, and the folder is in the prefix the cache keys on.
   // The base is resolved once: tmpdir() can itself be a link (macOS without TMPDIR is /tmp -> /private/tmp), and assertTemporary
   // refuses a link as the nearest existing ancestor of a root that does not exist yet. Links below the base are still refused.
-  const root = join(realpathSync(tmpdir()), `loadout-ab-${createHash('sha256').update(out).digest('hex').slice(0, 12)}`);
+  const root = join(realpathSync(tmpdir()), `loadout-ab-${sha256(out).slice(0, 12)}`);
   assertTemporary(root);
   rmSync(root, { recursive: true, force: true });
   // Not recursive, and private: the name is predictable in a shared tmpdir, so anything that appears there between the
@@ -600,22 +618,24 @@ async function runAll(o: Options, out: string, deps: { token?: string; print: (s
   mkdirSync(root, { mode: 0o700 });
   try {
     const rowsFile = join(out, 'rows.jsonl');
-    const specs = o.ids.map((id) => promptSpecs(o).find((p) => p.id === id) as PromptSpec);
+    const availableSpecs = promptSpecs(o);
+    const specs = o.ids.map((id) => availableSpecs.find((p) => p.id === id) as PromptSpec);
     const versions = Object.fromEntries(o.hosts.map((h) => [h, version(h)]));
     const secrets = deps.secrets;
     const configFile = join(out, 'config.json');
-    if (!existsSync(configFile)) writeFileSync(configFile, persistJson({ ...studySettings({ ...o, ...deps.provenance }), ...(o.studyLibrary ? { corpusHash: o.studyLibrary.corpusHash, manifestHash: o.studyLibrary.manifestHash } : {}), versions, schedule: schedule(o.hosts, o.ids, o.repeats, o.arms).map(jobId) }, secrets) + '\n');
+    if (!existsSync(configFile)) writeFileSync(configFile, persistJson({ ...studySettings({ ...o, ...deps.provenance }), ...(o.studyLibrary ? { corpusHash: o.studyLibrary.corpusHash, manifestHash: o.studyLibrary.manifestHash } : {}), versions, schedule: schedule(o.hosts, o.ids, o.repeats, studyArms(o)).map(jobId) }, secrets) + '\n');
     const studyHome = o.studyLibrary ? join(root, 'study-home') : undefined;
     if (studyHome) {
       prepareStudyArm({ arm: 'loadout' }, join(root, 'work'), o.studyLibrary!, studyHome);
       // No key file or original library is reachable through this temporary config.
       const config = loadConfig();
       writeFileSync(join(studyHome, 'config.json'), JSON.stringify({ ...config, jev: { ...config.jev, apiKeyFile: undefined } }));
+      await preflightC15({ work: join(root, 'work'), studyHome, shimDir: join(root, 'shim', 'codex'), configDir: '', env: deps.env, models: o.models, codexEffort: o.codexEffort, maxTurns: o.maxTurns, codexHook: o.codexHook }, o.studyLibrary!);
     }
     if (o.hosts.includes('codex')) await codexPreflight(o, root);
     const shims = Object.fromEntries(o.hosts.map((h) => [h, join(root, 'shim', h)]));
     for (const dir of Object.values(shims)) mkdirSync(dir, { recursive: true });
-    for (const job of schedule(o.hosts, o.ids, o.repeats, o.arms)) {
+    for (const job of schedule(o.hosts, o.ids, o.repeats, studyArms(o))) {
       const previous = completed(rowsFile);
       if (previous.some((r) => r.id === jobId(job))) continue;
       const spec = specs.find((s) => s.id === job.prompt);
@@ -634,10 +654,35 @@ async function runAll(o: Options, out: string, deps: { token?: string; print: (s
   }
 }
 
+/** Free skills/list, on the measured cwd and inherited homes. Never starts a thread, turn, hook or loadout MCP. */
+export async function preflightC15(ctx: Ctx, library: StudyLibrary): Promise<void> {
+  const expected = library.skills.map((s) => s.name).sort();
+  const sameNames = (names: string[]) => JSON.stringify(names.sort()) === JSON.stringify(expected);
+  const scanned = scanLibrary(join(ctx.studyHome!, 'library'));
+  if (scanned.some((s) => s.kind !== 'skill') || !sameNames(scanned.map((s) => s.name))) throw new Error('C15 loadout library differs from manifest');
+  const c = cli('codex');
+  const system = normalize(join(ctx.env.CODEX_HOME || join(ctx.env.HOME || homedir(), '.codex'), 'skills', '.system')) + '/';
+  for (const arm of ['native', 'loadout'] as const) {
+    resetWork(ctx.work);
+    prepareStudyArm({ arm }, ctx.work, library);
+    const env = runEnv({ host: 'codex', arm }, ctx);
+    // app-server has no --ignore-user-config/--ignore-rules switches. Disabled native skills still count as ambient.
+    const command: Command = { bin: c.bin, args: [...c.prefix, 'app-server', ...featuresOff(arm, ctx.codexHook).flatMap((f) => ['--disable', f]),
+      '-c', `model=${JSON.stringify(ctx.models.codex)}`, '-c', `model_reasoning_effort=${ctx.codexEffort ?? 'medium'}`, '-c', 'mcp_servers={}'], cwd: ctx.work, env };
+    let skills: DiscoveredSkill[] = [];
+    try { await inspectCodex(command, (found) => { skills = found; }); }
+    catch { throw new Error('C15 Codex discovery failed (details suppressed)'); }
+    const external = skills.filter((s) => !(s.scope === 'system' && typeof s.path === 'string' && normalize(resolve(s.path)).startsWith(system)));
+    if (arm === 'loadout' && external.length) throw new Error('C15 loadout discovered non-builtin skills');
+    if (arm === 'native' && (!sameNames(external.map((s) => s.name)) || external.some((s) => s.enabled !== true || typeof s.path !== 'string'
+      || normalize(s.path) !== normalize(join(ctx.work, '.agents', 'skills', s.name, 'SKILL.md'))))) throw new Error('C15 native discovery differs from manifest');
+  }
+}
+
 /** Free: the features Codex reports for each arm's flags, on an empty home so nothing of the user's is read or written. */
 async function codexPreflight(o: Options, root: string): Promise<void> {
   const c = cli('codex');
-  for (const arm of o.arms ?? ARMS) {
+  for (const arm of studyArms(o)) {
     const home = join(root, 'codex-home', arm);
     mkdirSync(home, { recursive: true });
     const off = featuresOff(arm, o.codexHook);
@@ -660,8 +705,17 @@ async function judgeAll(out: string, print: (s: string) => void, secrets: string
     const names = [...bare.hook.listed, ...bare.hook.injected, ...loadout.hook.listed, ...loadout.hook.injected, ...bare.skillsOpened, ...loadout.skillsOpened];
     if (names.some((name) => name.includes('<credential>'))) throw new Error('skill names were redacted: blind judging is not possible');
     const dir = (r: RunRow) => join(out, 'outputs', r.host, r.prompt, `${r.arm}-${r.repeat}`);
-    const bareFiles = redactNames(deliverables(dir(bare)), names);
-    const loadoutFiles = redactNames(deliverables(dir(loadout)), names);
+    const files = [deliverables(dir(bare)), deliverables(dir(loadout))];
+    if (baseline === 'native') {
+      // Relative cd/read commands do not contain skills/<name>/SKILL.md and escape openedSkills().
+      for (const text of files) {
+        for (const m of text.matchAll(/\.agents[/\\]skills[/\\]([a-z0-9-]+)(?:[/\\]|\b)/gi)) names.push(m[1]!);
+        for (const m of text.matchAll(/\bcd\s+["']?([^\s"';&]+)["']?\s*(?:&&|;)\s*cat\s+["']?SKILL\.md\b/gi)) names.push(m[1]!.split(/[/\\]/).at(-1)!);
+      }
+    }
+    const clean = baseline === 'native' ? redactC15 : redactNames;
+    const bareFiles = clean(files[0]!, names);
+    const loadoutFiles = clean(files[1]!, names);
     const judge = JUDGES[host];
     const verdict = await judgePair(requests.find((r) => r.id === prompt)!.request, { [baseline]: bareFiles.text, loadout: loadoutFiles.text }, async (p) => {
       const res = await modelJson(p, PrefSchema, { backend: judge.backend, model: judge.model, system: JUDGE_SYSTEM, out });
@@ -694,10 +748,11 @@ export async function main(args: string[], deps: { print?: (s: string) => void; 
 async function mainImpl(args: string[], print: (s: string) => void, env: NodeJS.ProcessEnv, secrets: string[]): Promise<void> {
   const { values } = parseArgs({ args, options: { plan: { type: 'boolean' }, run: { type: 'boolean' }, 'judge-only': { type: 'string' }, hosts: { type: 'string' }, ids: { type: 'string' }, repeats: { type: 'string' }, out: { type: 'string' },
     'claude-model': { type: 'string' }, 'codex-model': { type: 'string' }, 'codex-effort': { type: 'string' }, 'max-turns': { type: 'string' }, 'timeout-s': { type: 'string' }, 'no-codex-hook': { type: 'boolean' },
-    study: { type: 'string' }, arms: { type: 'string' }, library: { type: 'string' }, 'library-size': { type: 'string' }, 'no-judge': { type: 'boolean' } } });
+    study: { type: 'string' }, library: { type: 'string' }, 'library-size': { type: 'string' }, 'no-judge': { type: 'boolean' } } });
   if (values.plan && values.run) throw new Error('choose --plan or --run');
   if (values.study !== undefined && values.study !== 'c15') throw new Error('--study must be c15');
   const c15 = values.study === 'c15';
+  if (c15 && values['codex-effort'] !== undefined && values['codex-effort'] !== 'medium') throw new Error('C15 requires medium Codex effort');
   if (c15 && values.ids) assertTestPrompts(values.ids.split(','));
   const specs = c15 ? selectC15Prompts() : PILOT;
   if (values['codex-effort'] !== undefined && !CODEX_EFFORTS.includes(values['codex-effort'])) throw new Error(`--codex-effort must be one of: ${CODEX_EFFORTS.join(', ')}`);
@@ -706,27 +761,23 @@ async function mainImpl(args: string[], print: (s: string) => void, env: NodeJS.
   const o: Options = {
     hosts: list(values.hosts, ['claude', 'codex'], c15 ? ['codex'] : ['claude', 'codex']), ids: list<string>(values.ids, specs.map((p) => p.id), specs.map((p) => p.id)), repeats: positive(values.repeats, 2, 'repeats'),
     models: { claude: values['claude-model'] ?? AB_MODELS.claude, codex: values['codex-model'] ?? (c15 ? 'gpt-6-luna' : AB_MODELS.codex) }, codexEffort: values['codex-effort'] ?? (c15 ? 'medium' : undefined), maxTurns: positive(values['max-turns'], 30, 'max-turns'), timeoutS: positive(values['timeout-s'], 600, 'timeout-s'), codexHook: !values['no-codex-hook'],
-    ...(values.arms || c15 ? { arms: list(values.arms, ['bare', 'native', 'loadout'], c15 ? ['native', 'loadout'] : ARMS) } : {}),
     ...(c15 ? { study: 'c15' as const, librarySize: values['library-size'] === 'all' ? 'all' as const : positive(values['library-size'], 250, 'library-size'), judge: !values['no-judge'] } : {}),
   };
   if (values['judge-only'] !== undefined) {
     const dir = resolve(values['judge-only']);
-    if (existsSync(join(dir, 'config.json')) && JSON.parse(readFileSync(join(dir, 'config.json'), 'utf8')).judge === false) throw new Error('this is an unjudged tokens-only study');
+    const savedConfig = existsSync(join(dir, 'config.json')) ? JSON.parse(readFileSync(join(dir, 'config.json'), 'utf8')) : undefined;
+    if (savedConfig?.judge === false) throw new Error('this is an unjudged tokens-only study');
     refuseStopped(dir);
     const verdicts = await judgeAll(dir, print, secrets);
     const rows = completed(join(dir, 'rows.jsonl'));
     writeFileSync(join(dir, 'report.md'), report(rows, verdicts, secrets));
     // Judging an unfinished study leaves it marked: the marker goes only once every scheduled run has a row.
-    const scheduled: string[] = existsSync(join(dir, 'config.json')) ? JSON.parse(readFileSync(join(dir, 'config.json'), 'utf8')).schedule : [];
+    const scheduled: string[] = savedConfig?.schedule ?? [];
     if (scheduled.length && scheduled.every((id) => rows.some((r) => r.id === id))) rmSync(join(dir, 'INCOMPLETE'), { force: true });
     return;
   }
-  const arms = o.arms ?? ARMS;
-  if (arms.length !== 2 || new Set(arms).size !== 2 || !arms.includes('loadout')) throw new Error('--arms must pair loadout with exactly one of bare or native');
-  if (arms.includes('native') && !c15) throw new Error('native requires --study c15');
   if (c15) {
     if (o.hosts.length !== 1 || o.hosts[0] !== 'codex') throw new Error('C15 is Codex only; Claude host blocked on E12');
-    if (!arms.includes('native')) throw new Error('C15 requires arms native,loadout');
     if (JSON.stringify(o.ids) !== JSON.stringify(specs.map((p) => p.id))) throw new Error('C15 requires the complete preregistered prompt set in its fixed order');
     if (!o.codexHook) throw new Error('C15 requires the loadout hook');
     if (!values.library) throw new Error('C15 requires --library <directory>');
