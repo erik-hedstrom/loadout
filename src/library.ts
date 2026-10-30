@@ -53,7 +53,8 @@ export function readConfined(root: string, rel: string, maxBytes: number, realRo
   if (isAbsolute(rel) || rel.split(/[\\/]/).includes('..')) throw new Error('give a path relative to the skill folder');
   let fd: number;
   try {
-    fd = openSync(join(root, rel), constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+    // Reject FIFOs through fstat without waiting for a writer to open them.
+    fd = openSync(join(root, rel), constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
   } catch {
     throw new Error('no such file in the skill');
   }

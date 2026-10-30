@@ -54,8 +54,8 @@ codex plugin marketplace add erik-hedstrom/loadout && codex plugin add loadout-c
   routing is on and a key is found), library, index and hosts, and prints a
   fix for each gap.
 
-Adopted skills keep costing tokens until you move or disable them in each
-host ([library](docs/library.md#skills)).
+After adoption, [hide the native listings with the printed snippets](docs/library.md#skills)
+so loadout's hook and `load_skill` replace them.
 
 Then start `claude` or `codex` as usual. Latency and setup details:
 [the hook plugins](docs/hook.md).

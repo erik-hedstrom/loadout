@@ -41,6 +41,7 @@ Each PR body's **Review state** section has the round-by-round record.
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
 | A2 | P0 | `loadout audit`: what your installed skills cost you | Claude | cloud | done ([PR #3](https://github.com/erik-hedstrom/loadout/pull/3)) |
+| A6 | P0 | Paste-ready host hide snippets after `audit --adopt` | Codex | cloud | in review ([#66](https://github.com/erik-hedstrom/loadout/pull/66)) |
 | A1 | P0 | README rewrite around the problem, 3-command quickstart, GIF | Claude | cloud | partial ([#28](https://github.com/erik-hedstrom/loadout/pull/28)): README merged; the GIF waits on A5 |
 | A3 | P1 | `loadout init` wizard + starter packs | Codex | cloud | done ([#30](https://github.com/erik-hedstrom/loadout/pull/30)) |
 | A4 | P1 | npm package under an available name + release workflow | Codex | cloud + erik | blocked: npm name decision |
@@ -72,6 +73,25 @@ Acceptance:
 - It never writes outside `~/.loadout`.
 
 A2 learnings: inventory is not request overhead; overrides are host-specific, MCP counts describe configuration, and adoption must exclude real library locations discovered through host links (PR #3).
+
+**A6. Hide adopted native listings.**
+
+Why: copying skills into loadout leaves their native listings in place. Users
+need the exact replacement step to stop paying for those listings.
+
+Acceptance: after successful copies, print scoped Claude `skillOverrides`
+JSON (`user-invocable-only`), plugin names to disable via `/plugin`, and
+Codex `[[skills.config]]` entries with absolute manifest paths and
+`enabled = false`. Skip existing restrictive overrides and disabled skills;
+keep OpenCode/Cursor guidance. Include the same data in `--json`. Print only,
+with safe serialization and adversarial fixture tests; never edit host configs.
+Document the replacement step without uncommitted measurement claims.
+
+Learnings: Claude overrides are keyed by name; plugin skills need `/plugin`;
+local project settings outrank shared project settings, which outrank user
+settings. Reads and hide destinations follow the session cwd and its
+platform/Git local-file rules, not the directory where a skill was discovered.
+Resolver edge cases led to Erik's 2026-10-29 decision: on POSIX, inspect `.git` with lstat only; non-directory or unreadable entries warn and omit project destinations, including submodules/separate Git dirs.
 
 **A1. README rewrite.**
 

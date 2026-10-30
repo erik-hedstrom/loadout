@@ -33,10 +33,71 @@ bge-small-en-v1.5).
 - Symlinks are never followed; repos are cloned with `core.symlinks=false`.
 - Oversized skills are skipped with a reason.
 
-`audit --adopt` copies the skills it finds into the library and prints how to
-turn them off in each host. It never edits host configs: skills left in the
-agents' own folders stay listed by the agents. It refuses a `LOADOUT_HOME`
-outside `~/.loadout`.
+`audit --adopt` copies the skills it finds into the library, then prints the
+exact changes to hide the adopted skills that are still listed natively.
+Copying alone leaves the native listing in place. Hidden skills stop costing
+listing tokens; loadout's hook and `load_skill` serve them when needed. It
+never edits host configs. It refuses a `LOADOUT_HOME` outside `~/.loadout`.
+
+For Claude Code personal skills, merge the printed JSON into
+`~/.claude/settings.json`. For project skills, use the printed effective
+local settings path for a Claude session started in the audited directory.
+Keep other settings and existing overrides:
+
+```json
+{
+  "skillOverrides": {
+    "example-skill": "user-invocable-only"
+  }
+}
+```
+
+This hides the skill from Claude's listing while keeping `/example-skill`
+available to the user. Claude does not invoke it on its own through the native
+Skill tool. Overrides match skill names, so same-named skills share the
+override. Entries already set to anything other than `"on"` are left out of
+the printed changes, including `"name-only"`, which still lists the name.
+Because [local project settings override shared project settings, which override user settings](https://code.claude.com/docs/en/settings#settings-precedence),
+an effective `"on"` in a higher scope also gets a hide entry in the session's
+effective local settings file.
+Shared project settings come from the session directory, even when skills
+are discovered in an ancestor directory. The local file also stays there on
+Windows, outside Git, or when the repository root is home; otherwise it lives
+at the Git root. On POSIX, a non-directory or unreadable `.git` entry is not modeled
+(including linked worktrees, submodules and separate Git directories): audit reads
+only user/shared settings, omits project destinations, and advises running from the
+main checkout. Its project-local overrides are not read and may defeat printed
+personal-skill snippets.
+An existing legacy local file in the session directory is read before the
+root-local file, so root-local values win. See the official
+[local-file location rules](https://code.claude.com/docs/en/settings#where-claude-code-keeps-the-local-file-in-a-git-repository).
+Managed settings and command-line `--settings` are not modeled; managed
+values outrank everything, and `--settings` outranks these files.
+Ownership is not modeled; when the Git root or its `.git` or `.claude` entry
+is not owned by the user, Claude keeps the local file in the session directory
+instead.
+Plugin skills are unaffected by `skillOverrides`: disable the named plugins
+via `/plugin` instead. This disables the whole plugin, including its other
+components. The `/skills` menu also saves visibility changes to
+`.claude/settings.local.json`. See the official
+[Claude Code visibility settings](https://code.claude.com/docs/en/skills#override-skill-visibility-from-settings).
+
+For Codex, merge the printed entries into `~/.codex/config.toml`, updating
+an existing entry for the same path rather than adding a duplicate:
+
+```toml
+[[skills.config]]
+path = "/absolute/path/to/example-skill/SKILL.md"
+enabled = false
+```
+
+Already-disabled skills are left out. Restart Codex afterwards. See the official
+[Codex skill configuration](https://learn.chatgpt.com/docs/build-skills#enable-or-disable-local-codex-skills).
+If `CLAUDE_CONFIG_DIR` or `CODEX_HOME` is set, the audit prints that host home's
+settings path instead. `--json --adopt` includes the same changes as structured
+data under `disable` (`claude.sessionDirectory`, `claude.settings`,
+`claude.plugins`, `codex` and `guidance`).
+OpenCode and Cursor receive folder/permission guidance.
 
 ## MCP servers
 
