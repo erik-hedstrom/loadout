@@ -94,7 +94,7 @@ it('rejects a sanitized body that expands beyond the loadout limit, while B12 ke
   expect(scanLibrary(join(home, 'library')).map((s) => s.name).sort()).toEqual(library.skills.map((s) => s.name).sort());
 });
 
-it.each(['discovery-error', 'native-missing', 'native-wrong-name', 'native-disabled', 'native-ambient', 'loadout-ambient', 'fake-builtin', 'system-extra', 'system-modified', 'system-policy-modified', 'system-reference-modified', 'system-file-added', 'system-escaping-link', 'scan-missing', 'scan-extra', 'scan-wrong-name', 'pass'] as const)('C15 preflight handles %s before a model turn', async (failure) => {
+it.each(['discovery-error', 'native-missing', 'native-wrong-name', 'native-disabled', 'native-ambient', 'loadout-ambient', 'fake-builtin', 'system-extra', 'system-modified', 'system-policy-modified', 'system-reference-modified', 'system-file-added', 'system-escaping-link', 'scan-missing', 'scan-extra', 'scan-wrong-name', 'pass', 'linked-home'] as const)('C15 preflight handles %s before a model turn', async (failure) => {
   const library = readStudyLibrary(source(), 'all');
   // A linked tmpdir is what macOS has (/var -> /private/var); the host reports the canonical cwd, which discovery must match.
   if (failure === 'pass' && process.platform !== 'win32') {
@@ -103,7 +103,11 @@ it.each(['discovery-error', 'native-missing', 'native-wrong-name', 'native-disab
     vi.stubEnv('TMPDIR', link);
   }
   const root = temp(), work = join(root, 'work'), home = join(root, 'study-home');
-  const ctx: Ctx = { work, studyHome: home, shimDir: temp(), configDir: '', env: { HOME: temp(), CODEX_HOME: temp(), PATH: process.env.PATH }, models: AB_MODELS, codexEffort: 'medium', maxTurns: 30, codexHook: true };
+  // The host reports canonical paths, so a CODEX_HOME reached through a link must not read as a different builtin tree.
+  const linked = failure === 'linked-home' && process.platform !== 'win32';
+  let codexHome = temp();
+  if (linked) { const link = join(temp(), 'codex-link'); symlinkSync(codexHome, link, 'dir'); codexHome = link; }
+  const ctx: Ctx = { work, studyHome: home, shimDir: temp(), configDir: '', env: { HOME: temp(), CODEX_HOME: codexHome, PATH: process.env.PATH }, models: AB_MODELS, codexEffort: 'medium', maxTurns: 30, codexHook: true };
   prepareStudyArm(job('loadout'), work, library, home);
   if (failure === 'scan-missing') rmSync(join(home, 'library', 'skills', library.skills[0]!.name), { recursive: true });
   if (failure === 'scan-extra') {
@@ -153,13 +157,13 @@ it.each(['discovery-error', 'native-missing', 'native-wrong-name', 'native-disab
         writeFileSync(join(system, name, 'references', 'doc.md'), !cleanHome && failure === 'system-reference-modified' ? 'PRIVATE MODIFIED REFERENCE' : 'Clean reference');
         if (!cleanHome && failure === 'system-file-added') writeFileSync(join(system, name, 'references', 'added.md'), 'Clean reference');
       }
-      found.push({ name, path: file, scope: 'system', enabled: true });
+      found.push({ name, path: linked ? realpathSync(file) : file, scope: 'system', enabled: true });
     }
     onSkills?.(found);
     return { discoveredSkills: found.length, discoveredPackSkills: native ? library.skills.length : 0, tools: [] };
   });
   try {
-    if (failure === 'pass') { await preflightC15(ctx, library); expect(calls).toBe(3); }
+    if (failure === 'pass' || failure === 'linked-home') { await preflightC15(ctx, library); expect(calls).toBe(3); }
     else if (failure.startsWith('system-')) await expect(preflightC15(ctx, library)).rejects.toThrow('C15 builtin skills differ from clean installation');
     else await expect(preflightC15(ctx, library)).rejects.toThrow(/^C15 (?:Codex discovery failed|native discovery differs|loadout discovered non-builtin skills|loadout library differs|builtin skills differ)/);
   } finally { vi.restoreAllMocks(); vi.unstubAllEnvs(); }
