@@ -31,7 +31,7 @@ const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---/;
 /** Provenance written next to each installed skill: where it came from, so re-adding updates in place. */
 const SOURCE_FILE = '.loadout-source.json';
 /** Budgets against hostile or accidental giant repositories. */
-const LIMITS = {
+export const LIMITS = {
   cloneMs: 120_000,
   manifestBytes: 256 * 1024,
   skillFiles: 2_000,

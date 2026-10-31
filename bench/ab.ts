@@ -18,17 +18,19 @@ import { homedir, tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { delimiter, dirname, join, relative, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
+import { fileURLToPath } from 'node:url';
 import { DEFAULT_CONFIG, jevBaseUrl, loadConfig, paths, resolveApiKey } from '../src/config.js';
 import { JEV_FALLBACK_NOTE, NO_KEY_WARNING } from '../src/hook.js';
 import { hookCommand, SEARCH_SERVER, SEARCH_TOOLS, searchServer, toToml } from '../src/launch.js';
-import { capabilityKey, readManifest, scanLibrary } from '../src/library.js';
-import { CREDENTIAL_SHAPE, persistJson, redact, report, TOKEN_ANYWHERE, type Leak, type RunRow, type Verdict } from './ab-report.js';
-import { codexJudgeRefusal, DATA, isEntry, modelJson, readJsonl, RESULTS, run } from './lib.js';
+import { capabilityKey, LIMITS, readConfined, readManifest, scanLibrary } from '../src/library.js';
+import { C15_IDS, CREDENTIAL_SHAPE, persistJson, redact, report, TOKEN_ANYWHERE, type Leak, type RunRow, type Verdict } from './ab-report.js';
+import { codexJudgeRefusal, DATA, isEntry, modelJson, readJsonl, RESULTS, run, splitOf } from './lib.js';
+import { readListingLibrary, stripCodexSkillsBudget, writeSkillFile } from './listing.js';
 import { CLAUDE_MANAGED_PRECONDITION, CLAUDE_SCRUB_PRECONDITION, CLAUDE_SETTINGS, CLAUDE_SWITCH_PRECONDITION, CODEX_CLOUD_PRECONDITION, childEnv, claudeEnv, envAllowlist, hostWrites, redacted, refusedFiles, resetWork } from './mcp-overhead.js';
-import { assertTemporary, claudeIsolation, cli, execute, validateFeatures, type Command, type Host } from './overhead.js';
+import { assertTemporary, claudeIsolation, cli, execute, inspectCodex, validateFeatures, type Command, type DiscoveredSkill, type Host } from './overhead.js';
 import { deliverableFiles, deliverables, JUDGE_MAX_BYTES, judgePair, JUDGE_SYSTEM, NOTE, PrefSchema, type Arm } from './pairwise.js';
 import { hookShim, toolEvents, type Event, type HookExecution, type Inventory } from './stream.js';
-import { claudeUsage, codexUsage, effectiveInput, sumUsage, type RunUsage } from './usage.js';
+import { claudeUsage, codexUsage, codexEffectiveInput, effectiveInput, events, sumUsage, type RunUsage } from './usage.js';
 
 const ARMS: Arm[] = ['bare', 'loadout'];
 /** Held-out C1 test rows where all three 2026-10-16 Jev reruns loaded the same set and the C1 judge rated a loaded skill useful: one copy, one document, one code task. */
@@ -38,6 +40,56 @@ const PILOT = [
   { id: 'c1-debug-13', kind: 'code', fixture: 'c1-debug-13', hidden: 'c1-debug-13.hidden.test.mjs' },
 ] as const;
 type PromptSpec = { id: string; kind: string; fixture?: string; hidden?: string };
+const sha256 = (text: string) => createHash('sha256').update(text).digest('hex');
+/** Frozen from task requirements alone: no source attachments, private project or external account needed. */
+const C15_CATEGORIES = ['writing', 'productivity', 'everyday', 'questions'];
+const C15_TASKS = [
+  'c1-web-02', 'c1-web-05', 'c1-web-07', 'c1-web-08', 'c1-web-11', 'c1-web-14', 'c1-web-16', 'c1-web-20', 'c1-web-22', 'c1-web-24',
+  'c1-backend-01', 'c1-backend-07', 'c1-backend-10', 'c1-backend-15',
+  'c1-integrations-03', 'c1-integrations-06', 'c1-integrations-14', 'c1-integrations-19',
+  'c1-documents-02', 'c1-documents-07', 'c1-documents-10', 'c1-documents-21', 'c1-documents-22', 'c1-documents-25',
+  'c1-business-02', 'c1-business-03', 'c1-business-04', 'c1-business-05', 'c1-business-06', 'c1-business-08', 'c1-business-09',
+  'c1-business-10', 'c1-business-11', 'c1-business-13', 'c1-business-14', 'c1-business-15', 'c1-business-16', 'c1-business-17',
+  'c1-business-18', 'c1-business-19', 'c1-business-20', 'c1-business-22', 'c1-business-23', 'c1-business-24', 'c1-business-25',
+  'c1-business-26', 'c1-business-27', 'c1-business-28', 'c1-business-29',
+  'c1-apps-01', 'c1-apps-02', 'c1-apps-03', 'c1-apps-04', 'c1-apps-06', 'c1-apps-07', 'c1-apps-08', 'c1-apps-09',
+];
+
+export function assertTestPrompts(ids: string[]): void {
+  if (ids.some((id) => splitOf(id) !== 'test')) throw new Error('C15 refuses dev-split prompts');
+}
+
+export function selectC15Prompts(rows = readJsonl<{ id: string; category: string }>(join(DATA, 'requests-c1.jsonl'))): PromptSpec[] {
+  assertTestPrompts(C15_IDS);
+  const order = (a: { id: string }, b: { id: string }) => sha256(a.id).localeCompare(sha256(b.id));
+  const chosen: PromptSpec[] = rows.filter((r) => splitOf(r.id) === 'test' && (C15_CATEGORIES.includes(r.category) || C15_TASKS.includes(r.id)))
+    .sort(order).slice(0, 9).map((r) => ({ id: r.id, kind: r.category }));
+  if (chosen.length !== 9 || !rows.some((r) => r.id === 'c1-debug-13')) throw new Error('C15 requires nine eligible test prompts and c1-debug-13');
+  chosen.push({ ...PILOT[2] });
+  chosen.sort(order);
+  if (JSON.stringify(chosen.map((p) => p.id)) !== JSON.stringify(C15_IDS)) throw new Error('C15 selection differs from the preregistered IDs');
+  return chosen;
+}
+
+export interface StudyLibrary { skills: { name: string; text: string }[]; librarySize: number; corpusHash: string; manifestHash: string; rejected: number; normalized: number }
+export function readStudyLibrary(source: string, size: number | 'all'): StudyLibrary {
+  const corpus = readListingLibrary(source, true);
+  const all = corpus.skills.map((s) => ({ name: s.name, text: s.text! }));
+  if (!all.length || (size !== 'all' && (!Number.isSafeInteger(size) || size < 1 || size > all.length))) throw new Error('library-size exceeds the valid corpus or is invalid');
+  const skills = all.slice(0, size === 'all' ? all.length : size);
+  return { skills, librarySize: skills.length, corpusHash: sha256(JSON.stringify(all)), manifestHash: sha256(JSON.stringify(skills)), rejected: corpus.rejected, normalized: corpus.normalized };
+}
+
+/** One frozen manifest supplies both arms; never copy directories from the untrusted source. */
+export function prepareStudyArm(job: Pick<Job, 'arm'>, work: string, library: StudyLibrary, home?: string): void {
+  assertTemporary(work);
+  mkdirSync(join(work, '.git'), { recursive: true });
+  const destination = job.arm === 'native' ? join(work, '.agents') : home ? join(home, 'library') : undefined;
+  if (!destination) return;
+  for (const skill of library.skills) writeSkillFile(destination, skill.name, skill.text);
+}
+const studyArms = (o: Pick<Options, 'study'>): Arm[] => o.study === 'c15' ? ['native', 'loadout'] : ARMS;
+const promptSpecs = (o: Options) => o.study === 'c15' ? selectC15Prompts() : PILOT;
 /** Three or more words, or the hook treats it as a follow-up and adds nothing. */
 const WARMUP_PROMPT = 'Reply with the single word READY and nothing else. Do not use any tools.';
 export const AB_MODELS: Record<Host, string> = { claude: 'sonnet', codex: 'gpt-6.1-sol' };
@@ -58,13 +110,13 @@ const jobId = (j: Pick<Job, 'host' | 'arm' | 'prompt' | 'repeat'>) => `${j.host}
  * Per host: one warm-up run per arm, then the measured runs with the arms alternating, the arm that goes first
  * alternating too (by prompt and repeat), so neither arm always follows the other.
  */
-export function schedule(hosts: Host[], prompts: string[], repeats: number): Job[] {
+export function schedule(hosts: Host[], prompts: string[], repeats: number, arms: Arm[] = ARMS): Job[] {
   const jobs: Omit<Job, 'seq'>[] = [];
   for (const host of hosts) {
-    for (const arm of ARMS) jobs.push({ host, arm, prompt: 'warmup', repeat: 0, warmup: true });
+    for (const arm of arms) jobs.push({ host, arm, prompt: 'warmup', repeat: 0, warmup: true });
     for (let repeat = 1; repeat <= repeats; repeat++) {
       prompts.forEach((prompt, i) => {
-        for (const arm of (i + repeat) % 2 === 0 ? ARMS : [...ARMS].reverse()) jobs.push({ host, arm, prompt, repeat, warmup: false });
+        for (const arm of (i + repeat) % 2 === 0 ? arms : [...arms].reverse()) jobs.push({ host, arm, prompt, repeat, warmup: false });
       });
     }
   }
@@ -89,6 +141,7 @@ export interface Ctx {
   codexEffort?: string;
   maxTurns: number;
   codexHook: boolean;
+  studyHome?: string;
 }
 
 /** `Bash(node --test)` and its arguments: how the agent checks a fix. Both arms, so the permission policy is not a difference. */
@@ -101,7 +154,9 @@ const claudeServer = (env: NodeJS.ProcessEnv) => {
   if (env.TYPESAFE_BASE_URL) server.env = { ...server.env, TYPESAFE_BASE_URL: env.TYPESAFE_BASE_URL };
   return server;
 };
-const codexServer = () => ({ ...searchServer(false), required: true, env_vars: ['TYPESAFE_API_KEY', 'TYPESAFE_BASE_URL'], tools: Object.fromEntries(SEARCH_TOOLS.map((t) => [t, { approval_mode: 'approve' }])) });
+// An empty run cwd cannot resolve a bare `--import tsx`. Do not inherit an ambient LOADOUT_HOME in the hook command.
+const studyLoadoutArgv = () => [process.execPath, '--import', import.meta.resolve('tsx'), fileURLToPath(new URL('../src/cli.ts', import.meta.url))];
+const codexServer = (home?: string) => ({ ...(home ? { command: process.execPath, args: [...studyLoadoutArgv().slice(1), 'mcp'], env: { LOADOUT_HOME: home } } : searchServer(false)), required: true, env_vars: ['TYPESAFE_API_KEY', 'TYPESAFE_BASE_URL'], tools: Object.fromEntries(SEARCH_TOOLS.map((t) => [t, { approval_mode: 'approve' }])) });
 const CODEX_HOOK = [{ hooks: [{ type: 'command', command: 'loadout hook codex', timeout: 30 }] }];
 /** Codex features off in an arm: no plugins and no skill MCP installs anywhere, and no hooks unless this is the loadout arm with its hook. */
 const featuresOff = (arm: Arm, codexHook: boolean) => ['plugins', 'skill_mcp_dependency_install', ...(arm === 'loadout' && codexHook ? [] : ['hooks'])];
@@ -110,9 +165,10 @@ const featuresOff = (arm: Arm, codexHook: boolean) => ['plugins', 'skill_mcp_dep
  * The environment of one run, by allowlist (B7's, so no API key and no ambient override reaches a host). The shim
  * directory leads PATH in both arms: the plugin's hook calls `loadout` by name, and the bare arm proves it never does.
  */
-export function runEnv(job: Pick<Job, 'host' | 'arm'>, ctx: Pick<Ctx, 'shimDir' | 'configDir' | 'env'>): NodeJS.ProcessEnv {
+export function runEnv(job: Pick<Job, 'host' | 'arm'>, ctx: Pick<Ctx, 'shimDir' | 'configDir' | 'env' | 'studyHome'>): NodeJS.ProcessEnv {
   const env = childEnv(ctx.env, job.host);
   if (job.arm === 'loadout') for (const name of LOADOUT_ENV) if (ctx.env[name]) env[name] = ctx.env[name];
+  if (job.arm === 'loadout' && ctx.studyHome) env.LOADOUT_HOME = ctx.studyHome;
   env.PATH = `${ctx.shimDir}${delimiter}${env.PATH ?? ''}`;
   return job.host === 'claude' ? { ...claudeEnv(env), CLAUDE_CONFIG_DIR: ctx.configDir } : env;
 }
@@ -131,7 +187,7 @@ export function buildCommand(job: Job, prompt: string, ctx: Ctx): Command {
   const args = ['exec', '--json', '--ephemeral', '--ignore-user-config', '--ignore-rules', '--skip-git-repo-check', '-s', 'workspace-write', '-m', ctx.models.codex,
     ...(ctx.codexEffort === undefined ? [] : ['-c', `model_reasoning_effort=${ctx.codexEffort}`]),
     ...featuresOff(job.arm, ctx.codexHook).flatMap((f) => ['--disable', f]),
-    ...(job.arm === 'loadout' ? ['-c', `mcp_servers.${SEARCH_SERVER}=${toToml(codexServer())}`] : []),
+    ...(job.arm === 'loadout' ? ['-c', `mcp_servers.${SEARCH_SERVER}=${toToml(codexServer(ctx.studyHome))}`] : job.arm === 'native' ? ['-c', 'mcp_servers={}'] : []),
     ...(hook ? ['--dangerously-bypass-hook-trust', '-c', `hooks.UserPromptSubmit=${toToml(CODEX_HOOK)}`] : []), prompt];
   return { bin: binary.bin, args: [...binary.prefix, ...args], cwd: ctx.work, env };
 }
@@ -192,10 +248,10 @@ export function checkRun(job: Pick<Job, 'host' | 'arm'>, e: Evidence): string | 
   if (job.host === 'codex') return undefined;
   if (!e.inventory) return 'no startup inventory';
   const foreign = e.inventory.plugins.filter((p) => !isBuiltin(p));
-  if (job.arm === 'bare' && foreign.length) return 'ambient plugin in the bare arm; measurement invalid';
+  if (job.arm !== 'loadout' && foreign.length) return `ambient plugin in the ${job.arm} arm; measurement invalid`;
   if (job.arm === 'loadout' && (foreign.length !== 1 || foreign[0]!.name !== 'loadout' || normalize(foreign[0]!.path ?? '') !== normalize(e.pluginDir))) return 'the loadout plugin is not present exactly once, or another plugin is; measurement invalid';
   const servers = e.inventory.mcpServers;
-  if (job.arm === 'bare' && servers.length) return 'MCP server in the bare arm; measurement invalid';
+  if (job.arm !== 'loadout' && servers.length) return `MCP server in the ${job.arm} arm; measurement invalid`;
   if (job.arm === 'loadout' && !(servers.length === 1 && servers[0]!.name === SEARCH_SERVER && servers[0]!.status === 'connected')) return 'loadout MCP server missing or not connected; measurement invalid';
   if (e.hooks.length !== expected) return `the host ran ${e.hooks.length} UserPromptSubmit hook(s), expected ${expected}; measurement invalid`;
   if (e.hooks.some((h) => h.exit_code !== 0 || h.outcome !== 'success')) return 'the host reported the loadout hook as failed or unfinished; measurement invalid';
@@ -286,9 +342,26 @@ export function redactNames(text: string, names: string[]): { text: string; coun
   return { text, count };
 }
 
+/** C15-only arm clues, applied symmetrically; C14's redaction and its historical judge inputs stay unchanged. */
+function redactC15(text: string, names: string[]): { text: string; count: number } {
+  const redacted = redactNames(text, names);
+  const clean = redacted.text.replace(/[^\s"'`<>]*\.agents[/\\]skills(?:[/\\][^\s"'`<>]*)?|(?<![\w-])(?:(?:mcp__loadout__)?(?:find_tools|load_skill)|loadout)(?![\w-])|\bSKILL\.md\b/gi, () => {
+    redacted.count++;
+    return '[reference]';
+  });
+  return { text: clean, count: redacted.count };
+}
+
+/** rust-v0.163.0 responses_retry.rs emits these; exec drops will_retry. A completed, successful turn is also required. */
+function codexRetryNotice(message: unknown): boolean {
+  if (typeof message !== 'string') return false;
+  const match = /^Reconnecting\.\.\. (?:waiting for network|([1-9][0-9]*)\/([1-9][0-9]*))(?: \([\s\S]*\))?$/.exec(message);
+  return !!match && (match[1] === undefined || Number(match[1]) <= Number(match[2]));
+}
+
 // --- Plan -------------------------------------------------------------------------------------
 
-export interface Options { hosts: Host[]; ids: string[]; repeats: number; models: Record<Host, string>; codexEffort?: string; maxTurns: number; timeoutS: number; codexHook: boolean }
+export interface Options { hosts: Host[]; ids: string[]; repeats: number; models: Record<Host, string>; codexEffort?: string; maxTurns: number; timeoutS: number; codexHook: boolean; study?: 'c15'; librarySize?: number | 'all'; judge?: boolean; studyLibrary?: StudyLibrary }
 
 /** Set only by the harness's stand-in test; a real study never sets it. */
 const SELF_TEST = 'LOADOUT_AB_SELF_TEST';
@@ -304,6 +377,7 @@ export function blockers(o: Options, env: NodeJS.ProcessEnv = process.env): stri
     const refused = refusedFiles('codex');
     if (refused.length) out.push(`Codex state the study cannot isolate exists (${refused.map((f) => redacted(f)).join(', ')})`);
     const codexHome = env.CODEX_HOME || join(homedir(), '.codex');
+    if (o.study === 'c15' && lstatSync(join(codexHome, 'config.toml'), { throwIfNoEntry: false })) out.push('C15 requires CODEX_HOME without config.toml: preflight and exec must use the same configuration');
     const hooksJson = join(codexHome, 'hooks.json');
     if (o.codexHook && existsSync(hooksJson)) out.push(`${redacted(hooksJson)} exists: the loadout arm bypasses hook trust for this invocation, which would run it. Move it away or pass --no-codex-hook`);
     // Codex reads the first non-empty of these into every run's prompt (codex-rs/codex-home/src/instructions/mod.rs, rust-v0.160.1),
@@ -319,7 +393,9 @@ export function blockers(o: Options, env: NodeJS.ProcessEnv = process.env): stri
   // look valid while measuring next to nothing: the study is a Jev study or it does not run. The one exception
   // is this harness's own stand-in test (test/ab.test.ts), which runs the real hook and must not reach Jev's network.
   if (config && config.router !== 'jev' && env[SELF_TEST] !== 'lexical') out.push(`the loadout config sets "router": "${config.router}": the loadout arm would not route with Jev. Set "router": "jev" for the study`);
-  if (config) {
+  if (o.studyLibrary) {
+    if (o.studyLibrary.skills.some((s) => TOKEN_ANYWHERE.test(s.name))) out.push('library capability names requiring redaction; blind judging is not possible');
+  } else if (config) {
     const library = scanLibrary(paths.library());
     if (!library.length) out.push(`the loadout library is empty (${redacted(paths.library())}): the hook would route over nothing`);
     const unblindable = library.filter((c) => TOKEN_ANYWHERE.test(c.name) || TOKEN_ANYWHERE.test(capabilityKey(c))).length;
@@ -354,24 +430,38 @@ export function judgeProblems(o: Options): string[] {
 }
 
 export function planLines(o: Options, env: NodeJS.ProcessEnv = process.env, root = '<work root>'): string[] {
-  const jobs = schedule(o.hosts, o.ids, o.repeats);
-  const specs = o.ids.map((id) => PILOT.find((p) => p.id === id) as PromptSpec);
+  const arms = studyArms(o);
+  const jobs = schedule(o.hosts, o.ids, o.repeats, arms);
+  const availableSpecs = promptSpecs(o);
+  const specs = o.ids.map((id) => availableSpecs.find((p) => p.id === id) as PromptSpec);
   const lines: string[] = [];
   const loadoutRuns = jobs.filter((j) => j.arm === 'loadout').length;
   const claudeRuns = jobs.filter((j) => j.host === 'claude').length;
   lines.push(`${jobs.length} paid runs (${jobs.filter((j) => j.warmup).length} warm-ups): ${o.hosts.map((h) => `${h} ${jobs.filter((j) => j.host === h).length}`).join(', ')}; ${o.ids.length} prompts x 2 arms x ${o.repeats} repeats per host, plus one warm-up per arm. Nothing runs without --run.`);
-  lines.push(`Estimate (assumptions, not measurements): Claude ${claudeRuns * 2} to ${claudeRuns * o.maxTurns} requests, each carrying roughly 15k to 40k input tokens that are mostly cache reads; Codex one thread total per run; up to ${Math.round(jobs.length * o.timeoutS / 60)} minutes at the timeout, typically a third of that. Subscription quota, not cash. Jev: about ${loadoutRuns} routing calls (under $0.05, RESULTS sweeps run near $0.001 each) plus any find_tools. Judging: ${o.hosts.length * o.ids.length * o.repeats * 2} calls, sequential (Claude Opus on Codex outputs, Sol on Claude outputs).`);
+  if (o.studyLibrary) {
+    lines.push(`C15 arms: ${arms.join(',')}; ids: ${o.ids.join(',')}. Claude host blocked on E12; Codex only.`);
+    lines.push(`LIBRARY size=${o.studyLibrary.librarySize}; corpusHash=${o.studyLibrary.corpusHash}; manifestHash=${o.studyLibrary.manifestHash}; rejected=${o.studyLibrary.rejected}; normalized=${o.studyLibrary.normalized}. Identical sanitized SKILL.md-only bytes in both arms.`);
+    lines.push(`WRITES: native <work root>/work/.git and .agents/skills/<name>/SKILL.md; loadout <work root>/study-home/library/skills/<name>/SKILL.md and config.json, hook state and scan cache; no native copies in loadout. Temporary root removed at exit. --run also writes --out/config.json, rows.jsonl, streams/, outputs/, report.md and ${o.judge === false ? 'no verdicts' : 'verdicts.jsonl'}; host cache/auth writes listed below.`);
+  }
+  lines.push(`Estimate (assumptions, not measurements): ${claudeRuns ? `Claude ${claudeRuns * 2} to ${claudeRuns * o.maxTurns} requests, each carrying roughly 15k to 40k input tokens that are mostly cache reads; ` : ''}Codex one thread total per run; up to ${Math.round(jobs.length * o.timeoutS / 60)} minutes at the timeout, typically a third of that. Subscription quota, not cash. Jev: about ${loadoutRuns} routing calls (under $0.05, RESULTS sweeps run near $0.001 each) plus any find_tools. Judging: ${o.judge === false ? 0 : o.hosts.length * o.ids.length * o.repeats * 2} calls, sequential (Claude Opus on Codex outputs, Sol on Claude outputs).`);
   for (const s of specs) lines.push(`PROMPT ${s.id} (${s.kind}): ${promptText(s).length} characters with the note${s.fixture ? `; fixture ${s.fixture}, hidden test ${s.hidden}` : ''}`);
   for (const host of o.hosts) lines.push(`SCHEDULE ${host} (arm/prompt/repeat; warm-ups are repeat 0): ${jobs.filter((j) => j.host === host).map((j) => `${j.arm}/${j.prompt}/${j.repeat}`).join('  ')}`);
-  const ctx: Ctx = { work: join(root, 'work'), shimDir: join(root, 'shim', '<host>'), configDir: '<fresh CLAUDE_CONFIG_DIR per run>', env, models: o.models, codexEffort: o.codexEffort, maxTurns: o.maxTurns, codexHook: o.codexHook };
-  for (const host of o.hosts) for (const arm of ARMS) {
+  const ctx: Ctx = { work: join(root, 'work'), shimDir: join(root, 'shim', '<host>'), configDir: '<fresh CLAUDE_CONFIG_DIR per run>', env: o.studyLibrary ? { ...env, TYPESAFE_API_KEY: '<resolved via resolveApiKey before run>' } : env, models: o.models, codexEffort: o.codexEffort, maxTurns: o.maxTurns, codexHook: o.codexHook, ...(o.studyLibrary ? { studyHome: join(root, 'study-home') } : {}) };
+  for (const host of o.hosts) for (const arm of arms) {
     const c = buildCommand({ host, arm, prompt: o.ids[0]!, repeat: 1, warmup: false, seq: 0 }, '<prompt>', ctx);
     lines.push(`ARGV ${host}/${arm}: cwd=${JSON.stringify(c.cwd)} argv=${JSON.stringify([c.bin, ...c.args])}`);
     lines.push(`ENV ${host}/${arm} (names only): ${Object.keys(c.env ?? {}).join(', ')}${host === 'claude' ? ', CLAUDE_CODE_OAUTH_TOKEN (injected at launch)' : ''}`);
   }
   lines.push(`ENV allowlist: claude: ${envAllowlist('claude').join(', ')}; codex: ${envAllowlist('codex').join(', ')}; loadout arm also: ${LOADOUT_ENV.join(', ')} when set.`);
   for (const write of hostWrites(env)) lines.push(`HOST STATE: ${write}`);
-  lines.push(`HOST STATE: the loadout arm's hook and MCP server write under the loadout home (${redacted(paths.sessions())}/hook state, the library scan cache), as in a user's install. Every run's folder, the shim directory and Claude's fresh homes are under one temporary work root, removed at the end.`);
+  lines.push(`HOST STATE: the loadout arm's hook and MCP server write under the loadout home (${o.studyLibrary ? '<work root>/study-home/sessions' : redacted(paths.sessions())}/hook state, the library scan cache), as in a user's install. Every run's folder, the shim directory and Claude's fresh homes are under one temporary work root, removed at the end.`);
+  if (o.studyLibrary) {
+    lines.push(`PRECONDITION: ${CODEX_CLOUD_PRECONDITION}`);
+    lines.push('PRECONDITION: CODEX_HOME/config.toml must be absent so preflight and exec use the same configuration. Before any paid turn, free skills/list on the measured cwd with the same HOME/CODEX_HOME must discover exactly the native manifest names and paths, and no non-builtin skill in loadout. System-scoped skills under CODEX_HOME/skills/.system must match, by name, file list and per-file content hash, the builtins initialized in fresh HOME/CODEX_HOME by the same Codex executable. Any discovery error or mismatch stops the study. scanLibrary(study-home/library) must match the same manifest names. No thread or turn is created.');
+    lines.push('SELECTION: nine test prompts are hash-selected from request text; c1-debug-13 was selected earlier using Jev and judge results and contributes 2 of 20 pairs plus the only hidden-test gate. Report sensitivity excluding that fixture.');
+    lines.push('C15 retains C14 credential checks, warm-ups and cache-gap flags. Batch-stop rules tolerate documented Codex reconnect notices only on successful completion; codexRetries records their count. Jev costs are separate from host token metrics. Effective input = uncached input (including writes) x 1 + cached input x 0.1, a price-sheet assumption; output reported separately. --plan starts no child process and writes no files; paid runs and judging belong to the coordinator.');
+    return lines;
+  }
   for (const p of [CODEX_CLOUD_PRECONDITION, CLAUDE_MANAGED_PRECONDITION, CLAUDE_SCRUB_PRECONDITION, CLAUDE_SWITCH_PRECONDITION]) lines.push(`PRECONDITION: ${p}`);
   lines.push('DIFFERS from B7: Claude keeps its built-in tools (no --restricted) and its hooks (no disableAllHooks), because the agents edit files, run `node --test` and the loadout plugin is a hook; Codex keeps its shell and, in the loadout arm, the hooks feature. The Codex MCP server is `required = true`, as `loadout setup codex` writes it, so a failed start stops the run; the plugin install leaves it out on purpose (comment above `required = true` in src/launch.ts). Unlike B7, which records a global AGENTS.md in CODEX_HOME as identical across arms, this study refuses one: it is in the prompt of every run and steers the agent and its find_tools queries, which a token-delta baseline never notices. Both arms of a host share every other flag.');
   lines.push('UNVERIFIED offline (the pilot checks): --max-turns is not in `claude --help` 2.1.281 (B7 and C8 use it); whether the allowlist rule `Bash(node --test *)` matches the agent\'s test command (a denied command shows as a tool error on the row); whether `loadout mcp` and the plugin\'s hook see the TypeSafe key under Claude\'s MCP environment allowlist and subprocess scrub (the study requires a key file in the loadout config; whether HOME and a non-default LOADOUT_HOME reach them is untested, and a loadout run routed by keyword stops the batch); that `-c hooks.UserPromptSubmit` plus --dangerously-bypass-hook-trust registers the hook in `codex exec` 0.160.1 (discovery.rs reads `hooks` from every config layer, the session-flags layer included; the shim count proves it, and a run without the hook stops the batch); that Codex\'s stream carries no per-request usage (codex-rs exec_events.rs at rust-v0.160.1: it does not).');
@@ -393,6 +483,7 @@ async function execute1(job: Job, prompt: string, spec: PromptSpec | undefined, 
   const { out, previous, token, secrets, versions } = study;
   resetWork(ctx.work);
   if (spec?.fixture) cpSync(join(FIXTURES, spec.fixture), ctx.work, { recursive: true });
+  if (o.studyLibrary) prepareStudyArm(job, ctx.work, o.studyLibrary);
   const beforeFiles = new Map(deliverableFiles(ctx.work).map((p) => [p, readFileSync(p)]));
   const id = jobId(job);
   const marker = join(ctx.shimDir, `${id.replace(/\//g, '_')}.invocations`);
@@ -400,7 +491,8 @@ async function execute1(job: Job, prompt: string, spec: PromptSpec | undefined, 
   writeFileSync(marker, '');
   writeFileSync(capture, '');
   writeFileSync(`${capture}.err`, '');
-  writeFileSync(join(ctx.shimDir, 'loadout'), hookShim(marker, hookCommand(job.host, false), capture), { mode: 0o700 });
+  const hookEntry = ctx.studyHome ? [...studyLoadoutArgv(), 'hook', job.host].map((arg) => `'${arg.replace(/'/g, `'\\''`)}'`).join(' ') : hookCommand(job.host, false);
+  writeFileSync(join(ctx.shimDir, 'loadout'), hookShim(marker, hookEntry, capture), { mode: 0o700 });
   const command = buildCommand(job, prompt, ctx);
   if (job.host === 'claude') command.env = { ...command.env, CLAUDE_CODE_OAUTH_TOKEN: token };
   const startedAt = Date.now();
@@ -417,11 +509,26 @@ async function execute1(job: Job, prompt: string, spec: PromptSpec | undefined, 
   const leak: Leak | null = streamLeak ? { file: '<stream>', rule: 'held secret' }
     : job.warmup ? heldSecretLeak(ctx.work, secrets) : copyOutputs(ctx.work, dest, folders, secrets, stream.finalMessage);
   let usage: RunUsage | null = null;
+  let skillsBudget: RunRow['skillsBudget'] = null;
+  let codexRetries = 0;
+  let codexProblem: string | undefined;
   try { usage = (job.host === 'claude' ? claudeUsage : codexUsage)(proc.stdout); } catch { /* checkRun says why */ }
+  if (o.studyLibrary && job.host === 'codex') {
+    try {
+      const parsed = stripCodexSkillsBudget(proc.stdout);
+      skillsBudget = parsed.skillsBudget;
+      const parsedEvents = events(parsed.stdout);
+      codexRetries = parsedEvents.filter((e) => e.type === 'error' && codexRetryNotice(e.message)).length;
+      if (parsedEvents.some((e) => e.type === 'turn.failed' || e.item?.type === 'error'
+        || e.type === 'error' && !(proc.code === 0 && !proc.timedOut && usage && codexRetryNotice(e.message)))) codexProblem = 'Codex reported an unexpected error; measurement invalid';
+    } catch {
+      if (usage && !proc.timedOut) codexProblem = 'invalid Codex JSONL; measurement invalid';
+    }
+  }
   const marks = readFileSync(marker, 'utf8').split('\n');
   const hook = { invocations: marks.filter((l) => l === 'invoked').length, ...hookFacts(capturedRaw) };
   const failedBeforeModel = job.host === 'claude' ? stream.failedBeforeModel : usage === null && !proc.timedOut;
-  const broken = checkRun(job, { usage, hooks: stream.hooks, inventory: stream.inventory, failedBeforeModel, hookInvocations: hook.invocations, hookExits: marks.filter((l) => l.startsWith('exit ')).map((l) => Number(l.slice(5))), keywordRouted: routedByKeyword(capturedRaw, hookStderr, stream.events),
+  const broken = codexProblem ?? checkRun(job, { usage, hooks: stream.hooks, inventory: stream.inventory, failedBeforeModel, hookInvocations: hook.invocations, hookExits: marks.filter((l) => l.startsWith('exit ')).map((l) => Number(l.slice(5))), keywordRouted: routedByKeyword(capturedRaw, hookStderr, stream.events),
     uncountedContext: stream.hooks.filter((h) => h.context).length - marks.filter((l) => l === 'context').length, pluginDir: join(REPO, 'plugins', 'loadout'), codexHook: o.codexHook, requestedModel: o.models[job.host] });
 
   // Request gaps: since this host and arm last made a request (completion to completion inside a run, which counts the request's
@@ -451,11 +558,12 @@ async function execute1(job: Job, prompt: string, spec: PromptSpec | undefined, 
     startedAt: new Date(startedAt).toISOString(), endedAt: new Date(endedAt).toISOString(), ms: endedAt - startedAt,
     hostVersion: usage?.version ?? versions[job.host] ?? null, requestedModel: o.models[job.host], model: usage?.model ?? null, exit: proc.code, timedOut: proc.timedOut, stop: stream.result?.subtype ?? null,
     granularity: usage?.granularity ?? 'request', requests,
-    totals: { ...total, effectiveInput: job.host === 'claude' && requests.length ? requests.reduce((n, r) => n + effectiveInput(r), 0) : null, costUsd: usage?.costUsd ?? null, turns: usage?.turns ?? null },
+    totals: { ...total, effectiveInput: job.host === 'claude' && requests.length ? requests.reduce((n, r) => n + effectiveInput(r), 0) : o.studyLibrary && requests.length ? codexEffectiveInput(total) : null, costUsd: usage?.costUsd ?? null, turns: usage?.turns ?? null },
     unreconciled: usage?.unreconciled ?? [], modelUsage: usage?.modelUsage ?? null,
     coldCacheRisk: requests.some((r) => (r.gapMs ?? 0) > CACHE_TTL_MS),
     toolCalls: tools.length, toolErrors: tools.filter((t) => t.endsWith('(failed)')).length, loadoutTools: [...new Set(tools.filter((t) => t.startsWith(`mcp__${SEARCH_SERVER}__`)))],
     skillsOpened: openedSkills(stream.events), hook, hiddenTest, wroteFile, ...(leak ? { leak } : {}), ...(streamWithheld ? { streamWithheld: 'token shape' as const } : {}),
+    ...(o.studyLibrary ? { librarySize: o.studyLibrary.librarySize, corpusHash: o.studyLibrary.corpusHash, manifestHash: o.studyLibrary.manifestHash, skillsBudget, codexRetries } : {}),
     // A Codex run that timed out reports no usage: it cannot count, but it is not a broken arm.
     ...(invalid ? { invalid } : !usage ? { invalid: proc.timedOut ? UNUSABLE[0] : UNUSABLE[1] } : {}),
   };
@@ -472,17 +580,20 @@ function completed(file: string): RunRow[] {
 export interface Provenance { commit: string; library: string }
 
 /** Tracked changes count as a different commit; untracked files (this study's own results) do not. */
-export function provenance(): Provenance {
+export function provenance(studyLibrary?: StudyLibrary): Provenance {
   const git = (...args: string[]) => execFileSync('git', args, { cwd: REPO, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
   const head = git('rev-parse', 'HEAD');
   const diff = git('diff', '--no-ext-diff', '--no-textconv', 'HEAD');
+  const commit = diff ? `${head}+dirty-${sha256(diff).slice(0, 12)}` : head;
   // Each capability's key, name and description, and a skill's SKILL.md text (read through readConfined), hashed and never
   // shown: editing a skill without renaming it still changes what the hook injects.
+  if (studyLibrary) return { commit, library: `${studyLibrary.librarySize} skills, corpus ${studyLibrary.corpusHash}, manifest ${studyLibrary.manifestHash}` };
   const library = scanLibrary(paths.library()).map((c) => [capabilityKey(c), c.name, c.description, c.kind === 'skill' ? readManifest(c.source) ?? '' : ''].join('\0')).sort();
-  return { commit: diff ? `${head}+dirty-${createHash('sha256').update(diff).digest('hex').slice(0, 12)}` : head, library: `${library.length} capabilities, ${createHash('sha256').update(library.join('\n')).digest('hex').slice(0, 12)}` };
+  return { commit, library: `${library.length} capabilities, ${sha256(library.join('\n')).slice(0, 12)}` };
 }
 
-const studySettings = (s: Options & Partial<Provenance>) => ({ hosts: s.hosts, ids: s.ids, repeats: s.repeats, models: s.models, codexEffort: s.codexEffort, maxTurns: s.maxTurns, timeoutS: s.timeoutS, codexHook: s.codexHook, commit: s.commit, library: s.library });
+const studySettings = (s: Options & Partial<Provenance>) => ({ hosts: s.hosts, ids: s.ids, repeats: s.repeats, models: s.models, codexEffort: s.codexEffort, maxTurns: s.maxTurns, timeoutS: s.timeoutS, codexHook: s.codexHook, commit: s.commit, library: s.library,
+  ...(s.study ? { arms: studyArms(s), study: s.study, librarySize: s.librarySize, judge: s.judge } : {}) });
 
 /** An --out folder is one study: resuming it with other settings (another model, other code or library) would pair rows measured under different ones. */
 export function refuseOtherSettings(out: string, o: Options, p: Provenance, secrets: string[]): void {
@@ -503,7 +614,7 @@ async function runAll(o: Options, out: string, deps: { token?: string; print: (s
   // Derived from --out, not random: a resumed study then works in the same folder, and the folder is in the prefix the cache keys on.
   // The base is resolved once: tmpdir() can itself be a link (macOS without TMPDIR is /tmp -> /private/tmp), and assertTemporary
   // refuses a link as the nearest existing ancestor of a root that does not exist yet. Links below the base are still refused.
-  const root = join(realpathSync(tmpdir()), `loadout-ab-${createHash('sha256').update(out).digest('hex').slice(0, 12)}`);
+  const root = join(realpathSync(tmpdir()), `loadout-ab-${sha256(out).slice(0, 12)}`);
   assertTemporary(root);
   rmSync(root, { recursive: true, force: true });
   // Not recursive, and private: the name is predictable in a shared tmpdir, so anything that appears there between the
@@ -511,21 +622,30 @@ async function runAll(o: Options, out: string, deps: { token?: string; print: (s
   mkdirSync(root, { mode: 0o700 });
   try {
     const rowsFile = join(out, 'rows.jsonl');
-    const specs = o.ids.map((id) => PILOT.find((p) => p.id === id) as PromptSpec);
+    const availableSpecs = promptSpecs(o);
+    const specs = o.ids.map((id) => availableSpecs.find((p) => p.id === id) as PromptSpec);
     const versions = Object.fromEntries(o.hosts.map((h) => [h, version(h)]));
     const secrets = deps.secrets;
     const configFile = join(out, 'config.json');
-    if (!existsSync(configFile)) writeFileSync(configFile, persistJson({ ...studySettings({ ...o, ...deps.provenance }), versions, schedule: schedule(o.hosts, o.ids, o.repeats).map(jobId) }, secrets) + '\n');
+    if (!existsSync(configFile)) writeFileSync(configFile, persistJson({ ...studySettings({ ...o, ...deps.provenance }), ...(o.studyLibrary ? { corpusHash: o.studyLibrary.corpusHash, manifestHash: o.studyLibrary.manifestHash } : {}), versions, schedule: schedule(o.hosts, o.ids, o.repeats, studyArms(o)).map(jobId) }, secrets) + '\n');
+    const studyHome = o.studyLibrary ? join(root, 'study-home') : undefined;
+    if (studyHome) {
+      prepareStudyArm({ arm: 'loadout' }, join(root, 'work'), o.studyLibrary!, studyHome);
+      // No key file or original library is reachable through this temporary config.
+      const config = loadConfig();
+      writeFileSync(join(studyHome, 'config.json'), JSON.stringify({ ...config, jev: { ...config.jev, apiKeyFile: undefined } }));
+      await preflightC15({ work: join(root, 'work'), studyHome, shimDir: join(root, 'shim', 'codex'), configDir: '', env: deps.env, models: o.models, codexEffort: o.codexEffort, maxTurns: o.maxTurns, codexHook: o.codexHook }, o.studyLibrary!);
+    }
     if (o.hosts.includes('codex')) await codexPreflight(o, root);
     const shims = Object.fromEntries(o.hosts.map((h) => [h, join(root, 'shim', h)]));
     for (const dir of Object.values(shims)) mkdirSync(dir, { recursive: true });
-    for (const job of schedule(o.hosts, o.ids, o.repeats)) {
+    for (const job of schedule(o.hosts, o.ids, o.repeats, studyArms(o))) {
       const previous = completed(rowsFile);
       if (previous.some((r) => r.id === jobId(job))) continue;
       const spec = specs.find((s) => s.id === job.prompt);
       mkdirSync(join(root, 'claude-homes'), { recursive: true });
       const configDir = job.host === 'claude' ? mkdtempSync(join(root, 'claude-homes', 'run-')) : '';
-      const ctx: Ctx = { work: join(root, 'work'), shimDir: shims[job.host]!, configDir, env: deps.env, models: o.models, codexEffort: o.codexEffort, maxTurns: o.maxTurns, codexHook: o.codexHook };
+      const ctx: Ctx = { work: join(root, 'work'), shimDir: shims[job.host]!, configDir, env: studyHome ? { ...deps.env, TYPESAFE_API_KEY: resolveApiKey(loadConfig()) } : deps.env, models: o.models, codexEffort: o.codexEffort, maxTurns: o.maxTurns, codexHook: o.codexHook, studyHome };
       const row = await execute1(job, spec ? promptText(spec) : WARMUP_PROMPT, spec, ctx, o, { out, previous, token: deps.token, secrets, versions });
       if (configDir) rmSync(configDir, { recursive: true, force: true });
       if (previous.some((r) => r.host === row.host && r.hostVersion && row.hostVersion && r.hostVersion !== row.hostVersion)) row.invalid ??= `${row.host} version changed during the study; measurement invalid`;
@@ -538,10 +658,69 @@ async function runAll(o: Options, out: string, deps: { token?: string; print: (s
   }
 }
 
+/** Free skills/list, on the measured cwd and inherited homes. Never starts a thread, turn, hook or loadout MCP. */
+export async function preflightC15(ctx: Ctx, library: StudyLibrary): Promise<void> {
+  const expected = library.skills.map((s) => s.name).sort();
+  const sameNames = (names: string[]) => JSON.stringify(names.sort()) === JSON.stringify(expected);
+  const scanned = scanLibrary(join(ctx.studyHome!, 'library'));
+  if (scanned.some((s) => s.kind !== 'skill') || !sameNames(scanned.map((s) => s.name))) throw new Error('C15 loadout library differs from manifest');
+  const c = cli('codex');
+  // app-server has no --ignore-user-config/--ignore-rules switches; blockers require config.toml absent.
+  const discover = async (cwd: string, env: NodeJS.ProcessEnv, arm: 'native' | 'loadout') => {
+    const command: Command = { bin: c.bin, args: [...c.prefix, 'app-server', ...featuresOff(arm, ctx.codexHook).flatMap((f) => ['--disable', f]),
+      '-c', `model=${JSON.stringify(ctx.models.codex)}`, '-c', `model_reasoning_effort=${ctx.codexEffort ?? 'medium'}`, '-c', 'mcp_servers={}'], cwd, env };
+    let skills: DiscoveredSkill[] = [];
+    try { await inspectCodex(command, (found) => { skills = found; }); }
+    catch { throw new Error('C15 Codex discovery failed (details suppressed)'); }
+    return skills;
+  };
+  const systemRoot = (env: NodeJS.ProcessEnv) => join(env.CODEX_HOME || join(env.HOME || homedir(), '.codex'), 'skills', '.system');
+  const inSystem = (s: DiscoveredSkill, root: string) => s.scope === 'system' && typeof s.path === 'string' && normalize(resolve(s.path)).startsWith(normalize(resolve(root)) + '/');
+  // A builtin's policy (agents/openai.yaml), references and scripts shape what the agent is told or may run, so the
+  // fingerprint covers every file in its directory, not only SKILL.md. Links and other non-regular entries are refused.
+  const builtinFiles = (root: string, dir: string): string[] => readdirSync(join(root, dir), { withFileTypes: true }).flatMap((e) => {
+    if (e.isDirectory()) return builtinFiles(root, join(dir, e.name));
+    if (!e.isFile()) throw new Error('not a regular file');
+    return [join(dir, e.name)];
+  });
+  const builtinHashes = (skills: DiscoveredSkill[], root: string) => {
+    try {
+      return JSON.stringify(skills.map((s) => {
+        const dir = relative(root, dirname(s.path));
+        return [s.name, dir, builtinFiles(root, dir).sort().map((f) => [f, createHash('sha256').update(readConfined(root, f, LIMITS.manifestBytes)).digest('hex')])];
+      }).sort((a, b) => (a[0] as string).localeCompare(b[0] as string)));
+    } catch { throw new Error('C15 builtin skills differ from clean installation'); }
+  };
+  // Resolved like the work root above: the host reports canonical paths, and a linked tmpdir (macOS /var) would never match.
+  const clean = mkdtempSync(join(realpathSync(tmpdir()), 'loadout-c15-builtins-'));
+  let expectedBuiltins: string;
+  try {
+    const env: NodeJS.ProcessEnv = { ...childEnv(ctx.env, 'codex'), HOME: join(clean, 'home'), USERPROFILE: join(clean, 'home'), CODEX_HOME: join(clean, 'codex') };
+    delete env.CODEX_SQLITE_HOME;
+    const cwd = join(clean, 'work');
+    for (const p of [env.HOME!, env.CODEX_HOME!, join(cwd, '.git')]) mkdirSync(p, { recursive: true });
+    const skills = await discover(cwd, env, 'native');
+    if (skills.some((s) => !inSystem(s, systemRoot(env)))) throw new Error('C15 builtin skills differ from clean installation');
+    expectedBuiltins = builtinHashes(skills, systemRoot(env));
+  } finally { rmSync(clean, { recursive: true, force: true }); }
+  const system = systemRoot(ctx.env);
+  for (const arm of ['native', 'loadout'] as const) {
+    resetWork(ctx.work);
+    prepareStudyArm({ arm }, ctx.work, library);
+    const env = runEnv({ host: 'codex', arm }, ctx);
+    const skills = await discover(ctx.work, env, arm);
+    if (builtinHashes(skills.filter((s) => inSystem(s, system)), system) !== expectedBuiltins) throw new Error('C15 builtin skills differ from clean installation');
+    const external = skills.filter((s) => !inSystem(s, system));
+    if (arm === 'loadout' && external.length) throw new Error('C15 loadout discovered non-builtin skills');
+    if (arm === 'native' && (!sameNames(external.map((s) => s.name)) || external.some((s) => s.enabled !== true || typeof s.path !== 'string'
+      || normalize(s.path) !== normalize(join(ctx.work, '.agents', 'skills', s.name, 'SKILL.md'))))) throw new Error('C15 native discovery differs from manifest');
+  }
+}
+
 /** Free: the features Codex reports for each arm's flags, on an empty home so nothing of the user's is read or written. */
 async function codexPreflight(o: Options, root: string): Promise<void> {
   const c = cli('codex');
-  for (const arm of ARMS) {
+  for (const arm of studyArms(o)) {
     const home = join(root, 'codex-home', arm);
     mkdirSync(home, { recursive: true });
     const off = featuresOff(arm, o.codexHook);
@@ -557,21 +736,31 @@ async function judgeAll(out: string, print: (s: string) => void, secrets: string
   const file = join(out, 'verdicts.jsonl');
   const done = completed(file) as unknown as Verdict[];
   const requests = readJsonl<{ id: string; request: string }>(join(DATA, 'requests-c1.jsonl'));
+  const baseline = rows.some((r) => r.arm === 'native') ? 'native' : 'bare';
   for (const host of [...new Set(rows.map((r) => r.host))]) for (const prompt of [...new Set(rows.map((r) => r.prompt))]) for (const repeat of [...new Set(rows.map((r) => r.repeat))]) {
-    const [bare, loadout] = ARMS.map((arm) => rows.find((r) => r.host === host && r.prompt === prompt && r.repeat === repeat && r.arm === arm));
+    const [bare, loadout] = [baseline, 'loadout'].map((arm) => rows.find((r) => r.host === host && r.prompt === prompt && r.repeat === repeat && r.arm === arm));
     if (!bare || !loadout || done.some((v) => v.host === host && v.prompt === prompt && v.repeat === repeat)) continue;
     const names = [...bare.hook.listed, ...bare.hook.injected, ...loadout.hook.listed, ...loadout.hook.injected, ...bare.skillsOpened, ...loadout.skillsOpened];
     if (names.some((name) => name.includes('<credential>'))) throw new Error('skill names were redacted: blind judging is not possible');
     const dir = (r: RunRow) => join(out, 'outputs', r.host, r.prompt, `${r.arm}-${r.repeat}`);
-    const bareFiles = redactNames(deliverables(dir(bare)), names);
-    const loadoutFiles = redactNames(deliverables(dir(loadout)), names);
+    const files = [deliverables(dir(bare)), deliverables(dir(loadout))];
+    if (baseline === 'native') {
+      // Relative cd/read commands do not contain skills/<name>/SKILL.md and escape openedSkills().
+      for (const text of files) {
+        for (const m of text.matchAll(/\.agents[/\\]skills[/\\]([a-z0-9-]+)(?:[/\\]|\b)/gi)) names.push(m[1]!);
+        for (const m of text.matchAll(/\bcd\s+["']?([^\s"';&]+)["']?\s*(?:&&|;)\s*cat\s+["']?SKILL\.md\b/gi)) names.push(m[1]!.split(/[/\\]/).at(-1)!);
+      }
+    }
+    const clean = baseline === 'native' ? redactC15 : redactNames;
+    const bareFiles = clean(files[0]!, names);
+    const loadoutFiles = clean(files[1]!, names);
     const judge = JUDGES[host];
-    const verdict = await judgePair(requests.find((r) => r.id === prompt)!.request, { bare: bareFiles.text, loadout: loadoutFiles.text }, async (p) => {
+    const verdict = await judgePair(requests.find((r) => r.id === prompt)!.request, { [baseline]: bareFiles.text, loadout: loadoutFiles.text }, async (p) => {
       const res = await modelJson(p, PrefSchema, { backend: judge.backend, model: judge.model, system: JUDGE_SYSTEM, out });
       if (!res) throw new Error('the judge backend returned no answer');
       return res.output;
-    });
-    const v: Verdict = { host, prompt, repeat, winner: verdict.winner, judge, redactions: { bare: bareFiles.count, loadout: loadoutFiles.count } };
+    }, baseline);
+    const v: Verdict = { host, prompt, repeat, winner: verdict.winner, judge, redactions: { [baseline]: bareFiles.count, loadout: loadoutFiles.count } };
     appendFileSync(file, persistJson({ ...v, orders: verdict.orders }, secrets) + '\n');
     print(`${host}/${prompt}/${repeat}: ${v.winner} (${verdict.orders.map((x) => x.winner).join(' / ')}); ${judge.backend} ${judge.model}`);
   }
@@ -596,41 +785,60 @@ export async function main(args: string[], deps: { print?: (s: string) => void; 
 
 async function mainImpl(args: string[], print: (s: string) => void, env: NodeJS.ProcessEnv, secrets: string[]): Promise<void> {
   const { values } = parseArgs({ args, options: { plan: { type: 'boolean' }, run: { type: 'boolean' }, 'judge-only': { type: 'string' }, hosts: { type: 'string' }, ids: { type: 'string' }, repeats: { type: 'string' }, out: { type: 'string' },
-    'claude-model': { type: 'string' }, 'codex-model': { type: 'string' }, 'codex-effort': { type: 'string' }, 'max-turns': { type: 'string' }, 'timeout-s': { type: 'string' }, 'no-codex-hook': { type: 'boolean' } } });
+    'claude-model': { type: 'string' }, 'codex-model': { type: 'string' }, 'codex-effort': { type: 'string' }, 'max-turns': { type: 'string' }, 'timeout-s': { type: 'string' }, 'no-codex-hook': { type: 'boolean' },
+    study: { type: 'string' }, library: { type: 'string' }, 'library-size': { type: 'string' }, 'no-judge': { type: 'boolean' } } });
+  if (values.plan && values.run) throw new Error('choose --plan or --run');
+  if (values.study !== undefined && values.study !== 'c15') throw new Error('--study must be c15');
+  const c15 = values.study === 'c15';
+  if (c15 && values['codex-effort'] !== undefined && values['codex-effort'] !== 'medium') throw new Error('C15 requires medium Codex effort');
+  if (c15 && values.ids) assertTestPrompts(values.ids.split(','));
+  const specs = c15 ? selectC15Prompts() : PILOT;
   if (values['codex-effort'] !== undefined && !CODEX_EFFORTS.includes(values['codex-effort'])) throw new Error(`--codex-effort must be one of: ${CODEX_EFFORTS.join(', ')}`);
   const list = <T extends string>(text: string | undefined, allowed: readonly T[], fallback: T[]) => text?.split(',').map((x) => { if (!allowed.includes(x as T)) throw new Error(`unknown value ${x}`); return x as T; }) ?? fallback;
   const positive = (text: string | undefined, fallback: number, name: string) => { const n = text === undefined ? fallback : Number(text); if (!Number.isInteger(n) || n < 1) throw new Error(`--${name} must be a positive integer`); return n; };
   const o: Options = {
-    hosts: list(values.hosts, ['claude', 'codex'], ['claude', 'codex']), ids: list(values.ids, PILOT.map((p) => p.id), PILOT.map((p) => p.id)), repeats: positive(values.repeats, 2, 'repeats'),
-    models: { claude: values['claude-model'] ?? AB_MODELS.claude, codex: values['codex-model'] ?? AB_MODELS.codex }, codexEffort: values['codex-effort'], maxTurns: positive(values['max-turns'], 30, 'max-turns'), timeoutS: positive(values['timeout-s'], 600, 'timeout-s'), codexHook: !values['no-codex-hook'],
+    hosts: list(values.hosts, ['claude', 'codex'], c15 ? ['codex'] : ['claude', 'codex']), ids: list<string>(values.ids, specs.map((p) => p.id), specs.map((p) => p.id)), repeats: positive(values.repeats, 2, 'repeats'),
+    models: { claude: values['claude-model'] ?? AB_MODELS.claude, codex: values['codex-model'] ?? (c15 ? 'gpt-6-luna' : AB_MODELS.codex) }, codexEffort: values['codex-effort'] ?? (c15 ? 'medium' : undefined), maxTurns: positive(values['max-turns'], 30, 'max-turns'), timeoutS: positive(values['timeout-s'], 600, 'timeout-s'), codexHook: !values['no-codex-hook'],
+    ...(c15 ? { study: 'c15' as const, librarySize: values['library-size'] === 'all' ? 'all' as const : positive(values['library-size'], 250, 'library-size'), judge: !values['no-judge'] } : {}),
   };
   if (values['judge-only'] !== undefined) {
     const dir = resolve(values['judge-only']);
+    const savedConfig = existsSync(join(dir, 'config.json')) ? JSON.parse(readFileSync(join(dir, 'config.json'), 'utf8')) : undefined;
+    if (savedConfig?.judge === false) throw new Error('this is an unjudged tokens-only study');
     refuseStopped(dir);
     const verdicts = await judgeAll(dir, print, secrets);
     const rows = completed(join(dir, 'rows.jsonl'));
     writeFileSync(join(dir, 'report.md'), report(rows, verdicts, secrets));
     // Judging an unfinished study leaves it marked: the marker goes only once every scheduled run has a row.
-    const scheduled: string[] = existsSync(join(dir, 'config.json')) ? JSON.parse(readFileSync(join(dir, 'config.json'), 'utf8')).schedule : [];
+    const scheduled: string[] = savedConfig?.schedule ?? [];
     if (scheduled.length && scheduled.every((id) => rows.some((r) => r.id === id))) rmSync(join(dir, 'INCOMPLETE'), { force: true });
     return;
   }
-  const found = [...blockers(o, env), ...judgeProblems(o)];
+  if (c15) {
+    if (o.hosts.length !== 1 || o.hosts[0] !== 'codex') throw new Error('C15 is Codex only; Claude host blocked on E12');
+    if (JSON.stringify(o.ids) !== JSON.stringify(specs.map((p) => p.id))) throw new Error('C15 requires the complete preregistered prompt set in its fixed order');
+    if (!o.codexHook) throw new Error('C15 requires the loadout hook');
+    if (!values.library) throw new Error('C15 requires --library <directory>');
+    o.studyLibrary = readStudyLibrary(resolve(values.library), o.librarySize!);
+  } else if (values.library || values['library-size'] || values['no-judge']) throw new Error('--library, --library-size and --no-judge require --study c15');
+  // C15 planning is read-only: no host/version/feature probes, even free ones.
+  const found = [...blockers(o, env), ...(c15 && !values.run || o.judge === false ? [] : judgeProblems(o))];
   if (!values.run) {
     for (const line of planLines(o, env)) print(line);
     for (const b of found) print(`BLOCKED: ${b}`);
+    if (c15) print('Plan only: no child processes started; no files written; incurred $0.');
     return;
   }
   if (found.length) throw new Error(`blocked: ${found.join('; ')}`);
   if (process.platform === 'win32') throw new Error('--run needs a Linux or macOS shell: the hook shim is a POSIX script (run from WSL with the Linux CLIs)');
   const out = resolve(values.out ?? join(RESULTS, `${new Date().toISOString().replace(/[:.]/g, '-')}-ab-pilot`));
-  const p = provenance();
+  const p = provenance(o.studyLibrary);
   refuseOtherSettings(out, o, p, secrets);
   refuseStopped(out);
   mkdirSync(out, { recursive: true });
   writeFileSync(join(out, 'INCOMPLETE'), 'This run did not finish: resume it with --out, or delete the folder. Its rows are not a result.\n');
   await runAll(o, out, { token: env.CLAUDE_CODE_OAUTH_TOKEN, print, env, provenance: p, secrets });
-  const verdicts = await judgeAll(out, print, secrets);
+  const verdicts = o.judge === false ? [] : await judgeAll(out, print, secrets);
   writeFileSync(join(out, 'report.md'), report(completed(join(out, 'rows.jsonl')), verdicts, secrets));
   rmSync(join(out, 'INCOMPLETE'));
   print(`Raw rows and report: ${redacted(out)}`);

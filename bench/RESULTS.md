@@ -200,6 +200,118 @@ backlog, B7).
   so both remain listed conservatively. Codex's database writes and API-key
   alternative remain Erik's decision (backlog, B7).
 
+## C15 method (preregistered)
+
+Preregistered 2026-10-30, before any C15 run. Results: **not shown**.
+C14 adds loadout to bare; C15 instead replaces a native library, the state
+that [A6](../docs/loop/BACKLOG.md) helps users adopt. B12 measures listing
+cost but cannot establish retained quality on real tasks.
+
+```mermaid
+flowchart LR
+  Source[Confined source SKILL.md reads] --> Manifest[Sanitized name-hash ordered manifest]
+  Manifest --> Native[Temporary repo .agents/skills]
+  Manifest --> Library[Temporary LOADOUT_HOME/library/skills]
+  Native --> Preflight[Free exact discovery and isolation checks]
+  Library --> Preflight
+  Preflight --> Rows[Native rows with manifest hash]
+  Library --> Loadout[Loadout hook and MCP, no native copies]
+  Loadout --> Preflight
+  Preflight --> Rows2[Loadout rows with the same manifest hash]
+  Rows --> Judge[Blind both-order Opus judge]
+  Rows2 --> Judge
+```
+
+- **Primary:** 250 skills, Codex `gpt-6-luna`, medium effort, ten C1 test
+  prompts, two repeats, arms `native,loadout`: 40 measured runs plus one
+  warm-up per arm. Claude Opus judges each pair blind in both orders:
+  40 judge calls, sequential. Claude-host execution remains blocked on E12.
+- **Prompt rule (review correction, before any C15 run):** freeze eligibility
+  for the nine hash-selected rows using only request text, without reading
+  Jev selections or usefulness judgments. Take the first nine eligible
+  TEST rows in ascending SHA-256(request id) hexadecimal order, then include
+  `c1-debug-13` as the tenth, and order all ten by the same hash. Eligibility
+  is the self-contained writing, productivity, everyday and questions
+  categories plus the explicit self-contained task IDs in `bench/ab.ts`.
+  These tasks need no private source material or fixture repository; only
+  `c1-debug-13` uses the existing fixture. The plan prints the IDs and refuses
+  dev rows. Never tune routing, prompts, eligibility or this rule on these
+  test rows. The tenth, `c1-debug-13`, was selected earlier for C14 using
+  stable Jev rerun selections and a C1 judge's useful-skill rating. It is
+  not part of the unbiased hash-selected nine: it contributes **2 of 20
+  pairs and the only hidden-test gate**. The nine-row sample plus this
+  previously selected fixture is not a random ten-row population sample.
+  Report alongside the unchanged primary screen a sensitivity paired
+  effective-input median/range and win/loss/tie/split counts excluding
+  `c1-debug-13` (18 primary pairs). Do not change the primary rule.
+  Frozen IDs in run order: `c1-questions-06`, `c1-business-26`,
+  `c1-documents-22`, `c1-integrations-06`, `c1-business-27`,
+  `c1-questions-07`, `c1-business-23`, `c1-business-20`,
+  `c1-productivity-09`, `c1-debug-13`.
+- **Library:** B12's deterministic normalized-name hash prefixes; read only
+  confined SKILL.md files. Keep only name/description frontmatter and escaped,
+  third-party-framed bodies; discard hooks and all other metadata and files.
+  Both arms get identical SKILL.md bytes and skill sets. Record library size,
+  sanitized full-corpus hash and selected-manifest hash on every row.
+  Reject rebuilt manifests exceeding loadout's UTF-8 byte limit before
+  selection or hashing; the metadata-only B12 corpus is unchanged.
+  Native installs under the temporary repo's `.agents/skills`, with a `.git`
+  directory marker; loadout has no native copies and sees only a temporary
+  library made from the same manifest. This measures SKILL.md-only libraries,
+  not execution of downloaded scripts or access to references.
+  Before any paid turn, free Codex `skills/list` uses the measured cwd and
+  HOME/CODEX_HOME. It must discover exactly the native manifest names and
+  paths, and no non-builtin skill in loadout. System-scoped skills under
+  CODEX_HOME's `skills/.system` must match by name, file list and per-file
+  content hash (every file in each builtin's directory, links refused) the
+  builtins initialized in fresh HOME/CODEX_HOME by the same Codex executable.
+  CODEX_HOME's `config.toml` must be absent: preflight cannot ignore it as exec
+  does. Discovery errors, extra or modified builtins, disabled native
+  copies, unexpected skills or a `scanLibrary` name-set mismatch stop the
+  study with fixed diagnostics. No thread or turn is created for this probe.
+- **Primary token metric:** per-run effective input, native minus loadout,
+  paired by prompt and repeat. Report each prompt's pairs and the paired median
+  and range over all 20 pairs. Effective input weights uncached input 1 and
+  cached input 0.1; this is a price-sheet assumption informed by the
+  [OpenAI price sheet](https://developers.openai.com/api/docs/pricing), not
+  measured subscription billing or a verified Luna price. Cache writes, if
+  reported separately, are included at weight 1 in this fixed assumption.
+  Output tokens stay separate. Report raw buckets, tool calls, skills opened,
+  hook context characters, Codex's nonfatal skills-budget notice and
+  `codexRetries` reconnect-notice counts per arm (including warm-ups).
+- **Quality rule, fixed now:** among pairs with a both-orders verdict,
+  loadout losses (native wins) minus loadout wins must be at most 2 of the
+  20 planned pairs, and the `c1-debug-13` hidden test must not pass less often
+  for loadout. Report wins, ties, splits and missing pairs, plus the Wilson
+  95% interval of the loadout-loses rate (native wins / pairs with both orders,
+  including splits). Do not declare the screen passed with missing pairs or
+  hidden tests. Rows and verdicts must uniquely match the 20 planned
+  prompt/repeat keys, the study must share one corpus/manifest/size, and both
+  hidden-test repeats must report tests > 0 in each arm. Duplicate keys and
+  mixed manifests invalidate the screen. Missing pairs and missing judgments
+  are reported separately. At n=20 this is a screening rule, **not proof of
+  non-inferiority**; repeats of ten prompts are not independent population
+  samples. Both orders use saved final responses and symmetric skill-name
+  redaction; C15 additionally removes `.agents/skills` paths, `SKILL.md`, bare
+  and `mcp__loadout__`-qualified `find_tools`/`load_skill`, and the standalone
+  word `loadout` (including `loadout.find_tools`). Word redaction preserves
+  compound identifiers containing letters, digits, underscores or hyphens.
+  A skill's own template can still reveal the arm.
+- **Secondary:** whole valid library, one repeat, same ten prompts and two
+  arms: 20 measured runs plus two warm-ups; tokens only, unjudged.
+- **Against loadout:** zero or negative paired input savings, losses beyond
+  the screen, or fewer passing hidden tests. Report these outcomes unchanged.
+  Token savings with quality loss do not establish the product goal.
+- **Limits:** ten prompts, one host, Luna only, sanitized bodies and an
+  assumed cached-input price. General quality retention, other models/hosts,
+  actual bills and whole-library quality are not shown. Jev routing/search
+  costs are reported separately from host tokens and judge quota. Harness
+  implementation and plans cost $0; the coordinator authorizes and runs the
+  paid study separately. C14 warm-ups, alternating order, cache-risk flags and
+  credential redaction apply unchanged. C15 tolerates documented Codex reconnect
+  notices when the run completes successfully, recording their count; other
+  batch-stop rules remain unchanged.
+
 ## C14 method: three prompts with and without loadout
 
 The first clean Codex pilot is recorded [below](#c14-results-2026-10-26-codex-luna-pilot-inconclusive).
