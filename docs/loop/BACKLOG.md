@@ -825,6 +825,9 @@ alone do not establish the planned sample or a completed hidden test.
 The fixture's earlier Jev/judge selection needs disclosure and sensitivity.
 Review fixes and tests address these gates; re-review and the paid study
 remain with the coordinator. Implementation, tests and free probes cost $0.
+Round 3: the builtin check now covers every file in each builtin directory,
+and macOS CI failed because the clean-home cwd was not resolved past the
+linked tmpdir.
 
 **C14. A/B pilot.** Erik, 2026-10-19: test three prompts with and without
 loadout, evaluate the output and compare token use; he asked about tokens in,

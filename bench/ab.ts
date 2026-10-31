@@ -457,7 +457,7 @@ export function planLines(o: Options, env: NodeJS.ProcessEnv = process.env, root
   lines.push(`HOST STATE: the loadout arm's hook and MCP server write under the loadout home (${o.studyLibrary ? '<work root>/study-home/sessions' : redacted(paths.sessions())}/hook state, the library scan cache), as in a user's install. Every run's folder, the shim directory and Claude's fresh homes are under one temporary work root, removed at the end.`);
   if (o.studyLibrary) {
     lines.push(`PRECONDITION: ${CODEX_CLOUD_PRECONDITION}`);
-    lines.push('PRECONDITION: CODEX_HOME/config.toml must be absent so preflight and exec use the same configuration. Before any paid turn, free skills/list on the measured cwd with the same HOME/CODEX_HOME must discover exactly the native manifest names and paths, and no non-builtin skill in loadout. System-scoped skills under CODEX_HOME/skills/.system must match names and SKILL.md content hashes initialized in fresh HOME/CODEX_HOME by the same Codex executable. Any discovery error or mismatch stops the study. scanLibrary(study-home/library) must match the same manifest names. No thread or turn is created.');
+    lines.push('PRECONDITION: CODEX_HOME/config.toml must be absent so preflight and exec use the same configuration. Before any paid turn, free skills/list on the measured cwd with the same HOME/CODEX_HOME must discover exactly the native manifest names and paths, and no non-builtin skill in loadout. System-scoped skills under CODEX_HOME/skills/.system must match, by name, file list and per-file content hash, the builtins initialized in fresh HOME/CODEX_HOME by the same Codex executable. Any discovery error or mismatch stops the study. scanLibrary(study-home/library) must match the same manifest names. No thread or turn is created.');
     lines.push('SELECTION: nine test prompts are hash-selected from request text; c1-debug-13 was selected earlier using Jev and judge results and contributes 2 of 20 pairs plus the only hidden-test gate. Report sensitivity excluding that fixture.');
     lines.push('C15 retains C14 credential checks, warm-ups and cache-gap flags. Batch-stop rules tolerate documented Codex reconnect notices only on successful completion; codexRetries records their count. Jev costs are separate from host token metrics. Effective input = uncached input (including writes) x 1 + cached input x 0.1, a price-sheet assumption; output reported separately. --plan starts no child process and writes no files; paid runs and judging belong to the coordinator.');
     return lines;
@@ -676,12 +676,23 @@ export async function preflightC15(ctx: Ctx, library: StudyLibrary): Promise<voi
   };
   const systemRoot = (env: NodeJS.ProcessEnv) => join(env.CODEX_HOME || join(env.HOME || homedir(), '.codex'), 'skills', '.system');
   const inSystem = (s: DiscoveredSkill, root: string) => s.scope === 'system' && typeof s.path === 'string' && normalize(resolve(s.path)).startsWith(normalize(resolve(root)) + '/');
+  // A builtin's policy (agents/openai.yaml), references and scripts shape what the agent is told or may run, so the
+  // fingerprint covers every file in its directory, not only SKILL.md. Links and other non-regular entries are refused.
+  const builtinFiles = (root: string, dir: string): string[] => readdirSync(join(root, dir), { withFileTypes: true }).flatMap((e) => {
+    if (e.isDirectory()) return builtinFiles(root, join(dir, e.name));
+    if (!e.isFile()) throw new Error('not a regular file');
+    return [join(dir, e.name)];
+  });
   const builtinHashes = (skills: DiscoveredSkill[], root: string) => {
     try {
-      return JSON.stringify(skills.map((s) => [s.name, createHash('sha256').update(readConfined(root, relative(root, s.path), LIMITS.manifestBytes)).digest('hex')]).sort((a, b) => a[0]!.localeCompare(b[0]!)));
+      return JSON.stringify(skills.map((s) => {
+        const dir = relative(root, dirname(s.path));
+        return [s.name, dir, builtinFiles(root, dir).sort().map((f) => [f, createHash('sha256').update(readConfined(root, f, LIMITS.manifestBytes)).digest('hex')])];
+      }).sort((a, b) => (a[0] as string).localeCompare(b[0] as string)));
     } catch { throw new Error('C15 builtin skills differ from clean installation'); }
   };
-  const clean = mkdtempSync(join(tmpdir(), 'loadout-c15-builtins-'));
+  // Resolved like the work root above: the host reports canonical paths, and a linked tmpdir (macOS /var) would never match.
+  const clean = mkdtempSync(join(realpathSync(tmpdir()), 'loadout-c15-builtins-'));
   let expectedBuiltins: string;
   try {
     const env: NodeJS.ProcessEnv = { ...childEnv(ctx.env, 'codex'), HOME: join(clean, 'home'), USERPROFILE: join(clean, 'home'), CODEX_HOME: join(clean, 'codex') };

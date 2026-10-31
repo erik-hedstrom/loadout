@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, expect, it, vi } from 'vitest';
@@ -94,8 +94,14 @@ it('rejects a sanitized body that expands beyond the loadout limit, while B12 ke
   expect(scanLibrary(join(home, 'library')).map((s) => s.name).sort()).toEqual(library.skills.map((s) => s.name).sort());
 });
 
-it.each(['discovery-error', 'native-missing', 'native-wrong-name', 'native-disabled', 'native-ambient', 'loadout-ambient', 'fake-builtin', 'system-extra', 'system-modified', 'scan-missing', 'scan-extra', 'scan-wrong-name', 'pass'] as const)('C15 preflight handles %s before a model turn', async (failure) => {
+it.each(['discovery-error', 'native-missing', 'native-wrong-name', 'native-disabled', 'native-ambient', 'loadout-ambient', 'fake-builtin', 'system-extra', 'system-modified', 'system-policy-modified', 'system-reference-modified', 'system-file-added', 'system-escaping-link', 'scan-missing', 'scan-extra', 'scan-wrong-name', 'pass'] as const)('C15 preflight handles %s before a model turn', async (failure) => {
   const library = readStudyLibrary(source(), 'all');
+  // A linked tmpdir is what macOS has (/var -> /private/var); the host reports the canonical cwd, which discovery must match.
+  if (failure === 'pass' && process.platform !== 'win32') {
+    const link = join(temp(), 'tmp-link');
+    symlinkSync(temp(), link, 'dir');
+    vi.stubEnv('TMPDIR', link);
+  }
   const root = temp(), work = join(root, 'work'), home = join(root, 'study-home');
   const ctx: Ctx = { work, studyHome: home, shimDir: temp(), configDir: '', env: { HOME: temp(), CODEX_HOME: temp(), PATH: process.env.PATH }, models: AB_MODELS, codexEffort: 'medium', maxTurns: 30, codexHook: true };
   prepareStudyArm(job('loadout'), work, library, home);
@@ -115,6 +121,7 @@ it.each(['discovery-error', 'native-missing', 'native-wrong-name', 'native-disab
     if (cleanHome) {
       expect(command.env?.HOME).not.toBe(ctx.env.HOME);
       expect(command.cwd).not.toBe(work);
+      expect(command.cwd).toBe(realpathSync(command.cwd!));
     } else {
       expect(command.cwd).toBe(work);
       expect(command.env?.HOME).toBe(ctx.env.HOME);
@@ -133,8 +140,19 @@ it.each(['discovery-error', 'native-missing', 'native-wrong-name', 'native-disab
     const system = join(command.env!.CODEX_HOME!, 'skills', '.system');
     for (const name of !cleanHome && failure === 'system-extra' ? ['builtin', 'review-intruder'] : ['builtin']) {
       const file = join(system, name, 'SKILL.md');
-      mkdirSync(join(system, name), { recursive: true });
+      mkdirSync(join(system, name, 'agents'), { recursive: true });
       writeFileSync(file, !cleanHome && failure === 'system-modified' ? 'PRIVATE MODIFIED BODY' : 'Clean builtin body');
+      writeFileSync(join(system, name, 'agents', 'openai.yaml'), `allow_implicit_invocation: ${!cleanHome && failure === 'system-policy-modified'}\n`);
+      if (!cleanHome && failure === 'system-escaping-link') {
+        // Same bytes as the clean reference, so only the link itself can give it away.
+        const outside = temp();
+        writeFileSync(join(outside, 'doc.md'), 'Clean reference');
+        symlinkSync(outside, join(system, name, 'references'), process.platform === 'win32' ? 'junction' : 'dir');
+      } else {
+        mkdirSync(join(system, name, 'references'), { recursive: true });
+        writeFileSync(join(system, name, 'references', 'doc.md'), !cleanHome && failure === 'system-reference-modified' ? 'PRIVATE MODIFIED REFERENCE' : 'Clean reference');
+        if (!cleanHome && failure === 'system-file-added') writeFileSync(join(system, name, 'references', 'added.md'), 'Clean reference');
+      }
       found.push({ name, path: file, scope: 'system', enabled: true });
     }
     onSkills?.(found);
@@ -142,8 +160,9 @@ it.each(['discovery-error', 'native-missing', 'native-wrong-name', 'native-disab
   });
   try {
     if (failure === 'pass') { await preflightC15(ctx, library); expect(calls).toBe(3); }
+    else if (failure.startsWith('system-')) await expect(preflightC15(ctx, library)).rejects.toThrow('C15 builtin skills differ from clean installation');
     else await expect(preflightC15(ctx, library)).rejects.toThrow(/^C15 (?:Codex discovery failed|native discovery differs|loadout discovered non-builtin skills|loadout library differs|builtin skills differ)/);
-  } finally { vi.restoreAllMocks(); }
+  } finally { vi.restoreAllMocks(); vi.unstubAllEnvs(); }
 });
 
 it('blocks C15 with a Codex config that exec ignores, without changing C14', () => {

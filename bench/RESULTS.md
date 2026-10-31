@@ -262,7 +262,8 @@ flowchart LR
   Before any paid turn, free Codex `skills/list` uses the measured cwd and
   HOME/CODEX_HOME. It must discover exactly the native manifest names and
   paths, and no non-builtin skill in loadout. System-scoped skills under
-  CODEX_HOME's `skills/.system` must match by name and SKILL.md content hash the
+  CODEX_HOME's `skills/.system` must match by name, file list and per-file
+  content hash (every file in each builtin's directory, links refused) the
   builtins initialized in fresh HOME/CODEX_HOME by the same Codex executable.
   CODEX_HOME's `config.toml` must be absent: preflight cannot ignore it as exec
   does. Discovery errors, extra or modified builtins, disabled native
