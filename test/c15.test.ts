@@ -103,7 +103,7 @@ it.each(['discovery-error', 'native-missing', 'native-wrong-name', 'native-disab
     vi.stubEnv('TMPDIR', link);
   }
   const root = temp(), work = join(root, 'work'), home = join(root, 'study-home');
-  // The host reports canonical paths, so a CODEX_HOME reached through a link must not read as a different builtin tree.
+  // A CODEX_HOME reached through a link must not read as a different builtin tree.
   const linked = failure === 'linked-home' && process.platform !== 'win32';
   let codexHome = temp();
   if (linked) { const link = join(temp(), 'codex-link'); symlinkSync(codexHome, link, 'dir'); codexHome = link; }
@@ -157,7 +157,8 @@ it.each(['discovery-error', 'native-missing', 'native-wrong-name', 'native-disab
         writeFileSync(join(system, name, 'references', 'doc.md'), !cleanHome && failure === 'system-reference-modified' ? 'PRIVATE MODIFIED REFERENCE' : 'Clean reference');
         if (!cleanHome && failure === 'system-file-added') writeFileSync(join(system, name, 'references', 'added.md'), 'Clean reference');
       }
-      found.push({ name, path: linked ? realpathSync(file) : file, scope: 'system', enabled: true });
+      // Like the host, which reports canonical paths whatever link the home was reached through.
+      found.push({ name, path: realpathSync(file), scope: 'system', enabled: true });
     }
     onSkills?.(found);
     return { discoveredSkills: found.length, discoveredPackSkills: native ? library.skills.length : 0, tools: [] };

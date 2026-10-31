@@ -685,9 +685,10 @@ export async function preflightC15(ctx: Ctx, library: StudyLibrary): Promise<voi
   });
   const builtinHashes = (skills: DiscoveredSkill[], systemDir: string) => {
     try {
-      // The host reports canonical skill paths, so a CODEX_HOME reached through a link needs the same form to relativize.
-      const root = realpathSync(systemDir);
       return JSON.stringify(skills.map((s) => {
+        // The host reports canonical skill paths, so a CODEX_HOME reached through a link needs the same form to relativize.
+        // Resolved per skill, so a home with no builtins (nothing to hash) is not required to exist.
+        const root = realpathSync(systemDir);
         const dir = relative(root, dirname(s.path));
         return [s.name, dir, builtinFiles(root, dir).sort().map((f) => [f, createHash('sha256').update(readConfined(root, f, LIMITS.manifestBytes)).digest('hex')])];
       }).sort((a, b) => (a[0] as string).localeCompare(b[0] as string)));
