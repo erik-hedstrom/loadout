@@ -44,7 +44,7 @@ flowchart LR
 
 **The caching track owns:**
 - B11's harness and dataset: `bench/b11*.ts` and `bench/data/b11/`.
-- The session-cost columns F2 adds to `bench/mcp-overhead.ts`, and per-request usage in `bench/outcome.ts`.
+- The session-cost columns F2 adds to `bench/mcp-overhead.ts` and `bench/ab.ts`, and Codex per-request usage in `bench/outcome.ts` once Erik picks its source.
   B7's per-request study and its RESULTS entry stay with B7, in section B.
 - The RESULTS sections of B11 and F1 to F5, and this file.
 

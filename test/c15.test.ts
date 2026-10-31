@@ -94,7 +94,7 @@ it('rejects a sanitized body that expands beyond the loadout limit, while B12 ke
   expect(scanLibrary(join(home, 'library')).map((s) => s.name).sort()).toEqual(library.skills.map((s) => s.name).sort());
 });
 
-it.each(['discovery-error', 'native-missing', 'native-wrong-name', 'native-disabled', 'native-ambient', 'loadout-ambient', 'fake-builtin', 'system-extra', 'system-modified', 'system-policy-modified', 'system-reference-modified', 'system-file-added', 'system-escaping-link', 'scan-missing', 'scan-extra', 'scan-wrong-name', 'pass', 'linked-home'] as const)('C15 preflight handles %s before a model turn', async (failure) => {
+it.each(['discovery-error', 'native-missing', 'native-wrong-name', 'native-disabled', 'native-ambient', 'loadout-ambient', 'fake-builtin', 'system-extra', 'system-modified', 'system-policy-modified', 'system-reference-modified', 'system-file-added', 'system-escaping-link', 'scan-missing', 'scan-extra', 'scan-wrong-name', 'pass', 'linked-home', 'no-builtins'] as const)('C15 preflight handles %s before a model turn', async (failure) => {
   const library = readStudyLibrary(source(), 'all');
   // A linked tmpdir is what macOS has (/var -> /private/var); the host reports the canonical cwd, which discovery must match.
   if (failure === 'pass' && process.platform !== 'win32') {
@@ -142,7 +142,8 @@ it.each(['discovery-error', 'native-missing', 'native-wrong-name', 'native-disab
     if (native && failure === 'native-ambient' || !cleanHome && !native && failure === 'loadout-ambient') found.push(ambient);
     if (!cleanHome && failure === 'fake-builtin') found.push({ ...ambient, scope: 'system' });
     const system = join(command.env!.CODEX_HOME!, 'skills', '.system');
-    for (const name of !cleanHome && failure === 'system-extra' ? ['builtin', 'review-intruder'] : ['builtin']) {
+    // 'no-builtins': no home has a .system folder, so there is nothing to resolve or hash.
+    for (const name of failure === 'no-builtins' ? [] : !cleanHome && failure === 'system-extra' ? ['builtin', 'review-intruder'] : ['builtin']) {
       const file = join(system, name, 'SKILL.md');
       mkdirSync(join(system, name, 'agents'), { recursive: true });
       writeFileSync(file, !cleanHome && failure === 'system-modified' ? 'PRIVATE MODIFIED BODY' : 'Clean builtin body');
@@ -164,7 +165,7 @@ it.each(['discovery-error', 'native-missing', 'native-wrong-name', 'native-disab
     return { discoveredSkills: found.length, discoveredPackSkills: native ? library.skills.length : 0, tools: [] };
   });
   try {
-    if (failure === 'pass' || failure === 'linked-home') { await preflightC15(ctx, library); expect(calls).toBe(3); }
+    if (failure === 'pass' || failure === 'linked-home' || failure === 'no-builtins') { await preflightC15(ctx, library); expect(calls).toBe(3); }
     else if (failure.startsWith('system-')) await expect(preflightC15(ctx, library)).rejects.toThrow('C15 builtin skills differ from clean installation');
     else await expect(preflightC15(ctx, library)).rejects.toThrow(/^C15 (?:Codex discovery failed|native discovery differs|loadout discovered non-builtin skills|loadout library differs|builtin skills differ)/);
   } finally { vi.restoreAllMocks(); vi.unstubAllEnvs(); }

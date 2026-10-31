@@ -206,8 +206,9 @@ loadout's tools cost +158 per request in Claude Code with tool search on (a
 matched default-tools comparison against native skills is not shown).
 
 **B13. B11 runner tests fail under a linked `TMPDIR`.** On Linux, with
-`TMPDIR` a symlink, `test/b11-runner.test.ts` fails 16 of 17 tests with "B11
-library provenance validation failed". CI does not exercise it: the suite is
+`TMPDIR` a symlink and `passt` installed, `test/b11-runner.test.ts` fails 16
+of 17 tests with "B11 library provenance validation failed" (13 of the 17 are
+`networkTest`s that skip without `pasta`). CI does not exercise it: the suite is
 `describe.runIf(linux)` and only a linked `TMPDIR` triggers the failure.
 Unrelated to C15 by imports: no `bench/b11*.ts` file imports listing, ab,
 ab-report, overhead, pairwise, usage or mcp-overhead.
@@ -217,7 +218,7 @@ no loosening of the linked-path refusals the B11 harness applies to the
 library and fixtures. Do not fix inside C15 work.
 
 Experiment (2026-10-31, `e8887b9`, fresh WSL Ubuntu clone, Node 24.15.0,
-`npm ci`; no model or network call): `TMPDIR` real, 17 passed. `TMPDIR` a
+`npm ci`, `passt` installed; no model or network call): `TMPDIR` real, 17 passed. `TMPDIR` a
 symlink to a real directory, 16 failed and 1 passed; the failures shown carry
 "B11 library provenance validation failed". The first hypothesis, the
 uncanonical `tmpdir()` at `bench/b11.ts:147` and `bench/b11-sandbox.ts:130`, is
@@ -226,8 +227,9 @@ Read, not tested: `directoryRoot` (`bench/b11-listing.ts:10-21`) throws "linked
 skill root" when any ancestor of the skills root is a symlink, and
 `prepareB11Library` (`bench/b11-library.ts:62-65`) turns every error in that
 block into the generic message. The test fixtures live under `tmpdir()`, so a
-linked `TMPDIR` would trip it. Unconfirmed; whether the fix belongs in the
-fixtures or the check is open.
+linked `TMPDIR` would trip it. This fits the one passing test being the only
+one run without `--library` (`test/b11-runner.test.ts:73`). Unconfirmed;
+whether the fix belongs in the fixtures or the check is open.
 
 **B8. Items from the launch-readiness review.** The review (2026-10-13) is
 private ([ORCHESTRATOR](ORCHESTRATOR.md#local-the-default)).
@@ -502,7 +504,7 @@ Decisions for Erik:
 | C5 | P2 | Retrieval beyond 200 candidates (Jev tournament) | Codex | cloud | todo |
 | C6 | P2 | Multi-intent requests | Claude | cloud | todo |
 | C7 | P1 | Recommended packs with measured upside (first: frontend with Impeccable) | Codex (harness) + Claude (runs) | cloud (fixtures) + local (runs) | todo (after B1, C2) |
-| C11 | P1 | `bench/outcome.ts` keeps per-request usage | Codex | local | partial ([#55](https://github.com/erik-hedstrom/loadout/pull/55)): turn totals and crash-safe capture; request usage moved to F2 |
+| C11 | P1 | `bench/outcome.ts` keeps per-request usage | Codex | local | partial ([#55](https://github.com/erik-hedstrom/loadout/pull/55)): turn totals and crash-safe capture; Codex per-request usage moved to F2, which waits on Erik's choice of usage source |
 | C12 | P1 | Audit the need gate on held-out prompts | Claude | cloud (design) + local (runs) | done ([#46](https://github.com/erik-hedstrom/loadout/pull/46)): audited on C1 dev, no change ([RESULTS](../../bench/RESULTS.md#c12-2026-10-19-the-need-gate-on-c1-dev)) |
 | C13 | P1 | Pure-Jev baseline on main: offline scoring and routing stability | Codex (tools) + Claude (runs) | local | done ([#45](https://github.com/erik-hedstrom/loadout/pull/45)): baseline measured 2026-10-16 ([RESULTS](../../bench/RESULTS.md#c13-2026-10-16-pure-jev-baseline-on-main)) |
 | C8 | P0 | Skill use with the hook-only plugin | Claude | local | done ([#25](https://github.com/erik-hedstrom/loadout/pull/25)): headless, the hook injected a skill's text in 6 of 10; Claude opened 0 of 10, none of the 4 it was only pointed to (D13) |
@@ -1974,8 +1976,8 @@ with the core (section C). Changes to the shared contract follow
 |---|---|---|---|---|---|
 | B11 | P1 | OpenCode session cost and task checks with automatic prompt caching | Codex | local | partial ([#57](https://github.com/erik-hedstrom/loadout/pull/57)): harness and dataset merged; replacement pilot complete ([#63](https://github.com/erik-hedstrom/loadout/pull/63)); the 792-session study is not completed |
 | F1 | P1 | Prefix continuity on real hosts: loadout keeps the cached prefix turn after turn | Codex | local | todo (after F2) |
-| F2 | P1 | Session-cost capture: Jev cost and latency columns, and session shapes in B7 (Claude per-request capture is in `ab.ts`) | Codex | local | todo (Codex usage source is Erik's open decision; new B7 session shapes need his approval) |
-| F3 | P2 | Shorter constant MCP text and fewer discovery requests, at unchanged task success | Codex | local | todo (Claude columns exist in `ab.ts`; Codex per-request waits on F2's decision) |
+| F2 | P1 | Session-cost capture: Jev cost and latency columns, B7 session rollup and shapes, Codex outcome per-request usage (Claude per-request capture is in `ab.ts`) | Codex | local | todo (Codex usage source is Erik's open decision; new B7 session shapes need his approval) |
+| F3 | P2 | Shorter constant MCP text and fewer discovery requests, at unchanged task success | Codex | local | todo (Claude columns exist in `ab.ts`, but its Claude host is blocked on E12 for judged runs; Codex per-request waits on F2's decision) |
 | F4 | P2 | `loadout audit` reports cache-aware cost from measured numbers | Codex | cloud | todo (after B11, F1) |
 | F5 | P3 | Start-up and path variability: Codex first-request tools, launcher session paths | Codex | local | todo |
 
@@ -2007,7 +2009,7 @@ State of the code (read 2026-10-31):
 - `bench/outcome.ts` runs only Codex as the agent under test; Claude there is
   the judge, called through `claudeJson()`. Per-request Claude usage in
   `outcome.ts` would be a new host harness, so it is not part of F2. Outcome
-  rows keep Codex turn totals (C11).
+  rows keep Codex turn totals (C11); their per-request usage is below.
 - `bench/ab.ts` captures Claude usage per request with `claudeUsage`
   (`bench/usage.ts`, from #47), and each `RunRow` (`bench/ab-report.ts`)
   carries it. Session columns already reported: request count
@@ -2026,25 +2028,42 @@ State of the code (read 2026-10-31):
   measured Claude turns, one Codex request per run); adding them changes the
   paid-request counts and needs Erik's approval of the new estimate.
 
-Acceptance: what remains is Jev cost and per-request latency as columns where
-Jev or a request clock applies (`ab.ts` rows; B7's gateway arm has no Jev),
-and short, long and past-cache-lifetime sessions for native default against
-the gateway in `mcp-overhead.ts`, after Erik approves the changed request
-counts. Parsers read the host's own report (a fixture test per host; no proxy,
-AGENTS.md rule 1). Decision for Erik: the Codex usage source (`exec --json`
-has turn totals only; the alternatives read a Codex home, see C11). Until then
-Codex per-request usage is "not shown".
+Acceptance: what remains. `ab.ts` cannot stand in for B7 here: its arms are
+not native default against the gateway with configured servers.
+- `ab.ts` rows: a Jev cost column for the loadout arm (today recorded
+  separately) and per-request latency.
+- `mcp-overhead.ts`: a per-session rollup of the existing per-turn rows
+  (request count and the token buckets) and latency per run; neither is a
+  column today. Not added: Jev cost, because the gateway arm runs
+  `mcp --lexical` with no Jev; and completion, because `parseClaudeTurns`
+  throws on a non-success result (`bench/overhead.ts:310`) and `parseCodex`
+  on a failed turn, so every row already is a completed turn.
+- `mcp-overhead.ts` session shapes, for native default against the gateway:
+  short, long and past-cache-lifetime. After Erik approves the changed
+  paid-request counts.
+- Parsers read the host's own report (a fixture test per host; no proxy,
+  AGENTS.md rule 1).
+- Decision for Erik: the Codex usage source (`exec --json` has turn totals
+  only; the alternatives read a Codex home, see C11). Until then Codex
+  per-request usage is "not shown". After the decision, Codex outcome rows
+  keep per-request usage from that source, with a fixture test.
 
 **F3. Lower fixed and discovery overhead.** Candidates: shorter constant
 descriptions and server instructions in `createServer()`, and loading a named
 skill without a search first.
 
 Acceptance: measured against current main: loadout's fixed tokens and extra
-discovery requests per session. On Claude these are in `ab.ts` rows already:
-the first entry of `requests` for fixed tokens, `requests.length`, `toolCalls`
-and `loadoutTools` for discovery. On Codex `exec --json` gives one turn total,
-so request counts there wait on F2's Codex decision ("not shown" until then).
-The host's agent must still
+discovery requests per session. In `ab.ts` rows, fixed tokens are the first
+request of a loadout run minus the first request of a baseline run on the same
+prompt, with the hook's per-prompt context held out or reported alongside
+(`hook.contextChars` counts characters, not tokens); discovery is
+`requests.length`, `toolCalls` and `loadoutTools`. On Codex `exec --json`
+gives one turn total, so request counts there wait on F2's Codex decision
+("not shown" until then). The Claude host in `ab.ts` is blocked on E12 for
+judged runs: Claude outputs are judged by Codex, which cannot run tool-less
+(`judgeProblems` stops the run), and `--no-judge` is accepted only with
+`--study c15`, which is Codex only. So no tokens-only Claude run exists in
+`ab.ts` today; adding one is a code change, not E12. The host's agent must still
 discover and use the right resources and finish the tasks (B11 checks or C14
 runs): select on the dev split, then report the kept change once on test. C1 recall alone cannot show this, because the sweep calls
 `route()` directly. Core review is required, since the change touches the
