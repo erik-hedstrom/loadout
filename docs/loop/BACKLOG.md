@@ -57,7 +57,7 @@ Each PR body's **Review state** section has the round-by-round record.
 | A6 | P0 | Paste-ready host hide snippets after `audit --adopt` | Codex | cloud | done ([#66](https://github.com/erik-hedstrom/loadout/pull/66)) |
 | A1 | P0 | README rewrite around the problem, 3-command quickstart, GIF | Claude | cloud | partial ([#28](https://github.com/erik-hedstrom/loadout/pull/28)): README merged; the GIF waits on A5 |
 | A3 | P1 | `loadout init` wizard + starter packs | Codex | cloud | done ([#30](https://github.com/erik-hedstrom/loadout/pull/30)) |
-| A4 | P1 | npm package under an available name + release workflow | Claude (Codex quota out) | cloud + erik | review ([PR #PRNUM](https://github.com/erik-hedstrom/loadout/pull/PRNUM)); nothing is published, the first release waits on Erik's steps |
+| A4 | P1 | npm package under an available name + release workflow | Claude (Codex quota out) | cloud + erik | review ([PR #71](https://github.com/erik-hedstrom/loadout/pull/71)); nothing is published, the first release waits on Erik's steps |
 | A5 | P1 | Demo recording (route, launch, hook) | Claude | local | todo (after A1) |
 
 **A2. `loadout audit`.**
@@ -1575,7 +1575,7 @@ Learnings (2026-10-09):
 | E8 | P0 | Repo-wide simplification pass | Claude (pr-reviewer finds, worker fixes) + Codex review | cloud | in progress (merged: bench/ [#11](https://github.com/erik-hedstrom/loadout/pull/11), src/ [#12](https://github.com/erik-hedstrom/loadout/pull/12), Markdown [#15](https://github.com/erik-hedstrom/loadout/pull/15), Markdown rest [#26](https://github.com/erik-hedstrom/loadout/pull/26)); left: `docs/loop/BACKLOG.md`, `docs/loop/ORCHESTRATOR.md` and `bench/RESULTS.md`; the WSL-only `bench.test.ts` failure moved to E15 |
 | E9 | P0 | Security hardening from the read-only Sol review | Codex | cloud | done ([PR #4](https://github.com/erik-hedstrom/loadout/pull/4), re-measure [PR #7](https://github.com/erik-hedstrom/loadout/pull/7)) |
 | E3 | P1 | Split the test file per module | Codex | cloud | todo |
-| E5 | P1 | Changelog and release automation | Claude (Codex quota out) | cloud | partial ([PR #PRNUM](https://github.com/erik-hedstrom/loadout/pull/PRNUM)): hand-written 0.1.0 entry and tag-triggered release; no changelog tool adopted |
+| E5 | P1 | Changelog and release automation | Claude (Codex quota out) | cloud | partial ([PR #71](https://github.com/erik-hedstrom/loadout/pull/71)): hand-written 0.1.0 entry and tag-triggered release; no changelog tool adopted |
 | E6 | P2 | Architecture diagram in DESIGN.md | Claude | cloud | done ([#29](https://github.com/erik-hedstrom/loadout/pull/29)) |
 | E10 | P1 | Build without optional dependencies | Codex | cloud | done ([PR #8](https://github.com/erik-hedstrom/loadout/pull/8)) |
 | E11 | P1 | Fixed-text diagnostics in the gateway and relay | Codex | cloud | done ([PR #10](https://github.com/erik-hedstrom/loadout/pull/10)) |
