@@ -31,7 +31,10 @@ know-how when the work drifts away from what the session started with:
 The tool definitions cost input tokens, and both plugins attach this server,
 so they pay it: 158 per request in Claude Code 2.1.308 with its default tool
 search and default tools (the server added from a config, Haiku, the first
-request of a fresh session; with the plugin installed: not measured). A native listing of 50 skills with real
+request of a fresh session; with the plugin installed: not measured). The
+figure covers `find_tools` and `load_skill`; a library with gateway servers
+registers two more tools, `server_tools` and `call_server_tool`, which are not
+measured. A native listing of 50 skills with real
 names and descriptions cost 8,049, measured with the built-in tools removed, so
 the two are not a matched comparison. Both were single requests of fresh
 sessions

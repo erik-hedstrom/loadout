@@ -133,7 +133,8 @@ branches, PRs and `docs/loop/BACKLOG.md`.
   `haesteining` alias.
 - **Default CLIs first (2026-10-07, widened 2026-10-12).** loadout plugs into
   the stock `claude` and `codex` CLIs through their own extension points:
-  the Claude Code plugin and its prompt hook (D10), the Codex hook, and MCP
+  the Claude Code plugin with its prompt hook (D10) and, since D13 (Erik,
+  2026-11-01), the MCP search server, the Codex plugin with both, and MCP
   search. The plugin's install text says routed prompts go to TypeSafe.
   Asking people to start their agent through `loadout claude|codex` is a hard
   sell, so the launcher stays for benchmarks and power users, and
@@ -171,8 +172,8 @@ branches, PRs and `docs/loop/BACKLOG.md`.
 3. **Launch channels and timing.** Show HN, Reddit, X, LinkedIn, awesome
    lists. Agents draft; Erik posts.
 4. **Study prerequisites and remaining decisions.** See
-   [BACKLOG](docs/loop/BACKLOG.md) for C2's run prerequisites, D13's skill
-   loading path and the remaining review decisions. Stale cloud branches and
+   [BACKLOG](docs/loop/BACKLOG.md) for C2's run prerequisites, D13's paid re-run
+   (it needs a subscription token for a fresh Claude home) and the remaining review decisions. Stale cloud branches and
    worktrees stay until Erik decides whether to keep them.
 
 ## Setting up on the new Linux machine
@@ -207,7 +208,7 @@ native machine:
 | `src/diagnostic.ts` | Fixed-text transport diagnostics |
 | `src/audit.ts` | Installed-skill listing and tool overhead audit |
 | `src/doctor.ts` | Read-only setup check (`loadout doctor`) |
-| `plugins/` | Claude Code hook plugin and Codex hook + MCP plugin |
+| `plugins/` | Claude Code and Codex plugins, each with the prompt hook and `loadout mcp` |
 | `docs/hosts.md` | What works in which host, verified or not |
 | `src/library.ts` | Library scan, safe `add` from dirs/GitHub, confined reads, sources |
 | `src/jev.ts`, `src/embed.ts`, `src/prefilter.ts`, `src/retrieve.ts` | Jev client and validation, embeddings, BM25, fusion |

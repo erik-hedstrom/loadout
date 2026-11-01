@@ -4,7 +4,7 @@
 
 ### Changed
 
-- The Claude Code plugin also declares the `loadout mcp` server, because the hook's context points to its `load_skill` (D13). `loadout hook <agent> --no-mcp` is for a hook set up without the server; its context then names only the skill's folder. A live session through the plugin and the plugin arm's re-run are pending.
+- The Claude Code plugin also declares the `loadout mcp` server, because the hook's context points to its `load_skill` (D13). Its two tools are now in every Claude Code request (158 input tokens in B12's measurement, which added the server from a config; through the plugin: not measured) and Claude Code asks before first using them (`loadout setup claude-code` prints `permissions.allow` rules). If you added the server earlier with `claude mcp add`, run `claude mcp remove loadout --scope user`, or its tools load twice; `loadout doctor` flags the pair. `find_tools` sends the agent's goal and keywords to Jev, as the hook does with prompts. A live session through the plugin and the plugin arm's re-run are pending.
 
 ## 0.1.0
 

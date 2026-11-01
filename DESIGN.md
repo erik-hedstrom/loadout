@@ -384,9 +384,10 @@ definitions are in every request ([cost](docs/mcp.md#cost-and-privacy)).
 - each substantive prompt (not "yes" or "go on") is routed with the same two
   Jev requests;
 - the skills that fit are listed once per session, as third-party metadata,
-  with how to load them, naming only what the setup has: `load_skill` (the
-  default; `--no-mcp` for a hook set up without the server) and the skill's
-  folder (`skillFolders`);
+  with how to load them: `load_skill`, and the skill's folder unless
+  `skillFolders` is off. The hook cannot see the host's servers, so it assumes
+  loadout's: every printed setup attaches it. If the server failed to start,
+  the context still names `load_skill`;
 - a clear winner or a named skill is injected once.
 
 Without Jev (no key, `"router": "lexical"`, or Jev down) the hook adds no
