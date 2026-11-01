@@ -52,10 +52,12 @@ so the settings below must exist **before the first tag is pushed**.
 1. In one PR: set the version in `package.json`, put the entries under
    `## X.Y.Z` in `CHANGELOG.md` (the section becomes the release notes, so
    links in it are absolute), and, for the first release, make
-   `npm install -g @erik-hedstrom/loadout` step 1 of the README quickstart and
-   remove its "Until the npm package ... is released" wording. The README ships
-   in the tarball, and until this PR it correctly says the package is not
-   released.
+   `npm install -g @erik-hedstrom/loadout` step 1 of the README quickstart,
+   remove its "Until the npm package ... is released" wording, and remove its
+   "After the release" bullet, keeping that bullet's note (the command is still
+   `loadout`, the plugins find it on `PATH`, `npx` does not put it there so a
+   hook cannot use it) where the new step 1 lands. The README ships in the
+   tarball, and until this PR it correctly says the package is not released.
 2. After it merges, tag the merge commit and push the tag:
    `git tag vX.Y.Z <commit> && git push origin vX.Y.Z`.
 3. Approve the `publish` job.

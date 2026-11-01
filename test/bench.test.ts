@@ -160,6 +160,8 @@ body
           ]),
           ...(killed ? [] : [problem === 'auth failure' ? { type: 'result', subtype: 'success', is_error: true, total_cost_usd: 0 } : { type: 'result', total_cost_usd: 0.05 }]),
         ].map((e) => typeof e === 'string' ? e : JSON.stringify(e)).join('\n')));
+        // The token starts 3 characters before the 400-character cut of a failed run's stderr, so cutting first would leave most of it.
+        if (problem === 'no init') child.stderr!.emit('data', Buffer.from(`bench-token-canary${'e'.repeat(385)}`));
         if (!killed) child.emit('close', problem === 'no init' ? 1 : 0);
       });
       return child;
@@ -178,6 +180,9 @@ body
         expect(rows[0]).toMatchObject({ id: 'a', invalid: reason, exit: problem === 'no init' ? 1 : problem === 'stalled' ? null : 0, timedOut: problem === 'stalled', invoked: problem === 'stalled' ? [] : ['skill-a'], tools: problem === 'stalled' ? [] : ['Read'], inventory: problem === 'no init' || problem === 'bad init' || problem === 'plugins not a list' ? null : reduced(inventories[0]!), hookInvocations: hookCounts[0]! });
         expect(rows[0].costUsd).toBe(problem === 'auth failure' ? 0 : problem === 'stalled' ? undefined : 0.05);
         if (problem === 'auth failure') expect(rows[0].outcome).toEqual({ isError: true, subtype: 'success' });
+        // A failed run's stderr is kept, and rows are public: the token never reaches one.
+        if (problem === 'no init') expect(rows[0].stderr).toBe(`<credential>${'e'.repeat(385)}`);
+        expect(JSON.stringify(rows)).not.toContain('canary');
         expect(rows[0].hooks).toHaveLength(hookCounts[0]! + (ambient === 'absolute' ? 1 : 0));
         return;
       }
@@ -201,7 +206,7 @@ body
         expect(call.env!.LOADOUT_HOME).toBe(dir);
         const crossing = mode === 'plugin' ? ':CLAUDE_CONFIG_DIR/p:CLAUDE_CODE_OAUTH_TOKEN:MCP_CONNECTION_NONBLOCKING:MCP_CONNECT_TIMEOUT_MS:MCP_TIMEOUT' : '';
         expect(call.env!.WSLENV).toBe(windowsAgent ? 'KEEP/p:PATH/l' + crossing : 'KEEP/p:PATH/up');
-        // C8's setup, matched: a fresh Claude home with the token, and startup that waits for the plugin's server.
+        // Not C8's setup (which ran on the real Claude home): a fresh Claude home with the token, and startup that waits for the plugin's server.
         if (mode === 'plugin') {
           expect(call.env!.CLAUDE_CONFIG_DIR).toContain('loadout-claude-');
           expect(call.env!.CLAUDE_CODE_OAUTH_TOKEN).toBe('bench-token-canary');

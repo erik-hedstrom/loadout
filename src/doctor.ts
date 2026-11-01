@@ -157,7 +157,7 @@ export async function doctor(config: Config, client: (apiKey: string) => SystemO
         const runnable = server && typeof server === 'object' && !Array.isArray(server) && ['command', 'url'].some((k) => typeof server[k] === 'string' && server[k].trim() !== '');
         const found = [!hooksOff && plugin && 'plugin enabled', !hooksOff && hook && 'settings hook', runnable && 'search server'].filter(Boolean);
         // The plugin attaches its own server (D13), so a user-scope one from an earlier `claude mcp add` loads the tools twice.
-        if (found.length) return { on: found.join(' and '), ...(plugin && runnable ? { duplicate: 'plugin enabled and a separately configured search server: its tools are in every request twice' } : {}) };
+        if (found.length) return { on: found.join(' and '), ...(plugin && runnable ? { duplicate: 'plugin enabled and a separately configured search server: its tools are attached twice' } : {}) };
         // Claude Code rewrites .claude.json often, so a read can catch it half-written: call it broken only when nothing else is attached.
         if (!userConfig) return { broken: claudeConfig };
         const off = plugin ? 'plugin enabled' : hook ? 'settings hook' : undefined;
