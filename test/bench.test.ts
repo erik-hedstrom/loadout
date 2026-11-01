@@ -55,7 +55,9 @@ describe('benchmark backends', () => {
     { mode: 'plugin', windowsAgent: false, problem: 'missing hook' },
     { mode: 'plugin', windowsAgent: false, problem: 'missing mcp' },
     { mode: 'plugin', windowsAgent: false, problem: 'failed mcp' },
+    { mode: 'plugin', windowsAgent: false, problem: 'pending mcp' },
     { mode: 'plugin', windowsAgent: false, ambient: 'mcp' },
+    { mode: 'plugin', windowsAgent: false, ambient: 'loadout mcp' },
     { mode: 'hook', windowsAgent: false, problem: 'missing hook' },
     { mode: 'plugin', windowsAgent: false, problem: 'no init' },
     { mode: 'plugin', windowsAgent: false, problem: 'bad init' },
@@ -80,6 +82,7 @@ describe('benchmark backends', () => {
     vi.stubEnv('PATH', fakePath);
     vi.stubEnv('WSL_DISTRO_NAME', 'bench-distro');
     vi.stubEnv('WSLENV', 'KEEP/p:PATH/up');
+    vi.stubEnv('CLAUDE_CODE_OAUTH_TOKEN', 'bench-token-canary');
     const translate = (p: string) => windowsAgent ? `C:\\translated${p.replace(/\\/g, '/')}` : p;
     vi.doMock('../src/launch.js', async (original) => ({ ...await original<typeof import('../src/launch.js')>(), pathTranslator: () => translate, hookCommand: () => 'printf "%s" "$HOOK_OUT"; printf hook-err >&2; exit 7' }));
     vi.mocked(execFileSync).mockImplementation((command, args) => {
@@ -102,8 +105,11 @@ describe('benchmark backends', () => {
         const dirArg = args[args.indexOf('--plugin-dir') + 1]!;
         const local = windowsAgent ? dirArg.replace('C:\\translated', '').replace(/\\/g, '/') : dirArg;
         pluginCopies.push({ dir: local, servers: JSON.parse(readFileSync(join(local, '.mcp.json'), 'utf8')).mcpServers });
-        inventory.mcp_servers = problem === 'missing mcp' ? [] : [{ name: 'plugin:loadout:loadout', status: problem === 'failed mcp' ? 'failed' : 'connected' }, { name: 'ambient-db', status: 'connected' }];
-        if (ambient === 'mcp') inventory.mcp_servers.push({ name: 'loadout', status: 'connected' });
+        const status = problem === 'failed mcp' ? 'failed' : problem === 'pending mcp' ? 'pending' : 'connected';
+        inventory.mcp_servers = problem === 'missing mcp' ? [] : [{ name: 'plugin:loadout:loadout', status }];
+        // Any second server breaks the match with C8, whatever its name; a user-scope `loadout` also gives load_skill.
+        if (ambient === 'mcp') inventory.mcp_servers.push({ name: 'ambient-db', status: 'connected' });
+        if (ambient === 'loadout mcp') inventory.mcp_servers.push({ name: 'loadout', status: 'connected' });
       }
       if (problem === 'missing plugin') inventory.plugins = [];
       if (ambient === 'plugin') inventory.plugins.push({ name: 'loadout', path: '/ambient/loadout' });
@@ -164,7 +170,7 @@ body
       process.argv = [process.execPath, 'bench/invoke.ts', dir, '--agent', 'claude', '--mode', mode, '--ids', 'a,b', ...(killed ? ['--timeout-s', '0.05'] : [])];
       vi.resetModules();
       if (ambient || problem && problem !== 'silent hook' && problem !== 'capped') {
-        const reason = problem === 'auth failure' || problem === 'stalled' ? 'agent failed before the model ran' : problem === 'no init' || problem === 'bad init' || problem === 'plugins not a list' ? 'no startup inventory' : ambient === 'plugin' ? 'ambient loadout plugin; measurement invalid' : problem === 'missing mcp' || problem === 'failed mcp' || ambient === 'mcp' ? 'loadout MCP server missing, failed or ambient; measurement invalid' : ambient === 'absolute' ? 'uncounted loadout hook context; measurement invalid' : problem === 'missing plugin' ? 'missing loadout plugin; measurement invalid' : mode === 'routed' || mode === 'search' ? 'unexpected loadout UserPromptSubmit hook; measurement invalid' : 'expected exactly one loadout UserPromptSubmit hook; measurement invalid';
+        const reason = problem === 'auth failure' || problem === 'stalled' ? 'agent failed before the model ran' : problem === 'no init' || problem === 'bad init' || problem === 'plugins not a list' ? 'no startup inventory' : ambient === 'plugin' ? 'ambient loadout plugin; measurement invalid' : problem === 'missing mcp' || problem === 'failed mcp' || problem === 'pending mcp' || ambient === 'mcp' || ambient === 'loadout mcp' ? 'the plugin MCP server is missing or not connected, or another MCP server is present; measurement invalid' : ambient === 'absolute' ? 'uncounted loadout hook context; measurement invalid' : problem === 'missing plugin' ? 'missing loadout plugin; measurement invalid' : mode === 'routed' || mode === 'search' ? 'unexpected loadout UserPromptSubmit hook; measurement invalid' : 'expected exactly one loadout UserPromptSubmit hook; measurement invalid';
         await expect(import('../bench/invoke.js')).rejects.toThrow(reason);
         const rows = readFileSync(join(dir, `invoke-claude-${mode}.jsonl`), 'utf8').trim().split('\n').map((line) => JSON.parse(line));
         expect(rows).toHaveLength(1);
@@ -193,7 +199,14 @@ body
         expect(call.env!.PATH!.slice(call.env!.PATH!.indexOf(delimiter))).toBe(delimiter + fakePath);
         expect(call.env!.PATH!.split(delimiter)[0]).toContain('loadout-bin-');
         expect(call.env!.LOADOUT_HOME).toBe(dir);
-        expect(call.env!.WSLENV).toBe(windowsAgent ? 'KEEP/p:PATH/l' : 'KEEP/p:PATH/up');
+        const crossing = mode === 'plugin' ? ':CLAUDE_CONFIG_DIR/p:CLAUDE_CODE_OAUTH_TOKEN:MCP_CONNECTION_NONBLOCKING:MCP_CONNECT_TIMEOUT_MS:MCP_TIMEOUT' : '';
+        expect(call.env!.WSLENV).toBe(windowsAgent ? 'KEEP/p:PATH/l' + crossing : 'KEEP/p:PATH/up');
+        // C8's setup, matched: a fresh Claude home with the token, and startup that waits for the plugin's server.
+        if (mode === 'plugin') {
+          expect(call.env!.CLAUDE_CONFIG_DIR).toContain('loadout-claude-');
+          expect(call.env!.CLAUDE_CODE_OAUTH_TOKEN).toBe('bench-token-canary');
+          expect(call.env).toMatchObject({ MCP_CONNECTION_NONBLOCKING: '0', MCP_CONNECT_TIMEOUT_MS: '60000', MCP_TIMEOUT: '60000' });
+        }
       }
       const rows = readFileSync(join(dir, `invoke-claude-${mode}.jsonl`), 'utf8').trim().split('\n').map((line) => JSON.parse(line));
       expect(rows.map((row) => row.id)).toEqual(['a', 'b']);
@@ -210,6 +223,8 @@ body
         expect(row.costUsd).toBe(killed ? undefined : 0.05);
         expect(row.ms).toBeGreaterThanOrEqual(0);
       }
+      // The token is in the child's environment only: never in a row or the console.
+      expect(JSON.stringify([rows, log.mock.calls])).not.toContain('bench-token-canary');
       expect(process.env.PATH).toBe(fakePath);
     } finally {
       process.argv = argv;
@@ -221,6 +236,29 @@ body
       vi.resetModules();
     }
     expect(process.env.PATH).toBe(parentPath);
+  });
+
+  it.each([
+    { name: 'plugin mode without the login token', mode: 'plugin', token: '', existing: false, reason: 'needs CLAUDE_CODE_OAUTH_TOKEN' },
+    { name: 'a results file from an earlier run', mode: 'hook', token: 'bench-token-canary', existing: true, reason: 'already exists' },
+  ])('refuses $name before starting anything', async ({ mode, token, existing, reason }) => {
+    const dir = temp();
+    if (existing) writeFileSync(join(dir, `invoke-claude-${mode}.jsonl`), '{"id":"earlier"}\n');
+    vi.stubEnv('CLAUDE_CODE_OAUTH_TOKEN', token);
+    const argv = process.argv;
+    try {
+      process.argv = [process.execPath, 'bench/invoke.ts', dir, '--agent', 'claude', '--mode', mode, '--ids', 'a'];
+      vi.resetModules();
+      const failure = await import('../bench/invoke.js').then(() => undefined, (e: Error) => e);
+      expect(failure?.message).toContain(reason);
+      expect(failure?.message).not.toContain('bench-token-canary');
+      expect(vi.mocked(spawn)).not.toHaveBeenCalled();
+      if (existing) expect(readFileSync(join(dir, `invoke-claude-${mode}.jsonl`), 'utf8')).toBe('{"id":"earlier"}\n');
+    } finally {
+      process.argv = argv;
+      vi.unstubAllEnvs();
+      vi.resetModules();
+    }
   });
 
   it('generates 300 seeds through pending files and resumes with IDs and provenance', () => {

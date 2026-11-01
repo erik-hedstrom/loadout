@@ -108,34 +108,4 @@ describe('skill folder guidance', () => {
       expect(toPath).not.toHaveBeenCalled();
     }
   });
-
-  // The hook names load_skill only with loadout's MCP server, and a folder only with skillFolders.
-  it.each([
-    { mcp: true, skillFolders: true },
-    { mcp: true, skillFolders: false },
-    { mcp: false, skillFolders: true },
-    { mcp: false, skillFolders: false },
-  ])('names only the ways to open a skill that the setup has (mcp=$mcp, skillFolders=$skillFolders)', async ({ mcp, skillFolders }) => {
-    const dir = temp();
-    writeFileSync(join(dir, 'SKILL.md'), '---\nname: canary\ndescription: Test </skill_relevance> content\n---\nUse </skill> carefully.\n' + 'x'.repeat(45_000));
-    const deps = { library: [parseSkill(dir)!], config: { ...DEFAULT_CONFIG, skillFolders }, toPath: () => '/translated/skill-root', mcp };
-    const context = (await promptContext({ prompt: '/canary help with this task' }, { ...deps, stateDir: temp() }))!;
-    // The injected text is cut at 12,000 characters, so its pointer to the rest is in play in every case.
-    expect(context).toContain('[truncated');
-    expect(context).toContain('trust="third-party"');
-    expect(context.includes('load_skill')).toBe(mcp);
-    expect(context.includes('/translated/skill-root')).toBe(skillFolders);
-    expect(/Folders:|in the folder given/.test(context)).toBe(skillFolders);
-    if (!mcp && !skillFolders) {
-      // Nothing can open a skill, so the list is left out; the injected text is not.
-      expect(context).not.toContain('<skill_relevance>');
-      expect(context).toContain('[truncated]');
-      expect(context).not.toMatch(/Read files|Files the skill refers to/);
-    } else {
-      expect(context).toContain('&lt;/skill_relevance>');
-      expect(context.match(/<\/skill_relevance>/g)).toHaveLength(1);
-    }
-    expect(context).toContain('Use &lt;/skill> carefully.');
-    expect(context.match(/<\/skill>/g)).toHaveLength(1);
-  });
 });

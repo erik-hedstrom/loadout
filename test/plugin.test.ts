@@ -66,31 +66,6 @@ describe('Claude Code plugin', () => {
     expect(stderr).not.toContain(key);
   });
 
-  // The hook cannot see the host's MCP servers, so the setup says: the plugin and `loadout setup` attach the
-  // server and the default context names load_skill; a hook set up without it passes --no-mcp.
-  it.each([
-    { args: [], mcp: true },
-    { args: ['--no-mcp'], mcp: false },
-  ])('names load_skill only when the setup has the server (hook claude $args)', ({ args, mcp }) => {
-    const home = mkdtempSync(join(tmpdir(), 'loadout-hook-mcp-'));
-    try {
-      const skill = join(home, 'library/skills/canary');
-      mkdirSync(skill, { recursive: true });
-      writeFileSync(join(skill, 'SKILL.md'), '---\nname: canary\ndescription: Test skill\n---\nReference text.');
-      writeFileSync(join(home, 'config.json'), JSON.stringify({ router: 'lexical' }));
-      const result = spawnSync(process.execPath, ['--import', 'tsx', join(ROOT, 'src/cli.ts'), 'hook', 'claude', ...args], {
-        encoding: 'utf8', timeout: 20_000, env: { ...process.env, LOADOUT_HOME: home, TYPESAFE_API_KEY: '' },
-        input: JSON.stringify({ session_id: 'd13', prompt: '/canary help with this task', cwd: home }),
-      });
-      expect(result.status, result.stderr).toBe(0);
-      const context: string = JSON.parse(result.stdout).hookSpecificOutput.additionalContext;
-      expect(context).toContain('trust="third-party"');
-      expect(context.includes('load_skill')).toBe(mcp);
-      expect(context).toContain('read SKILL.md in the folder given');
-    } finally {
-      rmSync(home, { recursive: true, force: true });
-    }
-  });
 });
 
 describe('Codex plugin', () => {

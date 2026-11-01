@@ -14,8 +14,10 @@
  *           preloaded: does the agent open what the hook suggests? Its
  *           `loadout mcp` command is replaced by this checkout's code, as the
  *           PATH shim does for the hook. No --strict-mcp-config here: it would
- *           also drop the plugin's server; the run is invalid if the inventory
- *           shows any other loadout server.
+ *           also drop the plugin's server. Instead the run uses a fresh Claude
+ *           home (CLAUDE_CONFIG_DIR) with CLAUDE_CODE_OAUTH_TOKEN, as bench/ab.ts
+ *           does, and is invalid unless the plugin's server is the only MCP
+ *           server and is connected.
  * Ambient hooks that call loadout by absolute path bypass PATH; only their context
  * shows, so a silent one is not detected.
  *
@@ -26,10 +28,13 @@
  * agent to make up small sample inputs; otherwise it stops to ask before
  * reaching the point where it would open a skill.
  *
+ * Rows are appended to <sweep dir>/invoke-<agent>-<mode>.jsonl, which must not
+ * exist yet: give each run its own folder with a copy of decisions.jsonl.
+ *
  *   npx tsx bench/invoke.ts <sweep dir> --agent claude|codex --mode routed|search|hook|plugin --ids a,b,c [--max-turns 6]
  */
 import { execFileSync } from 'node:child_process';
-import { appendFileSync, cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, delimiter, join } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -56,6 +61,12 @@ if (!dir || !values.ids) throw new Error('usage: invoke.ts <sweep dir> --agent c
 const agent = values.agent as Agent;
 const mode = values.mode as 'routed' | 'search' | 'hook' | 'plugin';
 if ((mode === 'hook' || mode === 'plugin') && agent !== 'claude') throw new Error(`${mode} mode is Claude Code only`);
+const out = join(dir, `invoke-${agent}-${mode}.jsonl`);
+// Rows are appended, so a second run into one file would mix runs of different plugins or setups.
+if (existsSync(out)) throw new Error(`${basename(out)} already exists in ${dir}; use a new results folder holding a copy of decisions.jsonl`);
+// A fresh Claude home (no user settings, plugins or servers) needs the subscription token from `claude setup-token`.
+// The message is fixed: the token is never printed or written.
+if (mode === 'plugin' && !process.env.CLAUDE_CODE_OAUTH_TOKEN) throw new Error('plugin mode runs Claude in a fresh home and needs CLAUDE_CODE_OAUTH_TOKEN (from `claude setup-token`) in the environment');
 const rows = new Map(readJsonl<SweepRow>(join(dir, 'decisions.jsonl')).map((r) => [r.id, r]));
 const library = scanLibrary(paths.library());
 const byKey = new Map(library.map((c) => [capabilityKey(c), c]));
@@ -70,15 +81,25 @@ const workRoot = windowsAgent ? execFileSync('wslpath', ['-u', execFileSync('cmd
 const repo = join(import.meta.dirname, '..');
 let shimDir: string | undefined;
 let childEnv: NodeJS.ProcessEnv | undefined;
+let claudeHome: string | undefined;
 if (agent === 'claude') {
   shimDir = mkdtempSync(join(workRoot, 'loadout-bin-'));
   childEnv = { ...process.env, PATH: `${shimDir}${delimiter}${process.env.PATH ?? ''}` };
+  // WSLENV names what crosses into the Windows claude.exe; `/l` and `/p` translate a path list and a path.
   // The `claude` we start is a launcher script run inside WSL, so PATH stays a Linux list; PATH/l
   // translates it, shim folder first, for the Windows claude.exe and the hook shell it starts.
-  if (windowsAgent) childEnv.WSLENV = [...(process.env.WSLENV ?? '').split(':').filter((s) => s && !/^PATH(?:\/.*)?$/.test(s)), 'PATH/l'].join(':');
+  const crossing = ['PATH/l'];
+  if (mode === 'plugin') {
+    claudeHome = mkdtempSync(join(workRoot, 'loadout-claude-'));
+    // MCP startup is non-blocking by default, so the init event would list the plugin's server as pending; wait for
+    // it (env-vars: MCP_CONNECTION_NONBLOCKING "Set to 0 to make Claude Code wait for servers to connect before the
+    // first query"; MCP_CONNECT_TIMEOUT_MS bounds that wait, 5000 by default; MCP_TIMEOUT bounds one connect attempt).
+    Object.assign(childEnv, { CLAUDE_CONFIG_DIR: claudeHome, MCP_CONNECTION_NONBLOCKING: '0', MCP_CONNECT_TIMEOUT_MS: '60000', MCP_TIMEOUT: '60000' });
+    crossing.push('CLAUDE_CONFIG_DIR/p', 'CLAUDE_CODE_OAUTH_TOKEN', 'MCP_CONNECTION_NONBLOCKING', 'MCP_CONNECT_TIMEOUT_MS', 'MCP_TIMEOUT');
+  }
+  if (windowsAgent) childEnv.WSLENV = [...(process.env.WSLENV ?? '').split(':').filter((s) => s && !crossing.some((c) => c.split('/')[0] === s.split('/')[0])), ...crossing].join(':');
 }
 const NOTE = '\n\n(Test run: nothing is attached and the folder is empty. Where the request refers to files or data you do not have, create small realistic sample inputs and carry on.)';
-const out = join(dir, `invoke-${agent}-${mode}.jsonl`);
 
 const isLoadout = (name: string) => /^loadout(?:@|$)/i.test(name);
 const isLoadoutServer = (name: string) => /loadout/i.test(name);
@@ -108,10 +129,10 @@ function checkInventory(inventory: Inventory | undefined, hookInvocations: numbe
     if (!pluginDir || typeof plugin.path !== 'string' || normalize(plugin.path) !== normalize(toPath(pluginDir)) || ++ownPlugins > 1) return 'ambient loadout plugin; measurement invalid';
   }
   if (mode === 'plugin' && ownPlugins !== 1) return 'missing loadout plugin; measurement invalid';
-  // Only the plugin's own server: a user-scope `loadout` server would give the agent load_skill without the plugin.
-  if (mode === 'plugin') {
-    const servers = inventory.mcpServers.filter((s) => isLoadoutServer(s.name));
-    if (servers.length !== 1 || servers[0]!.name !== PLUGIN_SERVER || servers[0]!.status === 'failed') return 'loadout MCP server missing, failed or ambient; measurement invalid';
+  // Exactly the plugin's own server, connected: any other server changes what the agent can use, and one still
+  // pending or failed would be recorded as the agent declining to open a skill.
+  if (mode === 'plugin' && !(inventory.mcpServers.length === 1 && inventory.mcpServers[0]!.name === PLUGIN_SERVER && inventory.mcpServers[0]!.status === 'connected')) {
+    return 'the plugin MCP server is missing or not connected, or another MCP server is present; measurement invalid';
   }
   if (mode === 'plugin' || mode === 'hook') {
     if (hookInvocations !== 1) return 'expected exactly one loadout UserPromptSubmit hook; measurement invalid';
@@ -215,4 +236,5 @@ for (const id of values.ids.split(',')) {
 }
 rmSync(sessions, { recursive: true, force: true });
 if (shimDir) rmSync(shimDir, { recursive: true, force: true });
+if (claudeHome) rmSync(claudeHome, { recursive: true, force: true });
 if (invalidRun) throw new Error(invalidRun);
