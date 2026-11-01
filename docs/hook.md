@@ -54,9 +54,11 @@ claude mcp remove loadout --scope user
 for the new files; the plugin has no version, so Claude Code takes the commit
 as its version ([versions](https://code.claude.com/docs/en/plugins/loading#versions-and-updates)).
 
-**If the server does not start.** The server runs the `loadout` found on
-PATH. When it is not there or fails, `/mcp` and `claude mcp list` show
-`loadout mcp ... Failed to connect`, and the hook still adds its context. On
+**If the server does not start.** The hook is `loadout hook claude` and the
+server is `loadout mcp`, so both run the `loadout` found on PATH. Off PATH,
+neither runs: `/mcp` and `claude mcp list` show `loadout mcp ... Failed to
+connect`, and the hook adds nothing. If only the server fails, the hook still
+adds its context and names `load_skill`, which is then not there. On
 native Windows the `loadout` that `npm link` installs (an npm `.cmd` shim)
 started it: `claude mcp list` showed `plugin:loadout:loadout ... Connected`
 (Claude Code 2.1.308, 2026-11-01). The plugin's effect on session start time

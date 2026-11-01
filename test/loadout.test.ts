@@ -1138,41 +1138,47 @@ describe('launch', () => {
   });
 
   it('prints host configs that attach the search server', () => {
-    const codexWsl = hostSetup('codex', true);
-    const codex = codexWsl.snippet;
-    expect(codexWsl.where).toContain('WSL');
-    expect(codex).not.toContain('codex plugin add');
-    expect(codex).toMatch(/\[mcp_servers\.loadout\]\ncommand = "wsl\.exe"\nargs = \[.*"mcp", "--windows-paths"\]/);
-    expect(codex).toContain('env_vars = ["TYPESAFE_API_KEY", "TYPESAFE_BASE_URL"]');
-    // Codex waits for a required server before the first request (D17).
-    expect(parseToml(codex)).toMatchObject({ mcp_servers: { loadout: { command: 'wsl.exe', required: true } } });
-    expect(codex).toContain('[mcp_servers.loadout.tools.find_tools]\napproval_mode = "approve"');
-    expect(codex).not.toContain('call_server_tool');
-    expect(codex).toMatch(/\[\[hooks\.UserPromptSubmit\]\]\n\[\[hooks\.UserPromptSubmit\.hooks\]\]\ntype = "command"\ncommand = "wsl\.exe .* hook codex --windows-paths"\ntimeout = 30$/);
-    expect(JSON.parse(hostSetup('opencode', false).snippet).mcp.loadout).toMatchObject({ type: 'local', enabled: true });
-    expect(JSON.parse(hostSetup('claude-desktop', true).snippet).mcpServers.loadout.command).toBe('wsl.exe');
-    const claudeCode = hostSetup('claude-code', false).snippet;
-    expect(claudeCode).toContain('claude plugin marketplace add erik-hedstrom/loadout\nclaude plugin install loadout@loadout');
-    expect(claudeCode).toContain('+158 input tokens/request with default tool search and default tools');
-    expect(claudeCode).toContain('https://github.com/erik-hedstrom/loadout/blob/main/bench/RESULTS.md');
-    // The plugin attaches the server itself, so a second `claude mcp add` would define it twice.
-    expect(claudeCode).not.toMatch(/^claude mcp add/m);
-    expect(claudeCode).toContain('claude mcp remove loadout --scope user');
-    expect(claudeCode).toContain('measured with the server added from a config (through the plugin: not measured');
-    expect(claudeCode).toContain('find_tools (sends the agent\'s goal and keywords to Jev) and load_skill (reads a skill from your library)');
-    expect(claudeCode).toContain('mcp__plugin_loadout_loadout__find_tools, mcp__plugin_loadout_loadout__load_skill');
-    expect(claudeCode).not.toContain('UserPromptSubmit');
-    const wsl = hostSetup('claude-code', true);
-    expect(wsl.where).toContain('WSL');
-    expect(wsl.snippet).not.toContain('claude plugin install');
-    expect(wsl.snippet).toMatch(/^claude mcp add --scope user loadout -- \S+ .* mcp --windows-paths$/m);
-    expect(wsl.snippet).toContain('mcp__loadout__find_tools, mcp__loadout__load_skill');
-    // Only the two search tools: the gateway tools keep their prompt, and no wildcard approves a whole server.
-    for (const snippet of [claudeCode, wsl.snippet]) for (const absent of ['call_server_tool', 'server_tools', '*']) expect(snippet).not.toContain(absent);
-    const settings = JSON.parse(wsl.snippet.slice(wsl.snippet.indexOf('{')).split('\n\n')[0]!);
-    expect(settings).toEqual(claudeHookSettings(true));
-    expect(settings.hooks.UserPromptSubmit[0].hooks[0].command).toMatch(/^wsl\.exe .* hook claude --windows-paths$/);
-    expect(loaderArgs(['-e', 'x', '--require', 'a.cjs', '--import=file:///b.mjs', '--max-old-space-size=99'])).toEqual(['--require', 'a.cjs', '--import=file:///b.mjs']);
+    try {
+      // An ambient LOADOUT_HOME adds an `-e LOADOUT_HOME=...` pair to the printed commands (src/launch.ts).
+      vi.stubEnv('LOADOUT_HOME', '');
+      const codexWsl = hostSetup('codex', true);
+      const codex = codexWsl.snippet;
+      expect(codexWsl.where).toContain('WSL');
+      expect(codex).not.toContain('codex plugin add');
+      expect(codex).toMatch(/\[mcp_servers\.loadout\]\ncommand = "wsl\.exe"\nargs = \[.*"mcp", "--windows-paths"\]/);
+      expect(codex).toContain('env_vars = ["TYPESAFE_API_KEY", "TYPESAFE_BASE_URL"]');
+      // Codex waits for a required server before the first request (D17).
+      expect(parseToml(codex)).toMatchObject({ mcp_servers: { loadout: { command: 'wsl.exe', required: true } } });
+      expect(codex).toContain('[mcp_servers.loadout.tools.find_tools]\napproval_mode = "approve"');
+      expect(codex).not.toContain('call_server_tool');
+      expect(codex).toMatch(/\[\[hooks\.UserPromptSubmit\]\]\n\[\[hooks\.UserPromptSubmit\.hooks\]\]\ntype = "command"\ncommand = "wsl\.exe .* hook codex --windows-paths"\ntimeout = 30$/);
+      expect(JSON.parse(hostSetup('opencode', false).snippet).mcp.loadout).toMatchObject({ type: 'local', enabled: true });
+      expect(JSON.parse(hostSetup('claude-desktop', true).snippet).mcpServers.loadout.command).toBe('wsl.exe');
+      const claudeCode = hostSetup('claude-code', false).snippet;
+      expect(claudeCode).toContain('claude plugin marketplace add erik-hedstrom/loadout\nclaude plugin install loadout@loadout');
+      expect(claudeCode).toContain('+158 input tokens/request with default tool search and default tools');
+      expect(claudeCode).toContain('https://github.com/erik-hedstrom/loadout/blob/main/bench/RESULTS.md');
+      // The plugin attaches the server itself, so a second `claude mcp add` would define it twice.
+      expect(claudeCode).not.toMatch(/^claude mcp add/m);
+      expect(claudeCode).toContain('claude mcp remove loadout --scope user');
+      expect(claudeCode).toContain('measured with the server added from a config (through the plugin: not measured');
+      expect(claudeCode).toContain('find_tools (sends the agent\'s goal and keywords to Jev) and load_skill (reads a skill from your library)');
+      expect(claudeCode).toContain('mcp__plugin_loadout_loadout__find_tools, mcp__plugin_loadout_loadout__load_skill');
+      expect(claudeCode).not.toContain('UserPromptSubmit');
+      const wsl = hostSetup('claude-code', true);
+      expect(wsl.where).toContain('WSL');
+      expect(wsl.snippet).not.toContain('claude plugin install');
+      expect(wsl.snippet).toMatch(/^claude mcp add --scope user loadout -- \S+ .* mcp --windows-paths$/m);
+      expect(wsl.snippet).toContain('mcp__loadout__find_tools, mcp__loadout__load_skill');
+      // Only the two search tools: the gateway tools keep their prompt, and no wildcard approves a whole server.
+      for (const snippet of [claudeCode, wsl.snippet]) for (const absent of ['call_server_tool', 'server_tools', '*']) expect(snippet).not.toContain(absent);
+      const settings = JSON.parse(wsl.snippet.slice(wsl.snippet.indexOf('{')).split('\n\n')[0]!);
+      expect(settings).toEqual(claudeHookSettings(true));
+      expect(settings.hooks.UserPromptSubmit[0].hooks[0].command).toMatch(/^wsl\.exe .* hook claude --windows-paths$/);
+      expect(loaderArgs(['-e', 'x', '--require', 'a.cjs', '--import=file:///b.mjs', '--max-old-space-size=99'])).toEqual(['--require', 'a.cjs', '--import=file:///b.mjs']);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it.each([false, true])('prints privacy before Claude Code installation or WSL settings (WSL=%s)', (windows) => {

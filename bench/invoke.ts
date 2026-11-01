@@ -41,6 +41,7 @@ import { parseArgs } from 'node:util';
 import { loadConfig, paths } from '../src/config.js';
 import { claudeArgs, claudeHookBlock, codexArgs, hookCommand, materialize, pathTranslator, SEARCH_TOOLS, searchServer, which, type Agent } from '../src/launch.js';
 import { capabilityKey, scanLibrary } from '../src/library.js';
+import { redact } from './ab-report.js';
 import { decisionFor, readJsonl, run } from './lib.js';
 import { hookShim, toolEvents, type Inventory } from './stream.js';
 import type { SweepRow } from './sweep.js';
@@ -91,7 +92,7 @@ if (agent === 'claude') {
   const crossing = ['PATH/l'];
   if (mode === 'plugin') {
     claudeHome = mkdtempSync(join(workRoot, 'loadout-claude-'));
-    // MCP startup is non-blocking by default, so the init event would list the plugin's server as pending; wait for
+    // MCP startup is non-blocking by default, so the init event may list the plugin's server as pending; wait for
     // it (env-vars: MCP_CONNECTION_NONBLOCKING "Set to 0 to make Claude Code wait for servers to connect before the
     // first query"; MCP_CONNECT_TIMEOUT_MS bounds that wait, 5000 by default; MCP_TIMEOUT bounds one connect attempt).
     Object.assign(childEnv, { CLAUDE_CONFIG_DIR: claudeHome, MCP_CONNECTION_NONBLOCKING: '0', MCP_CONNECT_TIMEOUT_MS: '60000', MCP_TIMEOUT: '60000' });
@@ -215,7 +216,8 @@ for (const id of values.ids.split(',')) {
     tools: events.map((e) => (e.ok ? e.tool : `${e.tool} (failed)`)),
     exit: proc.code,
     timedOut: proc.timedOut,
-    ...(proc.code !== 0 && !proc.timedOut ? { stderr: proc.stderr.slice(-400) } : {}),
+    // Redacted before the cut, so a token straddling the 400-character boundary is not left half-visible.
+    ...(proc.code !== 0 && !proc.timedOut ? { stderr: redact(proc.stderr, [process.env.CLAUDE_CODE_OAUTH_TOKEN ?? '']).slice(-400) } : {}),
     costUsd,
     outcome,
     ms: Date.now() - started,

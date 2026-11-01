@@ -1485,16 +1485,21 @@ $0.02; the token is a personal subscription token from `claude setup-token`,
 read from the environment and never printed):
 
 ```bash
+read -rs CLAUDE_CODE_OAUTH_TOKEN && export CLAUDE_CODE_OAUTH_TOKEN
 d=bench/results/$(date -u +%Y-%m-%dT%H-%M-%SZ)-d13-plugin-mcp
 mkdir "$d" && cp bench/results/2026-10-06T05-40-33-sweep/decisions.jsonl "$d"/
-CLAUDE_CODE_OAUTH_TOKEN=... npx tsx bench/invoke.ts "$d" --agent claude --mode plugin \
+npx tsx bench/invoke.ts "$d" --agent claude --mode plugin \
   --model claude-sonnet-5-5 --max-turns 8 --timeout-s 240 \
   --ids integrations-01,productivity-04,writing-04,documents-19,documents-29,business-10,science-04,security-04,data-04,media-15
 ```
 
-It matches RESULTS' C8 arm: Sonnet 5.5, 8 turns, 4 minutes, the same ids. It
-refuses to append to an existing results file, and stops at the first
-invalid row.
+It aligns with RESULTS' C8 arm on model (Sonnet 5.5), turns (8), time (4
+minutes) and ids, but is not the same setup. C8's rows ran on the real Claude
+home, with the user's settings and plugins, and without the MCP blocking
+variables; this arm uses a fresh Claude home and waits for the plugin's server
+(`MCP_CONNECTION_NONBLOCKING=0`), so a difference in the result may come from
+either the plugin's server or that setup. It refuses to append to an existing
+results file, and stops at the first invalid row.
 
 Learnings (2026-11-01, Claude Sonnet 5.5 while Codex quota was out, so
 unverified until Codex's cross-model validation; a security-focused Codex

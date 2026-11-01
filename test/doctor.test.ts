@@ -264,7 +264,7 @@ describe('doctor', () => {
     const checks = byName(await doctor(config, () => okClient));
     expect(checks['Claude Code']).toMatchObject({
       ok: false,
-      detail: `CLI not on PATH; loadout: ${disableAllHooks ? 'search server' : 'plugin enabled and settings hook and search server'}; plugin enabled and a separately configured search server: its tools are in every request twice`,
+      detail: `CLI not on PATH; loadout: ${disableAllHooks ? 'search server' : 'plugin enabled and settings hook and search server'}; plugin enabled and a separately configured search server: its tools are attached twice`,
       fix: 'remove the separate server with `claude mcp remove loadout --scope user`',
     });
   });
