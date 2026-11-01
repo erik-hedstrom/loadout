@@ -58,7 +58,9 @@ marked the same way.
   sessions opened a loaded skill. With nothing preloaded, the search tool and
   the prompt hook (installed through a settings file, as `loadout setup
   claude-code` prints it), 6 of 10 (31-83%) Claude Code sessions opened a
-  useful skill. The hook-only plugin is not measured.
+  useful skill. The Claude Code plugin, which now carries the MCP server, is
+  not measured; the hook-only plugin before it opened none (0 of 10)
+  ([RESULTS](../bench/RESULTS.md#do-agents-use-what-they-are-given)).
 
 ## What loadout sends to TypeSafe
 
@@ -102,7 +104,9 @@ with `/`, `@` or `$` (`isFollowUp` in `src/hook.ts`), in every project
   On Claude Code 2.1.308, loadout's tools cost +158 with the default tools
   and 50 skills with real names cost +8,049 with built-in tools removed
   ([B12](../bench/RESULTS.md#b12-results-2026-10-28-what-installed-skills-cost-per-request-on-current-hosts)); a matched comparison is not shown. The
-  hook's per-prompt context is not included in either figure.
+  hook's per-prompt context is not included in either figure. Both plugins
+  attach loadout's server, so they pay its tool cost; B12 added the server from
+  a config, not through a plugin.
 - **Jev routing needs a TypeSafe key and two Jev requests per routed
   decision.** Without a key, `find_tools` and the launcher fall back to
   keyword ranking (the launcher with the default medium tier), and the prompt

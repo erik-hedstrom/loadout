@@ -1153,13 +1153,22 @@ describe('launch', () => {
     expect(JSON.parse(hostSetup('claude-desktop', true).snippet).mcpServers.loadout.command).toBe('wsl.exe');
     const claudeCode = hostSetup('claude-code', false).snippet;
     expect(claudeCode).toContain('claude plugin marketplace add erik-hedstrom/loadout\nclaude plugin install loadout@loadout');
-    expect(claudeCode).toContain('+158 input tokens/request with default tool search');
+    expect(claudeCode).toContain('+158 input tokens/request with default tool search and default tools');
     expect(claudeCode).toContain('https://github.com/erik-hedstrom/loadout/blob/main/bench/RESULTS.md');
-    expect(claudeCode).toMatch(/claude mcp add --scope user loadout -- \S+ .* mcp$/);
+    // The plugin attaches the server itself, so a second `claude mcp add` would define it twice.
+    expect(claudeCode).not.toMatch(/^claude mcp add/m);
+    expect(claudeCode).toContain('claude mcp remove loadout --scope user');
+    expect(claudeCode).toContain('measured with the server added from a config (through the plugin: not measured');
+    expect(claudeCode).toContain('find_tools (sends the agent\'s goal and keywords to Jev) and load_skill (reads a skill from your library)');
+    expect(claudeCode).toContain('mcp__plugin_loadout_loadout__find_tools, mcp__plugin_loadout_loadout__load_skill');
     expect(claudeCode).not.toContain('UserPromptSubmit');
     const wsl = hostSetup('claude-code', true);
     expect(wsl.where).toContain('WSL');
     expect(wsl.snippet).not.toContain('claude plugin install');
+    expect(wsl.snippet).toMatch(/^claude mcp add --scope user loadout -- \S+ .* mcp --windows-paths$/m);
+    expect(wsl.snippet).toContain('mcp__loadout__find_tools, mcp__loadout__load_skill');
+    // Only the two search tools: the gateway tools keep their prompt, and no wildcard approves a whole server.
+    for (const snippet of [claudeCode, wsl.snippet]) for (const absent of ['call_server_tool', 'server_tools', '*']) expect(snippet).not.toContain(absent);
     const settings = JSON.parse(wsl.snippet.slice(wsl.snippet.indexOf('{')).split('\n\n')[0]!);
     expect(settings).toEqual(claudeHookSettings(true));
     expect(settings.hooks.UserPromptSubmit[0].hooks[0].command).toMatch(/^wsl\.exe .* hook claude --windows-paths$/);
@@ -1172,6 +1181,7 @@ describe('launch', () => {
     expect(notice).toContain('every project (user scope)');
     expect(notice).toContain("each routed prompt, with the repository's top-level file names and dependency names, to TypeSafe's Jev API");
     expect(notice).toContain('"router": "lexical" in loadout\'s config keeps prompts local');
+    expect(notice).toContain("the agent's goal and keywords and the top-level file names of the folder the host starts it in");
     expect(snippet.indexOf(windows ? '{' : 'claude plugin marketplace add')).toBeGreaterThan(notice.length);
     expect(where).toContain('desktop app Code tab: not yet tested');
   });

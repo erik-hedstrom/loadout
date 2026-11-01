@@ -1,10 +1,24 @@
 # The prompt hook plugins
 
 Each plugin carries a `UserPromptSubmit` hook that runs `loadout hook claude`
-or `loadout hook codex`. The hook routes each substantive prompt and adds the
-skills predicted to fit as context, so you keep starting your agent as usual. Both
-need `loadout` on PATH and Node 22.12+. What was checked in which host:
-[hosts.md](hosts.md).
+or `loadout hook codex`, and the [library search server](mcp.md) (`loadout
+mcp`), which has the `load_skill` tool the hook's context points to. The hook
+routes each substantive prompt and adds the skills predicted to fit as
+context, so you keep starting your agent as usual. Both need `loadout` on PATH
+and Node 22.12+. What was checked in which host: [hosts.md](hosts.md).
+
+The server's tool definitions are a fixed part of every request; the hook's
+context is not fixed, it varies with the prompt. The server's cost is in
+[mcp.md](mcp.md#cost-and-privacy); the hook's per-prompt context, and the
+plugin's effect on Claude Code session start, are not measured
+([RESULTS](../bench/RESULTS.md#b12-results-2026-10-28-what-installed-skills-cost-per-request-on-current-hosts)).
+
+The hook cannot see which MCP servers its host has, so it always assumes
+loadout's server: `loadout setup` prints both the hook and the server, and the
+plugins carry both. Its context still names `load_skill` when the server
+failed to start (the agent then has only the skill's folder, where the host
+lets it read). A hook set up by hand without the server names a tool that is
+not there.
 
 ## Claude Code
 
@@ -15,10 +29,44 @@ claude plugin install loadout@loadout
 
 You can also use `/plugin` inside a session.
 
+Claude Code asks before it uses the plugin's tools, and its docs describe no
+way for a plugin to approve them ([plugin docs](https://code.claude.com/docs/en/plugins/components#mcp-servers)).
+To skip the prompt, add `mcp__plugin_loadout_loadout__find_tools` and
+`mcp__plugin_loadout_loadout__load_skill` to `permissions.allow` in your
+settings ([permission rules](https://code.claude.com/docs/en/permissions#mcp));
+`loadout setup claude-code` prints them. The Codex plugin approves them itself.
+`find_tools` sends the agent's goal and keywords to Jev, and `load_skill`
+reads a skill from your library, so those two rules approve exactly that
+([privacy](#privacy)).
+
+**Updating from an earlier install.** The plugin used to carry only the hook.
+Now it also adds the server's tools to every request (158 input tokens in
+B12's measurement, which added the server from a config; through the plugin:
+not measured) and a first-use approval prompt. If you ran `claude mcp add` for
+loadout before, remove that server or its tools load twice, with the allow
+rules covering only one set:
+
+```bash
+claude mcp remove loadout --scope user
+```
+
+`loadout doctor` flags the pair. Run `claude plugin update loadout@loadout`
+for the new files; the plugin has no version, so Claude Code takes the commit
+as its version ([versions](https://code.claude.com/docs/en/plugins/loading#versions-and-updates)).
+
+**If the server does not start.** The server runs the `loadout` found on
+PATH. When it is not there or fails, `/mcp` and `claude mcp list` show
+`loadout mcp ... Failed to connect`, and the hook still adds its context. On
+native Windows the `loadout` that `npm link` installs (an npm `.cmd` shim)
+started it: `claude mcp list` showed `plugin:loadout:loadout ... Connected`
+(Claude Code 2.1.308, 2026-11-01). The plugin's effect on session start time
+is not measured.
+
 For loadout running in WSL behind Windows Claude Code, use `loadout setup
 claude-code --windows` and merge its settings.json hook snippet into
-`~/.claude/settings.json` instead. The plugin's fixed command cannot carry the
-required `wsl.exe` wrapper.
+`~/.claude/settings.json` instead, then run the `claude mcp add` command in
+the same output. The plugin's fixed commands cannot carry the required
+`wsl.exe` wrapper.
 
 ## Codex CLI
 

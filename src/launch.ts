@@ -284,6 +284,9 @@ export function relevanceNote(
   return `<skill_relevance>\n${[body, hint].filter(Boolean).join(' ')}\n</skill_relevance>`;
 }
 
+/** First line of every setup snippet that installs the hook. The search tool is attached with it, and it sends text to Jev too (docs/hook.md#privacy). */
+const PRIVACY_NOTICE = '# Privacy: the hook runs in every project (user scope). It sends each routed prompt, with the repository\'s top-level file names and dependency names, to TypeSafe\'s Jev API. So does the search tool, with the agent\'s goal and keywords and the top-level file names of the folder the host starts it in, which can be your home folder. Setting "router": "lexical" in loadout\'s config keeps prompts local (search goals too).';
+
 /** POSIX single-quote a shell word unless it is plainly safe. */
 const quote = (a: string) => (/^[\w./:=-]+$/.test(a) ? a : `'${a.replace(/'/g, `'\\''`)}'`);
 
@@ -306,21 +309,25 @@ export function hostSetup(host: Host, windows: boolean): { where: string; snippe
           ? 'WSL loadout behind Windows Claude Code: merge this hook into ~/.claude/settings.json instead of installing the plugin; desktop app Code tab: not yet tested'
           : 'Claude Code CLI: run once; requires loadout on PATH and Node 22.12+; desktop app Code tab: not yet tested',
         snippet: [
-          '# Privacy: the hook runs in every project (user scope). It sends each routed prompt, with the repository\'s top-level file names and dependency names, to TypeSafe\'s Jev API. Setting "router": "lexical" in loadout\'s config keeps prompts local.',
+          PRIVACY_NOTICE,
           ...(windows ? [json(claudeHookSettings(true))] : [
             'claude plugin marketplace add erik-hedstrom/loadout',
             'claude plugin install loadout@loadout',
           ]),
           '',
-          '# Optional library search: +158 input tokens/request with default tool search (https://github.com/erik-hedstrom/loadout/blob/main/bench/RESULTS.md).',
-          `claude mcp add --scope user${Object.entries(s.env ?? {}).map(([k, v]) => ` -e ${k}=${quote(v)}`).join('')} loadout -- ${cmd.map(quote).join(' ')}`,
+          // The hook's context points to load_skill, which only this server has, so it is part of the setup.
+          `# ${windows ? 'Library search server' : 'The plugin attaches the library search server'} (find_tools, load_skill), which the hook's context points to: +158 input tokens/request with default tool search and default tools, measured with the server added from a config (through the plugin: not measured; https://github.com/erik-hedstrom/loadout/blob/main/bench/RESULTS.md).`,
+          ...(windows ? [] : ['# If you added the server earlier with `claude mcp add`, remove it, or its tools load twice: claude mcp remove loadout --scope user']),
+          ...(windows ? [`claude mcp add --scope user${Object.entries(s.env ?? {}).map(([k, v]) => ` -e ${k}=${quote(v)}`).join('')} loadout -- ${cmd.map(quote).join(' ')}`] : []),
+          // Claude Code defines no way for a plugin to pre-approve its tools, so the user's own permission rules do it.
+          `# Claude Code asks before using them. These rules approve find_tools (sends the agent's goal and keywords to Jev) and load_skill (reads a skill from your library). To skip the prompt, add them to "permissions.allow" in your settings (this command does not edit them): ${SEARCH_TOOLS.map((t) => `${windows ? 'mcp__loadout__' : 'mcp__plugin_loadout_loadout__'}${t}`).join(', ')}`,
         ].join('\n'),
       };
     case 'codex':
       if (!windows) return {
         where: 'Codex CLI: install checked offline with 0.160.1; live hook untested (D2); requires loadout on PATH and Node 22.12+; after installing, run /hooks in Codex to trust the hook; desktop and T3 Code plugin support: not yet tested',
         snippet: [
-          '# Privacy: the hook runs in every project (user scope). It sends each routed prompt, with the repository\'s top-level file names and dependency names, to TypeSafe\'s Jev API. Setting "router": "lexical" in loadout\'s config keeps prompts local.',
+          PRIVACY_NOTICE,
           'codex plugin marketplace add erik-hedstrom/loadout',
           'codex plugin add loadout-codex@loadout',
         ].join('\n'),
@@ -328,7 +335,7 @@ export function hostSetup(host: Host, windows: boolean): { where: string; snippe
       return {
         where: 'WSL loadout behind Windows Codex: merge this into ~/.codex/config.toml instead of installing the plugin; its fixed PATH commands cannot carry the wsl.exe wrapper; after adding the hook, run /hooks in Codex to trust it',
         snippet: [
-          '# Privacy: the hook runs in every project (user scope). It sends each routed prompt, with the repository\'s top-level file names and dependency names, to TypeSafe\'s Jev API. Setting "router": "lexical" in loadout\'s config keeps prompts local.',
+          PRIVACY_NOTICE,
           `[mcp_servers.loadout]`,
           `command = ${toToml(s.command)}`,
           `args = ${toToml(s.args ?? [])}`,

@@ -1,6 +1,6 @@
 {
   "name": "loadout",
-  "description": "Route prompts to relevant skills through the loadout hook in Claude Code CLI; desktop app Code tab: not yet tested. Requires loadout on PATH and Node 22.12+. Every routed prompt, with the repository's top-level file names and dependency names, goes to TypeSafe's Jev API; setting \"router\": \"lexical\" keeps prompts local.",
+  "description": "Route prompts to relevant skills through the loadout hook in Claude Code CLI, and attach loadout's library search (find_tools, load_skill); desktop app Code tab: not yet tested. Requires loadout on PATH and Node 22.12+. Every routed prompt, with the repository's top-level file names and dependency names, goes to TypeSafe's Jev API, and so do the agent's find_tools goals and keywords, with file names from the folder the host starts the server in; setting \"router\": \"lexical\" keeps prompts local.",
   "author": { "name": "Erik Hedström" },
   "repository": "https://github.com/erik-hedstrom/loadout",
   "license": "Apache-2.0",

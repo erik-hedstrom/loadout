@@ -43,6 +43,14 @@ Notes:
    ([RESULTS](../bench/RESULTS.md#do-agents-use-what-they-are-given)).
 4. 10 headless sessions per host with the search server attached, 2026-10-06
    ([RESULTS](../bench/RESULTS.md#do-agents-use-what-they-are-given)).
+   Claude Code's `loadout` plugin has declared the server since D13
+   (`.mcp.json`; `claude plugin validate` passes). On native Windows,
+   `claude mcp list` with the plugin installed into a throwaway Claude home and
+   `loadout` from `npm link` showed `plugin:loadout:loadout ... Connected`, and
+   `Failed to connect` with `loadout` off PATH (Claude Code 2.1.308,
+   2026-11-01; no model call). Not yet checked: a live Claude Code session
+   that opens a skill through the plugin. The bench's plugin arm for that is
+   written and not yet run.
 5. The same plugin as the CLI. Erik's check is backlog D10.
 6. `loadout setup codex` prints marketplace and plugin install commands for
    Codex CLI. The `loadout-codex` plugin carries `loadout hook codex` and

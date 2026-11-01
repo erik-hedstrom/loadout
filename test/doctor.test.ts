@@ -256,12 +256,24 @@ describe('doctor', () => {
     expect(formatDoctor(checks)).not.toContain(secret);
   });
 
-  it.each([false, true])('lists active Claude attachments with a search server (hooks disabled: %s)', async (disableAllHooks) => {
+  // The plugin attaches the server itself since D13: a user-scope one from `claude mcp add` doubles the tools.
+  it.each([false, true])('flags the plugin together with a separately configured search server, hooks or not (hooks disabled: %s)', async (disableAllHooks) => {
     mkdirSync(join(home, 'claude'));
     writeFileSync(join(home, 'claude', 'settings.json'), JSON.stringify({ enabledPlugins: { 'loadout@loadout': true }, hooks: { UserPromptSubmit: [{ hooks: [{ type: 'command', command: 'loadout hook claude' }] }] }, disableAllHooks }));
     writeFileSync(join(home, 'claude', '.claude.json'), JSON.stringify({ mcpServers: { loadout: { command: 'loadout' } } }));
     const checks = byName(await doctor(config, () => okClient));
-    expect(checks['Claude Code']).toMatchObject({ ok: true, detail: `CLI not on PATH; loadout: ${disableAllHooks ? 'search server' : 'plugin enabled and settings hook and search server'}` });
+    expect(checks['Claude Code']).toMatchObject({
+      ok: false,
+      detail: `CLI not on PATH; loadout: ${disableAllHooks ? 'search server' : 'plugin enabled and settings hook and search server'}; plugin enabled and a separately configured search server: its tools are in every request twice`,
+      fix: 'remove the separate server with `claude mcp remove loadout --scope user`',
+    });
+  });
+
+  it('lists a settings hook with a search server and no plugin as healthy', async () => {
+    mkdirSync(join(home, 'claude'));
+    writeFileSync(join(home, 'claude', 'settings.json'), JSON.stringify({ hooks: { UserPromptSubmit: [{ hooks: [{ type: 'command', command: 'loadout hook claude' }] }] } }));
+    writeFileSync(join(home, 'claude', '.claude.json'), JSON.stringify({ mcpServers: { loadout: { command: 'loadout' } } }));
+    expect(byName(await doctor(config, () => okClient))['Claude Code']).toMatchObject({ ok: true, detail: 'CLI not on PATH; loadout: settings hook and search server' });
   });
 
   it('ignores loadout mentioned only in comments or strings', async () => {

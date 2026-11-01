@@ -156,7 +156,8 @@ export async function doctor(config: Config, client: (apiKey: string) => SystemO
         const server = (userConfig?.mcpServers as Record<string, Record<string, unknown>> | undefined)?.loadout;
         const runnable = server && typeof server === 'object' && !Array.isArray(server) && ['command', 'url'].some((k) => typeof server[k] === 'string' && server[k].trim() !== '');
         const found = [!hooksOff && plugin && 'plugin enabled', !hooksOff && hook && 'settings hook', runnable && 'search server'].filter(Boolean);
-        if (found.length) return { on: found.join(' and ') };
+        // The plugin attaches its own server (D13), so a user-scope one from an earlier `claude mcp add` loads the tools twice.
+        if (found.length) return { on: found.join(' and '), ...(plugin && runnable ? { duplicate: 'plugin enabled and a separately configured search server: its tools are in every request twice' } : {}) };
         // Claude Code rewrites .claude.json often, so a read can catch it half-written: call it broken only when nothing else is attached.
         if (!userConfig) return { broken: claudeConfig };
         const off = plugin ? 'plugin enabled' : hook ? 'settings hook' : undefined;
@@ -199,12 +200,12 @@ export async function doctor(config: Config, client: (apiKey: string) => SystemO
     // doctor runs no binary found through an empty or relative PATH entry.
     const bin = onPath(h.bin);
     if (!bin && !h.present) continue;
-    const { on, off, broken }: { on?: string; off?: string; broken?: string } = h.attached();
+    const { on, off, broken, duplicate }: { on?: string; off?: string; broken?: string; duplicate?: string } = h.attached();
     checks.push({
       name: h.name,
-      ok: Boolean(on),
-      detail: `${bin ? (version(bin) ?? 'version unknown') : 'CLI not on PATH'}; loadout: ${broken ? 'config cannot be read or parsed' : (on ?? off ?? 'not set up')}`,
-      fix: broken ? `repair ${broken}` : off ? 'turn hooks back on' : `loadout setup ${h.setup}`,
+      ok: Boolean(on) && !duplicate,
+      detail: `${bin ? (version(bin) ?? 'version unknown') : 'CLI not on PATH'}; loadout: ${broken ? 'config cannot be read or parsed' : duplicate ? `${on}; ${duplicate}` : (on ?? off ?? 'not set up')}`,
+      fix: broken ? `repair ${broken}` : duplicate ? 'remove the separate server with `claude mcp remove loadout --scope user`' : off ? 'turn hooks back on' : `loadout setup ${h.setup}`,
     });
   }
   return checks;
