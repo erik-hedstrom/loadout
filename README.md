@@ -85,7 +85,8 @@ All numbers, caveats and negative results: [bench/RESULTS.md](bench/RESULTS.md).
   useful-skill use in Claude Code went from 2 of 10 (6–51%) to 6 of 10
   (31–83%) sessions when the prompt hook was added from settings.json
   ([RESULTS](bench/RESULTS.md#do-agents-use-what-they-are-given)).
-  The hook-only plugin injected full skill text in 6 of 10 sessions
+  The Claude Code plugin before it carried the MCP server (hook only) injected
+  full skill text in 6 of 10 sessions
   (31–83%); no library skill was opened (0–28%; headless, WSL behind Windows,
   where folder reads were not permitted). Whether the injected text was
   followed is not shown ([same study](bench/RESULTS.md#do-agents-use-what-they-are-given)).

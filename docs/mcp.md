@@ -28,8 +28,10 @@ know-how when the work drifts away from what the session started with:
 
 ## Cost and privacy
 
-The tool definitions cost input tokens: 158 per request in Claude Code
-2.1.308 with its default tool search. A native listing of 50 skills with real
+The tool definitions cost input tokens, and both plugins attach this server,
+so they pay it: 158 per request in Claude Code 2.1.308 with its default tool
+search and default tools (the server added from a config, Haiku, the first
+request of a fresh session; with the plugin installed: not measured). A native listing of 50 skills with real
 names and descriptions cost 8,049, measured with the built-in tools removed, so
 the two are not a matched comparison. Both were single requests of fresh
 sessions
@@ -48,7 +50,7 @@ files.
 
 | Host | How |
 |---|---|
-| Claude Code | `loadout setup claude-code` (a `claude mcp add` command, after the plugin commands) |
+| Claude Code | the `loadout` plugin attaches it (`loadout setup claude-code`); WSL behind Windows Claude Code: a `claude mcp add` command in the same output |
 | Codex CLI | the `loadout-codex` plugin attaches it (`loadout setup codex`); WSL behind Windows Codex: [hook plugins](hook.md#codex-cli) |
 | Codex tab of the ChatGPT desktop app, T3 Code | no setup path yet ([hosts](hosts.md)) |
 | Claude Desktop | `loadout setup claude-desktop` |

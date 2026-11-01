@@ -1,7 +1,9 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { describe, expect, it } from 'vitest';
 import { claudeHookBlock, hostSetup, SEARCH_TOOLS } from '../src/launch.js';
 
@@ -13,7 +15,7 @@ describe('Claude Code plugin', () => {
     expect(hooks).toEqual(claudeHookBlock('loadout hook claude'));
   });
 
-  it('ships a hook-only marketplace plugin', () => {
+  it('ships a marketplace plugin with the hook and the search server, and no bin/', () => {
     const marketplace = JSON.parse(readFileSync(join(ROOT, '.claude-plugin/marketplace.json'), 'utf8'));
     expect(marketplace.name).toBe('loadout');
     expect(marketplace.plugins).toEqual([{ name: 'loadout', source: './plugins/loadout' }]);
@@ -21,9 +23,73 @@ describe('Claude Code plugin', () => {
     const dir = join(ROOT, entry.source);
     const plugin = JSON.parse(readFileSync(join(dir, '.claude-plugin/plugin.json'), 'utf8'));
     expect(plugin.name).toBe('loadout');
+    // The server is declared once, in .mcp.json; `mcpServers` here would merge a second definition over it.
     for (const key of ['version', 'mcpServers', 'userConfig']) expect(plugin).not.toHaveProperty(key);
     expect(existsSync(join(dir, 'bin'))).toBe(false);
     expect(existsSync(join(dir, 'CLAUDE.md'))).toBe(false);
+  });
+
+  // Claude Code gives a stdio server the user's environment (TYPESAFE_API_KEY, LOADOUT_HOME), so the file
+  // carries no `env` and no credential. It defines no way for a plugin to pre-approve tools.
+  it('declares only `loadout mcp` in .mcp.json, with no env or approval settings', () => {
+    expect(JSON.parse(readFileSync(join(ROOT, 'plugins/loadout/.mcp.json'), 'utf8'))).toEqual({
+      mcpServers: { loadout: { command: 'loadout', args: ['mcp'] } },
+    });
+  });
+
+  it('starts the declared server without printing the key, and lists find_tools and load_skill', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'loadout-plugin-mcp-'));
+    const key = 'd13-secret-canary';
+    const skill = join(home, 'library/skills/canary');
+    mkdirSync(skill, { recursive: true });
+    writeFileSync(join(skill, 'SKILL.md'), '---\nname: canary\ndescription: Test skill\n---\nReference text.');
+    writeFileSync(join(home, 'config.json'), JSON.stringify({ router: 'lexical' }));
+    const declared = JSON.parse(readFileSync(join(ROOT, 'plugins/loadout/.mcp.json'), 'utf8')).mcpServers.loadout as { args: string[] };
+    // The checkout's code stands in for the `loadout` on PATH that Claude Code would run.
+    const transport = new StdioClientTransport({
+      command: process.execPath, args: ['--import', 'tsx', join(ROOT, 'src/cli.ts'), ...declared.args],
+      env: { LOADOUT_HOME: home, TYPESAFE_API_KEY: key }, stderr: 'pipe',
+    });
+    let stderr = '';
+    transport.stderr?.on('data', (chunk) => { stderr += chunk; });
+    const client = new Client({ name: 'plugin-test', version: '1' });
+    try {
+      await client.connect(transport);
+      const tools = await client.listTools();
+      expect(tools.tools.map((t) => t.name)).toEqual(SEARCH_TOOLS);
+      const loaded = await client.callTool({ name: 'load_skill', arguments: { skill: 'canary' } });
+      expect(JSON.stringify([tools, loaded, client.getServerVersion(), client.getInstructions()])).not.toContain(key);
+    } finally {
+      await client.close();
+      rmSync(home, { recursive: true, force: true });
+    }
+    expect(stderr).not.toContain(key);
+  });
+
+  // The hook cannot see the host's MCP servers, so the setup says: the plugin and `loadout setup` attach the
+  // server and the default context names load_skill; a hook set up without it passes --no-mcp.
+  it.each([
+    { args: [], mcp: true },
+    { args: ['--no-mcp'], mcp: false },
+  ])('names load_skill only when the setup has the server (hook claude $args)', ({ args, mcp }) => {
+    const home = mkdtempSync(join(tmpdir(), 'loadout-hook-mcp-'));
+    try {
+      const skill = join(home, 'library/skills/canary');
+      mkdirSync(skill, { recursive: true });
+      writeFileSync(join(skill, 'SKILL.md'), '---\nname: canary\ndescription: Test skill\n---\nReference text.');
+      writeFileSync(join(home, 'config.json'), JSON.stringify({ router: 'lexical' }));
+      const result = spawnSync(process.execPath, ['--import', 'tsx', join(ROOT, 'src/cli.ts'), 'hook', 'claude', ...args], {
+        encoding: 'utf8', timeout: 20_000, env: { ...process.env, LOADOUT_HOME: home, TYPESAFE_API_KEY: '' },
+        input: JSON.stringify({ session_id: 'd13', prompt: '/canary help with this task', cwd: home }),
+      });
+      expect(result.status, result.stderr).toBe(0);
+      const context: string = JSON.parse(result.stdout).hookSpecificOutput.additionalContext;
+      expect(context).toContain('trust="third-party"');
+      expect(context.includes('load_skill')).toBe(mcp);
+      expect(context).toContain('read SKILL.md in the folder given');
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
   });
 });
 

@@ -982,7 +982,7 @@ Left: the Claude arm (blocked on E12).
 | D15 | P0 | MCP discovery: make library MCP servers findable and usable through the search server | Claude | cloud + local | in progress: code and tests merged in [#39](https://github.com/erik-hedstrom/loadout/pull/39); the live check is left |
 | D17 | P1 | `loadout mcp` ready within Codex's MCP start-up grace | Claude | local (measure) + cloud (fix) | done ([#43](https://github.com/erik-hedstrom/loadout/pull/43)): WSL install advice in the README; `required = true` in the `--windows` TOML, not in the plugin (see below); measured 2026-10-15: under 1 s from ext4, 6–7 s from `/mnt/c` |
 | D12 | P0 | Codex: install the hook and search as one step, if Codex allows it | Codex | local | done ([#23](https://github.com/erik-hedstrom/loadout/pull/23)): `plugins/loadout-codex` through `.agents/plugins/marketplace.json`; install checked offline; the hook still needs `/hooks` trust; the live run is D2 |
-| D13 | P0 | The plugin must be able to open what its hook routes to | — | cloud + local + erik | blocked: design decision (Erik) |
+| D13 | P0 | The plugin must be able to open what its hook routes to | Claude | cloud + local | code in review; re-run not done |
 | D14 | P1 | Codex plugin forwards LOADOUT_HOME | Claude | cloud | done ([#36](https://github.com/erik-hedstrom/loadout/pull/36)): Codex gives a stdio MCP server only its default variables plus `env_vars`, so the plugin's `loadout mcp` ignored a custom `LOADOUT_HOME` (and a `"router": "lexical"` profile in it); now forwarded. A relative `LOADOUT_HOME` is now refused (on Windows, anything but a drive-qualified path, so no drive-relative, UNC or device path) and an empty one ignored; the `HOME` (or `USERPROFILE`) fallback must pass the same check. So the working directory or a remote share cannot become the config. An absolute value, including a mapped network drive, is trusted: a project settings `env` that sets one comes from settings that can already run their own hooks. The config the home points to cannot redirect the key (Erik, 2026-10-19): a `jev.baseUrl` other than api.typesafe.ai is refused unless `TYPESAFE_BASE_URL` names the URL. It still chooses `apiKeyFile`, whose content then reaches only that URL, which is why the home must not come from the working directory either. Checked against the Codex source only, not a live run |
 | D16 | P1 | Warn when the hook runs without a TypeSafe key | Claude | cloud | done ([#27](https://github.com/erik-hedstrom/loadout/pull/27)): once per session, as a `systemMessage`, which Claude Code and Codex both show |
 | D18 | P1 | The hook and `load_skill` can offer `load_skill` only, with no folder | Codex | cloud | partial ([#54](https://github.com/erik-hedstrom/loadout/pull/54)): load_skill-only offer merged; C2 dropping its folder-hint limit waits on Erik |
@@ -1142,12 +1142,15 @@ Why (Erik, 2026-10-07): users stay in Claude Code, in the CLI or the desktop
 app, and loadout adds its value there. Competing to be the gateway is the
 harder position. The desktop app's Code tab loads the same `~/.claude` hooks
 and plugins as the CLI. B1: the hook has no fixed token cost, while the MCP
-tools add 546 tokens to every request.
+tools add 546 tokens to every request. Superseded by D13 (2026-11-01): the
+plugin now carries the MCP server; B12 measured +158 per request with default
+tool search and default tools.
 
 Acceptance:
 - The repo is a plugin marketplace (`.claude-plugin/marketplace.json`) with
-  one plugin, `plugins/loadout`, which runs the prompt hook. It has no MCP
-  server and no `bin/`. The user installs it, and nothing edits `~/.claude`
+  one plugin, `plugins/loadout`, which runs the prompt hook. It had no MCP
+  server when D10 shipped (D13 added it) and has no `bin/`. The user installs
+  it, and nothing edits `~/.claude`
   (rule 3). `claude plugin validate` passes.
 - `loadout setup claude-code` prints the install commands. The settings
   snippet stays only for loadout in WSL behind a Windows Claude Code.
@@ -1425,14 +1428,49 @@ working folder, which a headless run may not read. With the MCP server, the
 hook arm opened skills on the same 4. The Codex plugin carries the MCP server
 and is not affected by the first part.
 
+Decision (Erik, 2026-11-01): the Claude Code plugin carries the MCP server,
+like the Codex plugin. B1's +546 tokens per request, which D10 avoided, is
+older: B12 measured +158 with Claude Code's default tool search and default
+tools (a matched comparison is not shown).
+
 Acceptance:
 - The context names only ways to open a skill that the installed setup has.
 - The plugin arm in `bench/invoke.ts` re-run on the same 10 requests, against
-  the 6 of 10 and 2 of 10 rows.
-- Erik picks the approach first. Candidates: add the MCP server to the plugin
-  (B1: +546 tokens per request, which D10 avoided); inject more often, since
-  the hook already injects confident matches; or a Claude-side way to read
-  the library.
+  the 6 of 10 and 2 of 10 rows. Not done: it spends quota, so Erik runs it.
+  The arm now carries the plugin's server (see learnings).
+
+Learnings (2026-11-01, Claude Sonnet 5.5 while Codex quota was out, so
+unverified until Codex's cross-model validation; a security-focused Codex
+review is owed):
+- `plugins/loadout/.mcp.json` declares `loadout mcp`, with no `env`: the docs
+  give a plugin's stdio server the same environment access as a configured
+  one ([plugin docs](https://code.claude.com/docs/en/plugins/components#mcp-servers),
+  [MCP](https://code.claude.com/docs/en/mcp#plugin-provided-mcp-servers)).
+  Live: not checked, since it needs a model call. The server is
+  `plugin:loadout:loadout` and its tools `mcp__plugin_loadout_loadout__*`.
+- Those docs describe no plugin-side tool approval (plugin `settings` takes only
+  `agent` and `subagentStatusLine`), so the Codex plugin's auto-approval has no
+  Claude equivalent. `loadout setup claude-code` prints the two
+  `permissions.allow` rules instead; nothing is written to `~/.claude`.
+- The hook cannot see the host's servers. The default context names `load_skill`
+  (both plugins and `loadout setup` attach the server); `loadout hook
+  <agent> --no-mcp` is for a hook set up without it and names only the skill's
+  folder. With neither (`--no-mcp` and `skillFolders: false`) it lists nothing
+  and still injects.
+- `claude plugin validate` passes for the plugin and the marketplace (Claude
+  Code 2.1.308, a throwaway `CLAUDE_CONFIG_DIR` with no login, so it cannot
+  spend). Its warnings are the missing version (deliberate until E5) and a
+  missing listing icon.
+- The `plugin` arm of `bench/invoke.ts` ran the plugin with no MCP server.
+  It now loads a copy of the shipped plugin whose `loadout mcp` command is
+  replaced by this checkout's (as the PATH shim does for the hook), allows the
+  two tools (a headless run cannot answer the prompt), and drops
+  `--strict-mcp-config`, which ignores plugin servers too
+  ([launcher](../launcher.md)). The run is invalid unless the inventory shows
+  exactly one loadout server, `plugin:loadout:loadout`, not failed; rows record
+  that server's status and a count of other servers, not their names.
+  `--strict-mcp-config` is gone, so other MCP servers on the machine load; they
+  are in the count.
 
 **D15. MCP discovery.**
 

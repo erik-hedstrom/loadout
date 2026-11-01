@@ -32,7 +32,7 @@ routers and skills directories: [docs/comparison.md](docs/comparison.md).
 ```mermaid
 flowchart TB
     subgraph host["Host integration"]
-        CH["Claude Code plugin<br/>loadout hook claude"]
+        CH["Claude Code plugin<br/>loadout hook claude + loadout mcp"]
         XH["Codex plugin<br/>loadout hook codex + loadout mcp"]
         LA["Launcher<br/>loadout claude / codex"]
         RT["loadout route<br/>prints the decision, launches nothing"]
@@ -375,13 +375,18 @@ prompt, which shows the server, tool and arguments.
 
 ### Prompt hook
 
-The settings-file hook and the hook-only plugin have separate measurements
-([RESULTS](bench/RESULTS.md#do-agents-use-what-they-are-given)).
+The settings-file hook and the earlier hook-only plugin have separate
+measurements ([RESULTS](bench/RESULTS.md#do-agents-use-what-they-are-given)).
+Both plugins now carry `loadout mcp`, because the hook's context points to its
+`load_skill`. The hook's context varies with the prompt; the server's tool
+definitions are in every request ([cost](docs/mcp.md#cost-and-privacy)).
 
 - each substantive prompt (not "yes" or "go on") is routed with the same two
   Jev requests;
 - the skills that fit are listed once per session, as third-party metadata,
-  with how to load them;
+  with how to load them, naming only what the setup has: `load_skill` (the
+  default; `--no-mcp` for a hook set up without the server) and the skill's
+  folder (`skillFolders`);
 - a clear winner or a named skill is injected once.
 
 Without Jev (no key, `"router": "lexical"`, or Jev down) the hook adds no

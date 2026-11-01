@@ -10,8 +10,12 @@
  *   hook    (Claude) nothing preloaded; `loadout hook claude` routes the prompt
  *           and the loadout MCP server is attached, as after `loadout setup
  *           claude-code`: does the agent open what the hook suggests?
- *   plugin  (Claude) the shipped hook-only plugin; nothing preloaded and no
- *           MCP server: does the agent open what the hook suggests?
+ *   plugin  (Claude) the shipped plugin, hook and MCP server (D13); nothing
+ *           preloaded: does the agent open what the hook suggests? Its
+ *           `loadout mcp` command is replaced by this checkout's code, as the
+ *           PATH shim does for the hook. No --strict-mcp-config here: it would
+ *           also drop the plugin's server; the run is invalid if the inventory
+ *           shows any other loadout server.
  * Ambient hooks that call loadout by absolute path bypass PATH; only their context
  * shows, so a silent one is not detected.
  *
@@ -25,12 +29,12 @@
  *   npx tsx bench/invoke.ts <sweep dir> --agent claude|codex --mode routed|search|hook|plugin --ids a,b,c [--max-turns 6]
  */
 import { execFileSync } from 'node:child_process';
-import { appendFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, delimiter, join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { loadConfig, paths } from '../src/config.js';
-import { claudeArgs, claudeHookBlock, codexArgs, hookCommand, materialize, pathTranslator, which, type Agent } from '../src/launch.js';
+import { claudeArgs, claudeHookBlock, codexArgs, hookCommand, materialize, pathTranslator, SEARCH_TOOLS, searchServer, which, type Agent } from '../src/launch.js';
 import { capabilityKey, scanLibrary } from '../src/library.js';
 import { decisionFor, readJsonl, run } from './lib.js';
 import { hookShim, toolEvents, type Inventory } from './stream.js';
@@ -77,6 +81,20 @@ const NOTE = '\n\n(Test run: nothing is attached and the folder is empty. Where 
 const out = join(dir, `invoke-${agent}-${mode}.jsonl`);
 
 const isLoadout = (name: string) => /^loadout(?:@|$)/i.test(name);
+const isLoadoutServer = (name: string) => /loadout/i.test(name);
+/** How Claude Code names the plugin's own server (docs: `plugin:<plugin>:<server>`). */
+const PLUGIN_SERVER = 'plugin:loadout:loadout';
+
+/** The shipped plugin, with its `loadout mcp` command replaced by this checkout's (as the PATH shim does for the hook). */
+function pluginCopy(into: string): string {
+  const copy = join(into, 'plugin');
+  cpSync(join(repo, 'plugins', 'loadout'), copy, { recursive: true });
+  const file = join(copy, '.mcp.json');
+  const shipped = JSON.parse(readFileSync(file, 'utf8'));
+  shipped.mcpServers.loadout = { ...shipped.mcpServers.loadout, ...searchServer(windowsAgent) };
+  writeFileSync(file, JSON.stringify(shipped, null, 2));
+  return copy;
+}
 
 function checkInventory(inventory: Inventory | undefined, hookInvocations: number, uncountedContext: number, pluginDir?: string): string | undefined {
   if (!inventory) return 'no startup inventory';
@@ -90,6 +108,11 @@ function checkInventory(inventory: Inventory | undefined, hookInvocations: numbe
     if (!pluginDir || typeof plugin.path !== 'string' || normalize(plugin.path) !== normalize(toPath(pluginDir)) || ++ownPlugins > 1) return 'ambient loadout plugin; measurement invalid';
   }
   if (mode === 'plugin' && ownPlugins !== 1) return 'missing loadout plugin; measurement invalid';
+  // Only the plugin's own server: a user-scope `loadout` server would give the agent load_skill without the plugin.
+  if (mode === 'plugin') {
+    const servers = inventory.mcpServers.filter((s) => isLoadoutServer(s.name));
+    if (servers.length !== 1 || servers[0]!.name !== PLUGIN_SERVER || servers[0]!.status === 'failed') return 'loadout MCP server missing, failed or ambient; measurement invalid';
+  }
   if (mode === 'plugin' || mode === 'hook') {
     if (hookInvocations !== 1) return 'expected exactly one loadout UserPromptSubmit hook; measurement invalid';
   } else if (hookInvocations) return 'unexpected loadout UserPromptSubmit hook; measurement invalid';
@@ -98,6 +121,10 @@ function checkInventory(inventory: Inventory | undefined, hookInvocations: numbe
   return undefined;
 }
 
+const pluginDir = mode === 'plugin' ? pluginCopy(shimDir!) : undefined;
+// A headless run cannot answer an approval prompt, and Claude Code has no plugin-side pre-approval; the hook arm
+// approves the same two tools through claudeArgs. Last: --allowedTools takes every argument after it.
+const pluginAllow = pluginDir ? ['--allowedTools', ...SEARCH_TOOLS.map((t) => `mcp__${PLUGIN_SERVER.replace(/:/g, '_')}__${t}`)] : [];
 let invalidRun: string | undefined;
 for (const id of values.ids.split(',')) {
   const row = rows.get(id);
@@ -106,7 +133,7 @@ for (const id of values.ids.split(',')) {
   const session = materialize(decision, agent, config, sessions, toPath);
   if (values.model) session.model = values.model;
   if (mode === 'hook' || mode === 'plugin') session.relevance = undefined;
-  if (mode === 'plugin') session.pluginDir = join(repo, 'plugins', 'loadout');
+  if (pluginDir) session.pluginDir = pluginDir;
   const hookArgs = mode === 'hook' ? ['--settings', JSON.stringify(claudeHookBlock('loadout hook claude'))] : [];
   const cwd = mkdtempSync(join(workRoot, 'loadout-work-'));
   // Outside cwd: the agent is told its folder is empty, and the hook routes on cwd's file names.
@@ -119,7 +146,7 @@ for (const id of values.ids.split(',')) {
   const task = row.request + NOTE;
   const args =
     agent === 'claude'
-      ? claudeArgs(session, task, ['--output-format', 'stream-json', '--verbose', '--include-hook-events', '--no-session-persistence', '--max-turns', values['max-turns']!, '--strict-mcp-config', '--permission-mode', 'acceptEdits', ...hookArgs], { headless: true, toPath })
+      ? claudeArgs(session, task, ['--output-format', 'stream-json', '--verbose', '--include-hook-events', '--no-session-persistence', '--max-turns', values['max-turns']!, ...(mode === 'plugin' ? [] : ['--strict-mcp-config']), '--permission-mode', 'acceptEdits', ...hookArgs, ...pluginAllow], { headless: true, toPath })
       : codexArgs(session, task, ['--json', '-s', 'workspace-write', '--skip-git-repo-check'], { headless: true });
   const started = Date.now();
   const proc = await run(bin, args, cwd, Number(values['timeout-s']) * 1000, childEnv);
@@ -153,6 +180,8 @@ for (const id of values.ids.split(',')) {
     mode,
     model: session.model,
     inventory: inventory ? { loadoutPlugins: inventory.plugins.filter((p) => isLoadout(p.name)).map((p) => p.name), otherPlugins: inventory.plugins.filter((p) => !isLoadout(p.name)).length } : null,
+    // Statuses and a count only: the row is public and other servers' names are the user's.
+    mcpServers: inventory ? { loadout: inventory.mcpServers.filter((s) => isLoadoutServer(s.name)).map((s) => s.status), other: inventory.mcpServers.filter((s) => !isLoadoutServer(s.name)).length } : null,
     hooks,
     hookInvocations,
     ...(invalid ? { invalid } : {}),

@@ -1153,13 +1153,17 @@ describe('launch', () => {
     expect(JSON.parse(hostSetup('claude-desktop', true).snippet).mcpServers.loadout.command).toBe('wsl.exe');
     const claudeCode = hostSetup('claude-code', false).snippet;
     expect(claudeCode).toContain('claude plugin marketplace add erik-hedstrom/loadout\nclaude plugin install loadout@loadout');
-    expect(claudeCode).toContain('+158 input tokens/request with default tool search');
+    expect(claudeCode).toContain('+158 input tokens/request with default tool search and default tools');
     expect(claudeCode).toContain('https://github.com/erik-hedstrom/loadout/blob/main/bench/RESULTS.md');
-    expect(claudeCode).toMatch(/claude mcp add --scope user loadout -- \S+ .* mcp$/);
+    // The plugin attaches the server itself, so a second `claude mcp add` would define it twice.
+    expect(claudeCode).not.toContain('claude mcp add');
+    expect(claudeCode).toContain('mcp__plugin_loadout_loadout__find_tools, mcp__plugin_loadout_loadout__load_skill');
     expect(claudeCode).not.toContain('UserPromptSubmit');
     const wsl = hostSetup('claude-code', true);
     expect(wsl.where).toContain('WSL');
     expect(wsl.snippet).not.toContain('claude plugin install');
+    expect(wsl.snippet).toMatch(/^claude mcp add --scope user loadout -- \S+ .* mcp --windows-paths$/m);
+    expect(wsl.snippet).toContain('mcp__loadout__find_tools, mcp__loadout__load_skill');
     const settings = JSON.parse(wsl.snippet.slice(wsl.snippet.indexOf('{')).split('\n\n')[0]!);
     expect(settings).toEqual(claudeHookSettings(true));
     expect(settings.hooks.UserPromptSubmit[0].hooks[0].command).toMatch(/^wsl\.exe .* hook claude --windows-paths$/);

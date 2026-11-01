@@ -38,9 +38,11 @@ Usage:
   loadout mcp --http [--port 8787] [--host 127.0.0.1] [--token-file f] [--allowed-host h]
                                           The same over Streamable HTTP (skills only), for remote hosts
                                           such as ChatGPT behind a tunnel
-  loadout hook claude|codex [--windows-paths]
+  loadout hook claude|codex [--windows-paths] [--no-mcp]
                                           UserPromptSubmit hook: routes each prompt and adds the skills
-                                          that fit as context (reads the hook JSON on stdin)
+                                          that fit as context (reads the hook JSON on stdin).
+                                          --no-mcp: the host has no loadout MCP server, so the context
+                                          does not name load_skill
   loadout setup <host> [--windows]        Print plugin, hook and MCP setup instructions for a host:
                                           ${HOSTS.join(', ')}
   loadout doctor                          Check the key (one Jev call), library, index and hosts; read-only
@@ -172,7 +174,7 @@ async function runHook(rest: string[]): Promise<number> {
     process.exit(0);
   }, HOOK_DEADLINE_MS);
   try {
-    const { values, positionals } = parseArgs({ args: rest, allowPositionals: true, options: { 'windows-paths': { type: 'boolean' } } });
+    const { values, positionals } = parseArgs({ args: rest, allowPositionals: true, options: { 'windows-paths': { type: 'boolean' }, 'no-mcp': { type: 'boolean' } } });
     // Claude Code and Codex send the same fields (session_id, prompt, cwd) and read the same output.
     if (positionals[0] !== 'claude' && positionals[0] !== 'codex') {
       note('usage: loadout hook claude|codex');
@@ -197,6 +199,7 @@ async function runHook(rest: string[]): Promise<number> {
       repo: repoSignals(input.cwd && existsSync(input.cwd) ? input.cwd : process.cwd()),
       stateDir,
       ...(values['windows-paths'] ? { toPath: windowsPath } : {}),
+      mcp: !values['no-mcp'],
     });
     // After promptContext, so a throw there cannot use up the once-per-session marker unseen.
     const warning = noKeyWarning(input, { config, client, stateDir });
