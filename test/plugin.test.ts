@@ -23,6 +23,7 @@ describe('Claude Code plugin', () => {
     const dir = join(ROOT, entry.source);
     const plugin = JSON.parse(readFileSync(join(dir, '.claude-plugin/plugin.json'), 'utf8'));
     expect(plugin.name).toBe('loadout');
+    expect(plugin.description).toContain("find_tools goals and keywords, with file names from the folder the host starts the server in");
     // The server is declared once, in .mcp.json; `mcpServers` here would merge a second definition over it.
     for (const key of ['version', 'mcpServers', 'userConfig']) expect(plugin).not.toHaveProperty(key);
     expect(existsSync(join(dir, 'bin'))).toBe(false);
@@ -80,6 +81,7 @@ describe('Codex plugin', () => {
     const plugin = JSON.parse(readFileSync(join(dir, '.codex-plugin/plugin.json'), 'utf8'));
     expect(plugin.name).toBe('loadout-codex');
     expect(plugin.description).toContain("TypeSafe's Jev API");
+    expect(plugin.description).toContain("find_tools goals and keywords, with file names from the folder the host starts the server in");
     expect(JSON.parse(readFileSync(join(dir, 'hooks/hooks.json'), 'utf8'))).toEqual(claudeHookBlock('loadout hook codex'));
     // No `required`: Codex would accept it, but users cannot override it for a plugin server (D17).
     expect(JSON.parse(readFileSync(join(dir, '.mcp.json'), 'utf8'))).toEqual({
@@ -102,6 +104,7 @@ describe('Codex plugin', () => {
     expect(snippet).toContain('every project (user scope)');
     expect(snippet).toContain("each routed prompt, with the repository's top-level file names and dependency names, to TypeSafe's Jev API");
     expect(snippet).toContain('"router": "lexical"');
+    expect(snippet).toContain("the agent's goal and keywords and the top-level file names of the folder the host starts it in");
   });
 
   it.each([false, true])('setup never prints credentials or a configured key file, or edits host configs (WSL=%s)', (windows) => {
