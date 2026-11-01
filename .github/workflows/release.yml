@@ -1,36 +1,41 @@
 name: Release
 
-# Runs only when a version tag is pushed. Nothing here publishes until the `npm-release`
-# environment (required reviewer: Erik) approves the publish job. Setup steps: CONTRIBUTING.md.
+# Runs only when a version tag is pushed. Nothing publishes until the `npm-release`
+# environment (required reviewer: Erik) approves the publish job. Setup: CONTRIBUTING.md#releasing.
+# Actions are pinned to commit SHAs (the comment names the release tag).
 on:
   push:
-    tags: ['v[0-9]+.[0-9]+.[0-9]+*']
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
 
 permissions:
   contents: read
 
-concurrency:
-  group: release-${{ github.ref_name }}
-  cancel-in-progress: false
-
 jobs:
   verify:
     runs-on: ubuntu-latest
+    outputs:
+      notes: ${{ steps.notes.outputs.notes }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           persist-credentials: false
           fetch-depth: 0
-      - name: Tag is on main and matches package.json and CHANGELOG
+      - name: Tag is on main and matches package.json; CHANGELOG has a section for it
+        id: notes
         run: |
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main \
             || { echo "::error::$GITHUB_REF_NAME is not on main"; exit 1; }
           version=$(node -p "require('./package.json').version")
           [ "$GITHUB_REF_NAME" = "v$version" ] \
             || { echo "::error::tag $GITHUB_REF_NAME does not match package.json version $version"; exit 1; }
-          grep -Eq "^## \[?${version//./\\.}\]?( |$)" CHANGELOG.md \
-            || { echo "::error::CHANGELOG.md has no section for $version"; exit 1; }
-      - uses: actions/setup-node@v6
+          awk -v v="$version" '
+            /^## / { if (found) exit; if ($2 == v || $2 == "[" v "]") { found = 1; next } }
+            found { print }
+          ' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+          grep -q '[^[:space:]]' "$RUNNER_TEMP/notes.md" \
+            || { echo "::error::CHANGELOG.md has no entries under $version"; exit 1; }
+          { echo 'notes<<CHANGELOG_NOTES_EOF'; cat "$RUNNER_TEMP/notes.md"; echo 'CHANGELOG_NOTES_EOF'; } >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 24
           cache: npm
@@ -50,37 +55,39 @@ jobs:
     # Pauses for approval; the NPM_TOKEN secret lives in this environment, not in the repository.
     environment: npm-release
     permissions:
-      contents: write # creates the GitHub release
+      contents: read
       id-token: write # signs the provenance statement
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
-      # No install scripts run before the token is in the environment of the publish step.
+      # The install and the build run without the token. Only the publish step has it, and
+      # --ignore-scripts there keeps lifecycle scripts (prepack runs tsc) away from it. npm and
+      # the two pinned actions above still handle the token.
       - run: npm ci --ignore-scripts
+      - run: npm run build
       - name: Publish to npm with provenance
-        # A prerelease version needs an explicit dist-tag, so it never becomes `latest`.
-        run: |
-          case "$GITHUB_REF_NAME" in
-            *-*) npm publish --provenance --access public --tag next ;;
-            *) npm publish --provenance --access public ;;
-          esac
+        run: npm publish --provenance --ignore-scripts
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  # Separate from `publish`, so a failed release step reruns without npm's duplicate-version error.
+  release:
+    needs: [verify, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
       - name: Create the GitHub release from CHANGELOG.md
         run: |
-          version="${GITHUB_REF_NAME#v}"
-          awk -v v="$version" '
-            /^## / { if (found) exit; if ($2 == v || $2 == "[" v "]") { found = 1; next } }
-            found { print }
-          ' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
-          [ -s "$RUNNER_TEMP/notes.md" ] || { echo "::error::empty release notes for $version"; exit 1; }
-          case "$version" in *-*) flag=--prerelease ;; *) flag= ;; esac
+          printf '%s\n' "$NOTES" > "$RUNNER_TEMP/notes.md"
           gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" \
-            --notes-file "$RUNNER_TEMP/notes.md" $flag
+            --notes-file "$RUNNER_TEMP/notes.md"
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          NOTES: ${{ needs.verify.outputs.notes }}

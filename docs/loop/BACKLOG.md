@@ -17,7 +17,10 @@ launcher-only work is P2.
 ## v0.1 ship bar
 
 Erik, 2026-10-31. v0.1 ships when all of these hold:
-1. A clean npm install of `@erik-hedstrom/loadout` (A4, E5).
+1. A clean npm install of `@erik-hedstrom/loadout` (A4, E5). When it runs,
+   record the time, size and any failure of `npm install -g`: optional
+   `onnxruntime-node` and `protobufjs` may run install scripts (npm 12 warned
+   about both when the tarball was installed).
 2. A live README walk in stock `claude` and `codex`.
 3. C15's headline, on Codex, whatever it shows. Claude quality is not shown, or
    marked unverified, until cross-model validation.
@@ -174,7 +177,11 @@ Learnings: nothing is published, so the clean-directory check installs the
 plugin steps do not change. `npx` puts nothing on `PATH`, so a hook cannot rely
 on it. The first publish uses an `NPM_TOKEN` in a protected environment;
 npm's trusted publishing is configured on an existing package, so it can
-replace the token afterwards. Left: Erik's one-time setup and the tag; a live
+replace the token afterwards. The workflow cannot protect its own environment
+(GitHub creates a missing one without protection), so the environment must
+exist with Erik as reviewer before the first tag. The tarball ships the README,
+so the release PR makes `npm install -g` step 1 and drops the "Until" wording.
+Left: Erik's one-time setup, that README change and the tag; a live
 `npm install -g` from the registry after the first release.
 
 **A5. Demo recording.**
