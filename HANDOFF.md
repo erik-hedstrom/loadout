@@ -1,4 +1,4 @@
-# Handoff: loadout, 2026-10-26
+# Handoff: loadout, 2026-11-01
 
 Read this first if you are joining the project, human or agent. Then read
 [AGENTS.md](AGENTS.md) (rules), [docs/loop/ORCHESTRATOR.md](docs/loop/ORCHESTRATOR.md)
@@ -22,17 +22,20 @@ for usage and [DESIGN.md](DESIGN.md) for the architecture.
 
 - **Repo:** https://github.com/erik-hedstrom/loadout, **public** since
   2026-10-12. Everything pushed, and every PR and comment, is public at once.
-- **Version:** 0.1.0, not published. The npm name `loadout` is taken (see
-  decisions below).
+- **Version:** 0.1.0, not published. The npm name `loadout` is taken; Erik
+  chose `@erik-hedstrom/loadout` on 2026-10-31 (the command stays `loadout`).
+  A4 ships the package and the release workflow, which acts only on a tag Erik
+  pushes ([CONTRIBUTING](CONTRIBUTING.md#releasing)).
 - **Owner:** Erik Hedström (GitHub `erik-hedstrom`). Commits use
   `63313283+erik-hedstrom@users.noreply.github.com`.
-- **Main snapshot (2026-10-30):** `89e637c`. It includes A6's paste-ready
-  audit adoption snippets (#66), B12's current-host listing harness and results
-  (#67), the C14 A/B
-  harness (#47) and its measurement fixes (#64), B11's OpenCode harness
-  (#57) and completed replacement pilot (#63), D21's cache-stable request
-  prefix (#59), the separate caching track (#60), the production dependency
-  patches (#61) and the docs-evidence pass (#62). Current work and review state: [BACKLOG](docs/loop/BACKLOG.md).
+- **Main snapshot (2026-11-01):** `ccd30d5`. It includes the C15 harness and
+  preregistration (#69; the study has not run), the follow-ups (#68, #70),
+  A6's paste-ready audit adoption snippets (#66), B12's current-host
+  listing harness and results (#67), the C14 A/B harness (#47) and its
+  measurement fixes (#64, #65), B11's OpenCode harness (#57) and completed
+  replacement pilot (#63), D21's cache-stable request prefix (#59), the
+  separate caching track (#60), the production dependency patches (#61) and
+  the docs-evidence pass (#62). Current work and review state: [BACKLOG](docs/loop/BACKLOG.md).
 
 ### What exists
 
@@ -57,6 +60,9 @@ All numbers, caveats, raw-result links and recorded costs are in
   does not establish an improvement. [C14's rerun with the measurement fixes](bench/RESULTS.md#c14-rerun-2026-10-26-codex-luna-with-the-fixes)
   compares loadout with a setup that has no skills: loadout added uncached
   input tokens on all three prompts and won the one prompt where it opened skills.
+- **Not run:** [C15's study](bench/RESULTS.md#c15-method-preregistered)
+  (the same library natively and through loadout, on Codex); only its harness
+  and preregistration exist. Savings and quality retention are not shown.
 - **Not shown:** [B7's configured-MCP overhead study](bench/RESULTS.md#b7-method-not-run-yet-what-configured-mcp-servers-cost-per-request)
   has not run; [model-tier choice](bench/RESULTS.md#threats-to-validity)
   is not evaluated. [B11's completed replacement pilot](bench/RESULTS.md#b11-replacement-pilot-2026-10-23-completed-2026-10-26)
@@ -65,18 +71,26 @@ All numbers, caveats, raw-result links and recorded costs are in
 
 ## Pick up here
 
-1. **C14** is done for Codex
-   ([rerun](bench/RESULTS.md#c14-rerun-2026-10-26-codex-luna-with-the-fixes)). Measuring the saving
-   loadout is meant to make, replacing a natively installed library, needs a
-   comparison against that library, not against bare.
-   The Claude arm is blocked until a tool-less Codex judge is available (E12).
-   [Method and limits](bench/RESULTS.md#c14-method-three-prompts-with-and-without-loadout);
-   [run command](bench/README.md#ab-pilot-c14).
-2. **B11:** the replacement pilot completed. Run the 792-session full study
-   in its own output folder (never the pilot's) as the free quota allows.
+1. **The v0.1 ship bar** is at the top of the
+   [BACKLOG](docs/loop/BACKLOG.md#v01-ship-bar): a clean npm install, a live
+   README walk in stock `claude` and `codex`, C15's headline, and a GIF.
+   Items outside it wait until after v0.1.
+2. **C15** (the same library natively and through loadout, on Codex) has its
+   harness and preregistration merged (#69) and has not run. A Codex review of
+   the harness is owed before the paid study. C14 compared only against bare
+   ([rerun](bench/RESULTS.md#c14-rerun-2026-10-26-codex-luna-with-the-fixes)).
+   The Claude arm waits on a tool-less Codex judge (E12), so Claude quality
+   stays not shown until cross-model validation.
+   [Method](bench/RESULTS.md#c15-method-preregistered);
+   [commands](bench/README.md#native-library-comparison-c15).
+3. **The npm release** (A4, E5): Erik creates the `npm-release` environment and
+   the `NPM_TOKEN` secret and pushes the tag; steps in
+   [CONTRIBUTING](CONTRIBUTING.md#releasing).
+4. **B11:** the replacement pilot completed. The 792-session full study is
+   after v0.1; use its own output folder (never the pilot's).
    [Evidence](bench/RESULTS.md#b11-replacement-pilot-2026-10-23-completed-2026-10-26);
    [commands and handoff](docs/loop/B11-HANDOFF.md).
-3. **Prompt caching:** [CACHE-TRACK.md](docs/loop/CACHE-TRACK.md) defines the
+5. **Prompt caching:** [CACHE-TRACK.md](docs/loop/CACHE-TRACK.md) defines the
    boundary and [BACKLOG section F](docs/loop/BACKLOG.md#f-prompt-caching)
    holds the work queue. Complete cached-session savings remain not shown.
 
@@ -133,6 +147,8 @@ branches, PRs and `docs/loop/BACKLOG.md`.
   fresh Claude home per run), Erik's personal subscription, and the Codex
   arms keep the real `CODEX_HOME` with the writes the plan prints. D15: the
   stated race scope is accepted.
+- **npm name (2026-10-31).** `@erik-hedstrom/loadout`; `loadout` is taken.
+  The command name stays `loadout`.
 - **Public repo (2026-10-12).** The history was checked first (168 commits,
   without textconv): no key-shaped strings and no personal email, and the
   authors are noreply addresses. The one personal detail is the Windows
@@ -147,17 +163,14 @@ branches, PRs and `docs/loop/BACKLOG.md`.
      it.
    - Check whether Codex automatic review runs on PRs from outside
      contributors, which would spend your plan.
-2. **npm name.** `loadout` is taken (0.0.2). Options: `@erik-hedstrom/loadout`
-   (scoped, always available), or an unscoped name to check
-   (`loadout-router`, `skill-loadout`, …).
-3. **Budgets.**
+2. **Budgets.**
    - Cloud sessions: add `TYPESAFE_API_KEY` and network access to
      `api.typesafe.ai` and `huggingface.co` to the environment, if they should
      run real-Jev checks (D11).
    - Jev: more credit when the $10 runs out.
-4. **Launch channels and timing.** Show HN, Reddit, X, LinkedIn, awesome
+3. **Launch channels and timing.** Show HN, Reddit, X, LinkedIn, awesome
    lists. Agents draft; Erik posts.
-5. **Study prerequisites and remaining decisions.** See
+4. **Study prerequisites and remaining decisions.** See
    [BACKLOG](docs/loop/BACKLOG.md) for C2's run prerequisites, D13's skill
    loading path and the remaining review decisions. Stale cloud branches and
    worktrees stay until Erik decides whether to keep them.

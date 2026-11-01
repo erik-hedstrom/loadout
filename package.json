@@ -1,19 +1,30 @@
 {
-  "name": "loadout",
+  "name": "@erik-hedstrom/loadout",
   "version": "0.1.0",
   "description": "Add the skills that fit each prompt in Claude Code and Codex, or pick skills, MCP servers and a model tier per session with the launcher, from a separate library, using a cheap model (Jev).",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/erik-hedstrom/loadout.git"
+  },
+  "homepage": "https://github.com/erik-hedstrom/loadout#readme",
+  "bugs": "https://github.com/erik-hedstrom/loadout/issues",
   "bin": {
     "loadout": "dist/cli.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "NOTICE"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": ">=22.12"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "prepack": "npm run build",
     "dev": "tsx src/cli.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"

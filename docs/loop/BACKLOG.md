@@ -14,6 +14,22 @@ Priorities follow the decision "Default CLIs first" in
 [HANDOFF.md](../../HANDOFF.md#decisions-only-erik-can-make-ask-dont-assume):
 launcher-only work is P2.
 
+## v0.1 ship bar
+
+Erik, 2026-10-31. v0.1 ships when all of these hold:
+1. A clean npm install of `@erik-hedstrom/loadout` (A4, E5). When it runs,
+   record the time, size and any failure of `npm install -g`: optional
+   `onnxruntime-node` and `protobufjs` may run install scripts (npm 12 warned
+   about both when the tarball was installed).
+2. A live README walk in stock `claude` and `codex`.
+3. C15's headline, on Codex, whatever it shows. Claude quality is not shown, or
+   marked unverified, until cross-model validation.
+4. Every number traced to [RESULTS](../../bench/RESULTS.md).
+5. A GIF (A5).
+
+Cut until after v0.1: B7, B9, C2, C7, D3, E3, F1, F5, launcher-only work and
+tier-choice evaluation. The order below still applies to what remains.
+
 **Order of things:**
 1. Drive the open PRs (listed under "In review" below) through the merge
    gate. Open findings come before new work.
@@ -44,7 +60,7 @@ Each PR body's **Review state** section has the round-by-round record.
 | A6 | P0 | Paste-ready host hide snippets after `audit --adopt` | Codex | cloud | done ([#66](https://github.com/erik-hedstrom/loadout/pull/66)) |
 | A1 | P0 | README rewrite around the problem, 3-command quickstart, GIF | Claude | cloud | partial ([#28](https://github.com/erik-hedstrom/loadout/pull/28)): README merged; the GIF waits on A5 |
 | A3 | P1 | `loadout init` wizard + starter packs | Codex | cloud | done ([#30](https://github.com/erik-hedstrom/loadout/pull/30)) |
-| A4 | P1 | npm package under an available name + release workflow | Codex | cloud + erik | blocked: npm name decision |
+| A4 | P1 | npm package under an available name + release workflow | Claude (Codex quota out) | cloud + erik | review ([PR #71](https://github.com/erik-hedstrom/loadout/pull/71)); nothing is published, the first release waits on Erik's steps |
 | A5 | P1 | Demo recording (route, launch, hook) | Claude | local | todo (after A1) |
 
 **A2. `loadout audit`.**
@@ -151,6 +167,22 @@ Acceptance:
   directory.
 - A GitHub Actions release on tag. Provenance on.
 - No publish without Erik.
+
+Status: Erik chose `@erik-hedstrom/loadout` on 2026-10-31; the command stays
+`loadout`. The tarball, the release workflow and the 0.1.0 changelog are in the
+PR; the first publish is Erik's ([steps](../../CONTRIBUTING.md#releasing)).
+Learnings: nothing is published, so the clean-directory check installs the
+`npm pack` tarball instead of using `npx`. The plugins call `loadout` on
+`PATH`, and a scoped package still installs the `loadout` command, so the
+plugin steps do not change. `npx` puts nothing on `PATH`, so a hook cannot rely
+on it. The first publish uses an `NPM_TOKEN` in a protected environment;
+npm's trusted publishing is configured on an existing package, so it can
+replace the token afterwards. The workflow cannot protect its own environment
+(GitHub creates a missing one without protection), so the environment must
+exist with Erik as reviewer before the first tag. The tarball ships the README,
+so the release PR makes `npm install -g` step 1 and drops the "Until" wording.
+Left: Erik's one-time setup, that README change and the tag; a live
+`npm install -g` from the registry after the first release.
 
 **A5. Demo recording.**
 
@@ -333,7 +365,7 @@ and upload the preview.
 
 Learnings:
 - The CHANGELOG has no version section while A4 (npm) and E5 (release
-  automation) are open.
+  automation) are open. (A4 and E5's PR adds a 0.1.0 section.)
 
 **B6. Profile README.**
 
@@ -1550,7 +1582,7 @@ Learnings (2026-10-09):
 | E8 | P0 | Repo-wide simplification pass | Claude (pr-reviewer finds, worker fixes) + Codex review | cloud | in progress (merged: bench/ [#11](https://github.com/erik-hedstrom/loadout/pull/11), src/ [#12](https://github.com/erik-hedstrom/loadout/pull/12), Markdown [#15](https://github.com/erik-hedstrom/loadout/pull/15), Markdown rest [#26](https://github.com/erik-hedstrom/loadout/pull/26)); left: `docs/loop/BACKLOG.md`, `docs/loop/ORCHESTRATOR.md` and `bench/RESULTS.md`; the WSL-only `bench.test.ts` failure moved to E15 |
 | E9 | P0 | Security hardening from the read-only Sol review | Codex | cloud | done ([PR #4](https://github.com/erik-hedstrom/loadout/pull/4), re-measure [PR #7](https://github.com/erik-hedstrom/loadout/pull/7)) |
 | E3 | P1 | Split the test file per module | Codex | cloud | todo |
-| E5 | P1 | Changelog and release automation | Codex | cloud | todo (with A4) |
+| E5 | P1 | Changelog and release automation | Claude (Codex quota out) | cloud | partial ([PR #71](https://github.com/erik-hedstrom/loadout/pull/71)): hand-written 0.1.0 entry and tag-triggered release; no changelog tool adopted |
 | E6 | P2 | Architecture diagram in DESIGN.md | Claude | cloud | done ([#29](https://github.com/erik-hedstrom/loadout/pull/29)) |
 | E10 | P1 | Build without optional dependencies | Codex | cloud | done ([PR #8](https://github.com/erik-hedstrom/loadout/pull/8)) |
 | E11 | P1 | Fixed-text diagnostics in the gateway and relay | Codex | cloud | done ([PR #10](https://github.com/erik-hedstrom/loadout/pull/10)) |
@@ -1943,6 +1975,11 @@ Acceptance: `test/` holds one file per module, with shared fakes in
 Acceptance: changesets or release-please, with a CHANGELOG generated from
 PRs. A hand-written CHANGELOG.md exists since B4; the tool must take it over
 rather than start a second one.
+
+Status: the changelog part is done by hand with A4: `CHANGELOG.md` has a 0.1.0
+section, and the release workflow refuses a tag without a section for its
+version and uses that section as the GitHub release notes. Left: a tool that
+generates entries from PRs.
 
 **E6. Architecture diagram.**
 
