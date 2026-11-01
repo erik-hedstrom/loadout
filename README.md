@@ -28,8 +28,9 @@ paths: [hosts](docs/hosts.md).
 
 ## Quickstart
 
-Needs Node 22.12+, a TypeSafe API key, and the `claude` or `codex` CLI. The
-npm package is not published yet, so install from the repository:
+Needs Node 22.12+, a TypeSafe API key, and the `claude` or `codex` CLI. Until
+the npm package `@erik-hedstrom/loadout` is released, install from the
+repository:
 
 ```bash
 # 1. Install
@@ -46,6 +47,9 @@ claude plugin marketplace add erik-hedstrom/loadout && claude plugin install loa
 codex plugin marketplace add erik-hedstrom/loadout && codex plugin add loadout-codex@loadout   # then trust the hook in /hooks
 ```
 
+- **After the release,** step 1 is `npm install -g @erik-hedstrom/loadout`.
+  The command is still `loadout`, and the plugins in step 3 find it on `PATH`
+  as before. `npx` does not put it on `PATH`, so a hook cannot use it.
 - **Before step 2,** `loadout audit` estimates, per host, the tokens your
   installed skills' descriptions add (characters divided by 4, a fixed rule
   of thumb that is not measured, before host caps) and lists your MCP servers
