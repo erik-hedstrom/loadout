@@ -197,13 +197,15 @@ about it. Work in this order:
 Squash-merge one PR at a time:
 `gh pr merge N --squash --match-head-commit <reviewed head> --subject "<PR title> (#N)" --body-file <file>`.
 - **Set the subject and body.** A PR with one commit is otherwise squashed
-  under that commit's own message: #73's subject kept a byte-order mark and
-  lost its `Co-Authored-By` trailer that way. End the body file with the
-  trailer, and check the merged subject's first bytes.
-- **Delete the branch yourself** when a worktree holds it: `--delete-branch`
-  also deletes the local branch, which Git refuses while a worktree has it
-  checked out. Run `git push origin --delete <branch>`, then remove the
-  worktree and its local branch.
+  under that commit's own message: #73's merged subject starts with a
+  byte-order mark and its message has no `Co-Authored-By` trailer, both
+  carried over from that commit. Write the body file without a BOM, end it
+  with the trailer, and check the merged subject:
+  `git log -1 --format=%s | head -c3 | od -An -tx1` must not print `ef bb bf`.
+- **Delete the branch yourself,** without `--delete-branch`, which also
+  deletes the local branch and fails while a worktree has it checked out.
+  Run `git push origin --delete <branch>`, then remove the worktree and its
+  local branch.
 
 After each merge, wait until `mergeable` is no longer `UNKNOWN`, then merge
 `main` into the next PR and rerun its tests. Resolve BACKLOG conflicts by

@@ -31,8 +31,8 @@ for usage and [DESIGN.md](DESIGN.md) for the architecture.
 - **Main snapshot (2026-11-02):** `86683d4`. It includes the Claude Code
   plugin carrying the MCP server (D13, #72; its paid re-run has not run), the
   npm package and release workflow (A4, E5, #71), review follow-ups (#73), the
-  C15 harness and
-  preregistration (#69; the study has not run), the follow-ups (#68, #70),
+  C15 harness and preregistration (#69; the study has not run), the follow-ups
+  (#68, #70),
   A6's paste-ready audit adoption snippets (#66), B12's current-host
   listing harness and results (#67), the C14 A/B harness (#47) and its
   measurement fixes (#64, #65), B11's OpenCode harness (#57) and completed
@@ -102,8 +102,7 @@ All numbers, caveats, raw-result links and recorded costs are in
 The work continues as a loop in which Sol (Codex) builds and Claude reviews.
 Cloud sessions fill in when local usage runs out. While Codex quota was out
 (from 2026-10-31), Claude `worker` subagents built and `pr-reviewer` reviewed;
-those PRs say they are unverified until a Codex review, which is owed for
-#69 to #73 before C15's paid run. The
+those PRs (#69 to #73) are marked unverified until a Codex review. The
 topology, merge gate, prompts and budgets are in
 [docs/loop/ORCHESTRATOR.md](docs/loop/ORCHESTRATOR.md). Shared state lives in
 branches, PRs and `docs/loop/BACKLOG.md`.
