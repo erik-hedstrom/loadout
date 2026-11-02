@@ -201,7 +201,8 @@ Squash-merge one PR at a time:
   byte-order mark and its message has no `Co-Authored-By` trailer, both
   carried over from that commit. Write the body file without a BOM, end it
   with the trailer, and check the merged subject:
-  `git log -1 --format=%s | head -c3 | od -An -tx1` must not print `ef bb bf`.
+  `git fetch origin && git log -1 --format=%s origin/main | head -c3 | od -An -tx1`
+  must not print `ef bb bf`.
 - **Delete the branch yourself,** without `--delete-branch`, which also
   deletes the local branch and fails while a worktree has it checked out.
   Run `git push origin --delete <branch>`, then remove the worktree and its

@@ -32,13 +32,13 @@ for usage and [DESIGN.md](DESIGN.md) for the architecture.
   plugin carrying the MCP server (D13, #72; its paid re-run has not run), the
   npm package and release workflow (A4, E5, #71), review follow-ups (#73), the
   C15 harness and preregistration (#69; the study has not run), the follow-ups
-  (#68, #70),
-  A6's paste-ready audit adoption snippets (#66), B12's current-host
-  listing harness and results (#67), the C14 A/B harness (#47) and its
-  measurement fixes (#64, #65), B11's OpenCode harness (#57) and completed
-  replacement pilot (#63), D21's cache-stable request prefix (#59), the
-  separate caching track (#60), the production dependency patches (#61) and
-  the docs-evidence pass (#62). Current work and review state: [BACKLOG](docs/loop/BACKLOG.md).
+  (#68, #70), A6's paste-ready audit adoption snippets (#66), B12's
+  current-host listing harness and results (#67), the C14 A/B harness (#47)
+  and its measurement fixes (#64, #65), B11's OpenCode harness (#57) and
+  completed replacement pilot (#63), D21's cache-stable request prefix (#59),
+  the separate caching track (#60), the production dependency patches (#61)
+  and the docs-evidence pass (#62). Current work and review state:
+  [BACKLOG](docs/loop/BACKLOG.md).
 
 ### What exists
 
