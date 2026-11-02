@@ -1,4 +1,4 @@
-# Handoff: loadout, 2026-11-01
+# Handoff: loadout, 2026-11-02
 
 Read this first if you are joining the project, human or agent. Then read
 [AGENTS.md](AGENTS.md) (rules), [docs/loop/ORCHESTRATOR.md](docs/loop/ORCHESTRATOR.md)
@@ -24,11 +24,14 @@ for usage and [DESIGN.md](DESIGN.md) for the architecture.
   2026-10-12. Everything pushed, and every PR and comment, is public at once.
 - **Version:** 0.1.0, not published. The npm name `loadout` is taken; Erik
   chose `@erik-hedstrom/loadout` on 2026-10-31 (the command stays `loadout`).
-  A4 ships the package and the release workflow, which acts only on a tag Erik
-  pushes ([CONTRIBUTING](CONTRIBUTING.md#releasing)).
+  A4 (#71) added the package and the release workflow, which acts only on a
+  tag Erik pushes ([CONTRIBUTING](CONTRIBUTING.md#releasing)). It has not run.
 - **Owner:** Erik Hedström (GitHub `erik-hedstrom`). Commits use
   `63313283+erik-hedstrom@users.noreply.github.com`.
-- **Main snapshot (2026-11-01):** `ccd30d5`. It includes the C15 harness and
+- **Main snapshot (2026-11-02):** `86683d4`. It includes the Claude Code
+  plugin carrying the MCP server (D13, #72; its paid re-run has not run), the
+  npm package and release workflow (A4, E5, #71), review follow-ups (#73), the
+  C15 harness and
   preregistration (#69; the study has not run), the follow-ups (#68, #70),
   A6's paste-ready audit adoption snippets (#66), B12's current-host
   listing harness and results (#67), the C14 A/B harness (#47) and its
@@ -97,7 +100,10 @@ All numbers, caveats, raw-result links and recorded costs are in
 ## How the work continues
 
 The work continues as a loop in which Sol (Codex) builds and Claude reviews.
-Cloud sessions fill in when local usage runs out. The
+Cloud sessions fill in when local usage runs out. While Codex quota was out
+(from 2026-10-31), Claude `worker` subagents built and `pr-reviewer` reviewed;
+those PRs say they are unverified until a Codex review, which is owed for
+#69 to #73 before C15's paid run. The
 topology, merge gate, prompts and budgets are in
 [docs/loop/ORCHESTRATOR.md](docs/loop/ORCHESTRATOR.md). Shared state lives in
 branches, PRs and `docs/loop/BACKLOG.md`.

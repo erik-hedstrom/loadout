@@ -49,9 +49,7 @@ These items' rows and detail sections arrive with their PRs, so they are
 not repeated in the tables below. Delete a line here when its PR merges.
 Each PR body's **Review state** section has the round-by-round record.
 
-| PR | Item | State on 2026-10-22 |
-|---|---|---|
-| [#72](https://github.com/erik-hedstrom/loadout/pull/72) | D13 | pr-reviewer requested changes; fixes pushed; Codex review owed |
+None open on 2026-11-02.
 
 ## A. Adoption and ease of use
 
@@ -61,7 +59,7 @@ Each PR body's **Review state** section has the round-by-round record.
 | A6 | P0 | Paste-ready host hide snippets after `audit --adopt` | Codex | cloud | done ([#66](https://github.com/erik-hedstrom/loadout/pull/66)) |
 | A1 | P0 | README rewrite around the problem, 3-command quickstart, GIF | Claude | cloud | partial ([#28](https://github.com/erik-hedstrom/loadout/pull/28)): README merged; the GIF waits on A5 |
 | A3 | P1 | `loadout init` wizard + starter packs | Codex | cloud | done ([#30](https://github.com/erik-hedstrom/loadout/pull/30)) |
-| A4 | P1 | npm package under an available name + release workflow | Claude (Codex quota out) | cloud + erik | review ([PR #71](https://github.com/erik-hedstrom/loadout/pull/71)); nothing is published, the first release waits on Erik's steps |
+| A4 | P1 | npm package under an available name + release workflow | Claude (Codex quota out) | cloud + erik | code done ([#71](https://github.com/erik-hedstrom/loadout/pull/71)); nothing is published, the first release waits on Erik's steps |
 | A5 | P1 | Demo recording (route, launch, hook) | Claude | local | todo (after A1) |
 
 **A2. `loadout audit`.**
