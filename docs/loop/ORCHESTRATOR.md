@@ -194,10 +194,23 @@ about it. Work in this order:
   omits it, obtain an explicit local necessity review before merge.
 - **Acceptance criteria met**, with the backlog row updated in the PR.
 
-Squash-merge with `--delete-branch`, one PR at a time. After each merge, wait
-until `mergeable` is no longer `UNKNOWN`, then merge `main` into the next PR
-and rerun its tests. Resolve BACKLOG conflicts by keeping both sides, then
-delete the PR's line under "In review".
+Squash-merge one PR at a time:
+`gh pr merge N --squash --match-head-commit <reviewed head> --subject "<PR title> (#N)" --body-file <file>`.
+- **Set the subject and body.** A PR with one commit is otherwise squashed
+  under that commit's own message: #73's merged subject starts with a
+  byte-order mark and its message has no `Co-Authored-By` trailer, both
+  carried over from that commit. Write the body file without a BOM, end it
+  with the trailer, and check the merged subject:
+  `git fetch origin && git log -1 --format=%s origin/main | head -c3 | od -An -tx1`
+  must not print `ef bb bf`.
+- **Delete the branch yourself,** without `--delete-branch`, which also
+  deletes the local branch and fails while a worktree has it checked out.
+  Run `git push origin --delete <branch>`, then remove the worktree and its
+  local branch.
+
+After each merge, wait until `mergeable` is no longer `UNKNOWN`, then merge
+`main` into the next PR and rerun its tests. Resolve BACKLOG conflicts by
+keeping both sides, then delete the PR's line under "In review".
 
 ## Setup and budgets
 
@@ -347,6 +360,33 @@ command to start their agent; three commands from zero to a routed prompt; a rou
 that is honestly measured and improving; a repo that reads as serious engineering.
 Prefer deleting to adding. Start with the P0 items.
 ```
+
+### Running the orchestrator as a goal
+
+Claude Code's [`/goal`](https://code.claude.com/docs/en/goal) keeps a
+session working across turns until a condition holds. After each turn, a
+small model checks the condition against the conversation. It does not
+call tools, so the condition must be something the orchestrator's own
+messages show. The condition is at most 4,000 characters, so it points to
+the files above instead of repeating them. A session started this way
+replaces the opening message:
+
+```
+/goal You are loadout's orchestrator. Read HANDOFF.md, AGENTS.md,
+docs/loop/ORCHESTRATOR.md and the v0.1 ship bar in docs/loop/BACKLOG.md, sync,
+and run the iteration protocol toward the ship bar.
+Done when your latest message has a "Ship-bar status" table with one row per
+ship-bar item and per task you started, each showing a merged PR (link, squash
+SHA, ci-full green) or BLOCKED with its blocker (Erik's decision or action,
+quota, or an unapproved cost), followed by the main checkout's state and every
+open PR with its state. Also done, early, when a "Stop and ask Erik" condition
+occurs and your latest message names it and the decision needed.
+Otherwise stop after 80 turns with the same table.
+```
+
+`/goal` alone shows the condition and progress; `/goal clear` ends it. Add
+the session-specific rules (the merge authority Erik gives, which providers
+are available) to the condition itself.
 
 ### Cloud session (claude.ai/code, when local usage runs out)
 
