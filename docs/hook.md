@@ -43,7 +43,7 @@ reads a skill from your library, so those two rules approve exactly that
 Now it also adds the server's tools to every request (158 input tokens in
 B12's measurement, which added the server from a config; through the plugin:
 not measured) and a first-use approval prompt. If you ran `claude mcp add` for
-loadout before, remove that server or its tools load twice, with the allow
+loadout before, remove that server or its tools are attached twice, with the allow
 rules covering only one set:
 
 ```bash

@@ -107,7 +107,7 @@ describe('benchmark backends', () => {
         pluginCopies.push({ dir: local, servers: JSON.parse(readFileSync(join(local, '.mcp.json'), 'utf8')).mcpServers });
         const status = problem === 'failed mcp' ? 'failed' : problem === 'pending mcp' ? 'pending' : 'connected';
         inventory.mcp_servers = problem === 'missing mcp' ? [] : [{ name: 'plugin:loadout:loadout', status }];
-        // Any second server breaks the match with C8, whatever its name; a user-scope `loadout` also gives load_skill.
+        // Any MCP server besides the plugin's makes D13 differ from C8's setup, whatever its name; user-scope `loadout` also supplies load_skill.
         if (ambient === 'mcp') inventory.mcp_servers.push({ name: 'ambient-db', status: 'connected' });
         if (ambient === 'loadout mcp') inventory.mcp_servers.push({ name: 'loadout', status: 'connected' });
       }
