@@ -1725,6 +1725,7 @@ Learnings (2026-10-09):
 | E18 | P1 | Patch the Vite advisories in the development lockfile | Codex | cloud | done ([#56](https://github.com/erik-hedstrom/loadout/pull/56)) |
 | E19 | P1 | Patch the production dependency advisories (zod, body-parser, fast-uri, ip-address) | Codex | cloud | done ([#61](https://github.com/erik-hedstrom/loadout/pull/61)) |
 | E20 | P2 | Docs match the evidence: HANDOFF state and the per-prompt scope claim | Codex | cloud | review ([#62](https://github.com/erik-hedstrom/loadout/pull/62)) |
+| E21 | P0 | Benchmark rows redact every held credential, in every field and encoding | Codex | cloud | review: the after-the-fact Sol review of #73 found the redaction covered only the Claude token and only stderr |
 
 **E18. npm advisories.** `npm audit` on main reported six advisories against
 Vite 8.3.2 (GHSA-698v-4r3x-3vcv, GHSA-r825-w8mm-5pxw, GHSA-587h-7wmj-h5pm,
