@@ -1013,7 +1013,7 @@ Left: the Claude arm (blocked on E12).
 | D15 | P0 | MCP discovery: make library MCP servers findable and usable through the search server | Claude | cloud + local | in progress: code and tests merged in [#39](https://github.com/erik-hedstrom/loadout/pull/39); the live check is left |
 | D17 | P1 | `loadout mcp` ready within Codex's MCP start-up grace | Claude | local (measure) + cloud (fix) | done ([#43](https://github.com/erik-hedstrom/loadout/pull/43)): WSL install advice in the README; `required = true` in the `--windows` TOML, not in the plugin (see below); measured 2026-10-15: under 1 s from ext4, 6–7 s from `/mnt/c` |
 | D12 | P0 | Codex: install the hook and search as one step, if Codex allows it | Codex | local | done ([#23](https://github.com/erik-hedstrom/loadout/pull/23)): `plugins/loadout-codex` through `.agents/plugins/marketplace.json`; install checked offline; the hook still needs `/hooks` trust; the live run is D2 |
-| D13 | P0 | The plugin must be able to open what its hook routes to | Claude | cloud + local | in progress ([#72](https://github.com/erik-hedstrom/loadout/pull/72)): code merged; re-run not done |
+| D13 | P0 | The plugin must be able to open what its hook routes to | Claude | cloud + local | done ([#72](https://github.com/erik-hedstrom/loadout/pull/72), [#76](https://github.com/erik-hedstrom/loadout/pull/76)): re-run on C8's 10 requests, all valid, server connected in each; the hook injected 6 of 10 as in C8; Claude opened 3 of 10 (C8: 0), 3 of the 4 it was only pointed to, all through `load_skill`; the setup differs from C8 ([RESULTS](../../bench/RESULTS.md#the-plugin-with-its-mcp-server-d13-2026-11-03)); review Lows follow-up merged in [#75](https://github.com/erik-hedstrom/loadout/pull/75) |
 | D14 | P1 | Codex plugin forwards LOADOUT_HOME | Claude | cloud | done ([#36](https://github.com/erik-hedstrom/loadout/pull/36)): Codex gives a stdio MCP server only its default variables plus `env_vars`, so the plugin's `loadout mcp` ignored a custom `LOADOUT_HOME` (and a `"router": "lexical"` profile in it); now forwarded. A relative `LOADOUT_HOME` is now refused (on Windows, anything but a drive-qualified path, so no drive-relative, UNC or device path) and an empty one ignored; the `HOME` (or `USERPROFILE`) fallback must pass the same check. So the working directory or a remote share cannot become the config. An absolute value, including a mapped network drive, is trusted: a project settings `env` that sets one comes from settings that can already run their own hooks. The config the home points to cannot redirect the key (Erik, 2026-10-19): a `jev.baseUrl` other than api.typesafe.ai is refused unless `TYPESAFE_BASE_URL` names the URL. It still chooses `apiKeyFile`, whose content then reaches only that URL, which is why the home must not come from the working directory either. Checked against the Codex source only, not a live run |
 | D16 | P1 | Warn when the hook runs without a TypeSafe key | Claude | cloud | done ([#27](https://github.com/erik-hedstrom/loadout/pull/27)): once per session, as a `systemMessage`, which Claude Code and Codex both show |
 | D18 | P1 | The hook and `load_skill` can offer `load_skill` only, with no folder | Codex | cloud | partial ([#54](https://github.com/erik-hedstrom/loadout/pull/54)): load_skill-only offer merged; C2 dropping its folder-hint limit waits on Erik |
@@ -1475,12 +1475,19 @@ Acceptance:
   server: the context then names a tool that is not there (docs/hook.md says
   so; `claude mcp list` shows the failure).
 - The plugin arm in `bench/invoke.ts` re-run on the same 10 requests, against
-  the 6 of 10 and 2 of 10 rows. Not done: it spends quota, so Erik runs it
-  (command below).
+  the 6 of 10 and 2 of 10 rows. Done (2026-11-03,
+  [#76](https://github.com/erik-hedstrom/loadout/pull/76)): all 10 rows
+  valid, the plugin's server connected in each. The hook injected a skill's
+  text on the same 6 of 10 as C8. Claude opened 3 of 10 library skills (Wilson
+  95%: 11–60; C8: 0 of 10, 0–28), all through `load_skill`: 3 of the 4 it was
+  only pointed to (30–95; C8: 0 of 4). Those two rows count skills the judge
+  rates useful; no judge ran here, so this is opens only. The setup also
+  differs from C8, so the change is not attributed to the server alone
+  ([RESULTS](../../bench/RESULTS.md#the-plugin-with-its-mcp-server-d13-2026-11-03)).
 
-Re-run (Erik; about $2 to $3 by C8's $1.93 for the same 10 runs, and Jev under
-$0.02; the token is a personal subscription token from `claude setup-token`,
-read from the environment and never printed):
+Reproduction (ran 2026-11-03 once per request, one id in `--ids` each; $1.52
+reported by Claude Code, Jev under $0.02; the token is a personal subscription
+token from `claude setup-token`, read from the environment and never printed):
 
 ```bash
 read -rs CLAUDE_CODE_OAUTH_TOKEN && export CLAUDE_CODE_OAUTH_TOKEN
