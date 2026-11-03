@@ -405,7 +405,7 @@ async function main(): Promise<number> {
       const checks = await doctor(config, (apiKey) => jevClient({ apiKey, baseUrl: jevBaseUrl(config), model: config.jev.model, retries: 0 }));
       if (configError) checks.unshift({ name: 'config', ok: false, detail: configError, fix: `fix or delete ${paths.config()}; the other checks used the defaults` });
       console.log(formatDoctor(checks));
-      return checks.every((c) => c.ok) ? 0 : 1;
+      return checks.every((c) => c.ok !== false) ? 0 : 1;
     }
 
     case undefined:
