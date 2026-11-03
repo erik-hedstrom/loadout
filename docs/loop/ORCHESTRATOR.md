@@ -198,8 +198,7 @@ Squash-merge one PR at a time:
 `gh pr merge N --squash --match-head-commit <reviewed head> --subject "<PR title> (#N)" --body-file <file>`.
 - **Set the subject and body.** A PR with one commit is otherwise squashed
   under that commit's own message: #73's merged subject starts with a
-  byte-order mark and its message has no `Co-Authored-By` trailer, both
-  carried over from that commit. Write the body file without a BOM, end it
+  byte-order mark carried over from that commit. Write the body file without a BOM, end it
   with the trailer, and check the merged subject:
   `git fetch origin && git log -1 --format=%s origin/main | head -c3 | od -An -tx1`
   must not print `ef bb bf`.
