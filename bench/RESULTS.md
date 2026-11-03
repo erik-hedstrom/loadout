@@ -1178,10 +1178,128 @@ the agent sees.
 
 Raw: [invoke-claude-plugin.jsonl](results/2026-10-06T05-40-33-sweep/invoke-claude-plugin.jsonl).
 Cost: $1.93 reported by Claude Code (Sonnet, subscription); Jev under $0.02.
+The plugin now carries the MCP server; the re-run is
+[D13 below](#the-plugin-with-its-mcp-server-d13-2026-11-03).
 
 These are small samples (10 requests per cell, capped runs), not outcome
 measurements: they show whether the skill reaches the agent's context, not
 whether the result is better.
+
+### The plugin with its MCP server (D13, 2026-11-03)
+
+**With the MCP server in the plugin, Claude opened 3 of the 4 skills the hook
+only pointed to, all through `load_skill`.** C8's plugin arm opened none.
+D13 ([#72](https://github.com/erik-hedstrom/loadout/pull/72)) added the
+server to `plugins/loadout`; this re-runs C8's arm on the same 10 requests.
+The setup also differs from C8 in ways listed below, so the comparison does
+not isolate the server.
+
+Definitions are C8's. "Injected" means the hook put a skill's full text in
+context: the per-hook `hooks[].injected` in the rows. (The row-level
+`injected`, `loaded` and `offered` describe a preloaded session and are empty
+in plugin mode.) "Opened" means a successful Skill call, `SKILL.md` read or
+`load_skill` call on a library skill: the row's `invoked`. Parentheses: Wilson
+95% intervals.
+
+| Plugin arm, same 10 requests | C8: hook only (2026-10-12) | D13: hook + MCP server |
+|---|---:|---:|
+| Valid rows (the bench's checks) | 10 of 10 | 10 of 10 |
+| Hook added `<skill_relevance>` context | 10 of 10 (72–100) | 10 of 10 (72–100) |
+| Hook injected one skill's full text | 6 of 10 (31–83) | 6 of 10 (31–83) |
+| Claude opened a library skill | 0 of 10 (0–28) | **3 of 10** (11–60) |
+| …of the 4 it was only pointed to | 0 of 4 (0–49) | **3 of 4** (30–95) |
+| Ran out of turns (`error_max_turns`) | 7 of 10 (40–89) | 2 of 10 (6–51) |
+| Timed out (4 minutes) | 0 of 10 | 0 of 10 |
+| Cost reported by Claude Code | $1.93 | $1.52 |
+
+- **Injection is unchanged.** The hook injected the same skill on the same 6
+  requests as in C8: `mcp-builder`, `changelog-generator`, `vendor-review`,
+  `uncertainty-and-units`, `security-threat-model` and
+  `statistical-analysis`. Claude opened no library skill on these 6.
+  Whether it followed the injected text is not measured.
+- **The 4 pointed-to requests.** On `productivity-04`, `documents-19` and
+  `documents-29`, Claude loaded `obsidian-markdown`, `pdf` and `pptx` through
+  the plugin's `load_skill`. The hook arm (search tool plus a settings hook)
+  opened these on the same requests too, and `pdf--openai` on
+  `documents-29`. On `media-15` it made 7
+  shell calls (Bash, PowerShell), all of which failed, and opened nothing. The
+  hook arm opened two video-generation skills there.
+- No session called `find_tools` or Claude's Skill tool.
+- **"Useful" is not shown.** The 2 of 10 and 6 of 10 rows above count skills
+  the judge rates useful. No judge ran here, so 3 of 10 counts opens only.
+- **Every row passed the bench's checks** (`checkInventory` in
+  [invoke.ts](invoke.ts)):
+  - one loadout plugin, the bench's copy;
+  - `plugin:loadout:loadout` was the only MCP server and was `connected` in
+    all 10 init events;
+  - exactly one loadout `UserPromptSubmit` hook ran (counted by the PATH
+    shim). It was the only `UserPromptSubmit` hook. In C8 every session also
+    ran a second one from the user's own setup, which added no skill context.
+- **Other plugins.** Each row records `otherPlugins: 3` (C8: 20). The bench
+  counts every plugin in the init event other than loadout and records no
+  names, because rows are public. The fresh Claude home has no user plugins.
+  A free probe saw Claude Code's init list `@builtin` plugins even in a fresh
+  config dir ([B10](../docs/loop/BACKLOG.md)), so these are probably its
+  built-ins; the rows do not show it.
+- **How it ran.**
+  - 2026-11-03, 12:59–13:13 UTC, in WSL, from a fresh clone of `main` at
+    `c2e08cf` ([pin.txt](results/2026-11-03T13-13-04Z-d13-plugin-mcp/pin.txt)).
+  - `claude` was the Windows Claude Code 2.1.316 (`claude.exe` through an npm
+    shim; [run-env.txt](results/2026-11-03T13-13-04Z-d13-plugin-mcp/run-env.txt)).
+  - A driver ran the D13 command
+    ([BACKLOG](../docs/loop/BACKLOG.md)) once per request, with one id in
+    `--ids`: Sonnet 5.5 (`claude-sonnet-5-5`), 8 turns, 240 s. The rows are
+    in one file.
+  - `invoke.ts` gave each process a fresh Claude home (`CLAUDE_CONFIG_DIR` in
+    Windows `%TEMP%`, passed through `WSLENV`), `CLAUDE_CODE_OAUTH_TOKEN`, and
+    `MCP_CONNECTION_NONBLOCKING=0`, so Claude waited for the plugin's server.
+  - The driver would have discarded rate-limit or error attempts. None
+    occurred: each request ran once
+    ([attempts.txt](results/2026-11-03T13-13-04Z-d13-plugin-mcp/attempts.txt)).
+
+**Setup differences from C8.** Any of these can explain part of the change:
+
+| | C8 (2026-10-12) | D13 (2026-11-03) |
+|---|---|---|
+| Plugin | hook only; `--strict-mcp-config` | hook + MCP server; `load_skill` and `find_tools` allowed with `--allowedTools` |
+| Claude home | the real one: the user's settings, 20 other plugins and an extra `UserPromptSubmit` hook | fresh per process; 3 other plugins |
+| Processes | one `invoke.ts` process for all 10 | one per request |
+| MCP start-up | no server, nothing to wait for | waits for the server (`MCP_CONNECTION_NONBLOCKING=0`, 60 s timeouts) |
+| Claude Code | not recorded (the C8 PR's review notes describe 2.1.281) | 2.1.316 |
+| Model argument | `sonnet` (the alias, as recorded in the rows) | `claude-sonnet-5-5` |
+| loadout | C8's branch | `c2e08cf`, after D16, D18, D20, D21 and E14 changed the hook or routing path |
+
+The hook's text is not recorded (rows keep skill names only). Neither is the
+library or the config in the machine's loadout home, for either run. The same
+6 injections suggest that routing picked the same skills, but that is not
+shown for the 4 pointed-to requests.
+
+**Threats.**
+- n = 10, and n = 4 for the pointed-to subset. The intervals overlap: 0–28
+  against 11–60, and 0–49 against 30–95. So these runs do not establish a
+  higher open rate on their own.
+- What is shown without a statistical claim: the 3 opens are `load_skill`
+  calls on the plugin's server, a tool the C8 arm did not have.
+- Fewer runs ran out of turns (7 to 2), and the cost fell. With the home,
+  Claude Code version and loadout version all changed, the cause is not
+  shown.
+- Not measured: interactive sessions (a user approves the two tools once;
+  `loadout setup claude-code` prints the rules), native Windows, macOS or
+  Linux, whether the injected text was followed, and outcome quality.
+
+**D13's acceptance is partly met.** It reads: "The plugin arm in
+`bench/invoke.ts` re-run on the same 10 requests, against the 6 of 10 and 2
+of 10 rows." The re-run is done: all 10 rows are valid, and the plugin's
+server was connected in every session. The comparison is not: those two rows
+count skills the judge rated useful, and no judge ran on this arm, so its
+"useful" count is not shown.
+
+Raw: [results/2026-11-03T13-13-04Z-d13-plugin-mcp/](results/2026-11-03T13-13-04Z-d13-plugin-mcp/).
+Its input was a copy of the sweep's
+[decisions.jsonl](results/2026-10-06T05-40-33-sweep/decisions.jsonl),
+byte-identical to the committed file, so it is not committed again; C8's rows
+sit beside that file. Cost: $1.52 reported by Claude Code (Sonnet,
+subscription; summed `costUsd`); Jev under $0.02.
 
 ### The hook plugin in the Claude Code CLI (2026-10-08)
 

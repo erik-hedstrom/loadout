@@ -1,0 +1,10 @@
+integrations-01 attempts=1
+productivity-04 attempts=1
+writing-04 attempts=1
+documents-19 attempts=1
+documents-29 attempts=1
+business-10 attempts=1
+science-04 attempts=1
+security-04 attempts=1
+data-04 attempts=1
+media-15 attempts=1

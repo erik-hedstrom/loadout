@@ -1,0 +1,3 @@
+Recorded by the orchestrator after the run (the rows carry no host version):
+claude --version in WSL just before the run: 2.1.316 (Claude Code), the Windows claude.exe through an npm shim
+driver log: clone ready 2026-11-03T12:59Z; last row 2026-11-03T13:13Z
