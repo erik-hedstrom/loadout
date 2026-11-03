@@ -294,3 +294,15 @@ it('redacts allowlisted credentials in B12 resolved model metadata', async () =>
   expect(saved).not.toContain(secret); expect(saved).toContain('<credential>');
   expect(printed.join('\n')).not.toContain(secret); expect(printed.join('\n')).toContain('<credential>');
 });
+
+it('gates unanticipated B12 artifacts before finishing', async () => {
+  const secret = 'FAKE-listing-gate-token', out = join(temp(), 'gated');
+  vi.stubEnv('CLAUDE_CODE_CLIENT_KEY', secret);
+  let initialized = false;
+  await expect(main(['--library', library(), '--host', 'codex', '--run', '--out', out], {
+    print: () => {}, run: async (command) => {
+      if (!initialized) { initialized = true; writeFileSync(join(out, 'unknown-writer.txt'), secret.replaceAll('-', '%2d')); }
+      return { stdout: command.args.includes('--version') ? 'codex-cli 0.163.0' : codex, exit: 0, durationMs: 1, failure: null };
+    },
+  })).rejects.toThrow(/UNUSABLE.*unknown-writer/);
+});

@@ -1,5 +1,5 @@
 /** Cache-aware OpenCode study. See bench/README.md for the offline plan and explicit execution commands. */
-import { envSecrets, persistJson, redact } from './redact.js';
+import { assertNoSecrets, envSecrets, persistJson, redact } from './redact.js';
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -219,6 +219,7 @@ export async function main(args: string[]) {
           const s: Sandbox = { workspace, home, binary: o.binary! };
           const meter = budget.meter();
           const token = block.arm === 'gateway' ? randomBytes(32).toString('hex') : fixtureToken;
+          if (block.arm === 'gateway') secrets.push(token);
           let gateway: Awaited<ReturnType<typeof endpoint>> | undefined;
           const row: B11Row = { taskId: task.id, kind: task.kind, split: splitOf(task.id), model: block.model as B11Row['model'], arm: block.arm as B11Row['arm'], rep: block.rep, orderIndex: index, startedAt, opencodeVersion: OPENCODE_VERSION,
             timeoutMs: o.timeoutMs, steps: [], totals: { input: 0, cacheRead: 0, cacheWrite: 0, output: 0, reasoning: 0 }, toolCalls: [], skillsLoaded: [], result: 'invalid', invalidReason: 'provider-error', wallMs: 0, jev: meter.usage, listing: { skills: 0, servers: 0, tools: 0 } };
@@ -290,6 +291,7 @@ export async function main(args: string[]) {
       const rejected = workers.find((worker): worker is PromiseRejectedResult => worker.status === 'rejected');
       if (rejected) throw rejected.reason;
     }
+    assertNoSecrets(out, secrets);
     console.log(`Jev reserved/observed cost: $${budget.spent.toFixed(6)}; new rows: ${written} of ${runs} planned sessions${stopReason ? `; ${stopReason}` : ''}`);
   } finally { await Promise.all(endpoints.map(e => e.close())); rmSync(root, { recursive: true, force: true }); }
 }

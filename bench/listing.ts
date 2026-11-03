@@ -1,5 +1,5 @@
 /** B12: native listing size arms and Claude's default-tools MCP pair. No host starts without --run. */
-import { envSecrets, persistJson, redact } from './redact.js';
+import { assertNoSecrets, envSecrets, persistJson, redact } from './redact.js';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { appendFileSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
@@ -260,6 +260,7 @@ export async function main(args: string[], deps: { run?: typeof runHost; print?:
       print(`${c.host}/${c.arm}/${c.repeat}: exit=${result.exit} invalid=${invalid ?? 'none'}`);
       if (invalid) throw new Error('invalid measurement recorded; stopped before further paid calls');
     }
+    assertNoSecrets(out, secrets);
   } finally {
     // Only the fresh root we allocated is ever removed.
     assertTemporary(root);

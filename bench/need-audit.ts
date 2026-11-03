@@ -6,10 +6,11 @@
  *
  * The split defaults to dev: tune on dev, report on test once (AGENTS.md).
  */
+import { assertNoSecrets, envSecrets } from './redact.js';
 import { writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { parseArgs } from 'node:util';
-import { DEFAULT_CONFIG } from '../src/config.js';
+import { DEFAULT_CONFIG, loadConfig, resolveApiKey } from '../src/config.js';
 import { capabilityKey } from '../src/library.js';
 import { decide, needScore, policyFrom } from '../src/route.js';
 import type { Capability } from '../src/types.js';
@@ -157,6 +158,9 @@ if (isEntry(import.meta.url)) {
   const { values, positionals } = parseArgs({ allowPositionals: true, options: { labels: { type: 'string' }, split: { type: 'string', default: 'dev' }, out: { type: 'string' } } });
   if (!values.labels || !positionals.length || !['dev', 'test'].includes(values.split!)) throw new Error('usage: need-audit.ts --labels <judge-blind.jsonl> [--split dev|test] [--out file] <sweep dir> ...');
   const report = needAudit(values.labels, positionals, values.split as 'dev' | 'test');
-  if (values.out) writeFileSync(values.out, report);
+  if (values.out) {
+    writeFileSync(values.out, report);
+    assertNoSecrets(dirname(values.out), [resolveApiKey(loadConfig()) ?? '', ...envSecrets()]);
+  }
   console.log(report);
 }

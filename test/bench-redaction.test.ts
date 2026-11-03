@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { afterEach, expect, it, vi } from 'vitest';
-import { persistJson, redact } from '../bench/ab-report.js';
+import { persistJson, redact } from '../bench/redact.js';
 
 vi.mock('node:child_process', async (original) => ({
   ...await original<typeof import('node:child_process')>(), spawn: vi.fn(),
@@ -34,7 +34,7 @@ it.each([
   { source: 'TypeSafe env', name: 'TYPESAFE_API_KEY', secret: 'FAKEopaqueTypeSafeKey', exit: 1 },
   { source: 'TypeSafe key file', name: '', secret: 'FAKEopaqueFileKey', exit: 1 },
   { source: 'GitHub inherited env', name: 'GITHUB_TOKEN', secret: 'ghp_FAKEopaqueGithubKey', exit: 1 },
-  { source: 'OAuth successful search', name: 'CLAUDE_CODE_OAUTH_TOKEN', secret: 'FAKEoauth-token', exit: 0 },
+  { source: 'OAuth successful search', name: 'CLAUDE_CODE_OAUTH_TOKEN', secret: 'FAKEoauth-token-opaque', exit: 0 },
   { source: 'cleanup diagnostic', name: 'GITHUB_TOKEN', secret: 'FAKEcleanup-token', exit: 0 },
 ])('redacts the complete invoke row and console ($source)', async ({ source, name, secret, exit }) => {
   const dir = mkdtempSync(join(tmpdir(), 'loadout-invoke-redaction-'));
@@ -82,7 +82,7 @@ it.each([
     });
     process.argv = [process.execPath, 'bench/invoke.ts', dir, '--agent', 'codex', '--mode', 'search', '--ids', secret];
     vi.resetModules();
-    await import('../bench/invoke.js');
+    await expect(import('../bench/invoke.js')).rejects.toThrow(/UNUSABLE/);
     const row = JSON.parse(readFileSync(join(dir, 'invoke-codex-search.jsonl'), 'utf8'));
     expect(row).toMatchObject({ id: '<credential>', searches: [{ goal: '<credential>' }], exit });
     if (exit) expect(row.stderr).toBe(`<credential>${'e'.repeat(385)}`);

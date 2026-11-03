@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import * as fs from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
-import { join, posix, win32 } from 'node:path';
+import { basename, dirname, join, posix, win32 } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -15,6 +16,7 @@ import { catalogFacts, serverInstructions, serverSpecs, serverTools } from '../b
 import { CLAUDE_SETTINGS, arms, armId, buildPlan, canaryFound, canaryOf, checkCodexInventory, claudeEnv, estimate, childEnv, envAllowlist, CLAUDE_MANAGED_PRECONDITION, CLAUDE_SCRUB_PRECONDITION, CLAUDE_SWITCH_PRECONDITION, CODEX_CLOUD_PRECONDITION, managedClaudeFiles, formatOffline, hostState, hostWrites, loadoutFacts, main, managedCodexFiles, offline, positiveControl, presentFiles, reading, redacted, refusedFiles, resetWork, runStudy, summarize, type Arm, type Plan, type Row, type Run } from '../bench/mcp-overhead.js';
 
 const temps: string[] = [];
+vi.mock('node:fs', async (original) => ({ ...await original<typeof import('node:fs')>() }));
 const temp = () => { const dir = mkdtempSync(join(tmpdir(), 'loadout-b7-test-')); temps.push(dir); return dir; };
 afterAll(() => temps.forEach((dir) => rmSync(dir, { recursive: true, force: true })));
 const serverPath = join(import.meta.dirname, '../bench/mcp-fixture-server.ts');
@@ -842,6 +844,26 @@ describe('measurement', () => {
   }
   const small = () => buildPlan(temp(), { configs: ['n1'], repeats: 1 }, { PATH: process.env.PATH, CLAUDE_CODE_OAUTH_TOKEN: OAUTH_CANARY }, []);
   const study = (o: Opts = {}, p = small()) => { const h = fakeHost(p, o); return runStudy(p, temp(), { run: h.run, inventory: h.inventory, refused: () => [] }); };
+
+  it('gates unanticipated B7 artifacts before finishing', async () => {
+    const p = small(), out = temp(), h = fakeHost(p);
+    writeFileSync(join(out, 'unknown-writer.txt'), OAUTH_CANARY.replaceAll('-', '%2d'));
+    await expect(runStudy(p, out, { run: h.run, inventory: h.inventory, refused: () => [] })).rejects.toThrow(/UNUSABLE.*unknown-writer/);
+  });
+
+  it.each(['offline.json', 'host-state.json', 'summary.md'])('gates unredacted B7 metadata after writing %s', async (file) => {
+    const out = temp(), p = buildPlan(temp(), { hosts: ['claude'], configs: ['n1'], repeats: 1 }, { PATH: process.env.PATH }, []);
+    const h = fakeHost(p, { byOrder: true }), write = fs.writeFileSync;
+    const spy = vi.spyOn(fs, 'writeFileSync').mockImplementation((...args: Parameters<typeof writeFileSync>) => {
+      write(...args);
+      if (basename(String(args[0])) === file) write(join(dirname(String(args[0])), 'unknown-writer.txt'), OAUTH_CANARY.replaceAll('-', '%2d'));
+    });
+    try {
+      await expect(main(['--run', '--hosts', 'claude', '--configs', 'n1', '--repeats', '1'], { print: () => {}, run: h.run, out, claudeManaged: [] }))
+        .rejects.toThrow(/UNUSABLE.*unknown-writer/);
+      expect(existsSync(join(out, 'INCOMPLETE'))).toBe(true);
+    } finally { spy.mockRestore(); }
+  });
 
   it('redacts the launch token in B7 row metadata and allowlisted preflight credentials', async () => {
     const secret = 'haiku-FAKE-b7-token';

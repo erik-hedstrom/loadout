@@ -4,7 +4,7 @@
  * fake Jev, including replayed answers in the CLI subprocess (no Jev traffic).
  * Prompts omit session_id so repeat measurements neither reuse nor write state.
  */
-import { envSecrets, persistJson } from './redact.js';
+import { assertNoSecrets, envSecrets, persistJson } from './redact.js';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -128,5 +128,6 @@ if (isEntry(import.meta.url)) {
     console.log(samples.length ? `${step.padEnd(24)} ${percentile(samples, 0.5).toFixed(2).padStart(8)} ${percentile(samples, 0.95).toFixed(2).padStart(9)}` : `${step.padEnd(24)} skipped (disabled)`);
   }
   writeFileSync(join(dir, 'latency.json'), persistJson({ mode, node: process.version, limit, rows }, secrets) + '\n');
+  assertNoSecrets(dir, secrets);
   console.log(`Raw samples: ${join(dir, 'latency.json')}`);
 }

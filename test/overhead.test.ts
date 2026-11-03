@@ -1,12 +1,14 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import * as fs from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
-import { join, relative } from 'node:path';
+import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { buildPlan, copyPack, execute, main, parseClaude, parseCodex, runStudy, summarize, parsePromptInput, validateFeatures, inspectCodex, preflight, DISABLED_FEATURES, type Command, type Plan } from '../bench/overhead.js';
 
 const temps: string[] = [];
+vi.mock('node:fs', async (original) => ({ ...await original<typeof import('node:fs')>() }));
 function temp() {
   const dir = mkdtempSync(join(tmpdir(), 'loadout-overhead-test-'));
   temps.push(dir);
@@ -453,4 +455,36 @@ it('redacts inherited credentials in B1 printed plan paths', async () => {
     expect(printed.join('\n')).not.toContain(secret);
     expect(printed.join('\n')).toContain('<credential>');
   } finally { vi.unstubAllEnvs(); }
+});
+
+it('gates unanticipated B1 artifacts before finishing', async () => {
+  const secret = 'FAKE-overhead-gate-token', out = temp(), plan = buildPlan(fixture(), temp());
+  vi.stubEnv('LOADOUT_HOME', temp()); vi.stubEnv('TYPESAFE_API_KEY', secret);
+  try {
+    writeFileSync(join(out, 'unknown-writer.txt'), secret.replaceAll('-', '%2d'));
+    await expect(runStudy(plan, out, fakeStudy(plan))).rejects.toThrow(/UNUSABLE.*unknown-writer/);
+  } finally { vi.unstubAllEnvs(); }
+});
+
+it('gates a late B1 report artifact at the script completion boundary', async () => {
+  const secret = 'FAKE-overhead-late-token', library = fixture(), plan = buildPlan(library, temp()), fake = fakeStudy(plan);
+  vi.stubEnv('LOADOUT_HOME', temp()); vi.stubEnv('TYPESAFE_API_KEY', secret);
+  const resultRoot = resolve(import.meta.dirname, '..', 'bench', 'results'), before = new Set(readdirSync(resultRoot));
+  let out: string | undefined;
+  const write = fs.writeFileSync;
+  const spy = vi.spyOn(fs, 'writeFileSync').mockImplementation((...args: Parameters<typeof writeFileSync>) => {
+    write(...args);
+    if (basename(String(args[0])) === 'summary.md') { out = dirname(String(args[0])); write(join(out, 'unknown-writer.txt'), secret.replaceAll('-', '%2d')); }
+  });
+  const mapped = (command: Command, host: 'claude' | 'codex') => ({ ...command, cwd: plan.calls.find((c) => c.host === host && c.configuration === basename(command.cwd))!.command.cwd });
+  try {
+    await expect(main(['--library', library], { print: () => {}, run: (command, host) => fake.run(mapped(command, host), host), inspect: (command) => fake.inspect(mapped(command, 'codex')) }))
+      .rejects.toThrow(/UNUSABLE.*unknown-writer/);
+  } finally {
+    spy.mockRestore(); vi.unstubAllEnvs();
+    if (out) {
+      expect(resolve(out).startsWith(resultRoot + sep) && !before.has(basename(out))).toBe(true);
+      rmSync(out, { recursive: true, force: true });
+    }
+  }
 });

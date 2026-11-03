@@ -9,7 +9,7 @@
  *
  *   npx tsx bench/sweep.ts [--requests bench/data/requests.jsonl] [--limit 50] [--seed]
  */
-import { envSecrets, persistJson } from './redact.js';
+import { assertNoSecrets, envSecrets, persistJson } from './redact.js';
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -103,5 +103,6 @@ if (isEntry(import.meta.url)) {
     appendFileSync(out, persistJson(row, secrets) + '\n');
     if (++done % 25 === 0) console.log(`  ${done}/${requests.length}  $${cost.toFixed(4)}`);
   });
+  assertNoSecrets(dir, secrets);
   console.log(`done: ${done} decisions, $${cost.toFixed(4)}`);
 }

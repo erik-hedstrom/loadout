@@ -16,7 +16,7 @@
  * Text deliverables only (Markdown, code, JSON, CSV…): binaries are listed by
  * name but not compared. Runs use real subscriptions and take minutes each.
  */
-import { envSecrets, persistJson, redact } from './redact.js';
+import { assertNoSecrets, credentialMatch, scanSecrets, envSecrets, persistJson, redact } from './redact.js';
 import { appendFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -28,6 +28,7 @@ import { codexArgs, materialize, which } from '../src/launch.js';
 import { claudeJson, decisionFor, pool, readJsonl, run } from './lib.js';
 import { deliverables, judgePair, JUDGE_SYSTEM, NOTE, PrefSchema, type Arm, type Pref } from './pairwise.js';
 import type { SweepRow } from './sweep.js';
+import { toolEvents } from './stream.js';
 import { events, tokenUsage, type TokenUsage } from './usage.js';
 
 const { values, positionals } = parseArgs({
@@ -70,10 +71,14 @@ if (!values['judge-only']) {
     const started = Date.now();
     const res = await run(bin, codexArgs(session, row.request + NOTE, ['-s', 'workspace-write', '--skip-git-repo-check', '--json'], { headless: true }), cwd, Number(values['timeout-s']) * 1000);
     rmSync(target, { recursive: true, force: true });
-    mkdirSync(target, { recursive: true });
-    cpSync(cwd, target, { recursive: true, filter: (src) => !/[/\\](node_modules|\.git|\.venv|venv|__pycache__)([/\\]|$)/.test(src) });
+    const unusable = scanSecrets(cwd, secrets).length > 0 || credentialMatch(toolEvents(res.stdout).finalMessage ?? '', secrets);
+    if (!unusable) {
+      mkdirSync(target, { recursive: true });
+      cpSync(cwd, target, { recursive: true, filter: (src) => !/[/\\](node_modules|\.git|\.venv|venv|__pycache__)([/\\]|$)/.test(src) });
+    }
+    mkdirSync(join(out, id), { recursive: true });
     const metadata = { arm, model: session.model, skills: session.skills.map((c) => capabilityKey(c)), injected: session.injected.length, code: res.code, timedOut: res.timedOut, ms: Date.now() - started,
-      usage: null as TokenUsage | null, usageError: undefined as string | undefined };
+      invalid: unusable ? 'UNUSABLE: credential in output' : undefined, usage: null as TokenUsage | null, usageError: undefined as string | undefined };
     // A truncated stream must not prevent saving paid deliverables and metadata.
     try { metadata.usage = tokenUsage('codex', events(res.stdout)); }
     catch { metadata.usageError = 'Codex usage unavailable (contents suppressed)'; }
@@ -92,13 +97,15 @@ let cost = 0;
 // One at a time, so the judge's system prompt stays in the cache (AGENTS.md rule 6).
 for (const id of ids.filter((id) => !judged.has(id) && existsSync(join(out, id, 'bare.json')) && existsSync(join(out, id, 'loadout.json')))) {
   const row = rows.get(id)!;
+  const meta = (arm: Arm) => JSON.parse(readFileSync(join(out, id, `${arm}.json`), 'utf8'));
+  if (meta('bare').invalid || meta('loadout').invalid) continue;
   const files = { bare: deliverables(join(out, id, 'bare')), loadout: deliverables(join(out, id, 'loadout')) };
   const { winner, orders: [a, b] } = await judgePair(row.request, files, async (prompt) => {
+    assertNoSecrets(out, secrets);
     const res = await claudeJson<Pref>(prompt, schema, { model: values.judge!, system: JUDGE_SYSTEM });
     cost += res.costUsd;
     return { ...res.output, usage: res.usage, usageError: res.usageError };
   });
-  const meta = (arm: Arm) => JSON.parse(readFileSync(join(out, id, `${arm}.json`), 'utf8'));
   appendFileSync(verdictFile, persistJson({ id, winner, orders: [a, b], bare: meta('bare'), loadout: meta('loadout') }, secrets) + '\n');
   print(`${id}: ${winner} (${a.winner} / ${b.winner})`);
 }
@@ -106,3 +113,5 @@ for (const id of ids.filter((id) => !judged.has(id) && existsSync(join(out, id, 
 const verdicts = existsSync(verdictFile) ? readJsonl<{ id: string; winner: string }>(verdictFile).filter((v) => ids.includes(v.id)) : [];
 const count = (w: string) => verdicts.filter((v) => v.winner === w).length;
 print(`\nloadout better ${count('loadout')}, bare better ${count('bare')}, tie ${count('tie')}, split ${count('split')} (of ${verdicts.length}); judge $${cost.toFixed(2)}`);
+
+assertNoSecrets(out, secrets);

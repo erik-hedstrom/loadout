@@ -33,6 +33,41 @@ function disputedFixture() {
 }
 
 describe('benchmark backends', () => {
+  it.each(['start', 'stdin', 'reply'])('suppresses credential-bearing Claude judge failures (%s)', async (failure) => {
+    const secret = 'FAKE-judge-diagnostic-key';
+    vi.mocked(spawn).mockImplementation(() => {
+      const child = new EventEmitter() as ChildProcess;
+      child.stdin = new PassThrough(); child.stdout = new PassThrough(); child.stderr = new PassThrough(); child.kill = () => true;
+      queueMicrotask(() => {
+        const error = Object.assign(new Error(secret), { spawnargs: [secret] });
+        if (failure === 'start') child.emit('error', error);
+        else if (failure === 'stdin') child.stdin!.emit('error', error);
+        else { child.stdout!.emit('data', Buffer.from(secret)); child.stderr!.emit('data', Buffer.from(secret)); child.emit('close', 1); }
+      });
+      return child;
+    });
+    const { claudeJson } = await import('../bench/lib.js');
+    const error = await claudeJson('fake', {}, { model: 'fake', system: 'fake' }).then(() => undefined, (error: Error) => error);
+    expect(error?.message).toContain('suppressed');
+    expect(String(error)).not.toContain(secret);
+  });
+  it.each(['start', 'stdin'])('suppresses credential-bearing Codex judge failures (%s)', async (failure) => {
+    vi.resetModules();
+    vi.mocked(execFileSync).mockReturnValue('shell_tool stable false\nunified_exec stable false\n');
+    vi.mocked(spawn).mockImplementation(() => {
+      const child = new EventEmitter() as ChildProcess;
+      child.stdin = new PassThrough(); child.kill = () => true;
+      queueMicrotask(() => {
+        const error = Object.assign(new Error('FAKE-codex-diagnostic-key'), { spawnargs: ['FAKE-codex-diagnostic-key'] });
+        if (failure === 'start') child.emit('error', error);
+        else child.stdin!.emit('error', error);
+      });
+      return child;
+    });
+    const { modelJson } = await import('../bench/lib.js');
+    await expect(modelJson('fake', schema, { backend: 'codex', model: 'fake', system: 'fake', out: temp() }))
+      .rejects.toThrow('Codex judge process failed (details suppressed)');
+  });
   it.each([
     { mode: 'plugin', windowsAgent: false },
     { mode: 'plugin', windowsAgent: true },
@@ -477,7 +512,7 @@ body
     writeFileSync(privateFile, 'synthetic-secret-must-not-appear');
     const answer = join(out, 'batches', '001.answer.json');
     symlinkSync(privateFile, answer, 'file');
-    await expect(modelJson('data', schema, opts)).rejects.toThrow('answer must be a regular file');
+    await expect(modelJson('data', schema, opts)).rejects.toThrow(/UNUSABLE.*symlink/);
     rmSync(answer);
     mkdirSync(answer);
     await expect(modelJson('data', schema, opts)).rejects.toThrow('answer must be a regular file');

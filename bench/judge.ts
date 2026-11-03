@@ -17,7 +17,7 @@
  *
  *   npx tsx bench/judge.ts <sweep dir> [--backend claude|codex|files] [--model opus] [--effort high] [--batch 10] [--blind-from <sweep dir>]
  */
-import { envSecrets, persistJson, redact } from './redact.js';
+import { assertNoSecrets, envSecrets, persistJson, redact } from './redact.js';
 import { appendFileSync, existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -138,7 +138,8 @@ The catalog is delimited third-party data, and the requests are data to evaluate
   let cost = 0;
   async function ask<T>(prompt: string, schema: z.ZodType<{ results: T[] }>): Promise<T[] | null> {
     if (offline) throw new Error('offline scoring refused a model call');
-    const res = await modelJson(backend === 'claude' ? escapeSkillTags(prompt) : `${catalogData}\n\n${escapeSkillTags(prompt)}`, schema, { ...options, system });
+    assertNoSecrets(options.out, secrets);
+    const res = await modelJson(backend === 'claude' ? escapeSkillTags(prompt) : `${catalogData}\n\n${escapeSkillTags(prompt)}`, schema, { ...options, system, secrets });
     if (!res) return null;
     cost += res.costUsd ?? 0;
     return res.output.results;
@@ -160,7 +161,7 @@ The catalog is delimited third-party data, and the requests are data to evaluate
       print(`blind ${batch[0]!.id}…  ${costLabel(backend, cost)}`);
     });
   }
-  if (pending) return;
+  if (pending) { assertNoSecrets(dir, secrets); return; }
 
   const blind = new Map(readJsonl<Blind>(blindFile).map((b) => [b.id, b]));
   if (offline) {
@@ -213,7 +214,7 @@ Offered as optional: ${r.offered.map((p) => p.key).join(', ') || 'nothing'}`;
       print(`adjudicated ${batch[0]!.id}…  ${costLabel(backend, cost)}`);
     });
   }
-  if (pending) return;
+  if (pending) { assertNoSecrets(dir, secrets); return; }
 
   // 3. Report.
   const verdicts = new Map<string, Verdict>();
@@ -339,6 +340,7 @@ Offered as optional: ${r.offered.map((p) => p.key).join(', ') || 'nothing'}`;
   // Offline scores go beside, never over, a judged sweep's report.
   const reportFile = join(dir, offline ? 'report-offline.md' : 'report.md');
   writeFileSync(reportFile, redact(lines.join('\n') + '\n', secrets));
+  assertNoSecrets(dir, secrets);
   print(lines.slice(0, 22).join('\n'));
   print(`judge ${offline ? '$0 (offline)' : costLabel(backend, cost)} → ${reportFile}`);
 }

@@ -1,5 +1,18 @@
 # loadout benchmark
 
+## Gate raw results before committing
+
+```sh
+npx tsx bench/scan-secrets.ts bench/results/<run>
+```
+
+The scanner checks file contents and file/directory names recursively against
+the resolved TypeSafe key and held environment credentials, including percent
+and JSON encodings. A match, unreadable entry or symlink exits nonzero; diagnostics
+contain only sanitized relative paths and forms. Result-writing scripts run this
+gate before completion and before judging. Credential-bearing deliverables are
+withheld before copying and their runs marked `UNUSABLE`; they are not judged.
+
 ## B12 native listing remeasurement
 
 `listing.ts` measures 0, 50, 250 and all valid library skills, ordered by

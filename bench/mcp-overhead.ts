@@ -9,7 +9,7 @@
  * deferral may be claimed) share one process with `--no-session-persistence`, so no transcript lands in ~/.claude;
  * Codex gets one `--ephemeral` request.
  */
-import { envSecrets, persistJson } from './redact.js';
+import { assertNoSecrets, envSecrets, persistJson } from './redact.js';
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { homedir, tmpdir, userInfo } from 'node:os';
@@ -541,6 +541,7 @@ export async function runStudy(plan: Plan, out: string, deps: Deps = {}): Promis
       if (firstLine(await full.run(b.free!.version)) !== codex.baseline?.version) throw new Error('Codex version changed during the study; measurement invalid');
     }
   }
+  assertNoSecrets(out, secrets);
   return { rows, notes };
 }
 
@@ -607,6 +608,7 @@ export async function main(args: string[], deps: { print?: (s: string) => void; 
     writeFileSync(join(out, 'host-state.json'), JSON.stringify(hostState().filter((i) => i.decision.startsWith('identical')).map((i) => ({ host: i.host, item: i.item, present: presentFiles(i).map((f) => basename(f)) })), null, 1));
     const { rows, notes } = await runStudy(plan, out, { run: deps.run });
     writeFileSync(join(out, 'summary.md'), summarize(rows, notes) + '\n');
+    assertNoSecrets(out, [process.env.CLAUDE_CODE_OAUTH_TOKEN ?? '', ...envSecrets(childEnv(process.env, 'claude')), ...envSecrets(childEnv(process.env, 'codex'))]);
     rmSync(join(out, 'INCOMPLETE'));
     print(`Raw metrics: ${out}`);
   } finally { rmSync(root, { recursive: true, force: true }); }

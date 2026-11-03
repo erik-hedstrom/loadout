@@ -17,7 +17,7 @@
  *
  *   npx tsx bench/route-bench.ts [--sizes 1000,5000,20000] [--arms popular,bm25,hybrid,loadout] [--frontier 20]
  */
-import { envSecrets, persistJson } from './redact.js';
+import { assertNoSecrets, envSecrets, persistJson } from './redact.js';
 import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -190,6 +190,7 @@ await pool(jobs, Number(values.concurrency), async ({ task, size }) => {
 
   if (frontierIds.has(task.id) && size <= Number(values['frontier-max-size'])) {
     const list = [...library].sort((a, b) => a.name.localeCompare(b.name)).map((s) => `- ${s.name}: ${s.description}`).join('\n');
+    assertNoSecrets(outDir, secrets);
     const res = await claudeJson<{ skills: string[] }>(
       `A coding agent is about to work on this task:\n\n${task.task}\n\nRepository: ${JSON.stringify(task.repo)}\n\nAvailable skills:\n${list}\n\nWhich skills (at most 12) should be loaded for this task? Return their exact names; an empty list if none would help.`,
       { type: 'object', properties: { skills: { type: 'array', items: { type: 'string' }, maxItems: 12 } }, required: ['skills'] },
@@ -216,4 +217,5 @@ await pool(jobs, Number(values.concurrency), async ({ task, size }) => {
   }
 });
 
+assertNoSecrets(outDir, secrets);
 console.log(`rows: ${rowsFile}\nsummarise: npx tsx bench/tune.ts ${outDir}`);

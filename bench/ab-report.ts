@@ -7,7 +7,6 @@ import { DATA, readJsonl, wilson } from './lib.js';
 import { join } from 'node:path';
 import { redact } from './redact.js';
 
-export { CREDENTIAL_SHAPE, persistJson, redact, TOKEN_ANYWHERE } from './redact.js';
 
 /** Frozen before the study; shared with selection so missing pairs cannot redefine the planned sample. */
 export const C15_IDS = readJsonl<{ id: string }>(join(DATA, 'ab-c15-prompts.jsonl')).map((p) => p.id);

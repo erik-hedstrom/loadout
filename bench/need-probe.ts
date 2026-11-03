@@ -6,7 +6,7 @@
  *
  *   TYPESAFE_API_KEY=... npx tsx bench/need-probe.ts <route-bench results dir>
  */
-import { envSecrets, persistJson } from './redact.js';
+import { assertNoSecrets, envSecrets, persistJson } from './redact.js';
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { jevBaseUrl, loadConfig, resolveApiKey } from '../src/config.js';
@@ -79,4 +79,5 @@ await pool(tasks, 4, async (task) => {
     persistJson({ task: task.id, split: splitOf(task.id), gold: task.gold, scope: task.scope, top, answers, model: res.model }, secrets) + '\n',
   );
 });
+assertNoSecrets(out, secrets);
 console.log(`answers: ${out}/answers.jsonl  cost $${cost.toFixed(4)}`);

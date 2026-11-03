@@ -1,6 +1,6 @@
 /** B1: text-listing overhead, through official host CLIs. No model calls in --plan. */
 import { loadConfig, resolveApiKey } from '../src/config.js';
-import { envSecrets, persistJson, redact } from './redact.js';
+import { assertNoSecrets, envSecrets, persistJson, redact } from './redact.js';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { appendFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
@@ -520,6 +520,7 @@ export async function runStudy(plan: Plan, out: string, deps: StudyDeps = {}) {
     rows.push(row);
     appendFileSync(join(out, 'rows.jsonl'), persistJson(row, secrets) + '\n');
   }
+  assertNoSecrets(out, secrets);
   return { rows, offline: checked };
 }
 
@@ -571,6 +572,7 @@ export async function main(args: string[], deps: StudyDeps & { print?: (s: strin
     const { rows, offline } = await runStudy(plan, out, deps);
     const summary = summarize(rows, offline, secrets);
     writeFileSync(join(out, 'summary.md'), summary + '\n');
+    assertNoSecrets(out, secrets);
     print(summary);
     print(`Raw metrics: ${out}`);
   } finally {

@@ -12,7 +12,7 @@
  * the cache writes to whichever arm ran first. So every host and arm starts with one recorded warm-up run (excluded from
  * the comparisons, reported as the cold start), and the measured runs alternate between the arms.
  */
-import { envSecrets } from './redact.js';
+import { assertNoSecrets, credentialMatch, envSecrets, scanSecrets, CREDENTIAL_SHAPE, persistJson, redact, TOKEN_ANYWHERE } from './redact.js';
 import { appendFileSync, copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
@@ -24,7 +24,7 @@ import { DEFAULT_CONFIG, jevBaseUrl, loadConfig, paths, resolveApiKey } from '..
 import { JEV_FALLBACK_NOTE, NO_KEY_WARNING } from '../src/hook.js';
 import { hookCommand, SEARCH_SERVER, SEARCH_TOOLS, searchServer, toToml } from '../src/launch.js';
 import { capabilityKey, LIMITS, readConfined, readManifest, scanLibrary } from '../src/library.js';
-import { C15_IDS, CREDENTIAL_SHAPE, persistJson, redact, report, TOKEN_ANYWHERE, type Leak, type RunRow, type Verdict } from './ab-report.js';
+import { C15_IDS, report, type Leak, type RunRow, type Verdict } from './ab-report.js';
 import { codexJudgeRefusal, DATA, isEntry, modelJson, readJsonl, RESULTS, run, splitOf } from './lib.js';
 import { readListingLibrary, stripCodexSkillsBudget, writeSkillFile } from './listing.js';
 import { CLAUDE_MANAGED_PRECONDITION, CLAUDE_SCRUB_PRECONDITION, CLAUDE_SETTINGS, CLAUDE_SWITCH_PRECONDITION, CODEX_CLOUD_PRECONDITION, childEnv, claudeEnv, envAllowlist, hostWrites, redacted, refusedFiles, resetWork } from './mcp-overhead.js';
@@ -269,23 +269,11 @@ export function scrub(text: string, folders: [string, string][]): string {
   return folders.reduce((t, [from, to]) => t.split(from).join(to).split(from.replace(/\\/g, '/')).join(to), text);
 }
 
-const CREDENTIAL_IN_OUTPUT = 'credential in output';
+const CREDENTIAL_IN_OUTPUT = 'UNUSABLE: credential in output';
 
-const holdsSecret = (text: string | Buffer, secrets: string[]): boolean => secrets.some((s) => text.includes(s));
-
-function heldSecretLeak(work: string, secrets: string[], dir = work): Leak | null {
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const p = join(dir, entry.name);
-    const file = relative(work, p).replace(/\\/g, '/');
-    if (holdsSecret(file, secrets)) return { file: '<credential-bearing path>', rule: 'held secret' };
-    if (entry.isDirectory()) {
-      const leak = heldSecretLeak(work, secrets, p);
-      if (leak) return leak;
-    } else if (entry.isFile() && holdsSecret(readFileSync(p), secrets)) {
-      return { file, rule: 'held secret' };
-    }
-  }
-  return null;
+function heldSecretLeak(work: string, secrets: string[]): Leak | null {
+  const hit = scanSecrets(work, secrets)[0];
+  return hit ? { file: hit.file, rule: 'held secret' } : null;
 }
 
 /**
@@ -294,7 +282,7 @@ function heldSecretLeak(work: string, secrets: string[], dir = work): Leak | nul
  */
 export function copyOutputs(work: string, dest: string, folders: [string, string][], secrets: string[], finalMessage?: string): Leak | null {
   rmSync(dest, { recursive: true, force: true });
-  if (finalMessage !== undefined && holdsSecret(finalMessage, secrets)) return { file: '<final message>', rule: 'held secret' };
+  if (finalMessage !== undefined && credentialMatch(finalMessage, secrets)) return { file: '<final message>', rule: 'held secret' };
   const leak = heldSecretLeak(work, secrets);
   if (leak) return leak;
   const files = deliverableFiles(work).flatMap((p) => {
@@ -506,7 +494,7 @@ async function execute1(job: Job, prompt: string, spec: PromptSpec | undefined, 
   const capturedRaw = readFileSync(capture, 'utf8');
   const hookStderr = readFileSync(`${capture}.err`, 'utf8');
   const stream = toolEvents(proc.stdout);
-  const streamLeak = holdsSecret([proc.stdout, proc.stderr, capturedRaw, hookStderr].join('\n'), secrets);
+  const streamLeak = credentialMatch([proc.stdout, proc.stderr, capturedRaw, hookStderr].join('\n'), secrets);
   const leak: Leak | null = streamLeak ? { file: '<stream>', rule: 'held secret' }
     : job.warmup ? heldSecretLeak(ctx.work, secrets) : copyOutputs(ctx.work, dest, folders, secrets, stream.finalMessage);
   let usage: RunUsage | null = null;
@@ -760,7 +748,8 @@ async function judgeAll(out: string, print: (s: string) => void, secrets: string
     const loadoutFiles = clean(files[1]!, names);
     const judge = JUDGES[host];
     const verdict = await judgePair(requests.find((r) => r.id === prompt)!.request, { [baseline]: bareFiles.text, loadout: loadoutFiles.text }, async (p) => {
-      const res = await modelJson(p, PrefSchema, { backend: judge.backend, model: judge.model, system: JUDGE_SYSTEM, out });
+      assertNoSecrets(out, secrets);
+      const res = await modelJson(p, PrefSchema, { backend: judge.backend, model: judge.model, system: JUDGE_SYSTEM, out, secrets });
       if (!res) throw new Error('the judge backend returned no answer');
       return res.output;
     }, baseline);
@@ -781,13 +770,17 @@ export async function main(args: string[], deps: { print?: (s: string) => void; 
     try { config = loadConfig(); } catch { /* blockers reports an invalid config; judge-only still works from saved rows */ }
     const key = resolveApiKey(config ?? DEFAULT_CONFIG);
     if (key) secrets.push(key);
-    await mainImpl(args, (s) => (deps.print ?? console.log)(redact(s, secrets)), env, secrets);
+    const result = await mainImpl(args, (s) => (deps.print ?? console.log)(redact(s, secrets)), env, secrets);
+    if (result) {
+      assertNoSecrets(result.out, secrets);
+      if (result.complete) rmSync(join(result.out, 'INCOMPLETE'), { force: true });
+    }
   } catch (error) {
     throw new Error(redact(error instanceof Error ? error.message : 'ab failed', secrets));
   }
 }
 
-async function mainImpl(args: string[], print: (s: string) => void, env: NodeJS.ProcessEnv, secrets: string[]): Promise<void> {
+async function mainImpl(args: string[], print: (s: string) => void, env: NodeJS.ProcessEnv, secrets: string[]): Promise<{ out: string; complete: boolean } | undefined> {
   const { values } = parseArgs({ args, options: { plan: { type: 'boolean' }, run: { type: 'boolean' }, 'judge-only': { type: 'string' }, hosts: { type: 'string' }, ids: { type: 'string' }, repeats: { type: 'string' }, out: { type: 'string' },
     'claude-model': { type: 'string' }, 'codex-model': { type: 'string' }, 'codex-effort': { type: 'string' }, 'max-turns': { type: 'string' }, 'timeout-s': { type: 'string' }, 'no-codex-hook': { type: 'boolean' },
     study: { type: 'string' }, library: { type: 'string' }, 'library-size': { type: 'string' }, 'no-judge': { type: 'boolean' } } });
@@ -815,8 +808,7 @@ async function mainImpl(args: string[], print: (s: string) => void, env: NodeJS.
     writeFileSync(join(dir, 'report.md'), report(rows, verdicts, secrets));
     // Judging an unfinished study leaves it marked: the marker goes only once every scheduled run has a row.
     const scheduled: string[] = savedConfig?.schedule ?? [];
-    if (scheduled.length && scheduled.every((id) => rows.some((r) => r.id === id))) rmSync(join(dir, 'INCOMPLETE'), { force: true });
-    return;
+    return { out: dir, complete: scheduled.length > 0 && scheduled.every((id) => rows.some((r) => r.id === id)) };
   }
   if (c15) {
     if (o.hosts.length !== 1 || o.hosts[0] !== 'codex') throw new Error('C15 is Codex only; Claude host blocked on E12');
@@ -844,8 +836,8 @@ async function mainImpl(args: string[], print: (s: string) => void, env: NodeJS.
   await runAll(o, out, { token: env.CLAUDE_CODE_OAUTH_TOKEN, print, env, provenance: p, secrets });
   const verdicts = o.judge === false ? [] : await judgeAll(out, print, secrets);
   writeFileSync(join(out, 'report.md'), report(completed(join(out, 'rows.jsonl')), verdicts, secrets));
-  rmSync(join(out, 'INCOMPLETE'));
   print(`Raw rows and report: ${redacted(out)}`);
+  return { out, complete: true };
 }
 
 if (isEntry(import.meta.url)) {

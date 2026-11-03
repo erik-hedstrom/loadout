@@ -9,6 +9,8 @@ import { z } from 'zod';
 import type { Capability, RawRouting, RepoSignals, RouteDecision, ScoredCapability } from '../src/types.js';
 import type { SweepRow } from './sweep.js';
 import { tokenUsage, type TokenUsage } from './usage.js';
+import { loadConfig, resolveApiKey } from '../src/config.js';
+import { assertNoSecrets, envSecrets, redact } from './redact.js';
 
 const BENCH = import.meta.dirname;
 export const DATA = join(BENCH, 'data');
@@ -92,6 +94,11 @@ export function run(bin: string, args: string[], cwd: string, timeoutMs: number,
         child.kill('SIGKILL');
       }
     }, timeoutMs);
+    child.on('error', () => {
+      clearTimeout(timer);
+      // Node's spawn error includes argv, which can contain credential-bearing prompts.
+      resolve({ stdout: '', stderr: 'benchmark child failed to start (details suppressed)', code: 1, timedOut: false });
+    });
     child.on('close', (code) => {
       clearTimeout(timer);
       resolve({ stdout, stderr, code, timedOut });
@@ -247,7 +254,7 @@ export function auc(pos: number[], neg: number[]): number {
 let codexToolsChecked = false;
 
 export async function modelJson<T>(prompt: string, schema: z.ZodType<T>, opts: {
-  backend: string; model: string; system: string; out: string; effort?: string;
+  backend: string; model: string; system: string; out: string; effort?: string; secrets?: string[];
 }): Promise<{ output: T; costUsd: number | null } | null> {
   backendOf(opts.backend, opts.effort);
   const jsonSchema = z.toJSONSchema(schema, { target: 'draft-07' });
@@ -256,7 +263,10 @@ export async function modelJson<T>(prompt: string, schema: z.ZodType<T>, opts: {
     return { output: schema.parse(res.output), costUsd: res.costUsd };
   }
   if (opts.backend === 'files') {
-    const content = `Backend: ${opts.backend}\nModel: ${opts.model}\n\n## System\n\n${opts.system}\n\n## User\n\n${prompt}\n\n## JSON output schema\n\n${JSON.stringify(jsonSchema, null, 2)}\n`;
+    const secrets = opts.secrets ?? [resolveApiKey(loadConfig()) ?? '', ...envSecrets()];
+    const raw = `Backend: ${opts.backend}\nModel: ${opts.model}\n\n## System\n\n${opts.system}\n\n## User\n\n${prompt}\n\n## JSON output schema\n\n${JSON.stringify(jsonSchema, null, 2)}\n`;
+    // Redaction can collapse distinct batches. The digest preserves their identity without saving the private text.
+    const content = `Batch SHA256: ${createHash('sha256').update(raw).digest('hex')}\n${redact(raw, secrets)}`;
     const dir = join(opts.out, 'batches');
     mkdirSync(dir, { recursive: true });
     const prompts = readdirSync(dir).filter((f) => /^\d+\.prompt\.md$/.test(f)).sort();
@@ -265,10 +275,11 @@ export async function modelJson<T>(prompt: string, schema: z.ZodType<T>, opts: {
     const number = Math.max(0, ...prompts.map((f) => Number(f.split('.')[0]))) + 1;
     const file = existing ?? `${String(number).padStart(3, '0')}.prompt.md`;
     if (!existing) writeFileSync(join(dir, file), content, { flag: 'wx' });
+    assertNoSecrets(opts.out, secrets);
     const answer = join(dir, file.replace('.prompt.md', '.answer.json'));
     const stat = lstatSync(answer, { throwIfNoEntry: false });
     if (!stat) {
-      console.log(`pending batch ${file.replace('.prompt.md', '')}: ${answer}`);
+      console.log(redact(`pending batch ${file.replace('.prompt.md', '')}: ${answer}`, secrets));
       return null;
     }
     if (!stat.isFile()) throw new Error(`answer must be a regular file: ${answer}`);
@@ -299,13 +310,14 @@ export async function modelJson<T>(prompt: string, schema: z.ZodType<T>, opts: {
     await new Promise<void>((resolve, reject) => {
       const child = spawn(bin, args, { cwd: dir, env, stdio: ['pipe', 'ignore', 'ignore'] });
       const timer = setTimeout(() => child.kill(), 300_000);
-      child.on('error', (err) => { clearTimeout(timer); reject(err); });
+      const failed = () => { clearTimeout(timer); child.kill(); reject(new Error('Codex judge process failed (details suppressed)')); };
+      child.on('error', failed);
       child.on('close', (code) => {
         clearTimeout(timer);
         if (code === 0) resolve();
         else reject(new Error(`codex exited ${code}`));
       });
-      child.stdin.on('error', reject);
+      child.stdin.on('error', failed);
       child.stdin.end(content);
     });
     return { output: schema.parse(JSON.parse(readFileSync(answerFile, 'utf8'))), costUsd: null };
@@ -334,13 +346,13 @@ export function claudeJson<T>(prompt: string, schema: object, opts: { model: str
   ];
   return new Promise((resolve, reject) => {
     // Neutral cwd: the CLI otherwise tells the model about the directory it runs in.
-    const child = spawn('claude', args, { cwd: tmpdir(), stdio: ['pipe', 'pipe', 'pipe'] });
+    const child = spawn('claude', args, { cwd: tmpdir(), stdio: ['pipe', 'pipe', 'ignore'] });
     const timer = setTimeout(() => child.kill(), opts.timeoutMs ?? 300_000);
     let stdout = '';
-    let stderr = '';
     child.stdout.on('data', (d: Buffer) => (stdout += d));
-    child.stderr.on('data', (d: Buffer) => (stderr += d));
-    child.on('error', reject);
+    const failed = () => { clearTimeout(timer); child.kill(); reject(new Error('Claude judge process failed (details suppressed)')); };
+    child.on('error', failed);
+    child.stdin.on('error', failed);
     child.on('close', (code) => {
       clearTimeout(timer);
       try {
@@ -364,8 +376,8 @@ export function claudeJson<T>(prompt: string, schema: object, opts: { model: str
           usage,
           usageError,
         });
-      } catch (err) {
-        reject(new Error(`claude exited ${code}: ${err instanceof Error ? err.message : err}\n${stderr.slice(-500)}`));
+      } catch {
+        reject(new Error(`claude exited ${code}: response unavailable (contents suppressed)`));
       }
     });
     child.stdin.end(prompt);

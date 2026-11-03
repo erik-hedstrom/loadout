@@ -6,7 +6,7 @@
  *
  *   npx tsx bench/mismatch-probe.ts <judged sweep dir> [--blind-from <dir>]
  */
-import { envSecrets, persistJson, redact } from './redact.js';
+import { assertNoSecrets, envSecrets, persistJson, redact } from './redact.js';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -78,4 +78,5 @@ for (const q of Object.keys(MISMATCH_QUESTIONS)) {
 for (const o of obs.filter((o) => o.label === 'misleading' || o.scores.mismatch! >= 0.7)) lines.push(`  ${o.label.padEnd(10)} ${o.id} ${o.key} ${JSON.stringify(o.scores)}`);
 writeFileSync(join(dir, 'mismatch-probe.txt'), redact(lines.join('\n') + '\n', secrets));
 writeFileSync(join(dir, 'mismatch-probe.jsonl'), obs.map((o) => persistJson(o, secrets)).join('\n') + '\n');
+assertNoSecrets(dir, secrets);
 console.log(redact(lines.join('\n'), secrets));
