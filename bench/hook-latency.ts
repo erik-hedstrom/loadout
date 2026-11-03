@@ -4,6 +4,7 @@
  * fake Jev, including replayed answers in the CLI subprocess (no Jev traffic).
  * Prompts omit session_id so repeat measurements neither reuse nor write state.
  */
+import { envSecrets, persistJson } from './redact.js';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -65,6 +66,7 @@ if (isEntry(import.meta.url)) {
   const config = loadConfig();
   if (config.router !== 'jev') throw new Error('latency measurement needs router "jev" to exercise both requests');
   const apiKey = resolveApiKey(config);
+  const secrets = [apiKey ?? '', ...envSecrets()];
   const mode = apiKey ? 'real Jev' : 'fake client (no key; subprocess replays fake answers)';
   console.log(`Expected Jev cost: 2 requests/prompt, about $0.0011/decision (RESULTS v4).`);
   console.log(`Two passes (in-process + subprocess): up to ${4 * limit} requests, ~$${(0.0022 * limit).toFixed(4)} real; fake $0.`);
@@ -125,6 +127,6 @@ if (isEntry(import.meta.url)) {
     const samples = rows.flatMap((r) => r.ms[step] === undefined ? [] : [r.ms[step]!]);
     console.log(samples.length ? `${step.padEnd(24)} ${percentile(samples, 0.5).toFixed(2).padStart(8)} ${percentile(samples, 0.95).toFixed(2).padStart(9)}` : `${step.padEnd(24)} skipped (disabled)`);
   }
-  writeFileSync(join(dir, 'latency.json'), JSON.stringify({ mode, node: process.version, limit, rows }, null, 2) + '\n');
+  writeFileSync(join(dir, 'latency.json'), persistJson({ mode, node: process.version, limit, rows }, secrets) + '\n');
   console.log(`Raw samples: ${join(dir, 'latency.json')}`);
 }

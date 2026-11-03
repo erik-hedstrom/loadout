@@ -9,6 +9,7 @@
  * deferral may be claimed) share one process with `--no-session-persistence`, so no transcript lands in ~/.claude;
  * Codex gets one `--ephemeral` request.
  */
+import { envSecrets, persistJson } from './redact.js';
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { homedir, tmpdir, userInfo } from 'node:os';
@@ -468,7 +469,7 @@ export interface Deps { run?: (command: Command) => Promise<string>; inventory?:
 interface Baseline { version: string }
 
 /** Free Codex checks. A refusal skips the Codex arms; Claude is independent. Only counts and hashes are saved. */
-async function codexPreflight(plan: Plan, deps: Required<Deps>, out: string): Promise<{ ready: boolean; baseline?: Baseline; reason?: string }> {
+async function codexPreflight(plan: Plan, deps: Required<Deps>, out: string, secrets: string[]): Promise<{ ready: boolean; baseline?: Baseline; reason?: string }> {
   const refused = deps.refused();
   if (refused.length) return { ready: false, reason: `Codex state the study cannot isolate exists (${refused.map((f) => redacted(f)).join(', ')}): a managed layer, which --ignore-user-config does not skip, or $CODEX_HOME/.env, which Codex loads into its own environment` };
   let ready = true;
@@ -482,13 +483,14 @@ async function codexPreflight(plan: Plan, deps: Required<Deps>, out: string): Pr
     try { checkCodexInventory(await deps.inventory(r.free!.inventory), r.arm); } catch (error) { refusals.push((error as Error).message); }
     if (r.arm.kind === 'baseline') baseline = { version: String(line.version) };
     if (refusals.length) ready = false;
-    appendFileSync(join(out, 'preflight.jsonl'), JSON.stringify({ ...line, refusals }) + '\n');
+    appendFileSync(join(out, 'preflight.jsonl'), persistJson({ ...line, refusals }, secrets) + '\n');
   }
   return { ready, baseline };
 }
 
 export async function runStudy(plan: Plan, out: string, deps: Deps = {}): Promise<{ rows: Row[]; notes: string[] }> {
   if (plan.blockers.length) throw new Error(`blocked: ${plan.blockers.join('; ')}`);
+  const secrets = [process.env.CLAUDE_CODE_OAUTH_TOKEN ?? '', ...plan.runs.flatMap((r) => [r.command, ...Object.values(r.free ?? {})].flatMap((c) => envSecrets(c.env)))];
   // Strictly sequential, each command in the emptied work directory.
   const fresh = <R>(f: (command: Command) => Promise<R>) => (command: Command) => { resetWork(plan.work); return f(command); };
   const full = { run: fresh(deps.run ?? execute), inventory: fresh(deps.inventory ?? codexMcpInventory), refused: deps.refused ?? (() => refusedFiles('codex')) };
@@ -498,7 +500,7 @@ export async function runStudy(plan: Plan, out: string, deps: Deps = {}): Promis
   let codex: Awaited<ReturnType<typeof codexPreflight>> | undefined;
   for (const r of plan.runs) {
     if (r.arm.host === 'codex') {
-      codex ??= await codexPreflight(plan, full, out);
+      codex ??= await codexPreflight(plan, full, out, secrets);
       if (!codex.ready) continue;
     }
     let command = r.command;
@@ -530,7 +532,7 @@ export async function runStudy(plan: Plan, out: string, deps: Deps = {}): Promis
         mcp: session?.inventory.mcp ?? null, ambientHash: hash, toolsListed: session?.tools.length ?? null, mcpToolsListed: session?.tools.filter((t) => t.startsWith('mcp__')).length ?? null,
         toolSearchListed: session ? session.tools.includes('ToolSearch') : null, canaryFound: found };
     });
-    for (const row of made) { rows.push(row); appendFileSync(join(out, 'rows.jsonl'), JSON.stringify(row) + '\n'); }
+    for (const row of made) { rows.push(row); appendFileSync(join(out, 'rows.jsonl'), persistJson(row, secrets) + '\n'); }
   }
   if (plan.runs.some((r) => r.arm.host === 'codex')) {
     if (!codex?.ready) notes.push(`Codex skipped: ${codex?.reason ?? 'a free preflight check refused it (see preflight.jsonl)'}.`);

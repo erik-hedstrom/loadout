@@ -12,6 +12,7 @@
  * the cache writes to whichever arm ran first. So every host and arm starts with one recorded warm-up run (excluded from
  * the comparisons, reported as the cold start), and the measured runs alternate between the arms.
  */
+import { envSecrets } from './redact.js';
 import { appendFileSync, copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
@@ -546,7 +547,7 @@ async function execute1(job: Job, prompt: string, spec: PromptSpec | undefined, 
   const invalid = leak ? CREDENTIAL_IN_OUTPUT : broken;
   const hiddenTest = spec?.hidden && !job.warmup && !leak ? hiddenResult(ctx.work, join(FIXTURES, spec.hidden)) : null;
   // Skill text can contain placeholder tokens: withhold such streams without losing a valid measurement.
-  const streamWithheld = !leak && TOKEN_ANYWHERE.test(proc.stdout);
+  const streamWithheld = !leak && redact(proc.stdout, secrets) !== proc.stdout;
   if (!leak && !streamWithheld) {
     mkdirSync(join(out, 'streams'), { recursive: true });
     writeFileSync(join(out, 'streams', `${id.replace(/\//g, '_')}.jsonl`), proc.stdout);
@@ -774,7 +775,7 @@ async function judgeAll(out: string, print: (s: string) => void, secrets: string
 
 export async function main(args: string[], deps: { print?: (s: string) => void; env?: NodeJS.ProcessEnv } = {}): Promise<void> {
   const env = deps.env ?? process.env;
-  const secrets = [env.CLAUDE_CODE_OAUTH_TOKEN].filter((s): s is string => !!s);
+  const secrets = envSecrets(env);
   try {
     let config;
     try { config = loadConfig(); } catch { /* blockers reports an invalid config; judge-only still works from saved rows */ }

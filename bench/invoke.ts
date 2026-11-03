@@ -38,10 +38,10 @@ import { appendFileSync, cpSync, existsSync, mkdtempSync, readFileSync, rmSync, 
 import { tmpdir } from 'node:os';
 import { basename, delimiter, join } from 'node:path';
 import { parseArgs } from 'node:util';
-import { loadConfig, paths } from '../src/config.js';
+import { loadConfig, paths, resolveApiKey } from '../src/config.js';
 import { claudeArgs, claudeHookBlock, codexArgs, hookCommand, materialize, pathTranslator, SEARCH_TOOLS, searchServer, which, type Agent } from '../src/launch.js';
 import { capabilityKey, scanLibrary } from '../src/library.js';
-import { redact } from './ab-report.js';
+import { envSecrets, persistJson, redact } from './redact.js';
 import { decisionFor, readJsonl, run } from './lib.js';
 import { hookShim, toolEvents, type Inventory } from './stream.js';
 import type { SweepRow } from './sweep.js';
@@ -72,6 +72,7 @@ const rows = new Map(readJsonl<SweepRow>(join(dir, 'decisions.jsonl')).map((r) =
 const library = scanLibrary(paths.library());
 const byKey = new Map(library.map((c) => [capabilityKey(c), c]));
 const config = { ...loadConfig(), search: mode !== 'plugin' };
+const secrets = [resolveApiKey(config) ?? '', ...envSecrets()];
 const bin = which(agent);
 if (!bin) throw new Error(`${agent} not on PATH`);
 const toPath = pathTranslator(bin);
@@ -217,19 +218,19 @@ for (const id of values.ids.split(',')) {
     exit: proc.code,
     timedOut: proc.timedOut,
     // Redacted before the cut, so a token straddling the 400-character boundary is not left half-visible.
-    ...(proc.code !== 0 && !proc.timedOut ? { stderr: redact(proc.stderr, [process.env.CLAUDE_CODE_OAUTH_TOKEN ?? '']).slice(-400) } : {}),
+    ...(proc.code !== 0 && !proc.timedOut ? { stderr: redact(proc.stderr, secrets).slice(-400) } : {}),
     costUsd,
     outcome,
     ms: Date.now() - started,
   };
-  appendFileSync(out, JSON.stringify(result) + '\n');
+  appendFileSync(out, persistJson(result, secrets) + '\n');
   const status = invalid ?? (proc.timedOut ? 'timed out' : proc.code === 0 ? 'ok' : `exit ${proc.code}`);
-  console.log(`${id}: invoked ${result.invoked.join(', ') || '—'}; searched ${searches.length}×; ${events.length} tool calls; ${(result.ms / 1000).toFixed(0)} s, ${status}`);
+  console.log(redact(`${id}: invoked ${result.invoked.join(', ') || '—'}; searched ${searches.length}×; ${events.length} tool calls; ${(result.ms / 1000).toFixed(0)} s, ${status}`, secrets));
   // Best effort: a Windows process killed on timeout can hold files for a moment.
   try {
     rmSync(cwd, { recursive: true, force: true, maxRetries: 3, retryDelay: 1000 });
   } catch {
-    console.error(`  could not remove ${cwd}`);
+    console.error(redact(`  could not remove ${cwd}`, secrets));
   }
   if (invalid) {
     invalidRun = invalid;

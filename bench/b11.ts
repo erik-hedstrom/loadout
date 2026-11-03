@@ -1,4 +1,5 @@
 /** Cache-aware OpenCode study. See bench/README.md for the offline plan and explicit execution commands. */
+import { envSecrets, persistJson, redact } from './redact.js';
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -150,14 +151,17 @@ export async function main(args: string[]) {
     const skillsDir = join(root, 'library-skills'); mkdirSync(skillsDir);
     const prepared = o.library ? prepareB11Library(o.library, join(data.root, 'skills'), skillsDir) : undefined;
     if (prepared) validateNeeds(data.tasks, prepared.skills, data.canaries);
-    console.log(JSON.stringify({ mode: o.run ? 'run' : 'plan', opencodeVersion: OPENCODE_VERSION, nodeVersion: process.version, arms: o.arms, tasks: data.tasks.length,
+    const config = studyConfig(loadConfig());
+    const key = resolveApiKey(config);
+    const secrets = [key ?? '', ...envSecrets()];
+    console.log(persistJson({ mode: o.run ? 'run' : 'plan', opencodeVersion: OPENCODE_VERSION, nodeVersion: process.version, arms: o.arms, tasks: data.tasks.length,
       taskCounts: Object.fromEntries(['plain', 'skill-needle', 'mcp-needle'].map(k => [k, data.tasks.filter(t => t.kind === k).length])),
       runs, ...(o.heavy ? { heavyMax: o.heavy } : {}), expectedJevCalls: { preselect: data.tasks.length * o.models.length * o.reps * (o.arms.includes('preselect') ? 2 : 0), gatewayAtOneSearchPerStep: data.tasks.length * o.models.length * o.reps * (o.arms.includes('gateway') ? 40 : 0) },
       jevBudgetUsd: o.run ? o.budget : 0, requestedRunBudgetUsd: o.budget, expectedJevCostUsd: { plan: 0, runRange: [0, o.budget] }, modelCostUsd: 0, concurrency: o.concurrency, timeoutSeconds: o.timeoutMs / 1000,
       sessionDeadlineScheduleSeconds: plan.reduce((seconds, block) => seconds + Math.ceil(block.tasks.length / o.concurrency) * o.timeoutMs / 1000, 0),
       library: prepared?.provenance ?? null,
       documentation: 'bench/README.md#b11-opencode-sessions',
-    }, null, 2));
+    }, secrets));
     await sandboxCheck(o.binary);
     console.log('Sandbox preflight passed.');
     if (!o.run) return;
@@ -173,11 +177,9 @@ export async function main(args: string[]) {
     if (previous.some(r => r.opencodeVersion !== OPENCODE_VERSION)) throw new HarnessError('resume OpenCode version mismatch');
     if (o.heavy && previous.some(r => r.arm === 'heavy-max' && (r.heavyConfig?.skills !== o.heavy!.skills || r.heavyConfig?.servers !== o.heavy!.servers))) throw new HarnessError('resume heavy-max size mismatch');
     const done = new Set(previous.filter(r => r.result !== 'invalid').map(rowKey));
-    const config = studyConfig(loadConfig());
     const needsJev = o.arms.some(a => a === 'gateway' || a === 'preselect');
-    const key = needsJev ? resolveApiKey(config) : undefined;
     if (needsJev && !key) throw new HarnessError('Jev arms require a key resolved by loadout');
-    const budget = new JevBudget(o.budget, config, key ? jevClient({ apiKey: key, baseUrl: jevBaseUrl(config), model: config.jev.model, retries: 0 }) : { ask: async () => { throw new HarnessError('Jev disabled'); } });
+    const budget = new JevBudget(o.budget, config, needsJev && key ? jevClient({ apiKey: key, baseUrl: jevBaseUrl(config), model: config.jev.model, retries: 0 }) : { ask: async () => { throw new HarnessError('Jev disabled'); } });
     budget.spent = previous.reduce((n, r) => n + r.jev.costUsd, 0);
     const { skills, plantedNames } = prepared!;
     const protocolFile = join(out, 'protocol.json');
@@ -185,12 +187,13 @@ export async function main(args: string[]) {
       const prior = existsSync(protocolFile) ? JSON.parse(readFileSync(protocolFile, 'utf8')) : undefined;
       if (prior?.harnessVersion !== PROTOCOL_VERSION || prior.nodeVersion !== process.version || !isDeepStrictEqual(prior.library, prepared!.provenance)) throw new HarnessError('resume requires matching library provenance, Node version and harness version; use a fresh output directory for legacy rows');
     }
-    writeFileSync(protocolFile, JSON.stringify({ harnessVersion: PROTOCOL_VERSION, opencodeVersion: OPENCODE_VERSION, nodeVersion: process.version,
+    writeFileSync(protocolFile, persistJson({ harnessVersion: PROTOCOL_VERSION, opencodeVersion: OPENCODE_VERSION, nodeVersion: process.version,
       arms: o.arms, models: o.models, reps: o.reps, batchSize: o.batchSize, sweepPerKind: o.sweepPerKind, ...(o.heavy ? { heavyMax: o.heavy } : {}),
       library: prepared!.provenance, taskCounts: Object.fromEntries(['plain', 'skill-needle', 'mcp-needle'].map(k => [k, data.tasks.filter(t => t.kind === k).length])),
       plannedSessions: runs, concurrency: o.concurrency, timeoutSeconds: o.timeoutMs / 1000,
-    }, null, 2) + '\n');
+    }, secrets) + '\n');
     const fixtureToken = randomBytes(32).toString('hex');
+    secrets.push(fixtureToken);
     const servers: Capability[] = [];
     for (const spec of serverSpecs(MAX_SERVERS)) {
       const e = await endpoint(() => ({ server: fixtureServer(spec, data.canaries) }), fixtureToken); endpoints.push(e);
@@ -278,10 +281,10 @@ export async function main(args: string[]) {
             // OpenCode's private databases/logs and generated files never enter public results.
             removeSession(sessionRoot);
           }
-          appendFileSync(rowsFile, JSON.stringify(parseRow(row)) + '\n');
+          appendFileSync(rowsFile, persistJson(parseRow(row), [...secrets, token]) + '\n');
           written++;
           if (meter.exhausted) { stopped = true; stopReason ??= 'budget exhausted'; }
-          console.log(`${row.orderIndex} ${row.model} ${row.arm} ${row.taskId}: ${row.result}${row.invalidReason ? ` (${row.invalidReason})` : ''}`);
+          console.log(redact(`${row.orderIndex} ${row.model} ${row.arm} ${row.taskId}: ${row.result}${row.invalidReason ? ` (${row.invalidReason})` : ''}`, [...secrets, token]));
         }
       }).map(worker => worker.catch(error => { stopped = true; throw error; })));
       const rejected = workers.find((worker): worker is PromiseRejectedResult => worker.status === 'rejected');

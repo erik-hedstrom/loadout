@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { buildPlan, copyPack, execute, main, parseClaude, parseCodex, runStudy, summarize, parsePromptInput, validateFeatures, inspectCodex, preflight, DISABLED_FEATURES, type Command, type Plan } from '../bench/overhead.js';
@@ -420,4 +420,37 @@ describe('text-only configurations', () => {
     expect(raw + free).not.toContain('SECRET');
     expect(rows.find((r) => r.host === 'codex')!.agentsPresent).toBe(true);
   });
+});
+
+
+it('redacts inherited credentials in B1 rows and preflight inventories', async () => {
+  const secret = 'FAKE-overhead-token';
+  vi.stubEnv('LOADOUT_HOME', temp()); vi.stubEnv('TYPESAFE_API_KEY', secret);
+  try {
+    const plan = buildPlan(fixture(), temp()), out = temp(), deps = fakeStudy(plan);
+    const { rows, offline } = await runStudy(plan, out, {
+      run: async (command, host) => (await deps.run(command, host)).replaceAll('"ambient"', JSON.stringify(secret)),
+      inspect: async (command) => { const found = await deps.inspect(command); return { ...found, tools: [...found.tools, secret] }; },
+    });
+    expect(summarize(rows, offline, [secret])).not.toContain(secret);
+    expect(summarize(rows, offline, [secret])).toContain('<credential>');
+    for (const file of ['rows.jsonl', 'preflight.jsonl']) {
+      const saved = readFileSync(join(out, file), 'utf8');
+      expect(saved).not.toContain(secret); expect(saved).toContain('<credential>');
+    }
+  } finally { vi.unstubAllEnvs(); }
+});
+
+
+it('redacts inherited credentials in B1 printed plan paths', async () => {
+  const library = fixture(), secret = 'FAKE-overhead-plan-token', base = join(temp(), secret);
+  mkdirSync(base);
+  for (const name of ['TMP', 'TEMP', 'TMPDIR']) vi.stubEnv(name, base);
+  vi.stubEnv('LOADOUT_HOME', base); vi.stubEnv('TYPESAFE_API_KEY', secret);
+  try {
+    const printed: string[] = [];
+    await main(['--plan', '--library', library], { print: (text) => printed.push(text) });
+    expect(printed.join('\n')).not.toContain(secret);
+    expect(printed.join('\n')).toContain('<credential>');
+  } finally { vi.unstubAllEnvs(); }
 });

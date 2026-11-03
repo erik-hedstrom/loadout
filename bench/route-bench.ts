@@ -17,6 +17,7 @@
  *
  *   npx tsx bench/route-bench.ts [--sizes 1000,5000,20000] [--arms popular,bm25,hybrid,loadout] [--frontier 20]
  */
+import { envSecrets, persistJson } from './redact.js';
 import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -100,6 +101,7 @@ const popularTokens = popular.reduce((sum, s) => sum + descTokens(s), 0);
 const base = loadConfig();
 const config: Config = { ...DEFAULT_CONFIG, jev: base.jev, router: 'jev' };
 const apiKey = resolveApiKey(base);
+const secrets = [apiKey ?? '', ...envSecrets()];
 if (ARMS.has('loadout') && !apiKey) throw new Error('loadout arm needs TYPESAFE_API_KEY or jev.apiKeyFile in ~/.loadout/config.json');
 const client = apiKey ? jevClient({ apiKey, baseUrl: jevBaseUrl(config), model: config.jev.model, timeoutMs: 30_000, retries: 5 }) : undefined;
 
@@ -115,8 +117,8 @@ const label = [...ARMS].filter((a) => a !== 'none').concat(Number(values.frontie
 const outDir = join(RESULTS, `${stamp}-${label}`);
 mkdirSync(outDir, { recursive: true });
 const rowsFile = join(outDir, 'rows.jsonl');
-writeFileSync(join(outDir, 'config.json'), JSON.stringify({ sizes: SIZES, arms: [...ARMS], config: { ...config, jev: { ...config.jev, apiKeyFile: undefined } } }, null, 2));
-const emit = (row: Row) => appendFileSync(rowsFile, JSON.stringify(row) + '\n');
+writeFileSync(join(outDir, 'config.json'), persistJson({ sizes: SIZES, arms: [...ARMS], config: { ...config, jev: { ...config.jev, apiKeyFile: undefined } } }, secrets));
+const emit = (row: Row) => appendFileSync(rowsFile, persistJson(row, secrets) + '\n');
 
 const goldTasks = tasks.filter((t) => t.gold.length);
 const nFrontier = Math.min(Number(values.frontier), goldTasks.length);

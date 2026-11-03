@@ -1,4 +1,6 @@
 /** B1: text-listing overhead, through official host CLIs. No model calls in --plan. */
+import { loadConfig, resolveApiKey } from '../src/config.js';
+import { envSecrets, persistJson, redact } from './redact.js';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { appendFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
@@ -492,8 +494,9 @@ function ambientInventory(inventory: Inventory, configuration: Configuration) {
   });
 }
 export async function runStudy(plan: Plan, out: string, deps: StudyDeps = {}) {
+  const secrets = [resolveApiKey(loadConfig()) ?? '', ...envSecrets(), ...plan.calls.flatMap((c) => envSecrets(c.command.env))];
   mkdirSync(out, { recursive: true });
-  const checked = await preflight(plan, deps, (configuration, result) => appendFileSync(join(out, 'preflight.jsonl'), JSON.stringify({ host: 'codex', configuration, ...result }) + '\n'));
+  const checked = await preflight(plan, deps, (configuration, result) => appendFileSync(join(out, 'preflight.jsonl'), persistJson({ host: 'codex', configuration, ...result }, secrets) + '\n'));
   const codexReady = [...checked.values()].every((r) => r.refusals.length === 0);
   const control = plan.calls.find((c) => c.host === 'claude' && c.copiedSkills > 0)!.configuration;
   const rows: Row[] = [];
@@ -515,12 +518,12 @@ export async function runStudy(plan: Plan, out: string, deps: StudyDeps = {}) {
       visibleSkills: call.host === 'codex' ? free!.visibleSkills! : null, visiblePackSkills: call.host === 'codex' ? free!.visiblePackSkills! : null,
       contextHash: call.host === 'codex' ? free!.contextHash! : null, agentsPresent: call.host === 'codex' ? free!.agentsPresent! : null, tools: call.host === 'codex' ? free!.tools! : [] };
     rows.push(row);
-    appendFileSync(join(out, 'rows.jsonl'), JSON.stringify(row) + '\n');
+    appendFileSync(join(out, 'rows.jsonl'), persistJson(row, secrets) + '\n');
   }
   return { rows, offline: checked };
 }
 
-export function summarize(rows: Row[], offline: Map<Configuration, Preflight> = new Map()) {
+export function summarize(rows: Row[], offline: Map<Configuration, Preflight> = new Map(), secrets: string[] = []) {
   const lines = ['B1 deltas over each host baseline; costs are computed in analysis.',
     'Claude baseline: isolated CLI configuration plus the actual inventory recorded from init, including any synced plugins.',
     "Codex baseline: user's ambient setup with the declared model/sandbox/MCP/features overrides.",
@@ -541,12 +544,13 @@ export function summarize(rows: Row[], offline: Map<Configuration, Preflight> = 
   lines.push('Codex cap evidence uses nested prefixes of one validated corpus, not unrelated named packs. Reported budget: 2% of context or fallback 8,000 characters (https://developers.openai.com/codex/skills; not reverified offline). A token plateau alone establishes no cause.');
   lines.push('Calls 1 and 2 are first/second fresh sessions, not guaranteed cold/warm: use the observed counters. No cache flushing or session resumes. Different arms can share cached prefixes.');
   lines.push('Not measured: hooks, scripts, references, commands/agents, pack MCP/LSP servers (starting them executes downloaded code), router calls and output quality. Claude visibility is not exposed by init.');
-  return lines.join('\n');
+  return redact(lines.join('\n'), secrets);
 }
 
 export async function main(args: string[], deps: StudyDeps & { print?: (s: string) => void } = {}) {
   const { values } = parseArgs({ args, options: { plan: { type: 'boolean' }, library: { type: 'string' } } });
-  const print = deps.print ?? console.log;
+  const secrets = [resolveApiKey(loadConfig()) ?? '', ...envSecrets()];
+  const print = (text: string) => (deps.print ?? console.log)(redact(text, secrets));
   const root = mkdtempSync(join(tmpdir(), 'loadout-overhead-'));
   try {
     const plan = buildPlan(resolve(values.library ?? join(homedir(), '.loadout', 'library')), root);
@@ -565,7 +569,7 @@ export async function main(args: string[], deps: StudyDeps & { print?: (s: strin
     }
     const out = fileURLToPath(new URL(`./results/${new Date().toISOString().replace(/[:.]/g, '-')}-overhead/`, import.meta.url));
     const { rows, offline } = await runStudy(plan, out, deps);
-    const summary = summarize(rows, offline);
+    const summary = summarize(rows, offline, secrets);
     writeFileSync(join(out, 'summary.md'), summary + '\n');
     print(summary);
     print(`Raw metrics: ${out}`);

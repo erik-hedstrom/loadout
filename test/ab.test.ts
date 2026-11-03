@@ -862,6 +862,12 @@ describe('public text sinks', () => {
   const jwt = 'eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ1c2VyIn0.c2lnbmF0dXJl';
   const text = `${held} ${held} ${shape} ${jwt}`;
 
+  it('redacts opaque inherited credentials at the A/B public error sink', async () => {
+    const token = 'FAKE-inherited-github-token';
+    await expect(main(['--hosts', token], { env: { GITHUB_TOKEN: token } }))
+      .rejects.toThrow('unknown value <credential>');
+  });
+
   it('redacts a token whatever precedes it, while the deliverable stop rule skips kebab-case identifiers', () => {
     expect(redact(`mcp__loadout__${shape} key${shape} \\n${shape} (${jwt})`, [])).toBe('mcp__loadout__<credential> key<credential> \\n<credential> (<credential>)');
     const css = '.mask-image-linear-gradient-overlay, .task-list-item-checkbox-wrapper { display: none }';
@@ -938,6 +944,7 @@ describe('credential screening before persistence', () => {
     ...['binary', 'node_modules', '.env', 'path', 'stdout', 'stderr', 'hook', 'hook stderr', 'final message'].map((where) => ({ when, where, kind: 'held' })),
     ...['binary', 'node_modules', '.env', 'excluded path', 'stderr', 'hook', 'hook stderr', 'stdout', 'deliverable text', 'deliverable path', 'final message'].map((where) => ({ when, where, kind: 'shape' })),
   ]);
+  cases.push({ when: 'warmup', where: 'stdout', kind: 'encoded' });
   cases.push({ when: 'measured code', where: '.env', kind: 'held' });
   cases.push({ when: 'measured', where: 'shaped filename', kind: 'held' });
   // `nested` is JSON text inside a JSON string (an MCP result quoting JSON): a literal backslash-n before the token.
@@ -970,7 +977,7 @@ describe('credential screening before persistence', () => {
     vi.spyOn(overhead, 'cli').mockReturnValue({ bin: process.execPath, prefix: [script] });
     vi.spyOn(mcpOverhead, 'refusedFiles').mockReturnValue([]);
     vi.spyOn(benchLib, 'modelJson').mockResolvedValue({ output: { winner: 'first', confidence: 'high', reasons: `synthetic-held-secret \nsk-${'x'.repeat(24)} \tsk-${'x'.repeat(24)}` }, costUsd: 0 });
-    const secret = kind === 'held' ? 'synthetic-held-secret' : `sk-${'x'.repeat(24)}`;
+    const secret = kind === 'held' ? 'synthetic-held-secret' : kind === 'encoded' ? 'synthetic%2dheld%2dsecret' : `sk-${'x'.repeat(24)}`;
     const lead = prefix ? leads[prefix]! : '';
     const value = lead + secret;
     const target = when === 'warmup' ? 0 : 2;

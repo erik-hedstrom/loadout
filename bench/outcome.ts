@@ -16,12 +16,13 @@
  * Text deliverables only (Markdown, code, JSON, CSV…): binaries are listed by
  * name but not compared. Runs use real subscriptions and take minutes each.
  */
+import { envSecrets, persistJson, redact } from './redact.js';
 import { appendFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { z } from 'zod';
-import { loadConfig, paths } from '../src/config.js';
+import { loadConfig, paths, resolveApiKey } from '../src/config.js';
 import { capabilityKey, scanLibrary } from '../src/library.js';
 import { codexArgs, materialize, which } from '../src/launch.js';
 import { claudeJson, decisionFor, pool, readJsonl, run } from './lib.js';
@@ -46,6 +47,8 @@ const ids = values.ids.split(',');
 const library = scanLibrary(paths.library());
 // The comparison is about skills: no mid-session search in either arm.
 const config = { ...loadConfig(), search: false };
+const secrets = [resolveApiKey(config) ?? '', ...envSecrets()];
+const print = (text: string) => console.log(redact(text, secrets));
 const out = join(dir, 'outcome');
 mkdirSync(out, { recursive: true });
 
@@ -74,9 +77,9 @@ if (!values['judge-only']) {
     // A truncated stream must not prevent saving paid deliverables and metadata.
     try { metadata.usage = tokenUsage('codex', events(res.stdout)); }
     catch { metadata.usageError = 'Codex usage unavailable (contents suppressed)'; }
-    writeFileSync(meta, JSON.stringify(metadata));
+    writeFileSync(meta, persistJson(metadata, secrets));
     rmSync(cwd, { recursive: true, force: true });
-    console.log(`${id} ${arm}: ${res.timedOut ? 'timed out' : `exit ${res.code}`} in ${((Date.now() - started) / 1000).toFixed(0)} s`);
+    print(`${id} ${arm}: ${res.timedOut ? 'timed out' : `exit ${res.code}`} in ${((Date.now() - started) / 1000).toFixed(0)} s`);
   });
   rmSync(sessions, { recursive: true, force: true });
 }
@@ -96,10 +99,10 @@ for (const id of ids.filter((id) => !judged.has(id) && existsSync(join(out, id, 
     return { ...res.output, usage: res.usage, usageError: res.usageError };
   });
   const meta = (arm: Arm) => JSON.parse(readFileSync(join(out, id, `${arm}.json`), 'utf8'));
-  appendFileSync(verdictFile, JSON.stringify({ id, winner, orders: [a, b], bare: meta('bare'), loadout: meta('loadout') }) + '\n');
-  console.log(`${id}: ${winner} (${a.winner} / ${b.winner})`);
+  appendFileSync(verdictFile, persistJson({ id, winner, orders: [a, b], bare: meta('bare'), loadout: meta('loadout') }, secrets) + '\n');
+  print(`${id}: ${winner} (${a.winner} / ${b.winner})`);
 }
 
 const verdicts = existsSync(verdictFile) ? readJsonl<{ id: string; winner: string }>(verdictFile).filter((v) => ids.includes(v.id)) : [];
 const count = (w: string) => verdicts.filter((v) => v.winner === w).length;
-console.log(`\nloadout better ${count('loadout')}, bare better ${count('bare')}, tie ${count('tie')}, split ${count('split')} (of ${verdicts.length}); judge $${cost.toFixed(2)}`);
+print(`\nloadout better ${count('loadout')}, bare better ${count('bare')}, tie ${count('tie')}, split ${count('split')} (of ${verdicts.length}); judge $${cost.toFixed(2)}`);

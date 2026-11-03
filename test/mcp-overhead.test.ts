@@ -843,6 +843,19 @@ describe('measurement', () => {
   const small = () => buildPlan(temp(), { configs: ['n1'], repeats: 1 }, { PATH: process.env.PATH, CLAUDE_CODE_OAUTH_TOKEN: OAUTH_CANARY }, []);
   const study = (o: Opts = {}, p = small()) => { const h = fakeHost(p, o); return runStudy(p, temp(), { run: h.run, inventory: h.inventory, refused: () => [] }); };
 
+  it('redacts the launch token in B7 row metadata and allowlisted preflight credentials', async () => {
+    const secret = 'haiku-FAKE-b7-token';
+    vi.stubEnv('CLAUDE_CODE_OAUTH_TOKEN', secret);
+    const p = small(), out = temp();
+    for (const r of p.runs) if (r.free) r.free.version.env = { ...r.free.version.env, FAKE_AUTH_TOKEN: secret };
+    const h = fakeHost(p, { model: () => secret, codexVersion: () => secret });
+    await runStudy(p, out, { run: h.run, inventory: h.inventory, refused: () => [] });
+    for (const file of ['rows.jsonl', 'preflight.jsonl']) {
+      const saved = readFileSync(join(out, file), 'utf8');
+      expect(saved).not.toContain(secret); expect(saved).toContain('<credential>');
+    }
+  });
+
   it('refuses any plugin, including one appearing after a clean baseline, before saving that run', async () => {
     for (const afterBaseline of [false, true]) {
       const p = small();

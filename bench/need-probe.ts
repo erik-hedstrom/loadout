@@ -6,6 +6,7 @@
  *
  *   TYPESAFE_API_KEY=... npx tsx bench/need-probe.ts <route-bench results dir>
  */
+import { envSecrets, persistJson } from './redact.js';
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { jevBaseUrl, loadConfig, resolveApiKey } from '../src/config.js';
@@ -39,6 +40,7 @@ const tasks = loadTasks();
 
 const config = loadConfig();
 const apiKey = resolveApiKey(config);
+const secrets = [apiKey ?? '', ...envSecrets()];
 if (!apiKey) throw new Error('needs TYPESAFE_API_KEY');
 const client = jevClient({ apiKey, baseUrl: jevBaseUrl(config), model: config.jev.model, timeoutMs: 30_000 });
 
@@ -74,7 +76,7 @@ await pool(tasks, 4, async (task) => {
   const answers = Object.fromEntries(Object.entries(res.answers).map(([k, a]) => [k, a.type === 'noul' ? a.noul : null]));
   appendFileSync(
     join(out, 'answers.jsonl'),
-    JSON.stringify({ task: task.id, split: splitOf(task.id), gold: task.gold, scope: task.scope, top, answers, model: res.model }) + '\n',
+    persistJson({ task: task.id, split: splitOf(task.id), gold: task.gold, scope: task.scope, top, answers, model: res.model }, secrets) + '\n',
   );
 });
 console.log(`answers: ${out}/answers.jsonl  cost $${cost.toFixed(4)}`);

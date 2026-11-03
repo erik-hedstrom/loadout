@@ -6,6 +6,7 @@
  *
  *   npx tsx bench/mismatch-probe.ts <judged sweep dir> [--blind-from <dir>]
  */
+import { envSecrets, persistJson, redact } from './redact.js';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -29,7 +30,9 @@ const rows = readJsonl<SweepRow>(join(dir, 'decisions.jsonl'));
 const blind = new Map(readJsonl<{ id: string; useful: string[] }>(join(values['blind-from'] ?? dir, 'judge-blind.jsonl')).map((b) => [b.id, b]));
 const verdicts = new Map(readJsonl<{ id: string; loaded: { key: string; rating: string }[] }>(join(dir, 'judge-verdicts.jsonl')).map((v) => [v.id, v]));
 const config = loadConfig();
-const client = jevClient({ apiKey: resolveApiKey(config)!, baseUrl: jevBaseUrl(config), model: config.jev.model });
+const apiKey = resolveApiKey(config);
+const secrets = [apiKey ?? '', ...envSecrets()];
+const client = jevClient({ apiKey: apiKey!, baseUrl: jevBaseUrl(config), model: config.jev.model });
 const byKey = new Map(scanLibrary(paths.library()).map((c) => [capabilityKey(c), c]));
 
 type Label = 'helpful' | 'neutral' | 'misleading';
@@ -73,6 +76,6 @@ for (const q of Object.keys(MISMATCH_QUESTIONS)) {
   }
 }
 for (const o of obs.filter((o) => o.label === 'misleading' || o.scores.mismatch! >= 0.7)) lines.push(`  ${o.label.padEnd(10)} ${o.id} ${o.key} ${JSON.stringify(o.scores)}`);
-writeFileSync(join(dir, 'mismatch-probe.txt'), lines.join('\n') + '\n');
-writeFileSync(join(dir, 'mismatch-probe.jsonl'), obs.map((o) => JSON.stringify(o)).join('\n') + '\n');
-console.log(lines.join('\n'));
+writeFileSync(join(dir, 'mismatch-probe.txt'), redact(lines.join('\n') + '\n', secrets));
+writeFileSync(join(dir, 'mismatch-probe.jsonl'), obs.map((o) => persistJson(o, secrets)).join('\n') + '\n');
+console.log(redact(lines.join('\n'), secrets));

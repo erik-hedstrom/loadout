@@ -1,4 +1,5 @@
 /** B12: native listing size arms and Claude's default-tools MCP pair. No host starts without --run. */
+import { envSecrets, persistJson, redact } from './redact.js';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { appendFileSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
@@ -205,7 +206,8 @@ export async function main(args: string[], deps: { run?: typeof runHost; print?:
   if (!values.library) throw new ValidationError('--library <directory> is required');
   if (!['all', 'claude', 'codex'].includes(values.host)) throw new ValidationError('--host must be all, claude or codex');
   if (values.run && !values.out) throw new ValidationError('--run requires --out <new directory>');
-  const print = deps.print ?? console.log;
+  const secrets = [...envSecrets(childEnv(process.env, 'claude')), ...envSecrets(childEnv(process.env, 'codex'))];
+  const print = (text: string) => (deps.print ?? console.log)(redact(text, secrets));
   const corpus = readListingLibrary(resolve(values.library));
   const root = mkdtempSync(join(tmpdir(), 'loadout-listing-'));
   try {
@@ -254,7 +256,7 @@ export async function main(args: string[], deps: { run?: typeof runHost; print?:
         probeSkills: c.probeSkills, mcpLibrarySkills: c.arm === 'default-mcp' ? corpus.skills.length : 0,
         corpusHash: plan.corpusHash, manifestHash: c.manifestHash, rejected: plan.rejected, normalized: plan.normalized,
         ...parsed };
-      appendFileSync(join(out, 'rows.jsonl'), JSON.stringify(row) + '\n');
+      appendFileSync(join(out, 'rows.jsonl'), persistJson(row, secrets) + '\n');
       print(`${c.host}/${c.arm}/${c.repeat}: exit=${result.exit} invalid=${invalid ?? 'none'}`);
       if (invalid) throw new Error('invalid measurement recorded; stopped before further paid calls');
     }
