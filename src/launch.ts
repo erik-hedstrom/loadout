@@ -317,8 +317,8 @@ export function hostSetup(host: Host, windows: boolean): { where: string; snippe
           '',
           // The hook's context points to load_skill, which only this server has, so it is part of the setup.
           `# ${windows ? 'Library search server' : 'The plugin attaches the library search server'} (find_tools, load_skill), which the hook's context points to: +158 input tokens/request with default tool search and default tools, measured with the server added from a config (through the plugin: not measured; https://github.com/erik-hedstrom/loadout/blob/main/bench/RESULTS.md).`,
-          ...(windows ? [] : ['# If you added the server earlier with `claude mcp add`, remove it, or its tools load twice: claude mcp remove loadout --scope user']),
-          ...(windows ? [`claude mcp add --scope user${Object.entries(s.env ?? {}).map(([k, v]) => ` -e ${k}=${quote(v)}`).join('')} loadout -- ${cmd.map(quote).join(' ')}`] : []),
+          ...(windows ? [] : ['# If you added the server earlier with `claude mcp add`, remove it, or its tools are attached twice: claude mcp remove loadout --scope user']),
+          ...(windows ? [`claude mcp add --scope user loadout -- ${cmd.map(quote).join(' ')}`] : []),
           // Claude Code defines no way for a plugin to pre-approve its tools, so the user's own permission rules do it.
           `# Claude Code asks before using them. These rules approve find_tools (sends the agent's goal and keywords to Jev) and load_skill (reads a skill from your library). To skip the prompt, add them to "permissions.allow" in your settings (this command does not edit them): ${SEARCH_TOOLS.map((t) => `${windows ? 'mcp__loadout__' : 'mcp__plugin_loadout_loadout__'}${t}`).join(', ')}`,
         ].join('\n'),
