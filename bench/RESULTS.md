@@ -1219,8 +1219,9 @@ in plugin mode.) "Opened" means a successful Skill call, `SKILL.md` read or
   Whether it followed the injected text is not measured.
 - **The 4 pointed-to requests.** On `productivity-04`, `documents-19` and
   `documents-29`, Claude loaded `obsidian-markdown`, `pdf` and `pptx` through
-  the plugin's `load_skill`. These are the skills the hook arm (search tool
-  plus a settings hook) opened on the same requests. On `media-15` it made 7
+  the plugin's `load_skill`. The hook arm (search tool plus a settings hook)
+  opened these on the same requests too, and `pdf--openai` on
+  `documents-29`. On `media-15` it made 7
   shell calls (Bash, PowerShell), all of which failed, and opened nothing. The
   hook arm opened two video-generation skills there.
 - No session called `find_tools` or Claude's Skill tool.
@@ -1244,7 +1245,7 @@ in plugin mode.) "Opened" means a successful Skill call, `SKILL.md` read or
   - 2026-11-03, 12:59–13:13 UTC, in WSL, from a fresh clone of `main` at
     `c2e08cf` ([pin.txt](results/2026-11-03T13-13-04Z-d13-plugin-mcp/pin.txt)).
   - `claude` was the Windows Claude Code 2.1.316 (`claude.exe` through an npm
-    shim).
+    shim; [run-env.txt](results/2026-11-03T13-13-04Z-d13-plugin-mcp/run-env.txt)).
   - A driver ran the D13 command
     ([BACKLOG](../docs/loop/BACKLOG.md)) once per request, with one id in
     `--ids`: Sonnet 5.5 (`claude-sonnet-5-5`), 8 turns, 240 s. The rows are
@@ -1286,10 +1287,12 @@ shown for the 4 pointed-to requests.
   `loadout setup claude-code` prints the rules), native Windows, macOS or
   Linux, whether the injected text was followed, and outcome quality.
 
-**D13's acceptance holds.** It asked for the plugin arm re-run on the same 10
-requests. All 10 rows are valid, and the plugin's server was connected in
-every session. Claude opened 3 of the 4 skills it was only pointed to. The
-judge's "useful" rating is not shown for this arm.
+**D13's acceptance is partly met.** It reads: "The plugin arm in
+`bench/invoke.ts` re-run on the same 10 requests, against the 6 of 10 and 2
+of 10 rows." The re-run is done: all 10 rows are valid, and the plugin's
+server was connected in every session. The comparison is not: those two rows
+count skills the judge rated useful, and no judge ran on this arm, so its
+"useful" count is not shown.
 
 Raw: [results/2026-11-03T13-13-04Z-d13-plugin-mcp/](results/2026-11-03T13-13-04Z-d13-plugin-mcp/).
 Its input was a copy of the sweep's
