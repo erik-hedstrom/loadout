@@ -24,7 +24,8 @@ Erik, 2026-10-31. v0.1 ships when all of these hold:
 2. A live README walk in stock `claude` and `codex`.
 3. C15's headline, on Codex, whatever it shows. Claude quality is not shown, or
    marked unverified, until cross-model validation.
-4. Every number traced to [RESULTS](../../bench/RESULTS.md).
+4. Every number traced to [RESULTS](../../bench/RESULTS.md) (documentation
+   audit in review: [#84](https://github.com/erik-hedstrom/loadout/pull/84)).
 5. A GIF (A5).
 
 Cut until after v0.1: B7, B9, C2, C7, D3, E3, F1, F5, launcher-only work and
@@ -57,7 +58,7 @@ None open on 2026-11-02.
 |---|---|---|---|---|---|
 | A2 | P0 | `loadout audit`: what your installed skills cost you | Claude | cloud | done ([PR #3](https://github.com/erik-hedstrom/loadout/pull/3)) |
 | A6 | P0 | Paste-ready host hide snippets after `audit --adopt` | Codex | cloud | done ([#66](https://github.com/erik-hedstrom/loadout/pull/66)) |
-| A1 | P0 | README rewrite around the problem, 3-command quickstart, GIF | Claude | cloud | partial ([#28](https://github.com/erik-hedstrom/loadout/pull/28)): README merged; the GIF waits on A5 |
+| A1 | P0 | README rewrite around the problem, 3-command quickstart, GIF | Claude | cloud | partial ([#28](https://github.com/erik-hedstrom/loadout/pull/28)): README merged; ship-bar number trace and README pass in review ([#84](https://github.com/erik-hedstrom/loadout/pull/84)); the GIF waits on A5 |
 | A3 | P1 | `loadout init` wizard + starter packs | Codex | cloud | done ([#30](https://github.com/erik-hedstrom/loadout/pull/30)) |
 | A4 | P1 | npm package under an available name + release workflow | Claude (Codex quota out) | cloud + erik | blocked: the first release waits on Erik's steps; code merged ([#71](https://github.com/erik-hedstrom/loadout/pull/71)), nothing published |
 | A5 | P1 | Demo recording (route, launch, hook) | Claude | local | todo (after A1) |
@@ -140,6 +141,17 @@ Launcher, library, hook and MCP details belong in `docs/launcher.md`,
 hold the security model and router. Keep C8's hook-only plugin results
 distinct from the settings-hook-plus-search result: following injected text
 and better outcomes remain not shown.
+
+Ship-bar item 4 audit ([#84](https://github.com/erik-hedstrom/loadout/pull/84)):
+the PR body traces the claims in README, top-level docs, DESIGN, SECURITY and
+CONTRIBUTING to exact RESULTS sections, distinguishing implementation facts
+from measurements. README now leads skill-use evidence with D13's plugin
+with MCP; overlapping intervals and changed setups do not establish a higher
+open rate. B12's skill and MCP arms use different tool configurations. The
+Codex hook's live turn and Claude marketplace install remain untested. Claude's
+documented debug log can show the hook's context; this check was not live-tested
+here. C15 has a marked README slot; its headline and A5's GIF remain. Tests and
+typecheck passed on Windows; no model or Jev calls, $0, cache effect none.
 
 **A3. `loadout init` wizard and starter packs.**
 
