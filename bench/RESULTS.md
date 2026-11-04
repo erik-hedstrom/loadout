@@ -6,6 +6,17 @@ of 1,000 to 20,000 real skills from GitSkills. Method and caveats:
 they measure what reaches the agent, not whether the agent then finishes the
 task.
 
+## F2 offline capture (2026-11-04; no live measurement)
+
+Offline implementation adds an A/B Jev-attempt accounting prototype,
+nullable request timing/provenance fields, B7 session rollups and run timing,
+and source-shaped Codex parser fixtures. These are synthetic parser tests,
+not recorded host measurements. Source/channel access and live-run budgets
+remain Erik's decisions. B7's protocol and the active C15 study are unchanged.
+F1 is planned but unmeasured. Cost: $0; no model or Jev calls.
+[Capture details and limits](../docs/loop/F2-CAPTURE.md).
+Prefix continuity, net savings and retained quality are **not shown**.
+
 ## B12 method: native listing remeasurement
 
 Harness added 2026-10-28; [results](#b12-results-2026-10-28-what-installed-skills-cost-per-request-on-current-hosts). B1's generated-name

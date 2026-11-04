@@ -4,6 +4,7 @@
  */
 import { setTimeout as sleep } from 'node:timers/promises';
 import { redactJson } from './redact.js';
+import { JevUsageError, type JevAttemptUsage, type JevUsageEvent } from './jev-usage.js';
 
 /** Instructions and criteria accept plain text or JSON structure (labelled fields, lists). */
 export type Text = string | string[] | Record<string, unknown>;
@@ -24,6 +25,8 @@ export interface SystemOneResponse {
   usage: { input_tokens: number; output_tokens: number };
   /** Local count of replaced key shapes, once per logical request (not per retry). */
   redactions?: number;
+  /** Legacy routing counters default to zero; accounting must treat absent/invalid usage as unknown. */
+  usageMissing?: boolean;
 }
 
 export interface SystemOneClient {
@@ -82,24 +85,32 @@ export function validateResponse(body: unknown, questions: Record<string, Questi
     model: typeof model === 'string' ? model : 'unknown',
     answers: answers!,
     usage: { input_tokens: finite(usage?.input_tokens), output_tokens: finite(usage?.output_tokens) },
+    ...(![usage?.input_tokens, usage?.output_tokens].every((v) => Number.isSafeInteger(v) && (v as number) >= 0) ? { usageMissing: true } : {}),
   };
 }
 
-export function jevClient(opts: { apiKey: string; baseUrl: string; model: string; timeoutMs?: number; retries?: number }): SystemOneClient {
+export function jevClient(opts: { apiKey: string; baseUrl: string; model: string; timeoutMs?: number; retries?: number; onUsage?: (event: JevUsageEvent) => void }): SystemOneClient {
   const once = async (body: string, questions: Record<string, Question>, signal?: AbortSignal) => {
-    const timeout = AbortSignal.timeout(opts.timeoutMs ?? 12_000);
-    const res = await fetch(`${opts.baseUrl.replace(/\/$/, '')}/v1/systemone`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${opts.apiKey}`, 'Content-Type': 'application/json' },
-      body,
-      signal: signal ? AbortSignal.any([timeout, signal]) : timeout,
-    });
-    const response = await res.json().catch(() => ({}));
-    if (!res.ok) throw new JevError(`Jev request failed: HTTP ${res.status}`, res.status);
-    return validateResponse(response, questions);
+    opts.onUsage?.({ type: 'start' });
+    let usage: JevAttemptUsage = { inputTokens: null, outputTokens: null };
+    try {
+      const timeout = AbortSignal.timeout(opts.timeoutMs ?? 12_000);
+      const res = await fetch(`${opts.baseUrl.replace(/\/$/, '')}/v1/systemone`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${opts.apiKey}`, 'Content-Type': 'application/json' },
+        body,
+        signal: signal ? AbortSignal.any([timeout, signal]) : timeout,
+      });
+      const response = await res.json().catch(() => ({}));
+      const token = (v: unknown) => Number.isSafeInteger(v) && (v as number) >= 0 ? v as number : null;
+      usage = { inputTokens: token(response?.usage?.input_tokens), outputTokens: token(response?.usage?.output_tokens) };
+      if (!res.ok) throw new JevError(`Jev request failed: HTTP ${res.status}`, res.status);
+      return validateResponse(response, questions);
+    } finally { opts.onUsage?.({ type: 'finish', ...usage }); }
   };
   return {
     async ask(state, questions, signal) {
+      opts.onUsage?.({ type: 'call' });
       // Every real Jev caller reaches this boundary, including callers outside route().
       // Sanitize once so retries reuse the same body and do not inflate the count.
       let request: ReturnType<typeof redactJson>;
@@ -116,6 +127,7 @@ export function jevClient(opts: { apiKey: string; baseUrl: string; model: string
         try {
           return { ...await once(json, safeQuestions, signal), redactions: count };
         } catch (err) {
+          if (err instanceof JevUsageError) throw err;
           if (signal?.aborted) throw new Error('Jev request cancelled');
           if (!(err instanceof JevError)) err = new Error(err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError') ? 'Jev request timed out' : 'Jev request failed: network error');
           // Network errors and timeouts are not JevErrors and are worth one more try.

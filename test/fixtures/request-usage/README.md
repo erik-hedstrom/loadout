@@ -1,5 +1,19 @@
 # Host usage captures
 
+F2 adds **synthetic**, source-shaped `codex-rollout-0.163.0.jsonl` and
+`codex-app-server-0.163.0.jsonl`; these are not live captures. Their contracts
+are pinned to openai/codex `rust-v0.163.0`, `protocol/src/protocol.rs`
+(`TokenUsageInfo`) and `app-server-protocol/src/protocol/v2/thread.rs`
+(`ThreadTokenUsageUpdatedNotification`). The rollout fixture repeats an
+event, includes an info-null update, omits one write counter and includes
+irrelevant private-looking fields to check projection. No Codex home is
+read by either parser. Live validation and source approval remain pending.
+
+`legacy-report-hashes.json` hashes reports regenerated with the #77 base
+(`ed1b03d`) reporter from the committed C14 rerun rows/verdicts and from those
+same rows projected to legacy native/loadout shapes. This tests formatting
+compatibility without reading or changing the active C15 study.
+
 Recorded 2026-10-22 in WSL, one minimal no-tool prompt per host. These are
 trimmed real streams, not generated counters. Prompt: `Reply with exactly OK.
 Do not use tools.` No loadout plugin or hook was active.

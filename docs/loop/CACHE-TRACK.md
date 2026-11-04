@@ -112,6 +112,19 @@ Each goal maps to backlog items, which hold the acceptance criteria.
 
 ## Host caching rules
 
+F2 offline work (2026-11-04) is partial: [capture flow, provenance and
+limitations](F2-CAPTURE.md). The Jev subprocess channel is a prototype; Codex
+source approval and live capture are pending. B7's existing rows now support
+session rollups and run timing, with no change to session shapes. F1 has a
+plan, not a harness or measurement. No savings or continuity claim follows.
+
+The dated rules below are historical: current Claude Code documentation
+distinguishes 1-hour main-conversation subscription writes from 5-minute
+requests, and current OpenAI rules distinguish newer-model exact cache
+boundaries from older-model 128-token reporting. New captures infer no TTL
+when the selected policy is unavailable. Rechecked 2026-11-04 against the
+linked official pages; see the F2 notes before interpreting gap flags.
+
 Retrieved 2026-10-22 from the providers' documentation. Recheck them before a write-up.
 - **Anthropic** caches the exact prefix in the order tools, system, messages. Cache writes cost 1.25× input for
   5 minutes or 2× for 1 hour. Reads usually cost 0.1×, and 0.05× on Opus and Sonnet 5.5

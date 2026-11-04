@@ -316,6 +316,8 @@ export interface Row {
   model: string | null; requestedModel: string; hostVersion: string; input: number; uncached: number; cacheCreation: number; cacheRead: number; output: number;
   mcp: { name: string; status: string }[] | null; ambientHash: string | null;
   toolsListed: number | null; mcpToolsListed: number | null; toolSearchListed: boolean | null; canaryFound: boolean | null;
+  /** Whole host invocation, including startup and the unmeasured canary; absent on legacy rows. */
+  runMs?: number;
 }
 
 /**
@@ -511,7 +513,9 @@ export async function runStudy(plan: Plan, out: string, deps: Deps = {}): Promis
       resetWork(command.env!.CLAUDE_CONFIG_DIR!);
       command = { ...command, env: { ...command.env, CLAUDE_CODE_OAUTH_TOKEN: token } };
     }
+    const started = performance.now();
     const stdout = await full.run(command);
+    const runMs = performance.now() - started;
     const session = r.arm.host === 'claude' ? parseClaudeTurns(stdout, 2, r.canary ? { allow: CANARY_TOOLS } : undefined) : null;
     if (session && session.inventory.plugins.length !== 0) throw new Error('Claude init plugins must be empty; measurement invalid');
     const turns = session ? session.turns : [parseCodex(stdout)];
@@ -531,7 +535,7 @@ export async function runStudy(plan: Plan, out: string, deps: Deps = {}): Promis
       return { host: r.arm.host, kind: r.arm.kind, config: r.arm.config ?? null, toolSearch: r.arm.toolSearch ?? null, repeat: r.repeat, turn: i + 1,
         model: session?.model ?? null, requestedModel: MODELS[r.arm.host], hostVersion, input: u.input, uncached: u.uncached, cacheCreation: u.cacheCreation, cacheRead: u.cacheRead, output: u.output,
         mcp: session?.inventory.mcp ?? null, ambientHash: hash, toolsListed: session?.tools.length ?? null, mcpToolsListed: session?.tools.filter((t) => t.startsWith('mcp__')).length ?? null,
-        toolSearchListed: session ? session.tools.includes('ToolSearch') : null, canaryFound: found };
+        toolSearchListed: session ? session.tools.includes('ToolSearch') : null, canaryFound: found, runMs };
     });
     for (const row of made) { rows.push(row); appendFileSync(join(out, 'rows.jsonl'), persistJson(row, secrets) + '\n'); }
   }
@@ -559,6 +563,24 @@ export function reading(r: Row): string {
   return all ? (r.toolSearchListed ? 'all loaded (ToolSearch present)' : 'all loaded (no ToolSearch)') : 'deferred (canary found)';
 }
 
+export function sessionRollups(rows: Row[]) {
+  const groups = new Map<string, Row[]>();
+  for (const r of rows) {
+    const key = JSON.stringify([r.host, r.kind, r.config, r.toolSearch, r.repeat]);
+    const group = groups.get(key) ?? [];
+    group.push(r);
+    groups.set(key, group);
+  }
+  return [...groups.values()].map((rs) => ({
+    host: rs[0]!.host, kind: rs[0]!.kind, config: rs[0]!.config, toolSearch: rs[0]!.toolSearch, repeat: rs[0]!.repeat,
+    granularity: rs[0]!.host === 'claude' ? 'request' as const : 'turn' as const,
+    measuredRows: rs.length,
+    input: rs.reduce((n, r) => n + r.input, 0), uncached: rs.reduce((n, r) => n + r.uncached, 0),
+    cacheCreation: rs.reduce((n, r) => n + r.cacheCreation, 0), cacheRead: rs.reduce((n, r) => n + r.cacheRead, 0), output: rs.reduce((n, r) => n + r.output, 0),
+    runMs: rs[0]!.runMs ?? null,
+  }));
+}
+
 export function summarize(rows: Row[], notes: string[] = []): string {
   const lines = ['B7 input tokens per request. Delta is over the same host\'s no-MCP baseline, same repeat and turn.',
     'Claude readings: tool search false = every definition loaded; default = host tool search on; auto = host decides. Deferral is not reported by the host: the Reading column is inferred from the init tool list and a canary lookup.',
@@ -570,6 +592,12 @@ export function summarize(rows: Row[], notes: string[] = []): string {
   }
   if (rows.some((r) => r.kind === 'native' && r.config === 'n20' && r.toolSearch === 'default' && !r.toolSearchListed)) lines.push('Tool search was not listed for native default at n20: this model or host has none here, so those rows are "all loaded", not deferred.');
   lines.push(...notes);
+  if (rows.some((r) => r.runMs !== undefined)) {
+    lines.push('', 'Session rollups: measured requests only (Codex: turn totals); run ms includes startup and the unmeasured canary.',
+      '| Host | Arm | Config | Tool search | Repeat | Granularity | Measured rows | Input | Uncached | Cache creation | Cache read | Output | Run ms |',
+      '| --- | --- | --- | --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |');
+    for (const s of sessionRollups(rows)) lines.push(`| ${s.host} | ${s.kind} | ${s.config ?? ''} | ${s.toolSearch ?? ''} | ${s.repeat} | ${s.granularity} | ${s.measuredRows} | ${s.input} | ${s.uncached} | ${s.cacheCreation} | ${s.cacheRead} | ${s.output} | ${s.runMs === null ? 'not shown' : Math.round(s.runMs)} |`);
+  }
   lines.push('Codex has one request per session (a second turn needs a persisted session), and exec reports no tool list: whether it deferred is not shown. Sessions per arm are few: report ranges, not intervals. Tokens, not money. Not measured: tool use through the gateway beyond the canary lookup, output quality, other models.');
   return lines.join('\n');
 }
