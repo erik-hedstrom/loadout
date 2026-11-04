@@ -1153,8 +1153,10 @@ row passed the bench's checks: the plugin was loaded, one loadout hook ran
 was present. The hook added `<skill_relevance>` context on all 10 prompts.
 - **In 6, it also injected one skill's full text:** `mcp-builder`,
   `changelog-generator`, `vendor-review`, `uncertainty-and-units`,
-  `security-threat-model` and `statistical-analysis`. Whether the judge rates
-  each one useful is not shown for this arm; the hook arm above opened
+  `security-threat-model` and `statistical-analysis`. All six are on their
+  request's useful list from the initial sweep's blind Opus judge (the lists
+  reused in [D13 below](#the-plugin-with-its-mcp-server-d13-2026-11-03));
+  the hook arm above opened
   `uncertainty-and-units` and `statistical-analysis` on the same requests.
   Whether Claude followed the injected text is not measured.
 - **Claude opened no library skill (0 of 10).** On the other 4 requests the
@@ -1207,6 +1209,7 @@ in plugin mode.) "Opened" means a successful Skill call, `SKILL.md` read or
 | Hook added `<skill_relevance>` context | 10 of 10 (72–100) | 10 of 10 (72–100) |
 | Hook injected one skill's full text | 6 of 10 (31–83) | 6 of 10 (31–83) |
 | Claude opened a library skill | 0 of 10 (0–28) | **3 of 10** (11–60) |
+| Claude opened a skill the judge lists as useful | 0 of 10 (0–28) | **3 of 10** (11–60) |
 | …of the 4 it was only pointed to | 0 of 4 (0–49) | **3 of 4** (30–95) |
 | Ran out of turns (`error_max_turns`) | 7 of 10 (40–89) | 2 of 10 (6–51) |
 | Timed out (4 minutes) | 0 of 10 | 0 of 10 |
@@ -1215,7 +1218,8 @@ in plugin mode.) "Opened" means a successful Skill call, `SKILL.md` read or
 - **Injection is unchanged.** The hook injected the same skill on the same 6
   requests as in C8: `mcp-builder`, `changelog-generator`, `vendor-review`,
   `uncertainty-and-units`, `security-threat-model` and
-  `statistical-analysis`. Claude opened no library skill on these 6.
+  `statistical-analysis`. All six are on their request's blind useful list
+  in both arms. Claude opened no library skill on these 6.
   Whether it followed the injected text is not measured.
 - **The 4 pointed-to requests.** On `productivity-04`, `documents-19` and
   `documents-29`, Claude loaded `obsidian-markdown`, `pdf` and `pptx` through
@@ -1225,8 +1229,15 @@ in plugin mode.) "Opened" means a successful Skill call, `SKILL.md` read or
   shell calls (Bash, PowerShell), all of which failed, and opened nothing. The
   hook arm opened two video-generation skills there.
 - No session called `find_tools` or Claude's Skill tool.
-- **"Useful" is not shown.** The 2 of 10 and 6 of 10 rows above count skills
-  the judge rates useful. No judge ran here, so 3 of 10 counts opens only.
+- **Usefulness scored from existing blind answers.** The initial sweep's
+  [judge-blind.jsonl](results/2026-10-06T02-08-14-sweep/judge-blind.jsonl)
+  has Opus's useful lists, made blind to loadout's choices. The 10 request
+  texts in that sweep's `decisions.jsonl` are identical to those in C8's
+  sweep, which D13 reused. Matching each row's `invoked` against its request's
+  `useful` list reproduces the hook's 6 of 10, search's 2 of 10 and C8
+  plugin's 0 of 10. The same lists count D13's three opens as useful:
+  `obsidian-markdown`, `pdf` and `pptx` on the requests named above. The other
+  seven sessions opened nothing. No new judge call ran; scoring cost $0.
 - **Every row passed the bench's checks** (`checkInventory` in
   [invoke.ts](invoke.ts)):
   - one loadout plugin, the bench's copy;
@@ -1287,12 +1298,15 @@ shown for the 4 pointed-to requests.
   `loadout setup claude-code` prints the rules), native Windows, macOS or
   Linux, whether the injected text was followed, and outcome quality.
 
-**D13's acceptance is partly met.** It reads: "The plugin arm in
+**D13's acceptance is met.** It reads: "The plugin arm in
 `bench/invoke.ts` re-run on the same 10 requests, against the 6 of 10 and 2
 of 10 rows." The re-run is done: all 10 rows are valid, and the plugin's
-server was connected in every session. The comparison is not: those two rows
-count skills the judge rated useful, and no judge ran on this arm, so its
-"useful" count is not shown.
+server was connected in every session. Using the same blind judge lists,
+D13 opened a listed-useful skill in 3 of 10 sessions (11–60), against the
+hook's 6 of 10 (31–83) and search's 2 of 10 (6–51). The intervals still
+overlap at n = 10, including C8's plugin interval (0–28), so a higher rate is
+not established. Whether injected text was followed, outcome quality and
+interactive sessions remain not shown.
 
 Raw: [results/2026-11-03T13-13-04Z-d13-plugin-mcp/](results/2026-11-03T13-13-04Z-d13-plugin-mcp/).
 Its input was a copy of the sweep's
