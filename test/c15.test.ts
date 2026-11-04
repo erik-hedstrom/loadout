@@ -234,6 +234,8 @@ it('plans primary and secondary without invoking any host or writing output', as
     const text = print.mock.calls.flat().join('\n');
     expect(text).toContain(secondary ? '22 paid runs (2 warm-ups)' : '42 paid runs (2 warm-ups)');
     expect(text).toContain(secondary ? 'Judging: 0 calls' : 'Judging: 40 calls');
+    expect(text).toContain('codex / gpt-6.1-terra');
+    expect(text).toContain("shares the agent's and request writer's OpenAI family");
     expect(text).toContain('Claude host blocked on E12');
     expect(text).toContain('cloud');
     expect(text).toContain('manifestHash=');
@@ -341,7 +343,8 @@ it('judge-only redacts native skill names and C15 arm clues in both orders and p
     writeFileSync(join(dir, 'answer.md'), 'native-secret-skill .agents/skills/unobserved/SKILL.md find_tools load_skill mcp__loadout__find_tools loadout.find_tools loadout cd cd-only && cat SKILL.md\nloadout-ready payloadout');
   }
   const prompts: string[] = [];
-  vi.spyOn(benchLib, 'modelJson').mockImplementation(async (p) => {
+  vi.spyOn(benchLib, 'modelJson').mockImplementation(async (p, _schema, opts) => {
+    expect(opts).toMatchObject({ backend: 'codex', model: 'gpt-6.1-terra' });
     prompts.push(p);
     return { output: { winner: prompts.length === 1 ? 'first' : 'second', confidence: 'high', reasons: 'Correct' } } as any;
   });
@@ -353,10 +356,29 @@ it('judge-only redacts native skill names and C15 arm clues in both orders and p
       expect(p).toContain('loadout-ready payloadout');
     }
     const verdict = readJsonl<Verdict>(join(out, 'verdicts.jsonl'))[0]!;
+    expect(verdict.judge).toEqual({ backend: 'codex', model: 'gpt-6.1-terra' });
     expect(verdict.winner).toBe('native');
     expect(Object.keys(verdict.redactions).sort()).toEqual(['loadout', 'native']);
     expect(Object.values(verdict.redactions).every((n) => n! > 0)).toBe(true);
     expect(readFileSync(join(out, 'report.md'), 'utf8')).toContain('| c1-debug-13 | 1 | native | native | native |');
+    expect(readFileSync(join(out, 'report.md'), 'utf8')).toContain('codex / gpt-6.1-terra');
+    expect(readFileSync(join(out, 'report.md'), 'utf8')).toContain("shares the agent's and request writer's OpenAI family");
+  } finally { vi.restoreAllMocks(); }
+});
+
+it.each(['verdict', 'config', 'missing-verdict-judge'] as const)('refuses conflicting C15 %s provenance before calls or writes', async (conflict) => {
+  const out = temp();
+  writeFileSync(join(out, 'rows.jsonl'), [row('native'), row('loadout')].map((r) => JSON.stringify(r)).join('\n'));
+  const judges = { codex: { backend: 'codex', model: 'gpt-6.1-terra' } };
+  writeFileSync(join(out, 'config.json'), JSON.stringify({ study: 'c15', judges: conflict === 'config' ? { codex: { backend: 'claude', model: 'opus' } } : judges }));
+  if (conflict !== 'config') writeFileSync(join(out, 'verdicts.jsonl'), JSON.stringify({ host: 'codex', prompt: 'c1-debug-13', repeat: 2,
+    ...(conflict === 'verdict' ? { judge: { backend: 'claude', model: 'opus' } } : {}) }) + '\n');
+  const before = readdirSync(out).map((f) => [f, readFileSync(join(out, f), 'utf8')]);
+  const judge = vi.spyOn(benchLib, 'modelJson').mockRejectedValue(new Error('must not call'));
+  try {
+    await expect(main(['--judge-only', out], { print: () => {} })).rejects.toThrow('judge provenance differs');
+    expect(judge).not.toHaveBeenCalled();
+    expect(readdirSync(out).map((f) => [f, readFileSync(join(out, f), 'utf8')])).toEqual(before);
   } finally { vi.restoreAllMocks(); }
 });
 
@@ -414,6 +436,7 @@ it.skipIf(process.platform === 'win32').each(['budget', 'unexpected', 'retry', '
       return;
     }
     await study;
+    expect(JSON.parse(readFileSync(join(out, 'config.json'), 'utf8')).judges).toEqual({ codex: { backend: 'codex', model: 'gpt-6.1-terra' } });
     const rows = readJsonl<RunRow>(join(out, 'rows.jsonl'));
     expect(rows).toHaveLength(22);
     expect(new Set(manifests).size).toBe(1);

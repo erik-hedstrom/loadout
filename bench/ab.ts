@@ -23,7 +23,7 @@ import { DEFAULT_CONFIG, jevBaseUrl, loadConfig, paths, resolveApiKey } from '..
 import { JEV_FALLBACK_NOTE, NO_KEY_WARNING } from '../src/hook.js';
 import { hookCommand, SEARCH_SERVER, SEARCH_TOOLS, searchServer, toToml } from '../src/launch.js';
 import { capabilityKey, LIMITS, readConfined, readManifest, scanLibrary } from '../src/library.js';
-import { C15_IDS, CREDENTIAL_SHAPE, persistJson, redact, report, TOKEN_ANYWHERE, type Leak, type RunRow, type Verdict } from './ab-report.js';
+import { C15_IDS, C15_JUDGE, C15_JUDGE_CAVEAT, CREDENTIAL_SHAPE, persistJson, redact, report, TOKEN_ANYWHERE, type Leak, type RunRow, type Verdict } from './ab-report.js';
 import { codexJudgeRefusal, DATA, isEntry, modelJson, readJsonl, RESULTS, run, splitOf } from './lib.js';
 import { readListingLibrary, stripCodexSkillsBudget, writeSkillFile } from './listing.js';
 import { CLAUDE_MANAGED_PRECONDITION, CLAUDE_SCRUB_PRECONDITION, CLAUDE_SETTINGS, CLAUDE_SWITCH_PRECONDITION, CODEX_CLOUD_PRECONDITION, childEnv, claudeEnv, envAllowlist, hostWrites, redacted, refusedFiles, resetWork } from './mcp-overhead.js';
@@ -95,8 +95,9 @@ const WARMUP_PROMPT = 'Reply with the single word READY and nothing else. Do not
 export const AB_MODELS: Record<Host, string> = { claude: 'sonnet', codex: 'gpt-6.1-sol' };
 /** Named levels in codex-cli 0.163.0; keep study inputs explicit rather than accepting custom model-defined strings. */
 const CODEX_EFFORTS = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra', 'persistent'];
-/** Cross-family (AGENTS.md): Codex outputs are judged by Claude, Claude outputs by Codex. */
+/** Historical C14 mapping; never reinterpret its saved folders as C15. */
 const JUDGES: Record<Host, { backend: 'claude' | 'codex'; model: string }> = { claude: { backend: 'codex', model: 'gpt-6.1-sol' }, codex: { backend: 'claude', model: 'opus' } };
+const judgesFor = (study?: 'c15') => study === 'c15' ? { ...JUDGES, codex: C15_JUDGE } : JUDGES;
 /** Beyond the allowlist, only the loadout arm gets these: the hook and the MCP server read the key, endpoint and home. */
 const LOADOUT_ENV = ['TYPESAFE_API_KEY', 'TYPESAFE_BASE_URL', 'LOADOUT_HOME'];
 const CACHE_TTL_MS = 5 * 60_000;
@@ -412,13 +413,12 @@ export function blockers(o: Options, env: NodeJS.ProcessEnv = process.env): stri
 
 /**
  * Free: each judge the hosts need can run. The judging comes after every agent run, so a judge that cannot run would
- * otherwise be found only after the quota is spent. Claude's outputs go to Codex, which cannot run tool-less on the
- * codex-cli versions seen so far (E12); Codex's outputs go to Claude.
+ * otherwise be found only after the quota is spent. C15 also needs a tool-less Codex judge (E12).
  */
 export function judgeProblems(o: Options): string[] {
   const out: string[] = [];
   for (const host of o.hosts) {
-    const { backend } = JUDGES[host];
+    const { backend } = judgesFor(o.study)[host];
     if (backend === 'codex') {
       const refusal = codexJudgeRefusal();
       if (refusal) out.push(`${host} outputs are judged by Codex and it cannot: ${refusal}`);
@@ -443,7 +443,8 @@ export function planLines(o: Options, env: NodeJS.ProcessEnv = process.env, root
     lines.push(`LIBRARY size=${o.studyLibrary.librarySize}; corpusHash=${o.studyLibrary.corpusHash}; manifestHash=${o.studyLibrary.manifestHash}; rejected=${o.studyLibrary.rejected}; normalized=${o.studyLibrary.normalized}. Identical sanitized SKILL.md-only bytes in both arms.`);
     lines.push(`WRITES: native <work root>/work/.git and .agents/skills/<name>/SKILL.md; loadout <work root>/study-home/library/skills/<name>/SKILL.md and config.json, hook state and scan cache; no native copies in loadout. Temporary root removed at exit. --run also writes --out/config.json, rows.jsonl, streams/, outputs/, report.md and ${o.judge === false ? 'no verdicts' : 'verdicts.jsonl'}; host cache/auth writes listed below.`);
   }
-  lines.push(`Estimate (assumptions, not measurements): ${claudeRuns ? `Claude ${claudeRuns * 2} to ${claudeRuns * o.maxTurns} requests, each carrying roughly 15k to 40k input tokens that are mostly cache reads; ` : ''}Codex one thread total per run; up to ${Math.round(jobs.length * o.timeoutS / 60)} minutes at the timeout, typically a third of that. Subscription quota, not cash. Jev: about ${loadoutRuns} routing calls (under $0.05, RESULTS sweeps run near $0.001 each) plus any find_tools. Judging: ${o.judge === false ? 0 : o.hosts.length * o.ids.length * o.repeats * 2} calls, sequential (Claude Opus on Codex outputs, Sol on Claude outputs).`);
+  lines.push(`Estimate (assumptions, not measurements): ${claudeRuns ? `Claude ${claudeRuns * 2} to ${claudeRuns * o.maxTurns} requests, each carrying roughly 15k to 40k input tokens that are mostly cache reads; ` : ''}Codex one thread total per run; up to ${Math.round(jobs.length * o.timeoutS / 60)} minutes at the timeout, typically a third of that. Subscription quota, not cash. Jev: about ${loadoutRuns} routing calls (under $0.05, RESULTS sweeps run near $0.001 each) plus any find_tools. Judging: ${o.judge === false ? 0 : o.hosts.length * o.ids.length * o.repeats * 2} calls, sequential (${o.hosts.map((h) => `${judgesFor(o.study)[h].backend} / ${judgesFor(o.study)[h].model} on ${h} outputs`).join(', ')}).`);
+  if (o.study === 'c15') lines.push(C15_JUDGE_CAVEAT, 'C15 agent and Terra judge calls consume the same Codex quota windows. Judge requests ephemeral, ignore user config/rules, read-only and tools disabled; global AGENTS files refused and skill catalog excluded. Installed-skill explicit injection is not established as isolated. Free tool preflight must pass before any paid run; Codex 0.163.0 still reports unified_exec=true when disabled (E12), so no judge can run on that install.');
   for (const s of specs) lines.push(`PROMPT ${s.id} (${s.kind}): ${promptText(s).length} characters with the note${s.fixture ? `; fixture ${s.fixture}, hidden test ${s.hidden}` : ''}`);
   for (const host of o.hosts) lines.push(`SCHEDULE ${host} (arm/prompt/repeat; warm-ups are repeat 0): ${jobs.filter((j) => j.host === host).map((j) => `${j.arm}/${j.prompt}/${j.repeat}`).join('  ')}`);
   const ctx: Ctx = { work: join(root, 'work'), shimDir: join(root, 'shim', '<host>'), configDir: '<fresh CLAUDE_CONFIG_DIR per run>', env: o.studyLibrary ? { ...env, TYPESAFE_API_KEY: '<resolved via resolveApiKey before run>' } : env, models: o.models, codexEffort: o.codexEffort, maxTurns: o.maxTurns, codexHook: o.codexHook, ...(o.studyLibrary ? { studyHome: join(root, 'study-home') } : {}) };
@@ -627,7 +628,7 @@ async function runAll(o: Options, out: string, deps: { token?: string; print: (s
     const versions = Object.fromEntries(o.hosts.map((h) => [h, version(h)]));
     const secrets = deps.secrets;
     const configFile = join(out, 'config.json');
-    if (!existsSync(configFile)) writeFileSync(configFile, persistJson({ ...studySettings({ ...o, ...deps.provenance }), ...(o.studyLibrary ? { corpusHash: o.studyLibrary.corpusHash, manifestHash: o.studyLibrary.manifestHash } : {}), versions, schedule: schedule(o.hosts, o.ids, o.repeats, studyArms(o)).map(jobId) }, secrets) + '\n');
+    if (!existsSync(configFile)) writeFileSync(configFile, persistJson({ ...studySettings({ ...o, ...deps.provenance }), judges: Object.fromEntries(o.hosts.map((h) => [h, judgesFor(o.study)[h]])), ...(o.studyLibrary ? { corpusHash: o.studyLibrary.corpusHash, manifestHash: o.studyLibrary.manifestHash } : {}), versions, schedule: schedule(o.hosts, o.ids, o.repeats, studyArms(o)).map(jobId) }, secrets) + '\n');
     const studyHome = o.studyLibrary ? join(root, 'study-home') : undefined;
     if (studyHome) {
       prepareStudyArm({ arm: 'loadout' }, join(root, 'work'), o.studyLibrary!, studyHome);
@@ -740,6 +741,15 @@ async function judgeAll(out: string, print: (s: string) => void, secrets: string
   const done = completed(file) as unknown as Verdict[];
   const requests = readJsonl<{ id: string; request: string }>(join(DATA, 'requests-c1.jsonl'));
   const baseline = rows.some((r) => r.arm === 'native') ? 'native' : 'bare';
+  const configFile = join(out, 'config.json');
+  const config = existsSync(configFile) ? JSON.parse(readFileSync(configFile, 'utf8')) : undefined;
+  const judges = judgesFor(config?.study === 'c15' || baseline === 'native' ? 'c15' : undefined);
+  // Check every verdict, including pairs that will be skipped. Missing provenance is not evidence of consistency.
+  const sameJudge = (a: Verdict['judge'] | undefined, b: Verdict['judge']) => a?.backend === b.backend && a.model === b.model;
+  if (Object.entries(config?.judges ?? {}).some(([host, judge]) => !judges[host as Host] || !sameJudge(judge as Verdict['judge'], judges[host as Host]))
+    || done.some((v) => !judges[v.host] || !sameJudge(v.judge, judges[v.host]))) {
+    throw new Error('judge provenance differs; use a fresh output directory');
+  }
   for (const host of [...new Set(rows.map((r) => r.host))]) for (const prompt of [...new Set(rows.map((r) => r.prompt))]) for (const repeat of [...new Set(rows.map((r) => r.repeat))]) {
     const [bare, loadout] = [baseline, 'loadout'].map((arm) => rows.find((r) => r.host === host && r.prompt === prompt && r.repeat === repeat && r.arm === arm));
     if (!bare || !loadout || done.some((v) => v.host === host && v.prompt === prompt && v.repeat === repeat)) continue;
@@ -757,7 +767,7 @@ async function judgeAll(out: string, print: (s: string) => void, secrets: string
     const clean = baseline === 'native' ? redactC15 : redactNames;
     const bareFiles = clean(files[0]!, names);
     const loadoutFiles = clean(files[1]!, names);
-    const judge = JUDGES[host];
+    const judge = judges[host];
     const verdict = await judgePair(requests.find((r) => r.id === prompt)!.request, { [baseline]: bareFiles.text, loadout: loadoutFiles.text }, async (p) => {
       const res = await modelJson(p, PrefSchema, { backend: judge.backend, model: judge.model, system: JUDGE_SYSTEM, out });
       if (!res) throw new Error('the judge backend returned no answer');

@@ -4,7 +4,7 @@ import { delimiter, join } from 'node:path';
 import { execFileSync, spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
-import { afterAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { modelJson } from '../bench/lib.js';
 
@@ -19,6 +19,8 @@ function temp() {
   return dir;
 }
 afterAll(() => temps.forEach((dir) => rmSync(dir, { recursive: true, force: true })));
+beforeEach(() => vi.stubEnv('CODEX_HOME', temp()));
+afterEach(() => vi.unstubAllEnvs());
 
 const schema = z.strictObject({ results: z.array(z.strictObject({ id: z.string(), prompt: z.string() })) });
 const runJudge = (dir: string, extra: string[] = []) => spawnSync(process.execPath, ['--import', 'tsx', 'bench/judge.ts', dir, '--backend', 'files', ...extra], { cwd: join(import.meta.dirname, '..'), env: { ...process.env, LOADOUT_HOME: dir }, encoding: 'utf8', timeout: 15_000 });
@@ -399,6 +401,20 @@ body
     expect(spawn).not.toHaveBeenCalled();
   });
 
+  it.each(['AGENTS.md', 'AGENTS.override.md'])('refuses global %s without reading or sending its contents', async (file) => {
+    const home = temp();
+    writeFileSync(join(home, file), 'PRIVATE GLOBAL INSTRUCTIONS');
+    vi.stubEnv('CODEX_HOME', home);
+    vi.mocked(execFileSync).mockClear();
+    vi.mocked(spawn).mockClear();
+    try {
+      await expect(modelJson('data', schema, { backend: 'codex', model: 'gpt-6.1-terra', system: 'rules', out: temp() })).rejects.toThrow('global AGENTS');
+      expect(execFileSync).not.toHaveBeenCalled();
+      expect(spawn).not.toHaveBeenCalled();
+      expect(readFileSync(join(home, file), 'utf8')).toBe('PRIVATE GLOBAL INSTRUCTIONS');
+    } finally { vi.unstubAllEnvs(); }
+  });
+
   it('rejects duplicate request IDs at judge ingestion', () => {
     const dir = disputedFixture();
     const row = readFileSync(join(dir, 'decisions.jsonl'), 'utf8');
@@ -633,16 +649,17 @@ body
     vi.stubEnv('BENCH_OTHER_TOKEN', 'synthetic-token');
     vi.stubEnv('BENCH_OTHER_SECRET', 'synthetic-secret');
     vi.stubEnv('bench_other_key', 'synthetic-key');
-    vi.stubEnv('CODEX_HOME', 'keep-auth-home');
+    const authHome = temp();
+    vi.stubEnv('CODEX_HOME', authHome);
     try {
       const catalog = 'Third-party catalog data:\n<skills_catalog>\nskill-a: plain\n</skills_catalog>\n\n';
-      const result = await checkedJson(catalog + 'Private request', schema, { backend: 'codex', model: 'gpt-6.1-sol', effort: 'high', system: 'rules', out: temp() });
+      const result = await checkedJson(catalog + 'Private request', schema, { backend: 'codex', model: 'gpt-6.1-terra', effort: 'high', system: 'rules', out: temp() });
       expect(result?.output.results).toEqual([{ id: 'a', prompt: 'done' }]);
       expect(result?.costUsd).toBeNull();
-      expect(args.slice(args.indexOf('exec'), args.indexOf('--output-schema'))).toEqual(['exec', '--ignore-user-config', '--ignore-rules', '--ephemeral', '--skip-git-repo-check', '--sandbox', 'read-only', '--model', 'gpt-6.1-sol', '-c', 'features.shell_tool=false', '-c', 'features.unified_exec=false', '-c', 'features.view_image=false', '-c', 'model_reasoning_effort="high"']);
+      expect(args.slice(args.indexOf('exec'), args.indexOf('--output-schema'))).toEqual(['exec', '--ignore-user-config', '--ignore-rules', '--ephemeral', '--skip-git-repo-check', '--sandbox', 'read-only', '--model', 'gpt-6.1-terra', '-c', 'features.shell_tool=false', '-c', 'features.unified_exec=false', '-c', 'features.view_image=false', '-c', 'features.hooks=false', '-c', 'features.plugins=false', '-c', 'skills.include_instructions=false', '-c', 'project_doc_max_bytes=0', '-c', 'model_reasoning_effort="high"']);
       expect(args.at(-1)).toBe('-');
       const preflight = vi.mocked(execFileSync).mock.calls[0]!;
-      expect(preflight[1]!.slice(-10)).toEqual([...args.slice(args.indexOf('-c'), args.indexOf('--output-schema')), 'features', 'list']);
+      expect(preflight[1]).toEqual(expect.arrayContaining([...args.slice(args.indexOf('-c'), args.indexOf('--output-schema')), 'features', 'list']));
       expect(Object.keys(preflight[2]!.env!).some((key) => /_(?:key|token|secret)$/i.test(key))).toBe(false);
       expect(outputSchema.additionalProperties).toBe(false);
       expect(args.join(' ')).not.toContain('Private request');
@@ -650,7 +667,7 @@ body
       expect(input).toContain('Private request');
       expect(input.startsWith(catalog)).toBe(true);
       expect(Object.keys(childEnv).some((key) => /_(?:key|token|secret)$/i.test(key))).toBe(false);
-      expect(childEnv.CODEX_HOME).toBe('keep-auth-home');
+      expect(childEnv.CODEX_HOME).toBe(authHome);
     } finally {
       vi.unstubAllEnvs();
     }

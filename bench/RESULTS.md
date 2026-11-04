@@ -218,14 +218,22 @@ flowchart LR
   Library --> Loadout[Loadout hook and MCP, no native copies]
   Loadout --> Preflight
   Preflight --> Rows2[Loadout rows with the same manifest hash]
-  Rows --> Judge[Blind both-order Opus judge]
+  Rows --> Judge[Blind both-order Codex Terra judge]
   Rows2 --> Judge
 ```
 
 - **Primary:** 250 skills, Codex `gpt-6-luna`, medium effort, ten C1 test
   prompts, two repeats, arms `native,loadout`: 40 measured runs plus one
-  warm-up per arm. Claude Opus judges each pair blind in both orders:
-  40 judge calls, sequential. Claude-host execution remains blocked on E12.
+  warm-up per arm. Codex / `gpt-6.1-terra` judges each pair blind in both
+  orders: 40 judge calls, sequential, sharing the agent's Codex quota windows.
+  **Family-rule override, Erik, 2026-11-04:** Terra shares the OpenAI family
+  with the Luna agent and Sol C1 request writer. Anthropic's five-hour limit
+  keeps stopping runs, so Erik selected OpenAI models for these tests.
+  Same-family bias is not independently controlled; this is not cross-family
+  quality validation. C14's recorded Opus judgments remain unchanged.
+  The installed Codex 0.163.0 still reports `unified_exec=true` when disabled;
+  the tool-less preflight therefore blocks C15 before any agent spending
+  (E12). Claude-host execution also remains blocked on E12.
 - **Prompt rule (review correction, before any C15 run):** freeze eligibility
   for the nine hash-selected rows using only request text, without reading
   Jev selections or usefulness judgments. Take the first nine eligible

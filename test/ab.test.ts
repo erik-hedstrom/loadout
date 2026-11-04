@@ -713,6 +713,20 @@ describe('resuming and finishing a study', () => {
   };
   const rows = [row({ id: 'claude/bare/warmup/0', prompt: 'warmup', repeat: 0, warmup: true }), row({ id: 'claude/loadout/p1/1', arm: 'loadout' })];
 
+  it('resumes a legacy C14 folder with Opus, preserving and skipping its recorded verdict', async () => {
+    const rs = [1, 2].flatMap((repeat) => (['bare', 'loadout'] as const).map((arm) => row({ id: `${arm}-${repeat}`, host: 'codex', arm, prompt: 'c1-web-14', repeat })));
+    const dir = study(rs);
+    const old = JSON.stringify({ host: 'codex', prompt: 'c1-web-14', repeat: 1, winner: 'tie', judge: { backend: 'claude', model: 'opus' }, redactions: { bare: 0, loadout: 0 } }) + '\n';
+    writeFileSync(join(dir, 'verdicts.jsonl'), old);
+    const judge = vi.spyOn(benchLib, 'modelJson').mockResolvedValue({ output: { winner: 'tie', confidence: 'high', reasons: 'fixture' }, costUsd: 0 });
+    try {
+      await main(['--judge-only', dir], { print: () => {} });
+      expect(judge).toHaveBeenCalledTimes(2);
+      for (const call of judge.mock.calls) expect(call[2]).toMatchObject({ backend: 'claude', model: 'opus' });
+      expect(readFileSync(join(dir, 'verdicts.jsonl'), 'utf8').startsWith(old)).toBe(true);
+    } finally { judge.mockRestore(); }
+  });
+
   it.each(['listed', 'injected', 'skillsOpened'] as const)('refuses judge-only when %s lost a name to redaction', async (source) => {
     const names = ['ta<credential>'];
     const loadout = row({ id: 'loadout', arm: 'loadout', prompt: 'c1-web-14',
@@ -831,7 +845,7 @@ describe('resuming and finishing a study', () => {
     vi.stubEnv('TYPESAFE_API_KEY', held);
     const rows = [row({ id: 'b' }), row({ id: 'l', arm: 'loadout', hook: { invocations: 1, contextChars: 123, listed: [held, shape, shape], injected: [held, shape] } })];
     const dir = study(rows);
-    writeFileSync(join(dir, 'verdicts.jsonl'), JSON.stringify({ host: 'claude', prompt: 'p1', repeat: 1, winner: 'tie', judge: { backend: 'codex', model: 'test' }, redactions: { bare: 0, loadout: 0 } }) + '\n');
+    writeFileSync(join(dir, 'verdicts.jsonl'), JSON.stringify({ host: 'claude', prompt: 'p1', repeat: 1, winner: 'tie', judge: { backend: 'codex', model: 'gpt-6.1-sol' }, redactions: { bare: 0, loadout: 0 } }) + '\n');
     try {
       await main(['--judge-only', dir], { print: () => {} });
       const text = readFileSync(join(dir, 'report.md'), 'utf8');

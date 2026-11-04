@@ -1,7 +1,7 @@
 import { execFileSync, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { pathTranslator, which } from '../src/launch.js';
 import { capabilityKey } from '../src/library.js';
@@ -205,6 +205,10 @@ export const wilson = (k: number, n: number): string => {
 
 const codexJudgeConfig = (effort?: string) => [
   '-c', 'features.shell_tool=false', '-c', 'features.unified_exec=false', '-c', 'features.view_image=false',
+  '-c', 'features.hooks=false', '-c', 'features.plugins=false',
+  // rust-v0.163.0: skills.include_instructions gates the catalog, not explicit skill injection.
+  // project_doc_max_bytes gates repository AGENTS, not global AGENTS (refused below).
+  '-c', 'skills.include_instructions=false', '-c', 'project_doc_max_bytes=0',
   ...(effort ? ['-c', `model_reasoning_effort=${JSON.stringify(effort)}`] : []),
 ];
 
@@ -214,6 +218,12 @@ const codexJudgeConfig = (effort?: string) => [
  * judge asks before it spends anything.
  */
 export function codexJudgeRefusal(effort?: string): string | undefined {
+  // --ignore-user-config and project_doc_max_bytes do not exclude CodexHomeUserInstructionsProvider.
+  // Keep the authentication home in place, but refuse instructions there just as the agent arms do.
+  const home = process.env.CODEX_HOME || join(homedir(), '.codex');
+  if (['AGENTS.md', 'AGENTS.override.md'].some((f) => lstatSync(join(home, f), { throwIfNoEntry: false }))) {
+    return 'Codex judging refused: global AGENTS files in CODEX_HOME reach the judge; use a dedicated authentication home without them.';
+  }
   const shim = process.platform === 'win32' ? which('codex') ?? which('codex.cmd') : undefined;
   const { bin, prefix } = codexCli(shim ? [dirname(shim)] : []);
   const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/_(?:KEY|TOKEN|SECRET)$/i.test(key)));
@@ -243,8 +253,6 @@ export function auc(pos: number[], neg: number[]): number {
   for (const p of pos) for (const n of neg) s += p > n ? 1 : p === n ? 0.5 : 0;
   return pos.length && neg.length ? s / (pos.length * neg.length) : NaN;
 }
-
-let codexToolsChecked = false;
 
 export async function modelJson<T>(prompt: string, schema: z.ZodType<T>, opts: {
   backend: string; model: string; system: string; out: string; effort?: string;
@@ -284,11 +292,8 @@ export async function modelJson<T>(prompt: string, schema: z.ZodType<T>, opts: {
     const shim = process.platform === 'win32' ? which('codex') ?? which('codex.cmd') : undefined;
     const { bin, prefix } = codexCli(shim ? [dirname(shim)] : []);
     const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/_(?:KEY|TOKEN|SECRET)$/i.test(key)));
-    if (!codexToolsChecked) {
-      const refusal = codexJudgeRefusal(opts.effort);
-      if (refusal) throw new Error(refusal);
-      codexToolsChecked = true;
-    }
+    const refusal = codexJudgeRefusal(opts.effort);
+    if (refusal) throw new Error(refusal);
     const args = [
       ...prefix,
       'exec', '--ignore-user-config', '--ignore-rules', '--ephemeral', '--skip-git-repo-check',

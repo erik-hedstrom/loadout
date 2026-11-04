@@ -541,7 +541,7 @@ Decisions for Erik:
 | C8 | P0 | Skill use with the hook-only plugin | Claude | local | done ([#25](https://github.com/erik-hedstrom/loadout/pull/25)): headless, the hook injected a skill's text in 6 of 10; Claude opened 0 of 10, none of the 4 it was only pointed to (D13) |
 | C9 | P1 | Host-model fallback router when there is no TypeSafe key | Claude (design) | cloud (code) + local (bench) | todo |
 | C10 | P2 | Bench quick fixes: sequential outcome judge, tier fixed across arms, stale A2 number | Claude | cloud | done ([#40](https://github.com/erik-hedstrom/loadout/pull/40)) |
-| C15 | P0 | Same library natively versus through loadout: task tokens, caching and retained quality | Codex (harness) + coordinator (runs) | local | harness merged ([#69](https://github.com/erik-hedstrom/loadout/pull/69)); study not run |
+| C15 | P0 | Same library natively versus through loadout: task tokens, caching and retained quality | Codex (harness) + coordinator (runs) | local | harness merged ([#69](https://github.com/erik-hedstrom/loadout/pull/69)); study not run. Erik, 2026-11-04: Terra judge through Codex, overriding family separation because Anthropic's five-hour limit interrupts runs; tool-less Codex preflight still blocks on 0.163.0 (E12) |
 | C14 | P1 | A/B pilot: three prompts with and without loadout in the stock CLIs, tokens (cached apart from uncached) and quality | Claude (harness) + Erik (runs) | cloud (harness) + local (runs) | Codex done: harness ([#47](https://github.com/erik-hedstrom/loadout/pull/47)), first pilot and measurement fixes ([#64](https://github.com/erik-hedstrom/loadout/pull/64)), rerun recorded (2026-10-26): loadout added uncached input tokens against a bare setup; the Claude arm waits on E12 |
 
 **C13. Pure-Jev baseline without more model spend.**
@@ -866,7 +866,7 @@ Acceptance:
   Codex only; Claude waits on E12.
   Preserve warm-ups, alternate arm order and C14 batch-stop/redaction rules.
 - Primary 250 skills, Luna, two repeats (40 measured + two warm-ups),
-  blind Opus judging both orders (40 sequential calls); paired effective
+  blind Codex / gpt-6.1-terra judging both orders (40 sequential calls); paired effective
   input at cached weight 0.1, output separately; fixed quality screen and
   Wilson interval. Secondary whole library, one repeat, tokens only.
 - Read-only `--plan` prints IDs, arms, argv, env names, writes, counts and
@@ -876,6 +876,16 @@ Acceptance:
 
 [Preregistered method and fixed quality rule](../../bench/RESULTS.md#c15-method-preregistered).
 [Commands](../../bench/README.md#native-library-comparison-c15).
+Judge decision, Erik, **2026-11-04**: use OpenAI models for Jev/loadout
+tests because Anthropic's five-hour limit keeps stopping runs. Terra shares
+the OpenAI family with the Luna agent and Sol C1 request writer; this is an
+explicit override of AGENTS.md's family-separation rule, not independent
+cross-family quality validation. Plans and reports disclose it; config and
+verdicts record backend/model, and inconsistent provenance refuses resume.
+C14 retains its historical Opus-on-Codex mapping. The installed Codex
+0.163.0 still reports unified_exec=true when disabled; the tool-less guard
+blocks C15 before agent spending. No real study or model call ran for this
+change ($0). [Isolation evidence and implementation handoff](C15-JUDGE-HANDOFF.md).
 Savings and quality retention: **not shown**. Round 1 reviews at `806a2d1`
 requested changes. Learnings: ignore-user-config does not hide native home
 skills; discovery needs exact name/path sets under the measured homes.

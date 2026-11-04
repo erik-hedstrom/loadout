@@ -3,11 +3,13 @@ import type { Host } from './overhead.js';
 import type { Arm } from './pairwise.js';
 import type { RequestUsage, RunUsage } from './usage.js';
 import { codexEffectiveInput } from './usage.js';
-import { DATA, readJsonl, wilson } from './lib.js';
+import { DATA, modelFamily, readJsonl, wilson } from './lib.js';
 import { join } from 'node:path';
 
 /** Frozen before the study; shared with selection so missing pairs cannot redefine the planned sample. */
 export const C15_IDS = readJsonl<{ id: string }>(join(DATA, 'ab-c15-prompts.jsonl')).map((p) => p.id);
+export const C15_JUDGE = { backend: 'codex', model: 'gpt-6.1-terra' } as const;
+export const C15_JUDGE_CAVEAT = "Family-rule override (Erik, 2026-11-04): the judge shares the agent's and request writer's OpenAI family (Luna agent, Sol C1 request writer). Anthropic's five-hour limit keeps interrupting runs; same-family bias is not independently controlled.";
 
 /**
  * What Codex's login tokens (JWTs) and API keys look like; they can occur in third-party skill text and parsed metadata.
@@ -193,6 +195,9 @@ function reportNative(rows: RunRow[], verdicts: Verdict[]): string {
   const metric = (n: number) => n.toLocaleString('en', { maximumFractionDigits: 2 });
   const out = ['# C15 native library comparison', '',
     `${measuredRows.length} measured runs; ${rows.filter((r) => r.warmup).length} warm-ups excluded; ${rows.filter((r) => r.invalid).length} invalid rows. Codex thread totals, not per-request usage.`, '',
+    `Judge provenance (saved verdicts): ${[...new Set(verdicts.map((v) => v.judge ? `${v.judge.backend} / ${v.judge.model}` : 'not recorded (legacy)'))].join(', ') || 'not shown (unjudged)'}.`,
+    ...(!verdicts.length || verdicts.some((v) => v.judge && modelFamily(v.judge.model) === 'openai')
+      ? [`Planned C15 judge: ${C15_JUDGE.backend} / ${C15_JUDGE.model}.`, C15_JUDGE_CAVEAT] : []), '',
     'Effective input = uncached input x 1 + cache write x 1 + cached input x 0.1. The 0.1 multiplier is a fixed price-sheet assumption ([OpenAI pricing](https://developers.openai.com/api/docs/pricing)), not verified Luna subscription billing. Output tokens and Jev costs are separate. Positive native minus loadout means input savings for loadout.', '',
     '| Prompt | Repeat | Arm | Uncached | Cache write | Cached | Output | Effective input | Tool calls | Skills opened | Hook context chars | skillsBudget |',
     '| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | ---: | --- |'];
