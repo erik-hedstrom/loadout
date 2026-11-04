@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, join, relative } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -33,6 +33,8 @@ afterEach(() => {
 });
 
 const byName = (checks: Awaited<ReturnType<typeof doctor>>) => Object.fromEntries(checks.map((c) => [c.name, c]));
+// Codex keys inline hook trust by its canonical CODEX_HOME; tmpdir() is itself a symlink on macOS.
+const codexConfig = () => join(realpathSync.native(join(home, 'codex')), 'config.toml');
 
 describe('doctor', () => {
   it('prints a fix for each failed check and makes no Jev call without a key', async () => {
@@ -199,7 +201,7 @@ describe('doctor', () => {
     mkdirSync(join(home, 'claude'));
     writeFileSync(join(home, 'claude', 'settings.json'), JSON.stringify({ hooks: { UserPromptSubmit: [{ hooks: [{ type: 'command', command: `${path} hook claude` }] }] } }));
     mkdirSync(join(home, 'codex'));
-    writeFileSync(join(home, 'codex', 'config.toml'), `[[hooks.UserPromptSubmit]]\n[[hooks.UserPromptSubmit.hooks]]\ntype = "command"\ncommand = ${JSON.stringify(`${path} hook codex`)}\n[hooks.state.${JSON.stringify(`${join(home, 'codex', 'config.toml')}:user_prompt_submit:0:0`)}]\ntrusted_hash = "sha256:saved-version"\n`);
+    writeFileSync(join(home, 'codex', 'config.toml'), `[[hooks.UserPromptSubmit]]\n[[hooks.UserPromptSubmit.hooks]]\ntype = "command"\ncommand = ${JSON.stringify(`${path} hook codex`)}\n[hooks.state.${JSON.stringify(`${codexConfig()}:user_prompt_submit:0:0`)}]\ntrusted_hash = "sha256:saved-version"\n`);
     const checks = byName(await doctor(config, () => okClient));
     expect(checks['Claude Code']).toMatchObject({ ok: true, detail: 'CLI not on PATH; loadout: settings hook' });
     expect(checks['Codex']).toMatchObject({ ok: true, detail: 'CLI not on PATH; loadout: hook trusted in /hooks for a saved version; Codex re-asks if changed' });
@@ -327,6 +329,13 @@ describe('doctor', () => {
     const checks = byName(await doctor(config, () => okClient));
     expect(checks['Claude Code']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: settings hook, but disableAllHooks in settings.json turns hooks off', fix: 'turn hooks back on' });
     expect(checks['Codex']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: hook, but [features] hooks = false in config.toml turns hooks off' });
+  });
+
+  // A working search server does not make up for a loadout hook the host has switched off, as on the plugin path.
+  it('fails an inline Codex hook switched off by [features] even with a search server', async () => {
+    mkdirSync(join(home, 'codex'));
+    writeFileSync(join(home, 'codex', 'config.toml'), '[[hooks.UserPromptSubmit]]\n[[hooks.UserPromptSubmit.hooks]]\ntype = "command"\ncommand = "loadout hook codex"\n\n[features]\nhooks = false\n\n[mcp_servers.loadout]\ncommand = "loadout"\n');
+    expect(byName(await doctor(config, () => okClient))['Codex']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: hook, but [features] hooks = false in config.toml turns hooks off', fix: 'turn hooks back on' });
   });
 
   it.skipIf(process.platform === 'win32')('ignores binaries found through a relative PATH entry', async () => {
@@ -491,7 +500,7 @@ describe('doctor', () => {
   it.each(['matching', 'wrong path', 'wrong group', 'wrong handler', 'missing'])('matches inline Codex trust by config path and hook position: %s', async (kind) => {
     mkdirSync(join(home, 'codex'));
     const file = join(home, 'codex', 'config.toml');
-    const key = `${kind === 'wrong path' ? join(home, 'other', 'config.toml') : file}:user_prompt_submit:${kind === 'wrong group' ? '0' : '1'}:${kind === 'wrong handler' ? '0' : '1'}`;
+    const key = `${kind === 'wrong path' ? join(home, 'other', 'config.toml') : codexConfig()}:user_prompt_submit:${kind === 'wrong group' ? '0' : '1'}:${kind === 'wrong handler' ? '0' : '1'}`;
     // Other handlers must not shift the loadout hook's persisted group/handler indices.
     const content = `[[hooks.UserPromptSubmit]]\n[[hooks.UserPromptSubmit.hooks]]\ntype = "command"\ncommand = "other hook codex"\n[[hooks.UserPromptSubmit]]\n[[hooks.UserPromptSubmit.hooks]]\ntype = "command"\ncommand = "other hook codex"\n[[hooks.UserPromptSubmit.hooks]]\ntype = "command"\ncommand = "loadout hook codex"\n${kind === 'missing' ? '' : `[hooks.state.${JSON.stringify(key)}]\ntrusted_hash = "sha256:saved-version"\n`}`;
     writeFileSync(file, content);
@@ -499,6 +508,25 @@ describe('doctor', () => {
     expect(check.ok).toBe(kind === 'matching');
     expect(check.detail).toContain(kind === 'matching' ? 'hook trusted in /hooks for a saved version' : 'hook not trusted yet: approve it in /hooks');
     expect(readFileSync(file, 'utf8')).toBe(content);
+  });
+
+  it('keys inline Codex trust by the canonical path of a symlinked CODEX_HOME', async () => {
+    const real = join(home, 'real-codex');
+    mkdirSync(real);
+    const link = join(home, 'codex-link');
+    symlinkSync(real, link, process.platform === 'win32' ? 'junction' : 'dir');
+    vi.stubEnv('CODEX_HOME', link);
+    const key = `${join(realpathSync.native(real), 'config.toml')}:user_prompt_submit:0:0`;
+    writeFileSync(join(real, 'config.toml'), `[[hooks.UserPromptSubmit]]\n[[hooks.UserPromptSubmit.hooks]]\ntype = "command"\ncommand = "loadout hook codex"\n[hooks.state.${JSON.stringify(key)}]\ntrusted_hash = "sha256:saved-version"\n`);
+    expect(byName(await doctor(config, () => okClient))['Codex']).toMatchObject({ ok: true, detail: 'CLI not on PATH; loadout: hook trusted in /hooks for a saved version; Codex re-asks if changed' });
+  });
+
+  // The plugin trust key hardcodes group 0, handler 0 of the plugin's hooks.json.
+  it('pins the plugin hook at the position its trust key names', () => {
+    const file = JSON.parse(readFileSync(join(import.meta.dirname, '../plugins/loadout-codex/hooks/hooks.json'), 'utf8')) as { hooks: Record<string, { hooks: { command?: string }[] }[]> };
+    expect(Object.keys(file.hooks)).toEqual(['UserPromptSubmit']);
+    expect(file.hooks.UserPromptSubmit!.flatMap((g) => g.hooks.map((h) => h.command))).toEqual(['loadout hook codex']);
+    expect(PLUGIN_HOOK_KEY).toBe('loadout-codex@loadout:hooks/hooks.json:user_prompt_submit:0:0');
   });
 
   it('does not count orphaned Codex hook trust as an attachment', async () => {
@@ -510,7 +538,7 @@ describe('doctor', () => {
   it.each(['untrusted', 'disabled'])('checks every inline loadout hook when a trusted plugin is also present: %s', async (kind) => {
     mkdirSync(join(home, 'codex'));
     const file = join(home, 'codex', 'config.toml');
-    const content = `[plugins."loadout-codex@loadout"]\nenabled = true\n${PLUGIN_TRUST}\n[[hooks.UserPromptSubmit]]\n[[hooks.UserPromptSubmit.hooks]]\ntype = "command"\ncommand = "loadout hook codex"\n[[hooks.UserPromptSubmit.hooks]]\ntype = "command"\ncommand = "loadout hook codex"\n[hooks.state.${JSON.stringify(`${file}:user_prompt_submit:0:0`)}]\ntrusted_hash = "sha256:saved"\n${kind === 'disabled' ? `[hooks.state.${JSON.stringify(`${file}:user_prompt_submit:0:1`)}]\nenabled = false\ntrusted_hash = "sha256:saved"\n` : ''}`;
+    const content = `[plugins."loadout-codex@loadout"]\nenabled = true\n${PLUGIN_TRUST}\n[[hooks.UserPromptSubmit]]\n[[hooks.UserPromptSubmit.hooks]]\ntype = "command"\ncommand = "loadout hook codex"\n[[hooks.UserPromptSubmit.hooks]]\ntype = "command"\ncommand = "loadout hook codex"\n[hooks.state.${JSON.stringify(`${codexConfig()}:user_prompt_submit:0:0`)}]\ntrusted_hash = "sha256:saved"\n${kind === 'disabled' ? `[hooks.state.${JSON.stringify(`${codexConfig()}:user_prompt_submit:0:1`)}]\nenabled = false\ntrusted_hash = "sha256:saved"\n` : ''}`;
     writeFileSync(file, content);
     const check = byName(await doctor(config, () => okClient))['Codex']!;
     expect(check.ok).toBe(false);

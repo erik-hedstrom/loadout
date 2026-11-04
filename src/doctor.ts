@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { delimiter, isAbsolute, join, resolve } from 'node:path';
 import { parse as parseToml } from 'smol-toml';
@@ -165,7 +165,7 @@ export async function doctor(config: Config, client: (apiKey: string) => SystemO
         const serverIssue = unstartable ? 'remove it with `claude mcp remove loadout --scope user`, or give it a non-empty command or url' : undefined;
         const found = [!hooksOff && plugin && 'plugin enabled', !hooksOff && hook && 'settings hook', runnable && 'search server'].filter(Boolean);
         // The plugin attaches its own server (D13), so a user-scope one from an earlier `claude mcp add` loads the tools twice.
-        if (found.length) return { on: [...found, unstartable].filter(Boolean).join(' and '), ...(plugin && runnable ? { duplicate: 'plugin enabled and a separately configured search server: its tools are attached twice' } : {}), ...(serverIssue ? { issue: serverIssue } : {}) };
+        if (found.length) return { on: [...found, unstartable].filter(Boolean).join(' and '), ...(plugin && runnable ? { duplicate: 'plugin enabled and a separately configured search server: its tools are attached twice' } : {}), issue: serverIssue };
         // Claude Code rewrites .claude.json often, so a read can catch it half-written: call it broken only when nothing else is attached.
         if (!userConfig) return { broken: claudeConfig };
         const off = plugin ? 'plugin enabled' : hook ? 'settings hook' : undefined;
@@ -199,9 +199,14 @@ export async function doctor(config: Config, client: (apiKey: string) => SystemO
         const serverIssue = unstartable ? 'remove [mcp_servers.loadout] from config.toml, or give it exactly one non-empty command or url' : undefined;
         // Codex 0.163.0: hooks/src/lib.rs::hook_key and declarations.rs::plugin_hook_key_source.
         // A saved hash proves past approval only; discovery.rs compares it with the current definition before running it.
+        // The plugin key's 0:0 is the handler's position in plugins/loadout-codex/hooks/hooks.json (a test pins it).
+        // Inline keys start with the config path: Codex canonicalizes a set CODEX_HOME (utils/home-dir
+        // find_codex_home_from_env, Windows verbatim prefix stripped) and uses the default ~/.codex as is.
+        // A hook position means config.toml was read, so the folder exists for realpath.
+        const keyHome = hook.length && process.env.CODEX_HOME ? realpathSync.native(codexHome) : codexHome;
         const keys = [
           ...(plugin ? ['loadout-codex@loadout:hooks/hooks.json:user_prompt_submit:0:0'] : []),
-          ...hook.map((position) => `${resolve(codexHome, 'config.toml')}:user_prompt_submit:${position}`),
+          ...hook.map((position) => `${resolve(keyHome, 'config.toml')}:user_prompt_submit:${position}`),
         ];
         const states = (config.hooks as { state?: Record<string, { trusted_hash?: unknown; enabled?: unknown }> } | undefined)?.state;
         const trust = keys.map((key) => {
@@ -219,7 +224,7 @@ export async function doctor(config: Config, client: (apiKey: string) => SystemO
           runnable && 'search server',
         ].filter(Boolean);
         const issue = serverIssue ?? trust.find((t) => t.issue)?.issue;
-        if (found.length) return { on: [...found, unstartable].filter(Boolean).join(' and '), ...(issue ? { issue } : {}) };
+        if (found.length) return { on: [...found, unstartable].filter(Boolean).join(' and '), issue };
         return unstartable ? { invalid: unstartable, issue } : {};
       },
       setup: 'codex',
