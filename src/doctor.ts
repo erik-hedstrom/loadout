@@ -160,13 +160,17 @@ export async function doctor(config: Config, client: (apiKey: string) => SystemO
         // setup adds the server in user scope; project-scoped entries apply only inside their project.
         const server = (userConfig?.mcpServers as Record<string, Record<string, unknown>> | undefined)?.loadout;
         const runnable = server && typeof server === 'object' && !Array.isArray(server) && ['command', 'url'].some((k) => typeof server[k] === 'string' && server[k].trim() !== '');
+        // An entry Claude Code cannot start is a broken setup, not an unused host, so it fails even when Codex is set up.
+        const unstartable = server !== undefined && !runnable && 'a search server in .claude.json that Claude Code cannot start';
+        const serverIssue = unstartable ? 'remove it with `claude mcp remove loadout --scope user`, or give it a non-empty command or url' : undefined;
         const found = [!hooksOff && plugin && 'plugin enabled', !hooksOff && hook && 'settings hook', runnable && 'search server'].filter(Boolean);
         // The plugin attaches its own server (D13), so a user-scope one from an earlier `claude mcp add` loads the tools twice.
-        if (found.length) return { on: found.join(' and '), ...(plugin && runnable ? { duplicate: 'plugin enabled and a separately configured search server: its tools are attached twice' } : {}) };
+        if (found.length) return { on: [...found, unstartable].filter(Boolean).join(' and '), ...(plugin && runnable ? { duplicate: 'plugin enabled and a separately configured search server: its tools are attached twice' } : {}), ...(serverIssue ? { issue: serverIssue } : {}) };
         // Claude Code rewrites .claude.json often, so a read can catch it half-written: call it broken only when nothing else is attached.
         if (!userConfig) return { broken: claudeConfig };
         const off = plugin ? 'plugin enabled' : hook ? 'settings hook' : undefined;
-        return off && hooksOff ? { off: `${off}, but disableAllHooks in settings.json turns hooks off` } : {};
+        if (off && hooksOff) return { off: `${off}, but disableAllHooks in settings.json turns hooks off` };
+        return unstartable ? { invalid: unstartable, issue: serverIssue } : {};
       },
       setup: 'claude-code',
     },
@@ -190,6 +194,9 @@ export async function doctor(config: Config, client: (apiKey: string) => SystemO
         const transports = server && typeof server === 'object' ? (['command', 'url'] as const).filter((k) => k in server) : [];
         const t = server && transports.length === 1 ? server[transports[0]!] : undefined;
         const runnable = server?.enabled !== false && typeof t === 'string' && t.trim() !== '';
+        // A present, enabled table Codex cannot start is a broken setup, not an unused host, so it fails even when Claude Code is set up.
+        const unstartable = server !== undefined && server?.enabled !== false && !runnable && 'a search server in config.toml that Codex cannot start';
+        const serverIssue = unstartable ? 'remove [mcp_servers.loadout] from config.toml, or give it exactly one non-empty command or url' : undefined;
         // Codex 0.163.0: hooks/src/lib.rs::hook_key and declarations.rs::plugin_hook_key_source.
         // A saved hash proves past approval only; discovery.rs compares it with the current definition before running it.
         const keys = [
@@ -211,9 +218,9 @@ export async function doctor(config: Config, client: (apiKey: string) => SystemO
           ...trust.slice(plugin ? 1 : 0).map((t) => t.detail),
           runnable && 'search server',
         ].filter(Boolean);
-        const issue = trust.find((t) => t.issue)?.issue;
-        if (found.length) return { on: found.join(' and '), ...(issue ? { issue } : {}) };
-        return {};
+        const issue = serverIssue ?? trust.find((t) => t.issue)?.issue;
+        if (found.length) return { on: [...found, unstartable].filter(Boolean).join(' and '), ...(issue ? { issue } : {}) };
+        return unstartable ? { invalid: unstartable, issue } : {};
       },
       setup: 'codex',
     },
@@ -224,11 +231,11 @@ export async function doctor(config: Config, client: (apiKey: string) => SystemO
     // doctor runs no binary found through an empty or relative PATH entry.
     const bin = onPath(h.bin);
     if (!bin && !h.present) continue;
-    const { on, off, broken, duplicate, issue }: { on?: string; off?: string; broken?: string; duplicate?: string; issue?: string } = state;
+    const { on, off, broken, duplicate, invalid, issue }: { on?: string; off?: string; broken?: string; duplicate?: string; invalid?: string; issue?: string } = state;
     checks.push({
       name: h.name,
       ok: broken || off || duplicate || issue ? false : on ? true : anyAttached ? null : false,
-      detail: `${bin ? (version(bin) ?? 'version unknown') : 'CLI not on PATH'}; loadout: ${broken ? 'config cannot be read or parsed' : duplicate ? `${on}; ${duplicate}` : (on ?? off ?? 'not set up')}`,
+      detail: `${bin ? (version(bin) ?? 'version unknown') : 'CLI not on PATH'}; loadout: ${broken ? 'config cannot be read or parsed' : duplicate ? `${on}; ${duplicate}` : (on ?? off ?? invalid ?? 'not set up')}`,
       fix: broken ? `repair ${broken}` : duplicate ? 'remove the separate server with `claude mcp remove loadout --scope user`' : off ? 'turn hooks back on' : issue ?? `loadout setup ${h.setup}`,
     });
   }

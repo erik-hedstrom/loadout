@@ -221,11 +221,18 @@ describe('doctor', () => {
     expect(checks['Claude Code']).toMatchObject({ ok: true, detail: 'CLI not on PATH; loadout: search server' });
   });
 
-  it.each([{ type: 'stdio' }, 'wrong', null, [], { command: '' }, { url: ' ' }, { command: 42, url: false }].map((server) => ({ server })))('does not count an unusable Claude user search server (%j)', async ({ server }) => {
+  it.each([{ type: 'stdio' }, 'wrong', null, [], { command: '' }, { url: ' ' }, { command: 42, url: false }].map((server) => ({ server })))('fails an unusable Claude user search server instead of counting it (%j)', async ({ server }) => {
     mkdirSync(join(home, 'claude'));
     writeFileSync(join(home, 'claude', '.claude.json'), JSON.stringify({ mcpServers: { loadout: server } }));
     const checks = byName(await doctor(config, () => okClient));
-    expect(checks['Claude Code']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: not set up' });
+    expect(checks['Claude Code']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: a search server in .claude.json that Claude Code cannot start', fix: 'remove it with `claude mcp remove loadout --scope user`, or give it a non-empty command or url' });
+  });
+
+  it('fails an unusable Claude user search server next to the plugin', async () => {
+    mkdirSync(join(home, 'claude'));
+    writeFileSync(join(home, 'claude', 'settings.json'), JSON.stringify({ enabledPlugins: { 'loadout@loadout': true } }));
+    writeFileSync(join(home, 'claude', '.claude.json'), JSON.stringify({ mcpServers: { loadout: { type: 'stdio' } } }));
+    expect(byName(await doctor(config, () => okClient))['Claude Code']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: plugin enabled and a search server in .claude.json that Claude Code cannot start', fix: 'remove it with `claude mcp remove loadout --scope user`, or give it a non-empty command or url' });
   });
 
   it('ignores project-scoped Claude search servers', async () => {
@@ -289,11 +296,17 @@ describe('doctor', () => {
     expect(checks['Claude Code']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: not set up' });
   });
 
-  it.each(['startup_timeout_sec = 20', 'command = ""', 'url = " "', 'command = "loadout"\nurl = "http://127.0.0.1:1"', 'command = "loadout"\nurl = ""'])('does not count a Codex server table that Codex cannot start (%s)', async (line) => {
+  it.each(['startup_timeout_sec = 20', 'command = ""', 'url = " "', 'command = "loadout"\nurl = "http://127.0.0.1:1"', 'command = "loadout"\nurl = ""'])('fails a Codex server table that Codex cannot start instead of counting it (%s)', async (line) => {
     mkdirSync(join(home, 'codex'));
     writeFileSync(join(home, 'codex', 'config.toml'), `[mcp_servers.loadout]\n${line}\n`);
     const checks = byName(await doctor(config, () => okClient));
-    expect(checks['Codex']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: not set up' });
+    expect(checks['Codex']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: a search server in config.toml that Codex cannot start', fix: 'remove [mcp_servers.loadout] from config.toml, or give it exactly one non-empty command or url' });
+  });
+
+  it('leaves a disabled Codex server table out instead of failing it', async () => {
+    mkdirSync(join(home, 'codex'));
+    writeFileSync(join(home, 'codex', 'config.toml'), '[mcp_servers.loadout]\nenabled = false\n');
+    expect(byName(await doctor(config, () => okClient))['Codex']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: not set up', fix: 'loadout setup codex' });
   });
 
   it('reports a malformed loadout config as a failed check and runs the rest on defaults', () => {
@@ -371,11 +384,11 @@ describe('doctor', () => {
     expect(checks['Claude Code']!.detail).toMatch(/^version unknown;/);
   });
 
-  it('reads a Codex server entry that is not a table as not set up', async () => {
+  it('fails a Codex server entry that is not a table', async () => {
     mkdirSync(join(home, 'codex'));
     writeFileSync(join(home, 'codex', 'config.toml'), 'mcp_servers = { loadout = "wrong" }\n');
     const checks = byName(await doctor(config, () => okClient));
-    expect(checks['Codex']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: not set up' });
+    expect(checks['Codex']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: a search server in config.toml that Codex cannot start' });
   });
 
   it('tells a broken host config apart from a missing one', async () => {
@@ -426,6 +439,8 @@ describe('doctor', () => {
     { name: 'Codex hooks off', claude: true, codex: '[plugins."loadout-codex@loadout"]\nenabled = true\n[features]\nhooks = false\n', status: 1 },
     { name: 'Codex config broken', claude: true, codex: '[invalid', status: 1 },
     { name: 'Codex hook untrusted', claude: true, codex: '[plugins."loadout-codex@loadout"]\nenabled = true\n', status: 1 },
+    // Codex rejects a server table with both transports, so this is a broken Codex setup, not an unused host.
+    { name: 'Codex server with command and url', claude: true, codex: '[mcp_servers.loadout]\ncommand = "loadout"\nurl = "http://127.0.0.1:1"\n', status: 1 },
   ])('doctor CLI exits $status with $name and both CLIs on PATH', ({ claude, codex, status, info, fix }) => {
     cpSync(join(import.meta.dirname, 'fixtures', 'library'), join(home, '.loadout', 'library'), { recursive: true });
     writeFileSync(join(home, '.loadout', 'config.json'), JSON.stringify({ router: 'lexical', embeddings: false }));
