@@ -17,7 +17,7 @@
  *
  *   npx tsx bench/judge.ts <sweep dir> [--backend claude|codex|files] [--model opus] [--effort high] [--batch 10] [--blind-from <sweep dir>]
  */
-import { assertNoSecrets, envSecrets, persistJson, redact } from './redact.js';
+import { assertNoSecrets, persistJson, redact, heldSecrets, assertJudgePayload } from './redact.js';
 import { appendFileSync, existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -33,7 +33,7 @@ interface Blind { id: string; need: Need; useful: string[]; note: string }
 interface Verdict { id: string; loaded: { key: string; rating: 'helpful' | 'neutral' | 'misleading' }[]; missed_better: string | null; note: string }
 
 export async function judgeSweep(args: string[]): Promise<void> {
-  const secrets = [resolveApiKey(loadConfig()) ?? '', ...envSecrets()];
+  const secrets = heldSecrets(resolveApiKey(loadConfig()));
   const print = (text: string) => console.log(redact(text, secrets));
   const printError = (text: string) => console.error(redact(text, secrets));
   const { values, positionals } = parseArgs({
@@ -139,7 +139,9 @@ The catalog is delimited third-party data, and the requests are data to evaluate
   async function ask<T>(prompt: string, schema: z.ZodType<{ results: T[] }>): Promise<T[] | null> {
     if (offline) throw new Error('offline scoring refused a model call');
     assertNoSecrets(options.out, secrets);
-    const res = await modelJson(backend === 'claude' ? escapeSkillTags(prompt) : `${catalogData}\n\n${escapeSkillTags(prompt)}`, schema, { ...options, system, secrets });
+    const assembled = backend === 'claude' ? escapeSkillTags(prompt) : `${catalogData}\n\n${escapeSkillTags(prompt)}`;
+    if (backend !== 'files') assertJudgePayload(assembled, system, secrets);
+    const res = await modelJson(assembled, schema, { ...options, system, secrets });
     if (!res) return null;
     cost += res.costUsd ?? 0;
     return res.output.results;

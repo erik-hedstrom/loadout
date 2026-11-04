@@ -1,3 +1,4 @@
+import { loadConfig, resolveApiKey } from '../src/config.js';
 /**
  * B7: what configured MCP servers cost per request, natively and through loadout's gateway. Nothing is
  * spent without `--run`; the method, the arms, the estimate and the commands are in docs/loop/BACKLOG.md
@@ -9,7 +10,7 @@
  * deferral may be claimed) share one process with `--no-session-persistence`, so no transcript lands in ~/.claude;
  * Codex gets one `--ephemeral` request.
  */
-import { assertNoSecrets, envSecrets, persistJson } from './redact.js';
+import { assertNoSecrets, envSecrets, persistJson, heldSecrets } from './redact.js';
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { homedir, tmpdir, userInfo } from 'node:os';
@@ -490,7 +491,7 @@ async function codexPreflight(plan: Plan, deps: Required<Deps>, out: string, sec
 
 export async function runStudy(plan: Plan, out: string, deps: Deps = {}): Promise<{ rows: Row[]; notes: string[] }> {
   if (plan.blockers.length) throw new Error(`blocked: ${plan.blockers.join('; ')}`);
-  const secrets = [process.env.CLAUDE_CODE_OAUTH_TOKEN ?? '', ...plan.runs.flatMap((r) => [r.command, ...Object.values(r.free ?? {})].flatMap((c) => envSecrets(c.env)))];
+  const secrets = [...heldSecrets(resolveApiKey(loadConfig())), ...plan.runs.flatMap((r) => [r.command, ...Object.values(r.free ?? {})].flatMap((c) => envSecrets(c.env)))];
   // Strictly sequential, each command in the emptied work directory.
   const fresh = <R>(f: (command: Command) => Promise<R>) => (command: Command) => { resetWork(plan.work); return f(command); };
   const full = { run: fresh(deps.run ?? execute), inventory: fresh(deps.inventory ?? codexMcpInventory), refused: deps.refused ?? (() => refusedFiles('codex')) };
@@ -608,7 +609,7 @@ export async function main(args: string[], deps: { print?: (s: string) => void; 
     writeFileSync(join(out, 'host-state.json'), JSON.stringify(hostState().filter((i) => i.decision.startsWith('identical')).map((i) => ({ host: i.host, item: i.item, present: presentFiles(i).map((f) => basename(f)) })), null, 1));
     const { rows, notes } = await runStudy(plan, out, { run: deps.run });
     writeFileSync(join(out, 'summary.md'), summarize(rows, notes) + '\n');
-    assertNoSecrets(out, [process.env.CLAUDE_CODE_OAUTH_TOKEN ?? '', ...envSecrets(childEnv(process.env, 'claude')), ...envSecrets(childEnv(process.env, 'codex'))]);
+    assertNoSecrets(out, heldSecrets(resolveApiKey(loadConfig())));
     rmSync(join(out, 'INCOMPLETE'));
     print(`Raw metrics: ${out}`);
   } finally { rmSync(root, { recursive: true, force: true }); }

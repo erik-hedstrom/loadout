@@ -1725,7 +1725,59 @@ Learnings (2026-10-09):
 | E18 | P1 | Patch the Vite advisories in the development lockfile | Codex | cloud | done ([#56](https://github.com/erik-hedstrom/loadout/pull/56)) |
 | E19 | P1 | Patch the production dependency advisories (zod, body-parser, fast-uri, ip-address) | Codex | cloud | done ([#61](https://github.com/erik-hedstrom/loadout/pull/61)) |
 | E20 | P2 | Docs match the evidence: HANDOFF state and the per-prompt scope claim | Codex | cloud | review ([#62](https://github.com/erik-hedstrom/loadout/pull/62)) |
-| E21 | P0 | Benchmark rows redact every held credential, in every field and encoding | Codex | cloud | done ([#77](https://github.com/erik-hedstrom/loadout/pull/77)): the after-the-fact Sol review of #73 found the redaction covered only the Claude token and only stderr; every result writer now redacts held credentials in every field and in percent-encoded forms |
+| E21 | P0 | Protect benchmark artifacts and judge payloads under the [bounded credential model](#e21-bounded-benchmark-credential-threat-model) | Codex | cloud | review ([#77](https://github.com/erik-hedstrom/loadout/pull/77)): acceptance bounded by Erik on 2026-11-04; listed residuals are outside E21 |
+
+### E21. Bounded benchmark credential threat model
+
+Decision: Erik, 2026-11-04. This is E21's acceptance; cases outside this model are
+residual risks, not defects against this item. Expected and incurred evaluation
+cost: $0; regressions use synthetic values and fake judges/providers only.
+
+1. **Held inventory.** Hold the TypeSafe key only through `resolveApiKey()`,
+   `CLAUDE_CODE_OAUTH_TOKEN`, and every matching **parent-process** environment
+   value, even if a child receives an allowlist. Match equal names or final
+   underscore-delimited segments `KEY`, `API_KEY`, `TOKEN`, `SECRET`, `PASSWORD`,
+   `PASSWD`, `PWD`, `CREDENTIAL`, `CREDENTIALS`, and `AUTH`, case-insensitively.
+   Well-known names include `PGPASSWORD`, `GITHUB_TOKEN`, `GH_TOKEN`, `NPM_TOKEN`,
+   `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `OPENAI_API_KEY`,
+   `ANTHROPIC_API_KEY`, and `TYPESAFE_API_KEY`. Bare `PWD` and `OLDPWD` are shell
+   directory settings and excluded; `DB_PWD` is held. Exclude `*_FILE` and
+   `*_PATH` by name, and numeric-limit names ending in `TOKENS`. There are no
+   value-prefix, path-shape or credential-shape heuristics. Thus `hunter2`, an
+   opaque `PGPASSWORD`, and a slash-prefixed `CLIENT_SECRET` are held. Values
+   shorter than four characters are excluded: they match ordinary text and hash
+   fragments too often to support this scanner's contract.
+2. **Encodings.** Check contents and file/directory names for raw credentials,
+   percent encoding, JSON Unicode escapes, standard/base64url encodings at all
+   three byte offsets, lower/upper hex, and UTF-16LE/BE. JSON/percent decoding is
+   bounded at four rounds; still-encoded deeper nesting is itself a refusal.
+   Reconstruct escapes within one JSON string value, but do not reassemble a
+   credential split across separate fields, lines or chunks.
+3. **Committed artifacts.** Retain sink redaction and require the shared
+   fail-closed results-folder scanner before judging and completion for rows,
+   reports, streams, outputs and B7/B12 metadata. Result symlinks and unreadable
+   entries refuse the run. B7 and B12 use the full held parent inventory.
+4. **Judge calls.** Check the fully assembled prompt and system immediately
+   before any live judge call, including `--judge-only`. A hit refuses the call;
+   scanning only an output subdirectory is insufficient for a request loaded
+   from a parent `decisions.jsonl`.
+5. **WORK folders.** Screen credential contents and names before copying.
+   WORK links/junctions and dependency trees matching the copy's `SKIP_DIRS`
+   (`node_modules`, `.git`, `.venv`, `venv`, `__pycache__`) are ignored, not leaks.
+   Never copy symlinks. Credential-bearing deliverables/final messages are
+   withheld and their rows marked `UNUSABLE`, never redacted into judge inputs.
+6. **Diagnostics.** Never echo a held value or a recoverable listed encoding,
+   including an encoded filename in a scanner error. Report sanitized relative
+   paths and forms only. Files-backend batch digests hash redacted text and its
+   public batch counter, never the original private prompt.
+
+**Residuals outside acceptance:** unknown/unlisted credential names, values under
+four characters, credentials only present in excluded credential files (other
+than the resolved TypeSafe key), unlisted transformations such as encryption or
+compression, and splitting across fields/lines/chunks except escapes within a
+single JSON string value. Skipped WORK dependency trees and links are not copied
+or judged. The scanner is a gate, not a historical cleanup: committing
+older/external results requires invoking it with the relevant held inventory.
 
 **E18. npm advisories.** `npm audit` on main reported six advisories against
 Vite 8.3.2 (GHSA-698v-4r3x-3vcv, GHSA-r825-w8mm-5pxw, GHSA-587h-7wmj-h5pm,

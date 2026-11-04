@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -31,18 +31,28 @@ afterEach(() => {
   if (root) rmSync(root, { recursive: true, force: true });
 });
 
-it.each(['content', 'filename', 'final message', 'unanticipated artifact'])('outcome withholds %s credentials before copying or judging', async (where) => {
+it.each(['content', 'filename', 'final message', 'unanticipated artifact', 'parent decision credential', 'dependency links'])('outcome withholds %s credentials before copying or judging', async (where) => {
   root = mkdtempSync(join(tmpdir(), 'loadout-outcome-screen-'));
   vi.stubEnv('LOADOUT_HOME', root); vi.stubEnv('TYPESAFE_API_KEY', secret);
   const encoded = encodeURIComponent(secret).replaceAll('-', '%2d');
-  writeFileSync(join(root, 'decisions.jsonl'), JSON.stringify({ id: 'fixture', request: 'fake', tier: 'medium', loaded: [], offered: [] }) + '\n');
-  const judge = vi.fn(async () => { throw new Error('must not judge credential-bearing outputs'); });
+  writeFileSync(join(root, 'decisions.jsonl'), JSON.stringify({ id: 'fixture', request: where === 'parent decision credential' ? encoded : 'fake', tier: 'medium', loaded: [], offered: [] }) + '\n');
+  const judge = vi.fn(async () => {
+    if (where === 'dependency links') return { output: { winner: 'first', confidence: 'high', reasons: 'safe' }, costUsd: 0 };
+    throw new Error('must not judge credential-bearing outputs');
+  });
   let calls = 0;
   vi.doMock('../src/launch.js', async (original) => ({ ...await original<typeof import('../src/launch.js')>(), which: () => 'fake-codex' }));
   vi.doMock('../bench/lib.js', async (original) => ({ ...await original<typeof import('../bench/lib.js')>(),
     claudeJson: judge, run: async (_bin: string, _args: string[], cwd: string) => {
       const tainted = calls++ === 0;
       writeFileSync(join(cwd, tainted && where === 'filename' ? encoded : 'answer.txt'), tainted && where === 'content' ? encoded : 'safe');
+      if (where === 'dependency links') {
+        const target = join(root, 'dependency-source'); mkdirSync(target, { recursive: true });
+        writeFileSync(join(target, 'private'), secret);
+        mkdirSync(join(cwd, 'node_modules', '.bin'), { recursive: true });
+        symlinkSync(target, join(cwd, 'node_modules', '.bin', 'npm'), process.platform === 'win32' ? 'junction' : 'dir');
+        symlinkSync(target, join(cwd, 'linked'), process.platform === 'win32' ? 'junction' : 'dir');
+      }
       if (tainted && where === 'unanticipated artifact') writeFileSync(join(root, 'outcome', 'unknown-writer.txt'), encoded);
       const stdout = tainted && where === 'final message' ? JSON.stringify({ type: 'item.completed', item: { type: 'agent_message', text: encoded } }) : '';
       return { stdout, stderr: '', code: 0, timedOut: false };
@@ -52,6 +62,15 @@ it.each(['content', 'filename', 'final message', 'unanticipated artifact'])('out
   process.argv = [process.execPath, 'bench/outcome.ts', root, '--ids', 'fixture'];
   vi.resetModules();
   if (where === 'unanticipated artifact') await expect(import('../bench/outcome.js')).rejects.toThrow(/UNUSABLE.*unknown-writer.txt/);
+  else if (where === 'parent decision credential') await expect(import('../bench/outcome.js')).rejects.toThrow(/UNUSABLE.*judge payload/);
+  else if (where === 'dependency links') {
+    await import('../bench/outcome.js');
+    const out = join(root, 'outcome', 'fixture');
+    expect(JSON.parse(readFileSync(join(out, 'bare.json'), 'utf8')).invalid).toBeUndefined();
+    expect(readdirSync(join(out, 'bare'))).toEqual(['answer.txt']);
+    expect(judge).toHaveBeenCalledTimes(2);
+    return;
+  }
   else {
     await import('../bench/outcome.js');
     const metadata = JSON.parse(readFileSync(join(root, 'outcome', 'fixture', 'bare.json'), 'utf8'));
@@ -110,7 +129,7 @@ it('holds credential-named env values without reading TypeSafe outside its resol
   const env = { GITHUB_TOKEN: secret, aws_secret_access_key: 'FAKE-AWS-opaque-secret', DB_PASSWORD: 'FAKE-password-opaque', ODD_ENV: github, GITHUB_PAT: 'FAKE-pat-opaque-value', EMPTY_TOKEN: '', PATH: 'ordinary' };
   Object.defineProperty(env, 'TYPESAFE_API_KEY', { enumerable: true, get() { throw new Error('must use resolveApiKey'); } });
   expect(JSON.parse(persistJson({ goal: `${secret} FAKE-AWS-opaque-secret FAKE-password-opaque ${github} FAKE-pat-opaque-value ordinary` }, envSecrets(env))))
-    .toEqual({ goal: '<credential> <credential> <credential> <credential> <credential> ordinary' });
+    .toEqual({ goal: `<credential> <credential> <credential> ${github} FAKE-pat-opaque-value ordinary` });
 });
 
 it('blocks credential-bearing judge inputs before asking the judge', async () => {
@@ -144,6 +163,7 @@ it.each((['sweep', 'route-bench', 'need-probe', 'mismatch-probe', 'outcome', 'ju
   const raw = { shortlist: [secret], wide: { pick: { [secret]: 1 } }, close: { pick: { [secret]: 1 }, fit: { [secret]: { '3': 1 } } } };
   const row = { id: 'fixture', task: 'fixture', category: 'fake', request: secret, tier: 'medium', arm: 'loadout', size: 20000,
     loaded: [{ key: secret, fit: 1 }], offered: [], raw, shortlist: [], costUsd: 0, ms: 1 };
+  if (script === 'outcome') row.request = 'safe request';
   const decision = { tier: 'medium', selected: [{ capability, p: 1 }], suggested: [], scored: [], router: 'jev', stats: { ms: 1, librarySize: 1, candidates: 1 }, warning: secret };
   if (script === 'judge') {
     row.loaded = [{ key: 'safe', fit: 1 }];

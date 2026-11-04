@@ -10,7 +10,7 @@ import type { Capability, RawRouting, RepoSignals, RouteDecision, ScoredCapabili
 import type { SweepRow } from './sweep.js';
 import { tokenUsage, type TokenUsage } from './usage.js';
 import { loadConfig, resolveApiKey } from '../src/config.js';
-import { assertNoSecrets, envSecrets, redact } from './redact.js';
+import { assertNoSecrets, redact, heldSecrets, assertJudgePayload } from './redact.js';
 
 const BENCH = import.meta.dirname;
 export const DATA = join(BENCH, 'data');
@@ -257,24 +257,24 @@ export async function modelJson<T>(prompt: string, schema: z.ZodType<T>, opts: {
   backend: string; model: string; system: string; out: string; effort?: string; secrets?: string[];
 }): Promise<{ output: T; costUsd: number | null } | null> {
   backendOf(opts.backend, opts.effort);
+  const secrets = [...heldSecrets(resolveApiKey(loadConfig())), ...(opts.secrets ?? [])];
   const jsonSchema = z.toJSONSchema(schema, { target: 'draft-07' });
   if (opts.backend === 'claude') {
     const res = await claudeJson<unknown>(prompt, jsonSchema, opts);
     return { output: schema.parse(res.output), costUsd: res.costUsd };
   }
   if (opts.backend === 'files') {
-    const secrets = opts.secrets ?? [resolveApiKey(loadConfig()) ?? '', ...envSecrets()];
     const raw = `Backend: ${opts.backend}\nModel: ${opts.model}\n\n## System\n\n${opts.system}\n\n## User\n\n${prompt}\n\n## JSON output schema\n\n${JSON.stringify(jsonSchema, null, 2)}\n`;
-    // Redaction can collapse distinct batches. The digest preserves their identity without saving the private text.
-    const content = `Batch SHA256: ${createHash('sha256').update(raw).digest('hex')}\n${redact(raw, secrets)}`;
+    const clean = redact(raw, secrets);
+    const content = (counter: number) => `Batch SHA256: ${createHash('sha256').update(counter + '\n' + clean).digest('hex')}\n${clean}`;
     const dir = join(opts.out, 'batches');
     mkdirSync(dir, { recursive: true });
     const prompts = readdirSync(dir).filter((f) => /^\d+\.prompt\.md$/.test(f)).sort();
     // Match by content so completed rows and retries cannot shift answers onto another batch.
-    const existing = prompts.find((f) => readFileSync(join(dir, f), 'utf8') === content);
+    const existing = prompts.find((f) => readFileSync(join(dir, f), 'utf8') === content(Number(f.split('.')[0])));
     const number = Math.max(0, ...prompts.map((f) => Number(f.split('.')[0]))) + 1;
     const file = existing ?? `${String(number).padStart(3, '0')}.prompt.md`;
-    if (!existing) writeFileSync(join(dir, file), content, { flag: 'wx' });
+    if (!existing) writeFileSync(join(dir, file), content(number), { flag: 'wx' });
     assertNoSecrets(opts.out, secrets);
     const answer = join(dir, file.replace('.prompt.md', '.answer.json'));
     const stat = lstatSync(answer, { throwIfNoEntry: false });
@@ -286,6 +286,7 @@ export async function modelJson<T>(prompt: string, schema: z.ZodType<T>, opts: {
     return { output: schema.parse(JSON.parse(readFileSync(answer, 'utf8'))), costUsd: null };
   }
   const content = `${prompt}\n\n## System\n\n${opts.system}\n\nUse only the supplied data; do not use tools. Return JSON matching this schema:\n${JSON.stringify(jsonSchema)}`;
+  assertJudgePayload(content, opts.system, secrets);
   const dir = mkdtempSync(join(tmpdir(), 'loadout-bench-codex-'));
   try {
     const schemaFile = join(dir, 'schema.json');
@@ -331,7 +332,8 @@ export async function modelJson<T>(prompt: string, schema: z.ZodType<T>, opts: {
  * stdin (the Windows claude.exe has a 32K command-line limit), and MCP servers,
  * tools and settings are stripped so they do not pollute cost measurements.
  */
-export function claudeJson<T>(prompt: string, schema: object, opts: { model: string; system: string; timeoutMs?: number }): Promise<ClaudeResult<T>> {
+export function claudeJson<T>(prompt: string, schema: object, opts: { model: string; system: string; timeoutMs?: number; secrets?: string[] }): Promise<ClaudeResult<T>> {
+  assertJudgePayload(prompt, opts.system, [...heldSecrets(resolveApiKey(loadConfig())), ...(opts.secrets ?? [])]);
   const args = [
     '-p',
     '--model', opts.model,

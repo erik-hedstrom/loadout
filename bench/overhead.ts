@@ -1,6 +1,6 @@
 /** B1: text-listing overhead, through official host CLIs. No model calls in --plan. */
 import { loadConfig, resolveApiKey } from '../src/config.js';
-import { assertNoSecrets, envSecrets, persistJson, redact } from './redact.js';
+import { assertNoSecrets, envSecrets, persistJson, redact, heldSecrets } from './redact.js';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { appendFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
@@ -494,7 +494,7 @@ function ambientInventory(inventory: Inventory, configuration: Configuration) {
   });
 }
 export async function runStudy(plan: Plan, out: string, deps: StudyDeps = {}) {
-  const secrets = [resolveApiKey(loadConfig()) ?? '', ...envSecrets(), ...plan.calls.flatMap((c) => envSecrets(c.command.env))];
+  const secrets = [...heldSecrets(resolveApiKey(loadConfig())), ...plan.calls.flatMap((c) => envSecrets(c.command.env))];
   mkdirSync(out, { recursive: true });
   const checked = await preflight(plan, deps, (configuration, result) => appendFileSync(join(out, 'preflight.jsonl'), persistJson({ host: 'codex', configuration, ...result }, secrets) + '\n'));
   const codexReady = [...checked.values()].every((r) => r.refusals.length === 0);
@@ -550,7 +550,7 @@ export function summarize(rows: Row[], offline: Map<Configuration, Preflight> = 
 
 export async function main(args: string[], deps: StudyDeps & { print?: (s: string) => void } = {}) {
   const { values } = parseArgs({ args, options: { plan: { type: 'boolean' }, library: { type: 'string' } } });
-  const secrets = [resolveApiKey(loadConfig()) ?? '', ...envSecrets()];
+  const secrets = heldSecrets(resolveApiKey(loadConfig()));
   const print = (text: string) => (deps.print ?? console.log)(redact(text, secrets));
   const root = mkdtempSync(join(tmpdir(), 'loadout-overhead-'));
   try {

@@ -1,5 +1,5 @@
 /** Cache-aware OpenCode study. See bench/README.md for the offline plan and explicit execution commands. */
-import { assertNoSecrets, envSecrets, persistJson, redact } from './redact.js';
+import { assertNoSecrets, persistJson, redact, heldSecrets } from './redact.js';
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -153,7 +153,7 @@ export async function main(args: string[]) {
     if (prepared) validateNeeds(data.tasks, prepared.skills, data.canaries);
     const config = studyConfig(loadConfig());
     const key = resolveApiKey(config);
-    const secrets = [key ?? '', ...envSecrets()];
+    const secrets = heldSecrets(key);
     console.log(persistJson({ mode: o.run ? 'run' : 'plan', opencodeVersion: OPENCODE_VERSION, nodeVersion: process.version, arms: o.arms, tasks: data.tasks.length,
       taskCounts: Object.fromEntries(['plain', 'skill-needle', 'mcp-needle'].map(k => [k, data.tasks.filter(t => t.kind === k).length])),
       runs, ...(o.heavy ? { heavyMax: o.heavy } : {}), expectedJevCalls: { preselect: data.tasks.length * o.models.length * o.reps * (o.arms.includes('preselect') ? 2 : 0), gatewayAtOneSearchPerStep: data.tasks.length * o.models.length * o.reps * (o.arms.includes('gateway') ? 40 : 0) },

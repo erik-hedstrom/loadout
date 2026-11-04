@@ -1,5 +1,6 @@
+import { loadConfig, resolveApiKey } from '../src/config.js';
 /** B12: native listing size arms and Claude's default-tools MCP pair. No host starts without --run. */
-import { assertNoSecrets, envSecrets, persistJson, redact } from './redact.js';
+import { assertNoSecrets, persistJson, redact, heldSecrets } from './redact.js';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { appendFileSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
@@ -206,7 +207,7 @@ export async function main(args: string[], deps: { run?: typeof runHost; print?:
   if (!values.library) throw new ValidationError('--library <directory> is required');
   if (!['all', 'claude', 'codex'].includes(values.host)) throw new ValidationError('--host must be all, claude or codex');
   if (values.run && !values.out) throw new ValidationError('--run requires --out <new directory>');
-  const secrets = [...envSecrets(childEnv(process.env, 'claude')), ...envSecrets(childEnv(process.env, 'codex'))];
+  const secrets = heldSecrets(resolveApiKey(loadConfig()));
   const print = (text: string) => (deps.print ?? console.log)(redact(text, secrets));
   const corpus = readListingLibrary(resolve(values.library));
   const root = mkdtempSync(join(tmpdir(), 'loadout-listing-'));

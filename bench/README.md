@@ -6,12 +6,15 @@
 npx tsx bench/scan-secrets.ts bench/results/<run>
 ```
 
-The scanner checks file contents and file/directory names recursively against
-the resolved TypeSafe key and held environment credentials, including percent
-and JSON encodings. A match, unreadable entry or symlink exits nonzero; diagnostics
-contain only sanitized relative paths and forms. Result-writing scripts run this
-gate before completion and before judging. Credential-bearing deliverables are
-withheld before copying and their runs marked `UNUSABLE`; they are not judged.
+The scanner checks every result artifact using the full parent credential
+inventory and the [bounded E21 threat model](../docs/loop/BACKLOG.md#e21-bounded-benchmark-credential-threat-model).
+It covers the listed raw, percent/JSON, base64/base64url, hex and UTF-16 forms;
+JSON/percent decoding stops at four rounds and refuses deeper nesting.
+Diagnostics contain sanitized relative paths and forms only. Result links and
+unreadable entries fail closed. Scripts run this gate before completion and
+check the assembled payload before live judging. WORK dependencies and links
+use the copy's exclusion filter; symlinks are never copied. Credential-bearing
+deliverables are withheld, marked `UNUSABLE`, and never judged.
 
 ## B12 native listing remeasurement
 

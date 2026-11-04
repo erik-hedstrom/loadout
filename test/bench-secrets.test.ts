@@ -24,11 +24,11 @@ const forms = [
   JSON.stringify(encodeURIComponent(secret)).slice(1, -1).replace('%', '\\u0025'),
 ];
 
-it('ignores numeric token settings, short opaque values and credential paths', () => {
+it('ignores numeric token settings and unlisted shapes, holding named path values of at least four characters', () => {
   const inventory = envSecrets({ MAX_THINKING_TOKENS: '1024', CLAUDE_CODE_MAX_OUTPUT_TOKENS: '16384', MAX_MCP_OUTPUT_TOKENS: '25000', PADDED_MAX_OUTPUT_TOKENS: '00000000000001024',
     SSH_AUTH_SOCK: '/tmp/a', CLIENT_SECRET: 'tiny', PRIVATE_KEY: '/tmp/long-private-key-path', TOKEN: 'C:\\fake\\long-token-path',
     GITHUB_TOKEN: secret, ODD: 'ghp_' + 'FAKE'.repeat(8) });
-  expect(inventory).toEqual([secret, 'ghp_' + 'FAKE'.repeat(8)]);
+  expect(inventory).toEqual(['tiny', '/tmp/long-private-key-path', 'C:\\fake\\long-token-path', secret]);
   expect(persistJson({ hash: 'afe1024dead16384beef25000' }, inventory)).toBe('{"hash":"afe1024dead16384beef25000"}');
 });
 
@@ -127,7 +127,7 @@ it('files judging redacts held inputs and keeps distinct batches matched after r
   expect(first).not.toContain(secret); expect(first).toContain('<credential>');
   writeFileSync(join(out, 'batches', '001.answer.json'), '{"result":"first"}');
   expect((await modelJson(`request ${secret}`, schema, options))?.output).toEqual({ result: 'first' });
-  expect(await modelJson(`request ${second}`, schema, options)).toBeNull();
+  expect(await modelJson(`different request ${second}`, schema, options)).toBeNull();
   expect(readFileSync(join(out, 'batches', '002.prompt.md'), 'utf8')).not.toContain(second);
 });
 

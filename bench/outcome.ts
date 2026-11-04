@@ -16,7 +16,7 @@
  * Text deliverables only (Markdown, code, JSON, CSV…): binaries are listed by
  * name but not compared. Runs use real subscriptions and take minutes each.
  */
-import { assertNoSecrets, credentialMatch, scanSecrets, envSecrets, persistJson, redact } from './redact.js';
+import { assertNoSecrets, credentialMatch, scanSecrets, persistJson, redact, heldSecrets, assertJudgePayload, copyWorkEntry } from './redact.js';
 import { appendFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -48,7 +48,7 @@ const ids = values.ids.split(',');
 const library = scanLibrary(paths.library());
 // The comparison is about skills: no mid-session search in either arm.
 const config = { ...loadConfig(), search: false };
-const secrets = [resolveApiKey(config) ?? '', ...envSecrets()];
+const secrets = heldSecrets(resolveApiKey(config));
 const print = (text: string) => console.log(redact(text, secrets));
 const out = join(dir, 'outcome');
 mkdirSync(out, { recursive: true });
@@ -71,10 +71,10 @@ if (!values['judge-only']) {
     const started = Date.now();
     const res = await run(bin, codexArgs(session, row.request + NOTE, ['-s', 'workspace-write', '--skip-git-repo-check', '--json'], { headless: true }), cwd, Number(values['timeout-s']) * 1000);
     rmSync(target, { recursive: true, force: true });
-    const unusable = scanSecrets(cwd, secrets).length > 0 || credentialMatch(toolEvents(res.stdout).finalMessage ?? '', secrets);
+    const unusable = scanSecrets(cwd, secrets, true).length > 0 || credentialMatch(toolEvents(res.stdout).finalMessage ?? '', secrets);
     if (!unusable) {
       mkdirSync(target, { recursive: true });
-      cpSync(cwd, target, { recursive: true, filter: (src) => !/[/\\](node_modules|\.git|\.venv|venv|__pycache__)([/\\]|$)/.test(src) });
+      cpSync(cwd, target, { recursive: true, filter: copyWorkEntry });
     }
     mkdirSync(join(out, id), { recursive: true });
     const metadata = { arm, model: session.model, skills: session.skills.map((c) => capabilityKey(c)), injected: session.injected.length, code: res.code, timedOut: res.timedOut, ms: Date.now() - started,
@@ -102,6 +102,7 @@ for (const id of ids.filter((id) => !judged.has(id) && existsSync(join(out, id, 
   const files = { bare: deliverables(join(out, id, 'bare')), loadout: deliverables(join(out, id, 'loadout')) };
   const { winner, orders: [a, b] } = await judgePair(row.request, files, async (prompt) => {
     assertNoSecrets(out, secrets);
+    assertJudgePayload(prompt, JUDGE_SYSTEM, secrets);
     const res = await claudeJson<Pref>(prompt, schema, { model: values.judge!, system: JUDGE_SYSTEM });
     cost += res.costUsd;
     return { ...res.output, usage: res.usage, usageError: res.usageError };

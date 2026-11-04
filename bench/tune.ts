@@ -7,7 +7,7 @@
  *
  *   npx tsx bench/tune.ts <results dir> [--v1 <old results dir>]
  */
-import { assertNoSecrets, envSecrets } from './redact.js';
+import { assertNoSecrets, heldSecrets } from './redact.js';
 import { loadConfig, resolveApiKey } from '../src/config.js';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -199,5 +199,5 @@ lines.push('', 'Gold share is a lower bound on precision: in a 20,000-skill libr
 const md = lines.join('\n') + '\n';
 writeFileSync(join(dir, 'summary.md'), md);
 writeFileSync(join(dir, 'tuned.json'), JSON.stringify(chosen.map((c) => ({ budget: c.budget, policy: c.policy, dev: c.dev })), null, 2));
-assertNoSecrets(dir, [resolveApiKey(loadConfig()) ?? '', ...envSecrets()]);
+assertNoSecrets(dir, heldSecrets(resolveApiKey(loadConfig())));
 console.log(md);

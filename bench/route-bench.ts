@@ -17,7 +17,7 @@
  *
  *   npx tsx bench/route-bench.ts [--sizes 1000,5000,20000] [--arms popular,bm25,hybrid,loadout] [--frontier 20]
  */
-import { assertNoSecrets, envSecrets, persistJson } from './redact.js';
+import { assertNoSecrets, persistJson, heldSecrets } from './redact.js';
 import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -101,7 +101,7 @@ const popularTokens = popular.reduce((sum, s) => sum + descTokens(s), 0);
 const base = loadConfig();
 const config: Config = { ...DEFAULT_CONFIG, jev: base.jev, router: 'jev' };
 const apiKey = resolveApiKey(base);
-const secrets = [apiKey ?? '', ...envSecrets()];
+const secrets = heldSecrets(apiKey);
 if (ARMS.has('loadout') && !apiKey) throw new Error('loadout arm needs TYPESAFE_API_KEY or jev.apiKeyFile in ~/.loadout/config.json');
 const client = apiKey ? jevClient({ apiKey, baseUrl: jevBaseUrl(config), model: config.jev.model, timeoutMs: 30_000, retries: 5 }) : undefined;
 

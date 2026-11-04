@@ -865,11 +865,10 @@ describe('measurement', () => {
     } finally { spy.mockRestore(); }
   });
 
-  it('redacts the launch token in B7 row metadata and allowlisted preflight credentials', async () => {
-    const secret = 'haiku-FAKE-b7-token';
-    vi.stubEnv('CLAUDE_CODE_OAUTH_TOKEN', secret);
+  it('redacts parent GitHub credentials in B7 rows and preflight even when the child has no token', async () => {
+    const secret = 'haiku-FAKE-parent-github';
+    vi.stubEnv('GITHUB_TOKEN', secret);
     const p = small(), out = temp();
-    for (const r of p.runs) if (r.free) r.free.version.env = { ...r.free.version.env, FAKE_AUTH_TOKEN: secret };
     const h = fakeHost(p, { model: () => secret, codexVersion: () => secret });
     await runStudy(p, out, { run: h.run, inventory: h.inventory, refused: () => [] });
     for (const file of ['rows.jsonl', 'preflight.jsonl']) {

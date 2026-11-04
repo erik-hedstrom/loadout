@@ -6,7 +6,7 @@
  *
  *   npx tsx bench/mismatch-probe.ts <judged sweep dir> [--blind-from <dir>]
  */
-import { assertNoSecrets, envSecrets, persistJson, redact } from './redact.js';
+import { assertNoSecrets, persistJson, redact, heldSecrets } from './redact.js';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -31,7 +31,7 @@ const blind = new Map(readJsonl<{ id: string; useful: string[] }>(join(values['b
 const verdicts = new Map(readJsonl<{ id: string; loaded: { key: string; rating: string }[] }>(join(dir, 'judge-verdicts.jsonl')).map((v) => [v.id, v]));
 const config = loadConfig();
 const apiKey = resolveApiKey(config);
-const secrets = [apiKey ?? '', ...envSecrets()];
+const secrets = heldSecrets(apiKey);
 const client = jevClient({ apiKey: apiKey!, baseUrl: jevBaseUrl(config), model: config.jev.model });
 const byKey = new Map(scanLibrary(paths.library()).map((c) => [capabilityKey(c), c]));
 

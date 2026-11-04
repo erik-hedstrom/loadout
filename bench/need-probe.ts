@@ -6,7 +6,7 @@
  *
  *   TYPESAFE_API_KEY=... npx tsx bench/need-probe.ts <route-bench results dir>
  */
-import { assertNoSecrets, envSecrets, persistJson } from './redact.js';
+import { assertNoSecrets, persistJson, heldSecrets } from './redact.js';
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { jevBaseUrl, loadConfig, resolveApiKey } from '../src/config.js';
@@ -40,7 +40,7 @@ const tasks = loadTasks();
 
 const config = loadConfig();
 const apiKey = resolveApiKey(config);
-const secrets = [apiKey ?? '', ...envSecrets()];
+const secrets = heldSecrets(apiKey);
 if (!apiKey) throw new Error('needs TYPESAFE_API_KEY');
 const client = jevClient({ apiKey, baseUrl: jevBaseUrl(config), model: config.jev.model, timeoutMs: 30_000 });
 

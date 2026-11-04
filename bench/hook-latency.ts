@@ -4,7 +4,7 @@
  * fake Jev, including replayed answers in the CLI subprocess (no Jev traffic).
  * Prompts omit session_id so repeat measurements neither reuse nor write state.
  */
-import { assertNoSecrets, envSecrets, persistJson } from './redact.js';
+import { assertNoSecrets, persistJson, heldSecrets } from './redact.js';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -66,7 +66,7 @@ if (isEntry(import.meta.url)) {
   const config = loadConfig();
   if (config.router !== 'jev') throw new Error('latency measurement needs router "jev" to exercise both requests');
   const apiKey = resolveApiKey(config);
-  const secrets = [apiKey ?? '', ...envSecrets()];
+  const secrets = heldSecrets(apiKey);
   const mode = apiKey ? 'real Jev' : 'fake client (no key; subprocess replays fake answers)';
   console.log(`Expected Jev cost: 2 requests/prompt, about $0.0011/decision (RESULTS v4).`);
   console.log(`Two passes (in-process + subprocess): up to ${4 * limit} requests, ~$${(0.0022 * limit).toFixed(4)} real; fake $0.`);

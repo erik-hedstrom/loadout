@@ -41,7 +41,7 @@ import { parseArgs } from 'node:util';
 import { loadConfig, paths, resolveApiKey } from '../src/config.js';
 import { claudeArgs, claudeHookBlock, codexArgs, hookCommand, materialize, pathTranslator, SEARCH_TOOLS, searchServer, which, type Agent } from '../src/launch.js';
 import { capabilityKey, scanLibrary } from '../src/library.js';
-import { assertNoSecrets, envSecrets, persistJson, redact } from './redact.js';
+import { assertNoSecrets, persistJson, redact, heldSecrets } from './redact.js';
 import { decisionFor, readJsonl, run } from './lib.js';
 import { hookShim, toolEvents, type Inventory } from './stream.js';
 import type { SweepRow } from './sweep.js';
@@ -72,7 +72,7 @@ const rows = new Map(readJsonl<SweepRow>(join(dir, 'decisions.jsonl')).map((r) =
 const library = scanLibrary(paths.library());
 const byKey = new Map(library.map((c) => [capabilityKey(c), c]));
 const config = { ...loadConfig(), search: mode !== 'plugin' };
-const secrets = [resolveApiKey(config) ?? '', ...envSecrets()];
+const secrets = heldSecrets(resolveApiKey(config));
 const bin = which(agent);
 if (!bin) throw new Error(`${agent} not on PATH`);
 const toPath = pathTranslator(bin);

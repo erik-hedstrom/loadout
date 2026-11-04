@@ -12,7 +12,7 @@
  * the cache writes to whichever arm ran first. So every host and arm starts with one recorded warm-up run (excluded from
  * the comparisons, reported as the cold start), and the measured runs alternate between the arms.
  */
-import { assertNoSecrets, credentialMatch, envSecrets, scanSecrets, CREDENTIAL_SHAPE, persistJson, redact, TOKEN_ANYWHERE } from './redact.js';
+import { assertNoSecrets, credentialMatch, envSecrets, scanSecrets, CREDENTIAL_SHAPE, persistJson, redact, TOKEN_ANYWHERE, heldSecrets, assertJudgePayload, copyWorkEntry } from './redact.js';
 import { appendFileSync, copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
@@ -262,7 +262,6 @@ export function checkRun(job: Pick<Job, 'host' | 'arm'>, e: Evidence): string | 
 
 // --- Deliverables -----------------------------------------------------------------------------
 
-const SKIP_DIRS = /[/\\](node_modules|\.git|\.venv|venv|__pycache__)([/\\]|$)/;
 
 /** Text a public row may carry: this machine's folders, as variables. */
 export function scrub(text: string, folders: [string, string][]): string {
@@ -272,7 +271,7 @@ export function scrub(text: string, folders: [string, string][]): string {
 const CREDENTIAL_IN_OUTPUT = 'UNUSABLE: credential in output';
 
 function heldSecretLeak(work: string, secrets: string[]): Leak | null {
-  const hit = scanSecrets(work, secrets)[0];
+  const hit = scanSecrets(work, secrets, true)[0];
   return hit ? { file: hit.file, rule: 'held secret' } : null;
 }
 
@@ -313,7 +312,7 @@ export function copyOutputs(work: string, dest: string, folders: [string, string
 export function hiddenResult(folder: string, hiddenTest: string): { passed: boolean; tests: number; failed: number } {
   const dir = mkdtempSync(join(tmpdir(), 'loadout-ab-hidden-'));
   try {
-    cpSync(folder, dir, { recursive: true, filter: (src) => !SKIP_DIRS.test(src) });
+    cpSync(folder, dir, { recursive: true, filter: copyWorkEntry });
     copyFileSync(hiddenTest, join(dir, 'hidden.test.mjs'));
     const r = spawnSync(process.execPath, ['--test', '--test-reporter=tap', 'hidden.test.mjs'], { cwd: dir, encoding: 'utf8', timeout: 60_000, env: { PATH: process.env.PATH, SYSTEMROOT: process.env.SYSTEMROOT } });
     const n = (k: string) => Number(new RegExp(`^# ${k} (\\d+)`, 'm').exec(r.stdout ?? '')?.[1] ?? 0);
@@ -749,6 +748,7 @@ async function judgeAll(out: string, print: (s: string) => void, secrets: string
     const judge = JUDGES[host];
     const verdict = await judgePair(requests.find((r) => r.id === prompt)!.request, { [baseline]: bareFiles.text, loadout: loadoutFiles.text }, async (p) => {
       assertNoSecrets(out, secrets);
+      assertJudgePayload(p, JUDGE_SYSTEM, secrets);
       const res = await modelJson(p, PrefSchema, { backend: judge.backend, model: judge.model, system: JUDGE_SYSTEM, out, secrets });
       if (!res) throw new Error('the judge backend returned no answer');
       return res.output;
@@ -764,12 +764,12 @@ async function judgeAll(out: string, print: (s: string) => void, secrets: string
 
 export async function main(args: string[], deps: { print?: (s: string) => void; env?: NodeJS.ProcessEnv } = {}): Promise<void> {
   const env = deps.env ?? process.env;
-  const secrets = envSecrets(env);
+  let secrets = [...envSecrets(), ...envSecrets(env)];
   try {
     let config;
     try { config = loadConfig(); } catch { /* blockers reports an invalid config; judge-only still works from saved rows */ }
     const key = resolveApiKey(config ?? DEFAULT_CONFIG);
-    if (key) secrets.push(key);
+    secrets = heldSecrets(key, env);
     const result = await mainImpl(args, (s) => (deps.print ?? console.log)(redact(s, secrets)), env, secrets);
     if (result) {
       assertNoSecrets(result.out, secrets);

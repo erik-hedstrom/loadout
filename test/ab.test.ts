@@ -856,6 +856,19 @@ describe('resuming and finishing a study', () => {
     } finally { judge.mockRestore(); }
   });
 
+  it('refuses a parent request credential in the fully assembled judge-only payload', async () => {
+    const secret = 'FAKE-parent-judge-request'; vi.stubEnv('DB_PASSWORD', secret);
+    const dir = study([row({ id: 'bare', prompt: 'c1-web-14' }), row({ id: 'loadout', prompt: 'c1-web-14', arm: 'loadout' })]);
+    const read = benchLib.readJsonl;
+    const source = vi.spyOn(benchLib, 'readJsonl').mockImplementation((file) => file.endsWith('requests-c1.jsonl')
+      ? [{ id: 'c1-web-14', request: Buffer.from(secret).toString('base64') }] as never : read(file));
+    const judge = vi.spyOn(benchLib, 'modelJson').mockResolvedValue({ output: { winner: 'first', confidence: 'high', reasons: 'safe' }, costUsd: 0 });
+    try {
+      await expect(main(['--judge-only', dir], { print: () => {} })).rejects.toThrow(/UNUSABLE.*judge payload/);
+      expect(judge).not.toHaveBeenCalled();
+    } finally { source.mockRestore(); judge.mockRestore(); }
+  });
+
   it('--judge-only removes the INCOMPLETE marker only when every scheduled run has a row', async () => {
     const dir = study(rows);
     await main(['--judge-only', dir], { print: () => {} });
@@ -994,7 +1007,7 @@ describe('credential screening before persistence', () => {
     const lead = prefix ? leads[prefix]! : '';
     const value = lead + secret;
     const target = when === 'warmup' ? 0 : 2;
-    const stops = kind === 'held' || kind === 'encoded' || (when !== 'warmup' && (where === 'final message' || where.startsWith('deliverable')));
+    const stops = kind === 'held' && where !== 'node_modules' || kind === 'encoded' || (when !== 'warmup' && (where === 'final message' || where.startsWith('deliverable')));
     let runs = 0;
     vi.spyOn(benchLib, 'run').mockImplementation(async (_bin, _args, work) => {
       const tainted = runs++ === target;

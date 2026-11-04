@@ -271,9 +271,9 @@ it('refuses unsafe writer names and existing destination files', () => {
 });
 
 
-it('redacts allowlisted credentials in B12 resolved model metadata', async () => {
+it('redacts parent GitHub credentials in B12 metadata even though child env excludes them', async () => {
   const secret = 'FAKE-listing-client-key';
-  vi.stubEnv('CLAUDE_CODE_CLIENT_KEY', secret);
+  vi.stubEnv('GITHUB_TOKEN', secret);
   const out = join(temp(), 'redacted');
   const printed: string[] = [];
   await main(['--library', library(), '--host', 'claude', '--run', '--out', out, '--claude-model', secret], {

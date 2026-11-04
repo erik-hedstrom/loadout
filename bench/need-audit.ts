@@ -6,7 +6,7 @@
  *
  * The split defaults to dev: tune on dev, report on test once (AGENTS.md).
  */
-import { assertNoSecrets, envSecrets } from './redact.js';
+import { assertNoSecrets, heldSecrets } from './redact.js';
 import { writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -160,7 +160,7 @@ if (isEntry(import.meta.url)) {
   const report = needAudit(values.labels, positionals, values.split as 'dev' | 'test');
   if (values.out) {
     writeFileSync(values.out, report);
-    assertNoSecrets(dirname(values.out), [resolveApiKey(loadConfig()) ?? '', ...envSecrets()]);
+    assertNoSecrets(dirname(values.out), heldSecrets(resolveApiKey(loadConfig())));
   }
   console.log(report);
 }

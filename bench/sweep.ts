@@ -9,7 +9,7 @@
  *
  *   npx tsx bench/sweep.ts [--requests bench/data/requests.jsonl] [--limit 50] [--seed]
  */
-import { assertNoSecrets, envSecrets, persistJson } from './redact.js';
+import { assertNoSecrets, persistJson, heldSecrets } from './redact.js';
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -69,7 +69,7 @@ if (isEntry(import.meta.url)) {
     .map((r) => (values.seed ? { ...r, request: r.seed ?? r.request } : r));
   const config = loadConfig();
   const apiKey = resolveApiKey(config);
-  const secrets = [apiKey ?? '', ...envSecrets()];
+  const secrets = heldSecrets(apiKey);
   if (!apiKey) throw new Error('needs a TypeSafe key (loadout init)');
   const client = jevClient({ apiKey, baseUrl: jevBaseUrl(config), model: config.jev.model });
   const library = scanLibrary(paths.library());

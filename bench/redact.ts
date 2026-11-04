@@ -1,6 +1,5 @@
 import { lstatSync, readFileSync, readdirSync } from 'node:fs';
 import { basename, join } from 'node:path';
-import { redactText } from '../src/redact.js';
 
 /**
  * What Codex's login tokens (JWTs) and API keys look like; they can occur in third-party skill text and parsed metadata.
@@ -18,7 +17,8 @@ export const TOKEN_ANYWHERE = new RegExp(TOKEN);
  */
 export const CREDENTIAL_SHAPE = new RegExp(String.raw`(?<![A-Za-z0-9])${TOKEN}`);
 
-type CredentialForm = 'raw' | 'percent-encoded' | 'json-escaped' | 'json+percent-encoded';
+type CredentialForm = 'raw' | 'percent-encoded' | 'json-escaped' | 'json+percent-encoded' | 'base64' | 'hex' | 'UTF16LE' | 'UTF16BE' | 'decode-depth';
+const MAX_DECODE_ROUNDS = 4;
 
 function forms(secret: string): string[] {
   const utf8 = Buffer.from(secret);
@@ -32,26 +32,46 @@ const upperHex = (text: string) => text.replace(/%[0-9a-f]{2}/gi, (part) => part
 const unescapeJson = (text: string) => text.replace(/\\(?:u[0-9a-fA-F]{4}|["\\/bfnrt])/g, (part) => JSON.parse('"' + part + '"') as string);
 const unescapePercent = (text: string) => text.replace(/(?:%[0-9a-f]{2})+/gi, (part) => Buffer.from(part.replaceAll('%', ''), 'hex').toString('utf8'));
 
-/** Decode representations for detection only; never compile credential text into a regex or an error. */
+/** Only the representations in E21's threat model are decoded; no secret text becomes a regex or diagnostic. */
 export function credentialMatch(text: string | Buffer, secrets: string[]): CredentialForm | null {
-  const raw = text.toString();
-  const held = secrets.filter(Boolean);
-  if (held.some((secret) => raw.includes(secret))) return 'raw';
-  let decoded = raw, json = false, percent = false;
-  while (true) {
+  const patterns = secrets.filter((secret) => secret.length >= 4).flatMap((secret) => [
+    { bytes: Buffer.from(secret), form: 'raw' as const },
+    { bytes: Buffer.from(secret, 'utf16le'), form: 'UTF16LE' as const },
+    { bytes: Buffer.from(secret, 'utf16le').swap16(), form: 'UTF16BE' as const },
+  ]);
+  const direct = (bytes: Buffer) => patterns.find((pattern) => bytes.includes(pattern.bytes))?.form ?? null;
+  const terminal = (bytes: Buffer): CredentialForm | null => {
+    const raw = direct(bytes);
+    if (raw) return raw;
+    const view = bytes.toString('utf8');
+    for (const [run] of view.matchAll(/[a-fA-F0-9]{8,}/g)) for (let offset = 0; offset < 2; offset++) {
+      if (direct(Buffer.from(run.slice(offset), 'hex'))) return 'hex';
+    }
+    // Check all four character alignments of a run, so surrounding base64-alphabet text cannot hide any of the three byte offsets.
+    for (const [run] of view.matchAll(/[A-Za-z0-9+/_-]{6,}={0,2}/g)) for (let offset = 0; offset < 4; offset++) {
+      if (direct(Buffer.from(run.slice(offset), 'base64'))) return 'base64';
+    }
+    return null;
+  };
+  const raw = terminal(Buffer.isBuffer(text) ? text : Buffer.from(text));
+  if (raw) return raw;
+  let decoded = text.toString(), json = false, percent = false;
+  for (let round = 0; round < MAX_DECODE_ROUNDS; round++) {
     const jsonView = unescapeJson(decoded);
     json ||= jsonView !== decoded;
-    if (jsonView !== decoded && held.some((secret) => jsonView.includes(secret))) return percent ? 'json+percent-encoded' : 'json-escaped';
+    if (jsonView !== decoded && terminal(Buffer.from(jsonView))) return percent ? 'json+percent-encoded' : 'json-escaped';
     const next = unescapePercent(jsonView);
     percent ||= next !== jsonView;
     if (next === decoded) return null;
-    if (held.some((secret) => next.includes(secret))) return json && percent ? 'json+percent-encoded' : json ? 'json-escaped' : 'percent-encoded';
+    if (terminal(Buffer.from(next))) return json && percent ? 'json+percent-encoded' : json ? 'json-escaped' : 'percent-encoded';
     decoded = next;
   }
+  // A still-encoded value is refused rather than spending unbounded time proving it clean.
+  return unescapePercent(unescapeJson(decoded)) === decoded ? null : 'decode-depth';
 }
 
 export function redact(text: string, secrets: string[]): string {
-  for (const secret of secrets.filter(Boolean).sort((a, b) => b.length - a.length)) {
+  for (const secret of secrets.filter((secret) => secret.length >= 4).sort((a, b) => b.length - a.length)) {
     for (const form of forms(secret).sort((a, b) => b.length - a.length)) {
       // Hex case has equal width, so split offsets still refer to the original text.
       const parts = upperHex(text).split(upperHex(form));
@@ -69,28 +89,45 @@ export function redact(text: string, secrets: string[]): string {
   return text.replace(new RegExp(TOKEN, 'g'), '<credential>');
 }
 
-/** TypeSafe's key must come separately from resolveApiKey(); settings and credential file paths are not credentials. */
+/** Bare PWD/OLDPWD are shell directory settings. DB_PWD and other final PWD segments are credentials. */
 export function envSecrets(env: NodeJS.ProcessEnv = process.env): string[] {
   return Object.keys(env)
-    .filter((name) => name.toUpperCase() !== 'TYPESAFE_API_KEY')
+    .filter((name) => !['TYPESAFE_API_KEY', 'PWD', 'OLDPWD'].includes(name.toUpperCase()))
     .flatMap((name) => {
-      const value = env[name];
-      if (!value || /^(?:[\\/]|[A-Za-z]:[\\/]|~[\\/]|file:)/.test(value)) return [];
-      const named = /(?:^|_)(?:TOKEN|SECRET|PASSWORD|PASSWD|PASS|CREDENTIALS?|API_?KEY|KEY|PAT|COOKIE|AUTH|AUTHORIZATION)$/i.test(name);
-      return (named && value.length >= 16) || redactText(value).count > 0 ? [value] : [];
+      const named = /(?:^|_)(?:KEY|API_KEY|TOKEN|SECRET|PASSWORD|PASSWD|PWD|CREDENTIALS?|AUTH)$/i.test(name) || name.toUpperCase() === 'PGPASSWORD';
+      const value = named ? env[name] : undefined;
+      return value && value.length >= 4 ? [value] : [];
     });
+}
+
+/** Resolve TypeSafe separately; always retain the full parent inventory even when a child receives a filtered environment. */
+export function heldSecrets(apiKey: string | undefined, env: NodeJS.ProcessEnv = process.env): string[] {
+  return [...new Set([apiKey ?? '', ...envSecrets(), ...envSecrets(env)])].filter((value) => value.length >= 4);
+}
+
+export const SKIP_DIRS = /[/\\](node_modules|\.git|\.venv|venv|__pycache__)([/\\]|$)/;
+/** Used both before copying WORK entries and when screening that same tree. Result artifacts use the stricter scanner. */
+export function copyWorkEntry(path: string): boolean {
+  return !SKIP_DIRS.test(path) && !lstatSync(path).isSymbolicLink();
+}
+
+/** Check the final payload at the call boundary, including requests loaded from a parent decisions file. */
+export function assertJudgePayload(prompt: string, system: string, secrets: string[]): void {
+  const form = credentialMatch(prompt, secrets) ?? credentialMatch(system, secrets);
+  if (form) throw new Error(`UNUSABLE: held credential in judge payload (${form})`);
 }
 
 export interface SecretHit { file: string; form: CredentialForm | 'symlink' | 'unreadable' | 'unsupported' }
 
 /** One fail-closed gate over all public artifacts, including files a writer did not anticipate. Links are never followed. */
-export function scanSecrets(root: string, secrets: string[]): SecretHit[] {
+export function scanSecrets(root: string, secrets: string[], work = false): SecretHit[] {
   const hits: SecretHit[] = [];
   const safe = (file: string) => credentialMatch(file, secrets) ? '<credential-bearing path>' : file.replace(/[\x00-\x1f\x7f]/g, '?');
   const visit = (path: string, file: string) => {
-    const nameHit = credentialMatch(file === '.' ? basename(path) : file, secrets);
-    if (nameHit) hits.push({ file: safe(file), form: nameHit });
     try {
+      if (work && !copyWorkEntry(path)) return;
+      const nameHit = credentialMatch(file === '.' ? basename(path) : file, secrets);
+      if (nameHit) hits.push({ file: safe(file), form: nameHit });
       const stat = lstatSync(path);
       if (stat.isSymbolicLink()) hits.push({ file: safe(file), form: 'symlink' });
       else if (stat.isDirectory()) for (const name of readdirSync(path)) visit(join(path, name), file === '.' ? name : file + '/' + name);
