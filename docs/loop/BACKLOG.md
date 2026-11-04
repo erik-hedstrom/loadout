@@ -185,6 +185,11 @@ Left: Erik's one-time setup, that README change and the tag; a live
 
 **A5. Demo recording.**
 
+Status: free preparation in progress on `agent/a5-demo`. The scripts and
+recording notes are in [docs/demo](../demo/README.md); no model or Jev call is
+part of preparation. The coordinator still runs and verifies the paid take,
+then adds its GIF to the README. The stub preview is not publication material.
+
 Acceptance:
 - A `vhs` or asciinema script committed in `docs/demo/`.
 - A GIF under 2 MB in the README.
