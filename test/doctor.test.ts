@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, join, relative } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -9,6 +9,8 @@ import { jevClient, type SystemOneClient } from '../src/jev.js';
 import { claudeHookSettings, hookCommand, hostSetup } from '../src/launch.js';
 
 const KEY = 'doctor-key-canary-7731';
+const PLUGIN_HOOK_KEY = 'loadout-codex@loadout:hooks/hooks.json:user_prompt_submit:0:0';
+const PLUGIN_TRUST = `\n[hooks.state."${PLUGIN_HOOK_KEY}"]\ntrusted_hash = "sha256:saved-version"\n`;
 const config: Config = { ...DEFAULT_CONFIG, embeddings: false };
 const okClient: SystemOneClient = { ask: async () => ({ model: 'jev-test', answers: { ok: { type: 'noul', noul: 0.9 } }, usage: { input_tokens: 10, output_tokens: 0 } }) };
 
@@ -31,6 +33,8 @@ afterEach(() => {
 });
 
 const byName = (checks: Awaited<ReturnType<typeof doctor>>) => Object.fromEntries(checks.map((c) => [c.name, c]));
+// Codex keys inline hook trust by its canonical CODEX_HOME; tmpdir() is itself a symlink on macOS.
+const codexConfig = () => join(realpathSync.native(join(home, 'codex')), 'config.toml');
 
 describe('doctor', () => {
   it('prints a fix for each failed check and makes no Jev call without a key', async () => {
@@ -131,18 +135,19 @@ describe('doctor', () => {
     ].join('\n'));
     const checks = byName(await doctor(config, () => okClient));
     expect(checks['Claude Code']!.detail).toMatch(/loadout: settings hook$/);
-    expect(checks['Codex']!.detail).toMatch(/loadout: hook \(trust not checked: approve it once in \/hooks\) and search server$/);
+    expect(checks['Codex']).toMatchObject({ ok: false, fix: 'approve the hook in `/hooks`' });
+    expect(checks['Codex']!.detail).toMatch(/loadout: hook not trusted yet: approve it in \/hooks and search server$/);
   });
 
   it('recognises a plugin-only Codex install without exposing or editing config contents', async () => {
     mkdirSync(join(home, 'codex'));
     const file = join(home, 'codex', 'config.toml');
-    const content = `[plugins."loadout-codex@loadout"]\nenabled = true\nprivate = "${KEY}"\n`;
+    const content = `[plugins."loadout-codex@loadout"]\nenabled = true\nprivate = "${KEY}"\n${PLUGIN_TRUST}`;
     writeFileSync(file, content);
     const checks = await doctor(config, () => okClient);
     expect(byName(checks)['Codex']).toMatchObject({
       ok: true,
-      detail: 'CLI not on PATH; loadout: plugin enabled (hook trust not verifiable from config: approve it in /hooks)',
+      detail: 'CLI not on PATH; loadout: plugin enabled (hook trusted in /hooks for a saved version; Codex re-asks if changed)',
     });
     expect(formatDoctor(checks)).not.toContain(KEY);
     expect(readFileSync(file, 'utf8')).toBe(content);
@@ -176,12 +181,12 @@ describe('doctor', () => {
   it('reports disabled plugin search without failing Codex routing', async () => {
     mkdirSync(join(home, 'codex'));
     const file = join(home, 'codex', 'config.toml');
-    const content = `[plugins."loadout-codex@loadout"]\nenabled = true\n[plugins."loadout-codex@loadout".mcp_servers.loadout]\nenabled = false\nprivate = "${KEY}"\n`;
+    const content = `[plugins."loadout-codex@loadout"]\nenabled = true\n[plugins."loadout-codex@loadout".mcp_servers.loadout]\nenabled = false\nprivate = "${KEY}"\n${PLUGIN_TRUST}`;
     writeFileSync(file, content);
     const checks = await doctor(config, () => okClient);
     expect(byName(checks)['Codex']).toMatchObject({
       ok: true,
-      detail: 'CLI not on PATH; loadout: plugin enabled (hook trust not verifiable from config: approve it in /hooks) and search off (plugin policy)',
+      detail: 'CLI not on PATH; loadout: plugin enabled (hook trusted in /hooks for a saved version; Codex re-asks if changed) and search off (plugin policy)',
     });
     expect(formatDoctor(checks)).not.toContain(KEY);
     expect(readFileSync(file, 'utf8')).toBe(content);
@@ -196,10 +201,10 @@ describe('doctor', () => {
     mkdirSync(join(home, 'claude'));
     writeFileSync(join(home, 'claude', 'settings.json'), JSON.stringify({ hooks: { UserPromptSubmit: [{ hooks: [{ type: 'command', command: `${path} hook claude` }] }] } }));
     mkdirSync(join(home, 'codex'));
-    writeFileSync(join(home, 'codex', 'config.toml'), `[[hooks.UserPromptSubmit]]\n[[hooks.UserPromptSubmit.hooks]]\ntype = "command"\ncommand = ${JSON.stringify(`${path} hook codex`)}\n`);
+    writeFileSync(join(home, 'codex', 'config.toml'), `[[hooks.UserPromptSubmit]]\n[[hooks.UserPromptSubmit.hooks]]\ntype = "command"\ncommand = ${JSON.stringify(`${path} hook codex`)}\n[hooks.state.${JSON.stringify(`${codexConfig()}:user_prompt_submit:0:0`)}]\ntrusted_hash = "sha256:saved-version"\n`);
     const checks = byName(await doctor(config, () => okClient));
     expect(checks['Claude Code']).toMatchObject({ ok: true, detail: 'CLI not on PATH; loadout: settings hook' });
-    expect(checks['Codex']).toMatchObject({ ok: true, detail: 'CLI not on PATH; loadout: hook (trust not checked: approve it once in /hooks)' });
+    expect(checks['Codex']).toMatchObject({ ok: true, detail: 'CLI not on PATH; loadout: hook trusted in /hooks for a saved version; Codex re-asks if changed' });
   });
 
   it.each([false, true])('counts a Claude user search server without settings (default config directory: %s)', async (defaultDir) => {
@@ -218,11 +223,18 @@ describe('doctor', () => {
     expect(checks['Claude Code']).toMatchObject({ ok: true, detail: 'CLI not on PATH; loadout: search server' });
   });
 
-  it.each([{ type: 'stdio' }, 'wrong', null, [], { command: '' }, { url: ' ' }, { command: 42, url: false }].map((server) => ({ server })))('does not count an unusable Claude user search server (%j)', async ({ server }) => {
+  it.each([{ type: 'stdio' }, 'wrong', null, [], { command: '' }, { url: ' ' }, { command: 42, url: false }].map((server) => ({ server })))('fails an unusable Claude user search server instead of counting it (%j)', async ({ server }) => {
     mkdirSync(join(home, 'claude'));
     writeFileSync(join(home, 'claude', '.claude.json'), JSON.stringify({ mcpServers: { loadout: server } }));
     const checks = byName(await doctor(config, () => okClient));
-    expect(checks['Claude Code']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: not set up' });
+    expect(checks['Claude Code']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: a search server in .claude.json that Claude Code cannot start', fix: 'remove it with `claude mcp remove loadout --scope user`, or give it a non-empty command or url' });
+  });
+
+  it('fails an unusable Claude user search server next to the plugin', async () => {
+    mkdirSync(join(home, 'claude'));
+    writeFileSync(join(home, 'claude', 'settings.json'), JSON.stringify({ enabledPlugins: { 'loadout@loadout': true } }));
+    writeFileSync(join(home, 'claude', '.claude.json'), JSON.stringify({ mcpServers: { loadout: { type: 'stdio' } } }));
+    expect(byName(await doctor(config, () => okClient))['Claude Code']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: plugin enabled and a search server in .claude.json that Claude Code cannot start', fix: 'remove it with `claude mcp remove loadout --scope user`, or give it a non-empty command or url' });
   });
 
   it('ignores project-scoped Claude search servers', async () => {
@@ -286,11 +298,17 @@ describe('doctor', () => {
     expect(checks['Claude Code']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: not set up' });
   });
 
-  it.each(['startup_timeout_sec = 20', 'command = ""', 'url = " "', 'command = "loadout"\nurl = "http://127.0.0.1:1"', 'command = "loadout"\nurl = ""'])('does not count a Codex server table that Codex cannot start (%s)', async (line) => {
+  it.each(['startup_timeout_sec = 20', 'command = ""', 'url = " "', 'command = "loadout"\nurl = "http://127.0.0.1:1"', 'command = "loadout"\nurl = ""'])('fails a Codex server table that Codex cannot start instead of counting it (%s)', async (line) => {
     mkdirSync(join(home, 'codex'));
     writeFileSync(join(home, 'codex', 'config.toml'), `[mcp_servers.loadout]\n${line}\n`);
     const checks = byName(await doctor(config, () => okClient));
-    expect(checks['Codex']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: not set up' });
+    expect(checks['Codex']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: a search server in config.toml that Codex cannot start', fix: 'remove [mcp_servers.loadout] from config.toml, or give it exactly one non-empty command or url' });
+  });
+
+  it('leaves a disabled Codex server table out instead of failing it', async () => {
+    mkdirSync(join(home, 'codex'));
+    writeFileSync(join(home, 'codex', 'config.toml'), '[mcp_servers.loadout]\nenabled = false\n');
+    expect(byName(await doctor(config, () => okClient))['Codex']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: not set up', fix: 'loadout setup codex' });
   });
 
   it('reports a malformed loadout config as a failed check and runs the rest on defaults', () => {
@@ -311,6 +329,13 @@ describe('doctor', () => {
     const checks = byName(await doctor(config, () => okClient));
     expect(checks['Claude Code']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: settings hook, but disableAllHooks in settings.json turns hooks off', fix: 'turn hooks back on' });
     expect(checks['Codex']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: hook, but [features] hooks = false in config.toml turns hooks off' });
+  });
+
+  // A working search server does not make up for a loadout hook the host has switched off, as on the plugin path.
+  it('fails an inline Codex hook switched off by [features] even with a search server', async () => {
+    mkdirSync(join(home, 'codex'));
+    writeFileSync(join(home, 'codex', 'config.toml'), '[[hooks.UserPromptSubmit]]\n[[hooks.UserPromptSubmit.hooks]]\ntype = "command"\ncommand = "loadout hook codex"\n\n[features]\nhooks = false\n\n[mcp_servers.loadout]\ncommand = "loadout"\n');
+    expect(byName(await doctor(config, () => okClient))['Codex']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: hook, but [features] hooks = false in config.toml turns hooks off', fix: 'turn hooks back on' });
   });
 
   it.skipIf(process.platform === 'win32')('ignores binaries found through a relative PATH entry', async () => {
@@ -368,11 +393,11 @@ describe('doctor', () => {
     expect(checks['Claude Code']!.detail).toMatch(/^version unknown;/);
   });
 
-  it('reads a Codex server entry that is not a table as not set up', async () => {
+  it('fails a Codex server entry that is not a table', async () => {
     mkdirSync(join(home, 'codex'));
     writeFileSync(join(home, 'codex', 'config.toml'), 'mcp_servers = { loadout = "wrong" }\n');
     const checks = byName(await doctor(config, () => okClient));
-    expect(checks['Codex']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: not set up' });
+    expect(checks['Codex']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: a search server in config.toml that Codex cannot start' });
   });
 
   it('tells a broken host config apart from a missing one', async () => {
@@ -414,5 +439,111 @@ describe('doctor', () => {
     mkdirSync(join(home, 'codex'));
     writeFileSync(join(home, 'codex', 'config.toml'), 'model = "gpt-6.1-sol"\n');
     expect(byName(await doctor(config, () => okClient))['Codex']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: not set up', fix: 'loadout setup codex' });
+  });
+
+  it.each([
+    { name: 'Claude only', claude: true, codex: '', status: 0, info: 'Codex', fix: 'codex' },
+    { name: 'Codex only', claude: false, codex: '[mcp_servers.loadout]\ncommand = "loadout"\n', status: 0, info: 'Claude Code', fix: 'claude-code' },
+    { name: 'neither host attached', claude: false, codex: '', status: 1 },
+    { name: 'Codex hooks off', claude: true, codex: '[plugins."loadout-codex@loadout"]\nenabled = true\n[features]\nhooks = false\n', status: 1 },
+    { name: 'Codex config broken', claude: true, codex: '[invalid', status: 1 },
+    { name: 'Codex hook untrusted', claude: true, codex: '[plugins."loadout-codex@loadout"]\nenabled = true\n', status: 1 },
+    // Codex rejects a server table with both transports, so this is a broken Codex setup, not an unused host.
+    { name: 'Codex server with command and url', claude: true, codex: '[mcp_servers.loadout]\ncommand = "loadout"\nurl = "http://127.0.0.1:1"\n', status: 1 },
+  ])('doctor CLI exits $status with $name and both CLIs on PATH', ({ claude, codex, status, info, fix }) => {
+    cpSync(join(import.meta.dirname, 'fixtures', 'library'), join(home, '.loadout', 'library'), { recursive: true });
+    writeFileSync(join(home, '.loadout', 'config.json'), JSON.stringify({ router: 'lexical', embeddings: false }));
+    for (const bin of ['loadout', 'claude', 'codex']) {
+      const file = join(home, 'bin', bin + (process.platform === 'win32' ? '.cmd' : ''));
+      writeFileSync(file, process.platform === 'win32' ? `@echo ${bin} 9.9.9\r\n` : `#!/bin/sh\necho '${bin} 9.9.9'\n`);
+      chmodSync(file, 0o755);
+    }
+    mkdirSync(join(home, 'claude'));
+    writeFileSync(join(home, 'claude', 'settings.json'), JSON.stringify({ enabledPlugins: { 'loadout@loadout': claude } }));
+    mkdirSync(join(home, 'codex'));
+    writeFileSync(join(home, 'codex', 'config.toml'), codex);
+    const result = spawnSync(process.execPath, ['--import', 'tsx', join(import.meta.dirname, '../src/cli.ts'), 'doctor'], { encoding: 'utf8', env: { ...process.env }, timeout: 20_000 });
+    expect(result.stderr).toBe('');
+    expect(result.status).toBe(status);
+    if (info) {
+      expect(result.stdout).toMatch(new RegExp(`ℹ ${info} +${info === 'Codex' ? 'codex' : 'claude'} 9\\.9\\.9; loadout: not set up\\n +fix: loadout setup ${fix}`));
+      expect(result.stdout).not.toContain(`✗ ${info}`);
+    } else {
+      expect(result.stdout).toContain('✗ Codex');
+    }
+  });
+
+  it.each([
+    { name: 'saved approval (current hash deliberately unknown)', key: PLUGIN_HOOK_KEY, state: 'trusted_hash = "sha256:older-version"', ok: true },
+    { name: 'no approval', key: PLUGIN_HOOK_KEY, state: 'enabled = true', ok: false },
+    { name: 'another plugin', key: PLUGIN_HOOK_KEY.replace('loadout-codex@loadout', 'other@loadout'), state: 'trusted_hash = "sha256:saved"', ok: false },
+    { name: 'old source path', key: PLUGIN_HOOK_KEY.replace('hooks/hooks.json', 'hooks.json'), state: 'trusted_hash = "sha256:saved"', ok: false },
+    { name: 'another event', key: PLUGIN_HOOK_KEY.replace('user_prompt_submit', 'session_start'), state: 'trusted_hash = "sha256:saved"', ok: false },
+    { name: 'old handler position', key: PLUGIN_HOOK_KEY.replace(':0:0', ':0:1'), state: 'trusted_hash = "sha256:saved"', ok: false },
+    { name: 'non-string hash', key: PLUGIN_HOOK_KEY, state: 'trusted_hash = 42', ok: false },
+    { name: 'empty hash', key: PLUGIN_HOOK_KEY, state: 'trusted_hash = ""', ok: false },
+    { name: 'individually disabled', key: PLUGIN_HOOK_KEY, state: 'enabled = false\ntrusted_hash = "sha256:saved"', ok: false, disabled: true },
+  ])('reads Codex plugin trust: $name', async ({ key, state, ok, disabled }) => {
+    mkdirSync(join(home, 'codex'));
+    const file = join(home, 'codex', 'config.toml');
+    const content = `[plugins."loadout-codex@loadout"]\nenabled = true\n[hooks.state.${JSON.stringify(key)}]\n${state}\nprivate = "${KEY}"\n`;
+    writeFileSync(file, content);
+    const checks = await doctor(config, () => okClient);
+    const check = byName(checks)['Codex']!;
+    expect(check.ok).toBe(ok);
+    expect(check.detail).toContain(disabled ? 'hook disabled in /hooks' : ok ? 'hook trusted in /hooks for a saved version; Codex re-asks if changed' : 'hook not trusted yet: approve it in /hooks');
+    if (!ok) expect(check.fix).toBe(disabled ? 'enable the hook in `/hooks`' : 'approve the hook in `/hooks`');
+    expect(formatDoctor(checks)).not.toContain(KEY);
+    expect(readFileSync(file, 'utf8')).toBe(content);
+  });
+
+  it.each(['matching', 'wrong path', 'wrong group', 'wrong handler', 'missing'])('matches inline Codex trust by config path and hook position: %s', async (kind) => {
+    mkdirSync(join(home, 'codex'));
+    const file = join(home, 'codex', 'config.toml');
+    const key = `${kind === 'wrong path' ? join(home, 'other', 'config.toml') : codexConfig()}:user_prompt_submit:${kind === 'wrong group' ? '0' : '1'}:${kind === 'wrong handler' ? '0' : '1'}`;
+    // Other handlers must not shift the loadout hook's persisted group/handler indices.
+    const content = `[[hooks.UserPromptSubmit]]\n[[hooks.UserPromptSubmit.hooks]]\ntype = "command"\ncommand = "other hook codex"\n[[hooks.UserPromptSubmit]]\n[[hooks.UserPromptSubmit.hooks]]\ntype = "command"\ncommand = "other hook codex"\n[[hooks.UserPromptSubmit.hooks]]\ntype = "command"\ncommand = "loadout hook codex"\n${kind === 'missing' ? '' : `[hooks.state.${JSON.stringify(key)}]\ntrusted_hash = "sha256:saved-version"\n`}`;
+    writeFileSync(file, content);
+    const check = byName(await doctor(config, () => okClient))['Codex']!;
+    expect(check.ok).toBe(kind === 'matching');
+    expect(check.detail).toContain(kind === 'matching' ? 'hook trusted in /hooks for a saved version' : 'hook not trusted yet: approve it in /hooks');
+    expect(readFileSync(file, 'utf8')).toBe(content);
+  });
+
+  it('keys inline Codex trust by the canonical path of a symlinked CODEX_HOME', async () => {
+    const real = join(home, 'real-codex');
+    mkdirSync(real);
+    const link = join(home, 'codex-link');
+    symlinkSync(real, link, process.platform === 'win32' ? 'junction' : 'dir');
+    vi.stubEnv('CODEX_HOME', link);
+    const key = `${join(realpathSync.native(real), 'config.toml')}:user_prompt_submit:0:0`;
+    writeFileSync(join(real, 'config.toml'), `[[hooks.UserPromptSubmit]]\n[[hooks.UserPromptSubmit.hooks]]\ntype = "command"\ncommand = "loadout hook codex"\n[hooks.state.${JSON.stringify(key)}]\ntrusted_hash = "sha256:saved-version"\n`);
+    expect(byName(await doctor(config, () => okClient))['Codex']).toMatchObject({ ok: true, detail: 'CLI not on PATH; loadout: hook trusted in /hooks for a saved version; Codex re-asks if changed' });
+  });
+
+  // The plugin trust key hardcodes group 0, handler 0 of the plugin's hooks.json.
+  it('pins the plugin hook at the position its trust key names', () => {
+    const file = JSON.parse(readFileSync(join(import.meta.dirname, '../plugins/loadout-codex/hooks/hooks.json'), 'utf8')) as { hooks: Record<string, { hooks: { command?: string }[] }[]> };
+    expect(Object.keys(file.hooks)).toEqual(['UserPromptSubmit']);
+    expect(file.hooks.UserPromptSubmit!.flatMap((g) => g.hooks.map((h) => h.command))).toEqual(['loadout hook codex']);
+    expect(PLUGIN_HOOK_KEY).toBe('loadout-codex@loadout:hooks/hooks.json:user_prompt_submit:0:0');
+  });
+
+  it('does not count orphaned Codex hook trust as an attachment', async () => {
+    mkdirSync(join(home, 'codex'));
+    writeFileSync(join(home, 'codex', 'config.toml'), PLUGIN_TRUST);
+    expect(byName(await doctor(config, () => okClient))['Codex']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: not set up' });
+  });
+
+  it.each(['untrusted', 'disabled'])('checks every inline loadout hook when a trusted plugin is also present: %s', async (kind) => {
+    mkdirSync(join(home, 'codex'));
+    const file = join(home, 'codex', 'config.toml');
+    const content = `[plugins."loadout-codex@loadout"]\nenabled = true\n${PLUGIN_TRUST}\n[[hooks.UserPromptSubmit]]\n[[hooks.UserPromptSubmit.hooks]]\ntype = "command"\ncommand = "loadout hook codex"\n[[hooks.UserPromptSubmit.hooks]]\ntype = "command"\ncommand = "loadout hook codex"\n[hooks.state.${JSON.stringify(`${codexConfig()}:user_prompt_submit:0:0`)}]\ntrusted_hash = "sha256:saved"\n${kind === 'disabled' ? `[hooks.state.${JSON.stringify(`${codexConfig()}:user_prompt_submit:0:1`)}]\nenabled = false\ntrusted_hash = "sha256:saved"\n` : ''}`;
+    writeFileSync(file, content);
+    const check = byName(await doctor(config, () => okClient))['Codex']!;
+    expect(check.ok).toBe(false);
+    expect(check.detail).toContain('plugin enabled (hook trusted in /hooks for a saved version; Codex re-asks if changed)');
+    expect(check.detail).toContain(kind === 'disabled' ? 'hook disabled in /hooks' : 'hook not trusted yet: approve it in /hooks');
+    expect(check.fix).toBe(kind === 'disabled' ? 'enable the hook in `/hooks`' : 'approve the hook in `/hooks`');
   });
 });

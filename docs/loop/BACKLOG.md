@@ -1003,7 +1003,7 @@ Left: the Claude arm (blocked on E12).
 | D11 | P0 | Cut the hook's per-prompt start cost | Codex | cloud + local | in progress ([#14](https://github.com/erik-hedstrom/loadout/pull/14), [#24](https://github.com/erik-hedstrom/loadout/pull/24) merged: the hook's new process p50 1,781 → 1,543 ms, scan 136 → 22 ms, [RESULTS](../../bench/RESULTS.md#routed-prompts-with-the-library-scan-cache-d11-2026-10-12)); left: time the new process's own Jev steps, and the embedding model load (needs a long-lived process: Erik decides) |
 | D1 | P0 | Validate on the new native Linux machine | Claude | local | todo (machine pending) |
 | D7 | P1 | `loadout doctor` | Claude | cloud | done ([#20](https://github.com/erik-hedstrom/loadout/pull/20)) |
-| D2 | P0 | Live Codex hook test | Claude | local + erik | todo (needs Erik to trust the hook in `/hooks`) |
+| D2 | P0 | Live Codex hook test | Claude | local + erik | partial ([#78](https://github.com/erik-hedstrom/loadout/pull/78)): README walk 2026-11-03 in a throwaway WSL home; the plugin's hook injected a skill into `codex exec` before the model call; the live model turn needs a Codex login in that home (Erik) |
 | D3 | P2 | Desktop and IDE hosts end to end | Claude | local | todo (generic MCP only, 2026-10-12) |
 | D5 | P2 | Isolation mode | Codex | cloud | in progress: Claude MCP servers hidden ([#32](https://github.com/erik-hedstrom/loadout/pull/32), merged); plugin hooks, skills and mods disclosed for now and settings files kept (Erik, 2026-10-19); left: hiding plugins (deferred, e.g. `enabledPlugins` false for each installed plugin and `syncClaudeAiPlugins` false in the session settings), the live check, and the README's reason for not using `--setting-sources` should name the user's hooks, permission rules and settings `env` (it says permissions and model; loadout always passes `--model`); interactive Codex cannot be hidden |
 | D4 | P2 | Gateway: native tools via `tools/list_changed` | Codex | cloud | todo |
@@ -1283,6 +1283,28 @@ Acceptance:
 - `codex exec` on 5 hook-mode requests (as in `bench/invoke.ts`) shows the
   context arriving and the skills being opened.
 - Document the result.
+
+README walk, 2026-11-03 (both hosts, the Quickstart followed literally in a
+throwaway `HOME` on WSL, fresh clone at `c2e08cf`, Claude Code 2.1.317
+installed into a throwaway npm prefix, Codex 0.163.0):
+- Claude: install, `loadout init --key-file`, `loadout add` (superpowers),
+  plugin install, `claude mcp list` (the plugin's server connected) and
+  `loadout doctor` passed. In `claude -p` on Haiku, the hook injected
+  `systematic-debugging` and the agent opened it with `load_skill`, framed
+  as third-party text. A planning prompt routed nothing (need below the gate).
+- Codex: plugin install passed; `hooks/list` showed the hook untrusted.
+  No CLI command trusts it; a `hooks.state` entry with `trusted_hash` in
+  `config.toml` is what `/hooks` writes. `codex exec` ran the hook, which
+  injected the skill's text, then stopped at the model call: the throwaway
+  home has no login. The live turn is left for Erik.
+- `loadout doctor` failed a Claude-only user who also has `codex`
+  installed, and called Codex's hook trust unverifiable. Both fixed in
+  [#78](https://github.com/erik-hedstrom/loadout/pull/78).
+- Papercuts, not blockers: `loadout --version` is not a command; npm 12 warns
+  that it blocked install scripts (loadout still works); `find_tools` called
+  with `query` instead of `goal` fails once before the agent retries.
+- Spend: 2 Haiku calls ($0.007), one Codex call (401, no model cost), Jev
+  about $0.004.
 
 **D3. Desktop and IDE hosts.**
 

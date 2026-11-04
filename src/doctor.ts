@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { delimiter, isAbsolute, join } from 'node:path';
+import { delimiter, isAbsolute, join, resolve } from 'node:path';
 import { parse as parseToml } from 'smol-toml';
 import { paths, resolveApiKey, type Config } from './config.js';
 import { EmbeddingStore, hasTransformers } from './embed.js';
@@ -12,7 +12,7 @@ import type { Capability } from './types.js';
 
 export interface Check {
   name: string;
-  ok: boolean;
+  ok: boolean | null; // null is informational and does not fail the CLI.
   detail: string;
   fix?: string;
 }
@@ -51,14 +51,19 @@ function readConfig(file: string, parse: (text: string) => unknown): Record<stri
 }
 
 /**
- * Whether a UserPromptSubmit hook runs loadout's `hook <agent>`. Claude's settings.json and Codex's
- * config.toml share this shape. The plugin runs `loadout hook claude`; setup writes
+ * Positions of UserPromptSubmit handlers running loadout's `hook <agent>`. Codex's trust keys use
+ * the original group/handler indices, including handlers belonging to other tools. Both hosts share this shape.
+ * The plugin runs `loadout hook claude`; setup writes
  * `node …/cli.js hook <agent>` (cli.ts from a checkout), through wsl.exe under WSL.
  */
-function hasHook(config: Record<string, unknown>, agent: 'claude' | 'codex'): boolean {
+function hookPositions(config: Record<string, unknown>, agent: 'claude' | 'codex'): string[] {
   const groups = (config.hooks as { UserPromptSubmit?: unknown } | undefined)?.UserPromptSubmit;
   const command = new RegExp(`(^|[\\s'/\\\\])(loadout|cli\\.[jt]s)'? hook ${agent}($|[\\s'])`);
-  return Array.isArray(groups) && groups.some((g) => Array.isArray(g?.hooks) && g.hooks.some((h: { type?: unknown; command?: unknown }) => h?.type === 'command' && typeof h.command === 'string' && command.test(h.command)));
+  if (!Array.isArray(groups)) return [];
+  return groups.flatMap((g, groupIndex) => Array.isArray(g?.hooks)
+    ? g.hooks.flatMap((h: { type?: unknown; command?: unknown }, handlerIndex: number) =>
+      h?.type === 'command' && typeof h.command === 'string' && command.test(h.command) ? [`${groupIndex}:${handlerIndex}`] : [])
+    : []);
 }
 
 /** Read-only: reports what is set up and how to fix what is not. Only the Jev check makes a network call. */
@@ -150,18 +155,22 @@ export async function doctor(config: Config, client: (apiKey: string) => SystemO
         if (!settings) return { broken: join(claudeHome, 'settings.json') };
         const userConfig = readConfig(claudeConfig, JSON.parse);
         const plugin = (settings.enabledPlugins as Record<string, unknown> | undefined)?.['loadout@loadout'] === true;
-        const hook = hasHook(settings, 'claude');
+        const hook = hookPositions(settings, 'claude').length > 0;
         const hooksOff = settings.disableAllHooks === true;
         // setup adds the server in user scope; project-scoped entries apply only inside their project.
         const server = (userConfig?.mcpServers as Record<string, Record<string, unknown>> | undefined)?.loadout;
         const runnable = server && typeof server === 'object' && !Array.isArray(server) && ['command', 'url'].some((k) => typeof server[k] === 'string' && server[k].trim() !== '');
+        // An entry Claude Code cannot start is a broken setup, not an unused host, so it fails even when Codex is set up.
+        const unstartable = server !== undefined && !runnable && 'a search server in .claude.json that Claude Code cannot start';
+        const serverIssue = unstartable ? 'remove it with `claude mcp remove loadout --scope user`, or give it a non-empty command or url' : undefined;
         const found = [!hooksOff && plugin && 'plugin enabled', !hooksOff && hook && 'settings hook', runnable && 'search server'].filter(Boolean);
         // The plugin attaches its own server (D13), so a user-scope one from an earlier `claude mcp add` loads the tools twice.
-        if (found.length) return { on: found.join(' and '), ...(plugin && runnable ? { duplicate: 'plugin enabled and a separately configured search server: its tools are attached twice' } : {}) };
+        if (found.length) return { on: [...found, unstartable].filter(Boolean).join(' and '), ...(plugin && runnable ? { duplicate: 'plugin enabled and a separately configured search server: its tools are attached twice' } : {}), issue: serverIssue };
         // Claude Code rewrites .claude.json often, so a read can catch it half-written: call it broken only when nothing else is attached.
         if (!userConfig) return { broken: claudeConfig };
         const off = plugin ? 'plugin enabled' : hook ? 'settings hook' : undefined;
-        return off && hooksOff ? { off: `${off}, but disableAllHooks in settings.json turns hooks off` } : {};
+        if (off && hooksOff) return { off: `${off}, but disableAllHooks in settings.json turns hooks off` };
+        return unstartable ? { invalid: unstartable, issue: serverIssue } : {};
       },
       setup: 'claude-code',
     },
@@ -176,36 +185,63 @@ export async function doctor(config: Config, client: (apiKey: string) => SystemO
         const hooksOff = features?.hooks === false;
         const pluginConfig = (config.plugins as Record<string, Record<string, unknown>> | undefined)?.['loadout-codex@loadout'];
         const plugin = features?.plugins !== false && pluginConfig?.enabled === true;
+        const hook = hookPositions(config, 'codex');
         const searchOff = (pluginConfig?.mcp_servers as Record<string, { enabled?: unknown }> | undefined)?.loadout?.enabled === false;
         if (plugin && hooksOff) return { off: `plugin enabled, but [features] hooks = false in config.toml turns hooks off${searchOff ? '; search off (plugin policy)' : ''}` };
+        if (hook.length && hooksOff) return { off: 'hook, but [features] hooks = false in config.toml turns hooks off' };
         const server = (config.mcp_servers as Record<string, Record<string, unknown>> | undefined)?.loadout;
         // Codex starts a server from exactly one of command (stdio) or url (HTTP), and rejects a table with both keys.
         const transports = server && typeof server === 'object' ? (['command', 'url'] as const).filter((k) => k in server) : [];
         const t = server && transports.length === 1 ? server[transports[0]!] : undefined;
         const runnable = server?.enabled !== false && typeof t === 'string' && t.trim() !== '';
-        // Config records enabled plugins and hooks; /hooks trust is keyed by Codex's own content hash, which doctor cannot verify.
+        // A present, enabled table Codex cannot start is a broken setup, not an unused host, so it fails even when Claude Code is set up.
+        const unstartable = server !== undefined && server?.enabled !== false && !runnable && 'a search server in config.toml that Codex cannot start';
+        const serverIssue = unstartable ? 'remove [mcp_servers.loadout] from config.toml, or give it exactly one non-empty command or url' : undefined;
+        // Codex 0.163.0: hooks/src/lib.rs::hook_key and declarations.rs::plugin_hook_key_source.
+        // A saved hash proves past approval only; discovery.rs compares it with the current definition before running it.
+        // The plugin key's 0:0 is the handler's position in plugins/loadout-codex/hooks/hooks.json (a test pins it).
+        // Inline keys start with the config path: Codex canonicalizes a set CODEX_HOME (utils/home-dir
+        // find_codex_home_from_env, Windows verbatim prefix stripped) and uses the default ~/.codex as is.
+        // A hook position means config.toml was read, so the folder exists for realpath.
+        const keyHome = hook.length && process.env.CODEX_HOME ? realpathSync.native(codexHome) : codexHome;
+        const keys = [
+          ...(plugin ? ['loadout-codex@loadout:hooks/hooks.json:user_prompt_submit:0:0'] : []),
+          ...hook.map((position) => `${resolve(keyHome, 'config.toml')}:user_prompt_submit:${position}`),
+        ];
+        const states = (config.hooks as { state?: Record<string, { trusted_hash?: unknown; enabled?: unknown }> } | undefined)?.state;
+        const trust = keys.map((key) => {
+          const state = states?.[key];
+          if (state?.enabled === false) return { detail: 'hook disabled in /hooks', issue: 'enable the hook in `/hooks`' };
+          const hash = state?.trusted_hash;
+          return typeof hash !== 'string' || !hash.trim()
+            ? { detail: 'hook not trusted yet: approve it in /hooks', issue: 'approve the hook in `/hooks`' }
+            : { detail: 'hook trusted in /hooks for a saved version; Codex re-asks if changed' };
+        });
         const found = [
-          plugin && 'plugin enabled (hook trust not verifiable from config: approve it in /hooks)',
+          plugin && `plugin enabled (${trust[0]!.detail})`,
           plugin && searchOff && 'search off (plugin policy)',
-          !hooksOff && hasHook(config, 'codex') && 'hook (trust not checked: approve it once in /hooks)',
+          ...trust.slice(plugin ? 1 : 0).map((t) => t.detail),
           runnable && 'search server',
         ].filter(Boolean);
-        if (found.length) return { on: found.join(' and ') };
-        return hooksOff && hasHook(config, 'codex') ? { off: 'hook, but [features] hooks = false in config.toml turns hooks off' } : {};
+        const issue = serverIssue ?? trust.find((t) => t.issue)?.issue;
+        if (found.length) return { on: [...found, unstartable].filter(Boolean).join(' and '), issue };
+        return unstartable ? { invalid: unstartable, issue } : {};
       },
       setup: 'codex',
     },
   ];
-  for (const h of hosts) {
+  const attachments = hosts.map((h) => ({ host: h, state: h.attached() }));
+  const anyAttached = attachments.some(({ state }) => 'on' in state && state.on);
+  for (const { host: h, state } of attachments) {
     // doctor runs no binary found through an empty or relative PATH entry.
     const bin = onPath(h.bin);
     if (!bin && !h.present) continue;
-    const { on, off, broken, duplicate }: { on?: string; off?: string; broken?: string; duplicate?: string } = h.attached();
+    const { on, off, broken, duplicate, invalid, issue }: { on?: string; off?: string; broken?: string; duplicate?: string; invalid?: string; issue?: string } = state;
     checks.push({
       name: h.name,
-      ok: Boolean(on) && !duplicate,
-      detail: `${bin ? (version(bin) ?? 'version unknown') : 'CLI not on PATH'}; loadout: ${broken ? 'config cannot be read or parsed' : duplicate ? `${on}; ${duplicate}` : (on ?? off ?? 'not set up')}`,
-      fix: broken ? `repair ${broken}` : duplicate ? 'remove the separate server with `claude mcp remove loadout --scope user`' : off ? 'turn hooks back on' : `loadout setup ${h.setup}`,
+      ok: broken || off || duplicate || issue ? false : on ? true : anyAttached ? null : false,
+      detail: `${bin ? (version(bin) ?? 'version unknown') : 'CLI not on PATH'}; loadout: ${broken ? 'config cannot be read or parsed' : duplicate ? `${on}; ${duplicate}` : (on ?? off ?? invalid ?? 'not set up')}`,
+      fix: broken ? `repair ${broken}` : duplicate ? 'remove the separate server with `claude mcp remove loadout --scope user`' : off ? 'turn hooks back on' : issue ?? `loadout setup ${h.setup}`,
     });
   }
   return checks;
@@ -213,5 +249,5 @@ export async function doctor(config: Config, client: (apiKey: string) => SystemO
 
 export function formatDoctor(checks: Check[]): string {
   const width = Math.max(...checks.map((c) => c.name.length));
-  return checks.map((c) => `${c.ok ? '✓' : '✗'} ${c.name.padEnd(width)}  ${c.detail}${c.ok || !c.fix ? '' : `\n  ${' '.repeat(width)}  fix: ${c.fix}`}`).join('\n');
+  return checks.map((c) => `${c.ok === null ? 'ℹ' : c.ok ? '✓' : '✗'} ${c.name.padEnd(width)}  ${c.detail}${c.ok || !c.fix ? '' : `\n  ${' '.repeat(width)}  fix: ${c.fix}`}`).join('\n');
 }
