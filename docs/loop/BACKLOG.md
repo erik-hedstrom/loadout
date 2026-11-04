@@ -541,7 +541,7 @@ Decisions for Erik:
 | C8 | P0 | Skill use with the hook-only plugin | Claude | local | done ([#25](https://github.com/erik-hedstrom/loadout/pull/25)): headless, the hook injected a skill's text in 6 of 10; Claude opened 0 of 10, none of the 4 it was only pointed to (D13) |
 | C9 | P1 | Host-model fallback router when there is no TypeSafe key | Claude (design) | cloud (code) + local (bench) | todo |
 | C10 | P2 | Bench quick fixes: sequential outcome judge, tier fixed across arms, stale A2 number | Claude | cloud | done ([#40](https://github.com/erik-hedstrom/loadout/pull/40)) |
-| C15 | P0 | Same library natively versus through loadout: task tokens, caching and retained quality | Codex (harness) + coordinator (runs) | local | harness merged ([#69](https://github.com/erik-hedstrom/loadout/pull/69)); launch blocked pending hook-trust notice fix ([#83](https://github.com/erik-hedstrom/loadout/pull/83)); no valid study result |
+| C15 | P0 | Same library natively versus through loadout: task tokens, caching and retained quality | Codex (harness) + coordinator (runs) | local | harness merged ([#69](https://github.com/erik-hedstrom/loadout/pull/69)); hook-trust notice tolerated ([#83](https://github.com/erik-hedstrom/loadout/pull/83)); study not rerun; no valid study result |
 | C14 | P1 | A/B pilot: three prompts with and without loadout in the stock CLIs, tokens (cached apart from uncached) and quality | Claude (harness) + Erik (runs) | cloud (harness) + local (runs) | Codex done: harness ([#47](https://github.com/erik-hedstrom/loadout/pull/47)), first pilot and measurement fixes ([#64](https://github.com/erik-hedstrom/loadout/pull/64)), rerun recorded (2026-10-26): loadout added uncached input tokens against a bare setup; the Claude arm waits on E12 |
 
 **C13. Pure-Jev baseline without more model spend.**
@@ -850,7 +850,7 @@ Why: C14 compares against bare and cannot show replacement savings. B12
 measures fixed native listing cost, including Codex's budget truncation;
 A6 prints how to hide adopted native listings. C15 compares the same library
 served natively and through loadout on real C1 test tasks, with caching and
-quality included. Status: **harness merged ([#69](https://github.com/erik-hedstrom/loadout/pull/69)); study not run**. No result yet.
+quality included. Status: **harness merged ([#69](https://github.com/erik-hedstrom/loadout/pull/69)); hook-trust notice tolerated ([#83](https://github.com/erik-hedstrom/loadout/pull/83)); study not rerun; no valid study result**.
 A Codex review of `4866e8a..27e572a` is owed before the paid study runs.
 
 Acceptance:
@@ -893,12 +893,14 @@ linked tmpdir.
 The name in the message is that CLI flag, not a hook/skill name:
 [config source](https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/core/src/config/mod.rs#L3429),
 [JSONL warning collector](https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/exec/src/event_processor_with_jsonl_output.rs#L409).
-Tolerate only the exact message/shape on loadout argv that passes the flag,
-and only with exit 0, usage present and no timeout. `hookTrustNotices`
+Tolerate at most two exact message/shape matches before the first
+`turn.started`, on loadout argv that passes the flag, and only with exit 0,
+usage present and no timeout. `hookTrustNotices`
 records observed matches (including invalid runs) and reports per-arm totals
 including warm-ups; historical rows show not recorded counts as "not shown".
 Other errors, near matches, native-arm notices and failed runs remain invalid.
-The two failed launch folders remain evidence; no valid C15 result is shown.
+The two failed launch folders are uncommitted evidence under the private
+C15 state directory; no valid C15 result is shown.
 
 **C14. A/B pilot.** Erik, 2026-10-19: test three prompts with and without
 loadout, evaluate the output and compare token use; he asked about tokens in,

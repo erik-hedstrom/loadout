@@ -462,7 +462,7 @@ export function planLines(o: Options, env: NodeJS.ProcessEnv = process.env, root
     lines.push(`PRECONDITION: ${CODEX_CLOUD_PRECONDITION}`);
     lines.push('PRECONDITION: CODEX_HOME/config.toml must be absent so preflight and exec use the same configuration. Before any paid turn, free skills/list on the measured cwd with the same HOME/CODEX_HOME must discover exactly the native manifest names and paths, and no non-builtin skill in loadout. System-scoped skills under CODEX_HOME/skills/.system must match, by name, file list and per-file content hash, the builtins initialized in fresh HOME/CODEX_HOME by the same Codex executable. Any discovery error or mismatch stops the study. scanLibrary(study-home/library) must match the same manifest names. No thread or turn is created.');
     lines.push('SELECTION: nine test prompts are hash-selected from request text; c1-debug-13 was selected earlier using Jev and judge results and contributes 2 of 20 pairs plus the only hidden-test gate. Report sensitivity excluding that fixture.');
-    lines.push('C15 retains C14 credential checks, warm-ups and cache-gap flags. Batch-stop rules tolerate documented Codex reconnect notices only on successful completion; codexRetries records their count. On successful loadout runs that pass --dangerously-bypass-hook-trust, the exact startup notice is also tolerated; hookTrustNotices records its count. Jev costs are separate from host token metrics. Effective input = uncached input (including writes) x 1 + cached input x 0.1, a price-sheet assumption; output reported separately. --plan starts no child process and writes no files; paid runs and judging belong to the coordinator.');
+    lines.push('C15 retains C14 credential checks, warm-ups and cache-gap flags. Batch-stop rules tolerate documented Codex reconnect notices only on successful completion; codexRetries records their count. On successful loadout runs that pass --dangerously-bypass-hook-trust, at most two exact startup notices before the first turn.started are tolerated; hookTrustNotices records the observed count. Jev costs are separate from host token metrics. Effective input = uncached input (including writes) x 1 + cached input x 0.1, a price-sheet assumption; output reported separately. --plan starts no child process and writes no files; paid runs and judging belong to the coordinator.');
     return lines;
   }
   for (const p of [CODEX_CLOUD_PRECONDITION, CLAUDE_MANAGED_PRECONDITION, CLAUDE_SCRUB_PRECONDITION, CLAUDE_SWITCH_PRECONDITION]) lines.push(`PRECONDITION: ${p}`);
@@ -527,7 +527,8 @@ async function execute1(job: Job, prompt: string, spec: PromptSpec | undefined, 
         && e.type === 'item.completed' && e.item?.type === 'error' && e.item.message === CODEX_HOOK_TRUST_NOTICE;
       codexRetries = parsedEvents.filter((e) => e.type === 'error' && codexRetryNotice(e.message)).length;
       hookTrustNotices = parsedEvents.filter(hookTrustNotice).length;
-      if (parsedEvents.some((e) => e.type === 'turn.failed' || e.item?.type === 'error' && !(successful && hookTrustNotice(e))
+      const firstTurn = parsedEvents.findIndex((e) => e.type === 'turn.started');
+      if (parsedEvents.some((e, i) => e.type === 'turn.failed' || e.item?.type === 'error' && !(successful && hookTrustNotices <= 2 && i < firstTurn && hookTrustNotice(e))
         || e.type === 'error' && !(successful && codexRetryNotice(e.message)))) codexProblem = 'Codex reported an unexpected error; measurement invalid';
     } catch {
       if (usage && !proc.timedOut) codexProblem = 'invalid Codex JSONL; measurement invalid';

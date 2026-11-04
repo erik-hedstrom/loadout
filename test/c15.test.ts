@@ -366,7 +366,8 @@ it('judge-only redacts native skill names and C15 arm clues in both orders and p
 });
 
 it.skipIf(process.platform === 'win32').each(['budget', 'unexpected', 'retry', 'retry-failed', 'almost-retry', 'discovery-drift',
-  'hook-trust', 'hook-trust-native', 'hook-trust-failed', 'hook-trust-timeout', 'hook-trust-no-usage',
+  'hook-trust', 'hook-trust-on-native-without-bypass', 'hook-trust-failed', 'hook-trust-timeout', 'hook-trust-no-usage',
+  'hook-trust-after-turn-started', 'hook-trust-three-startup-notices',
   'hook-trust-near', 'hook-trust-name', 'hook-trust-other', 'hook-trust-top-level', 'hook-trust-started', 'hook-trust-mixed'] as const)('executes the offline study with identical manifests and handles %s notices', async (notice) => {
   const library = source(), out = join(temp(), 'results'), home = temp();
   const configHome = temp();
@@ -394,21 +395,23 @@ it.skipIf(process.platform === 'win32').each(['budget', 'unexpected', 'retry', '
     const skillRoot = native ? join(cwd, '.agents', 'skills') : join(env!.LOADOUT_HOME!, 'library', 'skills');
     manifests.push(readdirSync(skillRoot).sort().map((n) => readFileSync(join(skillRoot, n, 'SKILL.md'), 'utf8')).join('\0'));
     expect(native).toBe(!args.some((a) => a.startsWith('hooks.UserPromptSubmit=')));
+    expect(args.includes('--dangerously-bypass-hook-trust')).toBe(!native);
     if (!native) {
       const shim = env!.PATH!.split(':')[0]!;
       const hook = spawnSync(join(shim, 'loadout'), ['hook', 'codex'], { cwd, env, input: JSON.stringify({ prompt: 'Please work on this task', session_id: `offline-${manifests.length}`, cwd }), encoding: 'utf8', timeout: 30_000 });
       expect(hook.status).toBe(0);
     }
-    const hookTrust = notice.startsWith('hook-trust') && (notice === 'hook-trust-native' ? native : !native);
+    const hookTrust = notice.startsWith('hook-trust') && (notice === 'hook-trust-on-native-without-bypass' ? native : !native);
     const message = '`--dangerously-bypass-hook-trust` is enabled. Enabled hooks may run without review for this invocation.';
     const warning = notice === 'hook-trust-near' ? message.replace('invocation.', 'invocation!')
       : notice === 'hook-trust-name' ? message.replace('--dangerously-bypass-hook-trust', '--another-flag')
       : notice === 'hook-trust-other' ? 'Unexpected host failure' : message;
     return { stdout: [
-      ...(hookTrust ? [1, 2].map(() => notice === 'hook-trust-top-level' ? { type: 'error', message: warning }
+      ...(notice === 'hook-trust-after-turn-started' ? [{ type: 'turn.started' }] : []),
+      ...(hookTrust ? Array.from({ length: notice === 'hook-trust-three-startup-notices' ? 3 : notice === 'hook-trust-after-turn-started' ? 1 : 2 }, () => notice === 'hook-trust-top-level' ? { type: 'error', message: warning }
         : { type: notice === 'hook-trust-started' ? 'item.started' : 'item.completed', item: { type: 'error', message: warning } }) : []),
       ...(hookTrust && notice === 'hook-trust-mixed' ? [{ type: 'item.completed', item: { type: 'error', message: 'Unexpected host failure' } }] : []),
-      { type: 'turn.started' },
+      ...(notice === 'hook-trust-after-turn-started' ? [] : [{ type: 'turn.started' }]),
       ...(native && !notice.startsWith('hook-trust') ? notice === 'budget' || notice === 'unexpected' ? [{ type: 'item.completed', item: { type: 'error', message: notice === 'budget' ? 'Exceeded skills context budget. All skill descriptions were removed and 888 additional skills were not included in the model-visible skills list.' : 'Unexpected host failure' } }]
         : [{ type: 'error', message: notice === 'almost-retry' ? 'Reconnecting... arbitrary failure' : 'Reconnecting... 1/5 (stream disconnected)' }, ...(notice === 'retry-failed' ? [{ type: 'turn.failed' }] : [])] : []),
       { type: 'item.completed', item: { type: 'agent_message', text: 'Answer' } },
@@ -427,11 +430,12 @@ it.skipIf(process.platform === 'win32').each(['budget', 'unexpected', 'retry', '
     if (notice !== 'budget' && notice !== 'retry' && notice !== 'hook-trust') {
       await expect(study).rejects.toThrow('unexpected error');
       const failedRows = readJsonl<RunRow>(join(out, 'rows.jsonl'));
-      const expected = notice.startsWith('hook-trust') && notice !== 'hook-trust-native' ? 2 : 1;
+      const expected = notice.startsWith('hook-trust') && notice !== 'hook-trust-on-native-without-bypass' ? 2 : 1;
       expect(failedRows).toHaveLength(expected);
       expect(manifests).toHaveLength(expected);
       expect(failedRows.at(-1)!.invalid).toContain('unexpected error');
-      expect(failedRows.at(-1)!.hookTrustNotices).toBe(['hook-trust-failed', 'hook-trust-timeout', 'hook-trust-no-usage', 'hook-trust-mixed'].includes(notice) ? 2 : 0);
+      expect(failedRows.at(-1)!.hookTrustNotices).toBe(notice === 'hook-trust-three-startup-notices' ? 3 : notice === 'hook-trust-after-turn-started' ? 1
+        : ['hook-trust-failed', 'hook-trust-timeout', 'hook-trust-no-usage', 'hook-trust-mixed'].includes(notice) ? 2 : 0);
       return;
     }
     await study;
