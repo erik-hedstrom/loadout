@@ -158,7 +158,7 @@ literal, atomic questions; every decision rule is code (`decide()` in
    library no larger than that goes whole. Local and free: the library is
    embedded once (new skills at `loadout add`); how long that takes is
    not shown. On the synthetic benchmark the embeddings added
-   nothing; on v4's 315 realistic, detailed requests they kept the judge's best
+   nothing; on v4's realistic, detailed requests they kept the judge's best
    skill in the candidates 87% of the time vs 80% for BM25 alone
    ([v4](bench/RESULTS.md#v4-2026-10-06-realistic-requests-on-the-real-library-judged)).
 2. **Wide request.** All in one call, evaluated in parallel:
@@ -245,6 +245,9 @@ Cost per decision: **$0.00082**, 0.95 s on the
 [v3 synthetic 20,000-skill test](bench/RESULTS.md#test-split); the cost on
 realistic requests is in the
 [v4 results](bench/RESULTS.md#v4-2026-10-06-realistic-requests-on-the-real-library-judged).
+
+Jev API contract, checked 2026-10-05: Choice is capped at 255 options.
+`CHOICE_LIMIT` in [route.ts](src/route.ts) reserves one for `no_skill_needed`.
 
 Things that did not work, and why they are not used:
 - **One yes/no question per candidate (v1).** Scores came back compressed

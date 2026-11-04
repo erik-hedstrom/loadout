@@ -59,17 +59,19 @@ codex plugin marketplace add erik-hedstrom/loadout && codex plugin add loadout-c
 - **After step 3,** `loadout doctor` checks the key (one Jev call when Jev
   routing is on and a key is found), library, index and hosts, and prints a
   fix for each gap.
-- **Host checks:** Codex's hook is checked offline; a live session is not yet
-  tested. Claude Code's marketplace install is untested; its plugin was tested
-  through `--plugin-dir` ([hosts](docs/hosts.md)).
+- **Host checks:** Claude Code's Quickstart, including the marketplace install,
+  was walked once in a fresh home on 2026-11-03. Codex's hook ran and injected
+  text in `codex exec`, but a live model turn is untested
+  ([D2 walk](docs/loop/BACKLOG.md); [hosts](docs/hosts.md)).
 
 After adoption, [hide the native listings with the printed snippets](docs/library.md#skills)
 so loadout's hook and `load_skill` replace them.
 
 Then start `claude` or `codex` as usual. Latency and setup details:
 [the hook plugins](docs/hook.md).
-In Claude Code, use `claude --debug-file ./loadout-debug.log` and look for
-`<skill_relevance>` or `<skill ` in the hook output
+In Claude Code, use `claude --debug-file /tmp/loadout-debug.log` and look for
+`<skill_relevance>` or `<skill ` in the hook output; prompts no library skill
+fits add nothing, so no marker appears
 ([debug log](https://code.claude.com/docs/en/hooks#debug-hooks)).
 
 **Privacy:** with a key set, the hook sends the text of each prompt event
@@ -90,13 +92,15 @@ All numbers, caveats and negative results: [bench/RESULTS.md](bench/RESULTS.md).
   mislead (95% Wilson intervals; the last two ignore within-request correlation)
   ([C1](bench/RESULTS.md#c1-2026-10-08-new-held-out-requests)). On C1's general
   business requests it loaded too readily.
-- **The current Claude Code plugin, with its MCP server,** opened a skill
-  the judge lists as useful in 3 of 10 sessions (Wilson 95%: 11–60%). The hook
+- **With the current Claude Code plugin and its MCP server,** Claude opened
+  a skill the judge lists as useful in 3 of 10 sessions (Wilson 95%: 11–60%). The hook
   also injected full skill text in 6 of 10 (31–83%); whether it was followed
   is not shown. These were headless runs on Claude Code 2.1.316, Sonnet 5.5,
-  WSL behind Windows, capped at 8 turns and 4 minutes. The intervals overlap
-  the earlier arms, and the setup changed, so a higher open rate is not
-  established ([D13](bench/RESULTS.md#the-plugin-with-its-mcp-server-d13-2026-11-03)).
+  WSL behind Windows, capped at 8 turns and 4 minutes. With C8's hook-only
+  plugin, Claude opened none (0 of 10, 0–28%); with the settings hook and search,
+  6 of 10 (31–83%). The intervals overlap and the setup changed, so no
+  difference is established
+  ([D13](bench/RESULTS.md#the-plugin-with-its-mcp-server-d13-2026-11-03)).
 - **Earlier launcher and settings-hook runs,** also headless and capped at
   4 minutes (Claude Code on Sonnet 5.5, also capped at 8 turns; Codex on
   gpt-6.1-sol): when the launcher loaded a skill, Claude Code opened one in
@@ -109,8 +113,8 @@ All numbers, caveats and negative results: [bench/RESULTS.md](bench/RESULTS.md).
   Codex (gpt-6.1-sol, 6-minute cap), where the loadout arm got the judge's
   top skill, it won 4, lost 3 and split 1 (Wilson 95%: 22–78%, 14–69%, 2–47%)
   ([pilot](bench/RESULTS.md#is-the-work-better-outcome-pilot-2026-10-07)).
-  **C15 headline pending:** add the same-library Codex study's result here
-  once it is recorded in [RESULTS](bench/RESULTS.md#c15-method-preregistered).
+  A same-library comparison on Codex (C15) is preregistered and has not run
+  yet ([method](bench/RESULTS.md#c15-method-preregistered)).
 - **Search tools:** their token cost (measured only in the first request of
   fresh Claude Code sessions) and how often agents used them:
   [library search](docs/mcp.md#cost-and-privacy).

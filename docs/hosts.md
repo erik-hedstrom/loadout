@@ -37,8 +37,12 @@ Notes:
    shows a tier choice reaching the agent. Tier-choice quality is not evaluated
    ([RESULTS](../bench/RESULTS.md#threats-to-validity)).
 3. The plugin, one `claude -p --plugin-dir` run, 2026-10-08
-   ([RESULTS](../bench/RESULTS.md#the-hook-plugin-in-the-claude-code-cli-2026-10-08)). The
-   marketplace install is untested.
+   ([RESULTS](../bench/RESULTS.md#the-hook-plugin-in-the-claude-code-cli-2026-10-08)).
+   The [D2 README walk](loop/BACKLOG.md) followed the Quickstart, including
+   marketplace install, once in a fresh WSL home on 2026-11-03 (Claude Code
+   2.1.317, Haiku): the plugin's server connected, doctor passed, and in
+   `claude -p` the hook injected `systematic-debugging`, which Claude opened
+   with `load_skill`.
    The settings-file hook ran in 10 sessions on 2026-10-07
    ([RESULTS](../bench/RESULTS.md#do-agents-use-what-they-are-given)).
 4. 10 headless sessions per host with the search server attached, 2026-10-06
@@ -49,9 +53,9 @@ Notes:
    `loadout` from `npm link` showed `plugin:loadout:loadout ... Connected`, and
    `Failed to connect` with `loadout` off PATH (Claude Code 2.1.308,
    2026-11-01; no model call). D13 then measured 10 headless plugin sessions
-   on Claude Code 2.1.316, Sonnet 5.5, WSL behind Windows: 3 opened a skill
-   the judge lists as useful (Wilson 95%: 11–60%). Interactive sessions are
-   not measured
+   on Claude Code 2.1.316, Sonnet 5.5, WSL behind Windows: the plugin's server
+   connected in all 10, and Claude made 3 successful `load_skill` calls.
+   Interactive sessions are not measured
    ([RESULTS](../bench/RESULTS.md#the-plugin-with-its-mcp-server-d13-2026-11-03)).
 5. The same plugin as the CLI. Erik's check is backlog D10.
 6. `loadout setup codex` prints marketplace and plugin install commands for
@@ -59,8 +63,11 @@ Notes:
    `loadout mcp`. Offline installation in a throwaway `CODEX_HOME`,
    `plugin/read`, `hooks/list` and `codex mcp list` were checked with Codex
    0.160.1 on 2026-10-12. `hooks/list` reported the installed hook as
-   `untrusted`: trust it with `/hooks` before routing prompts. A live hook
-   session is untested (backlog D2). There is no tested setup path for the
+   `untrusted`: trust it with `/hooks` before routing prompts. In the
+   [D2 README walk](loop/BACKLOG.md) on 2026-11-03 (Codex 0.163.0, fresh WSL
+   home), `codex exec` ran the hook and injected skill text, then stopped at
+   the model call because that home had no login. A live model turn is
+   untested. There is no tested setup path for the
    Codex tab of the ChatGPT desktop app or T3 Code yet: plugin support is
    untested, and setup no longer prints native TOML for these hosts.
 7. The launcher attached the server with `-c mcp_servers.…` (2026-10-06,
