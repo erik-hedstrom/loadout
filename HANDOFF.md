@@ -29,8 +29,8 @@ for usage and [DESIGN.md](DESIGN.md) for the architecture.
 - **Owner:** Erik Hedström (GitHub `erik-hedstrom`). Commits use
   `63313283+erik-hedstrom@users.noreply.github.com`.
 - **Main snapshot (2026-11-02):** `86683d4`. It includes the Claude Code
-  plugin carrying the MCP server (D13, #72; its paid re-run has not run), the
-  npm package and release workflow (A4, E5, #71), review follow-ups (#73), the
+  plugin carrying the MCP server (D13, #72; re-run completed in #76, compared
+  in #79), the npm package and release workflow (A4, E5, #71), review follow-ups (#73), the
   C15 harness and preregistration (#69; the study has not run), the follow-ups
   (#68, #70), A6's paste-ready audit adoption snippets (#66), B12's
   current-host listing harness and results (#67), the C14 A/B harness (#47)
@@ -177,9 +177,8 @@ branches, PRs and `docs/loop/BACKLOG.md`.
 3. **Launch channels and timing.** Show HN, Reddit, X, LinkedIn, awesome
    lists. Agents draft; Erik posts.
 4. **Study prerequisites and remaining decisions.** See
-   [BACKLOG](docs/loop/BACKLOG.md) for C2's run prerequisites, D13's paid re-run
-   (it needs a subscription token for a fresh Claude home) and the remaining review decisions. Stale cloud branches and
-   worktrees stay until Erik decides whether to keep them.
+   [BACKLOG](docs/loop/BACKLOG.md) for C2's run prerequisites and the remaining
+   review decisions. Stale cloud branches and worktrees stay until Erik decides whether to keep them.
 
 ## Setting up on the new Linux machine
 

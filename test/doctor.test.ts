@@ -445,15 +445,17 @@ describe('doctor', () => {
     { name: 'Claude only', claude: true, codex: '', status: 0, info: 'Codex', fix: 'codex' },
     { name: 'Codex only', claude: false, codex: '[mcp_servers.loadout]\ncommand = "loadout"\n', status: 0, info: 'Claude Code', fix: 'claude-code' },
     { name: 'neither host attached', claude: false, codex: '', status: 1 },
+    { name: 'Codex plugin left after uninstall', claude: false, codex: '[plugins."loadout-codex@loadout"]\nenabled = true\n' + PLUGIN_TRUST, status: 1, missingCodex: true },
     { name: 'Codex hooks off', claude: true, codex: '[plugins."loadout-codex@loadout"]\nenabled = true\n[features]\nhooks = false\n', status: 1 },
     { name: 'Codex config broken', claude: true, codex: '[invalid', status: 1 },
     { name: 'Codex hook untrusted', claude: true, codex: '[plugins."loadout-codex@loadout"]\nenabled = true\n', status: 1 },
     // Codex rejects a server table with both transports, so this is a broken Codex setup, not an unused host.
     { name: 'Codex server with command and url', claude: true, codex: '[mcp_servers.loadout]\ncommand = "loadout"\nurl = "http://127.0.0.1:1"\n', status: 1 },
-  ])('doctor CLI exits $status with $name and both CLIs on PATH', ({ claude, codex, status, info, fix }) => {
+  ])('doctor CLI exits $status with $name', ({ claude, codex, status, info, fix, missingCodex }) => {
     cpSync(join(import.meta.dirname, 'fixtures', 'library'), join(home, '.loadout', 'library'), { recursive: true });
     writeFileSync(join(home, '.loadout', 'config.json'), JSON.stringify({ router: 'lexical', embeddings: false }));
     for (const bin of ['loadout', 'claude', 'codex']) {
+      if (bin === 'codex' && missingCodex) continue;
       const file = join(home, 'bin', bin + (process.platform === 'win32' ? '.cmd' : ''));
       writeFileSync(file, process.platform === 'win32' ? `@echo ${bin} 9.9.9\r\n` : `#!/bin/sh\necho '${bin} 9.9.9'\n`);
       chmodSync(file, 0o755);
@@ -468,6 +470,9 @@ describe('doctor', () => {
     if (info) {
       expect(result.stdout).toMatch(new RegExp(`ℹ ${info} +${info === 'Codex' ? 'codex' : 'claude'} 9\\.9\\.9; loadout: not set up\\n +fix: loadout setup ${fix}`));
       expect(result.stdout).not.toContain(`✗ ${info}`);
+    } else if (missingCodex) {
+      expect(result.stdout).toContain('✗ Claude Code');
+      expect(result.stdout).toMatch(/✓ Codex +CLI not on PATH; loadout: plugin enabled/);
     } else {
       expect(result.stdout).toContain('✗ Codex');
     }
@@ -519,6 +524,23 @@ describe('doctor', () => {
     const key = `${join(realpathSync.native(real), 'config.toml')}:user_prompt_submit:0:0`;
     writeFileSync(join(real, 'config.toml'), `[[hooks.UserPromptSubmit]]\n[[hooks.UserPromptSubmit.hooks]]\ntype = "command"\ncommand = "loadout hook codex"\n[hooks.state.${JSON.stringify(key)}]\ntrusted_hash = "sha256:saved-version"\n`);
     expect(byName(await doctor(config, () => okClient))['Codex']).toMatchObject({ ok: true, detail: 'CLI not on PATH; loadout: hook trusted in /hooks for a saved version; Codex re-asks if changed' });
+  });
+
+  it('reports a CODEX_HOME removed after the config read without exposing config contents', async () => {
+    const real = join(home, 'real-codex');
+    mkdirSync(real);
+    const link = join(home, 'codex-link');
+    symlinkSync(real, link, process.platform === 'win32' ? 'junction' : 'dir');
+    vi.stubEnv('CODEX_HOME', link);
+    writeFileSync(join(real, 'config.toml'), `private = "${KEY}"\n[[hooks.UserPromptSubmit]]\n[[hooks.UserPromptSubmit.hooks]]\ntype = "command"\ncommand = "loadout hook codex"\n`);
+    const native = realpathSync.native;
+    vi.spyOn(realpathSync, 'native').mockImplementation((...args) => {
+      if (args[0] === link) rmSync(link);
+      return native(...args);
+    });
+    const checks = await doctor(config, () => okClient);
+    expect(byName(checks)['Codex']).toMatchObject({ ok: false, detail: 'CLI not on PATH; loadout: config cannot be read or parsed', fix: `repair ${join(link, 'config.toml')}` });
+    expect(formatDoctor(checks)).not.toContain(KEY);
   });
 
   // The plugin trust key hardcodes group 0, handler 0 of the plugin's hooks.json.

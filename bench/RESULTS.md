@@ -1229,7 +1229,8 @@ in plugin mode.) "Opened" means a successful Skill call, `SKILL.md` read or
   shell calls (Bash, PowerShell), all of which failed, and opened nothing. The
   hook arm opened two video-generation skills there.
 - No session called `find_tools` or Claude's Skill tool.
-- **Usefulness scored from existing blind answers.** The initial sweep's
+- **Usefulness scored from existing blind answers.** The
+  [v4 first run](#v4-2026-10-06-realistic-requests-on-the-real-library-judged)'s
   [judge-blind.jsonl](results/2026-10-06T02-08-14-sweep/judge-blind.jsonl)
   has Opus's useful lists, made blind to loadout's choices. The 10 request
   texts in that sweep's `decisions.jsonl` are identical to those in C8's
@@ -1304,9 +1305,10 @@ of 10 rows." The re-run is done: all 10 rows are valid, and the plugin's
 server was connected in every session. Using the same blind judge lists,
 D13 opened a listed-useful skill in 3 of 10 sessions (11–60), against the
 hook's 6 of 10 (31–83) and search's 2 of 10 (6–51). The intervals still
-overlap at n = 10, including C8's plugin interval (0–28), so a higher rate is
-not established. Whether injected text was followed, outcome quality and
-interactive sessions remain not shown.
+overlap at n = 10, including C8's plugin interval (0–28). Neither a higher
+rate than C8's plugin or search, nor a lower rate than the hook is established.
+Whether injected text was followed, outcome quality and interactive sessions
+remain not shown.
 
 Raw: [results/2026-11-03T13-13-04Z-d13-plugin-mcp/](results/2026-11-03T13-13-04Z-d13-plugin-mcp/).
 Its input was a copy of the sweep's
@@ -1324,7 +1326,7 @@ library. loadout's `UserPromptSubmit` hook exited 0 with empty stderr. It
 added about 1.6k characters of `<skill_relevance>` context: `contract-review` as
 most relevant, plus three others. The reply named `contract-review`. One run
 shows the wiring works. It does not measure skill use: the hook-only plugin
-has not been compared with the 6 of 10 above.
+was later compared with the 6 of 10 above in [C8 and D13](#the-plugin-with-its-mcp-server-d13-2026-11-03).
 
 **Latency.** [hook-latency.ts](hook-latency.ts), 20 dev prompts, real Jev, WSL,
 Node 24.15, the same library:
