@@ -888,6 +888,18 @@ Round 3: the builtin check now covers every file in each builtin directory,
 and macOS CI failed because the clean-home cwd was not resolved past the
 linked tmpdir.
 
+2026-11-04 warm-up failure: Codex 0.163.0 emits the literal
+`--dangerously-bypass-hook-trust` startup warning as `item.completed/error`.
+The name in the message is that CLI flag, not a hook/skill name:
+[config source](https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/core/src/config/mod.rs#L3429),
+[JSONL warning collector](https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/exec/src/event_processor_with_jsonl_output.rs#L409).
+Tolerate only the exact message/shape on loadout argv that passes the flag,
+and only with exit 0, usage present and no timeout. `hookTrustNotices`
+records observed matches (including invalid runs) and reports per-arm totals
+including warm-ups; historical rows show not recorded counts as "not shown".
+Other errors, near matches, native-arm notices and failed runs remain invalid.
+The two failed launch folders remain evidence; no valid C15 result is shown.
+
 **C14. A/B pilot.** Erik, 2026-10-19: test three prompts with and without
 loadout, evaluate the output and compare token use; he asked about tokens in,
 their effect on caching and output quality, and a small Codex A/B he ran
