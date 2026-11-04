@@ -264,7 +264,8 @@ function row(arm: 'native' | 'loadout', repeat = 1): RunRow {
     unreconciled: [], modelUsage: null, coldCacheRisk: false, toolCalls: 3, toolErrors: 0, loadoutTools: [], skillsOpened: ['sample'],
     hook: { invocations: arm === 'native' ? 0 : 1, contextChars: arm === 'native' ? 0 : 123, listed: [], injected: [] },
     hiddenTest: { passed: true, tests: 5, failed: 0 }, librarySize: 250, corpusHash: 'corpus', manifestHash: 'manifest',
-    skillsBudget: arm === 'native' ? { descriptionsRemoved: true, omitted: 888 } : null, codexRetries: arm === 'native' ? 2 : 0 };
+    skillsBudget: arm === 'native' ? { descriptionsRemoved: true, omitted: 888 } : null, codexRetries: arm === 'native' ? 2 : 0,
+    hookTrustNotices: arm === 'native' ? 0 : 2 };
 }
 
 it('reports actual paired native-minus-loadout buckets, 0.1 cached weighting, tools and budget notices', () => {
@@ -275,6 +276,10 @@ it('reports actual paired native-minus-loadout buckets, 0.1 cached weighting, to
   const text = report(rows, [verdict], []);
   expect(text).toContain('native: codexRetries 2');
   expect(text).toContain('loadout: codexRetries 0');
+  expect(text).toContain('native: hookTrustNotices 0');
+  expect(text).toContain('loadout: hookTrustNotices 2');
+  const legacy = rows.map(({ hookTrustNotices: _notRecorded, ...r }) => r);
+  expect(report(legacy, [], [])).toContain('loadout: hookTrustNotices not shown');
   expect(text).toContain('native minus loadout');
   expect(text).toContain('| c1-debug-13 | 1 | 800 | 0 | 1,000 | 50 | 900 |');
   expect(text).toContain('median 900; range 900 to 900; n=1');
@@ -360,7 +365,10 @@ it('judge-only redacts native skill names and C15 arm clues in both orders and p
   } finally { vi.restoreAllMocks(); }
 });
 
-it.skipIf(process.platform === 'win32').each(['budget', 'unexpected', 'retry', 'retry-failed', 'almost-retry', 'discovery-drift'] as const)('executes the offline study with identical manifests and handles %s notices', async (notice) => {
+it.skipIf(process.platform === 'win32').each(['budget', 'unexpected', 'retry', 'retry-failed', 'almost-retry', 'discovery-drift',
+  'hook-trust', 'hook-trust-on-native-without-bypass', 'hook-trust-failed', 'hook-trust-timeout', 'hook-trust-no-usage',
+  'hook-trust-after-turn-started', 'hook-trust-three-startup-notices',
+  'hook-trust-near', 'hook-trust-name', 'hook-trust-other', 'hook-trust-top-level', 'hook-trust-started', 'hook-trust-mixed'] as const)('executes the offline study with identical manifests and handles %s notices', async (notice) => {
   const library = source(), out = join(temp(), 'results'), home = temp();
   const configHome = temp();
   writeFileSync(join(configHome, 'config.json'), JSON.stringify({ router: 'lexical', embeddings: false }));
@@ -387,17 +395,29 @@ it.skipIf(process.platform === 'win32').each(['budget', 'unexpected', 'retry', '
     const skillRoot = native ? join(cwd, '.agents', 'skills') : join(env!.LOADOUT_HOME!, 'library', 'skills');
     manifests.push(readdirSync(skillRoot).sort().map((n) => readFileSync(join(skillRoot, n, 'SKILL.md'), 'utf8')).join('\0'));
     expect(native).toBe(!args.some((a) => a.startsWith('hooks.UserPromptSubmit=')));
+    expect(args.includes('--dangerously-bypass-hook-trust')).toBe(!native);
     if (!native) {
       const shim = env!.PATH!.split(':')[0]!;
       const hook = spawnSync(join(shim, 'loadout'), ['hook', 'codex'], { cwd, env, input: JSON.stringify({ prompt: 'Please work on this task', session_id: `offline-${manifests.length}`, cwd }), encoding: 'utf8', timeout: 30_000 });
       expect(hook.status).toBe(0);
     }
+    const hookTrust = notice.startsWith('hook-trust') && (notice === 'hook-trust-on-native-without-bypass' ? native : !native);
+    const message = '`--dangerously-bypass-hook-trust` is enabled. Enabled hooks may run without review for this invocation.';
+    const warning = notice === 'hook-trust-near' ? message.replace('invocation.', 'invocation!')
+      : notice === 'hook-trust-name' ? message.replace('--dangerously-bypass-hook-trust', '--another-flag')
+      : notice === 'hook-trust-other' ? 'Unexpected host failure' : message;
     return { stdout: [
-      ...(native ? notice === 'budget' || notice === 'unexpected' ? [{ type: 'item.completed', item: { type: 'error', message: notice === 'budget' ? 'Exceeded skills context budget. All skill descriptions were removed and 888 additional skills were not included in the model-visible skills list.' : 'Unexpected host failure' } }]
+      ...(notice === 'hook-trust-after-turn-started' ? [{ type: 'turn.started' }] : []),
+      ...(hookTrust ? Array.from({ length: notice === 'hook-trust-three-startup-notices' ? 3 : notice === 'hook-trust-after-turn-started' ? 1 : 2 }, () => notice === 'hook-trust-top-level' ? { type: 'error', message: warning }
+        : { type: notice === 'hook-trust-started' ? 'item.started' : 'item.completed', item: { type: 'error', message: warning } }) : []),
+      ...(hookTrust && notice === 'hook-trust-mixed' ? [{ type: 'item.completed', item: { type: 'error', message: 'Unexpected host failure' } }] : []),
+      ...(notice === 'hook-trust-after-turn-started' ? [] : [{ type: 'turn.started' }]),
+      ...(native && !notice.startsWith('hook-trust') ? notice === 'budget' || notice === 'unexpected' ? [{ type: 'item.completed', item: { type: 'error', message: notice === 'budget' ? 'Exceeded skills context budget. All skill descriptions were removed and 888 additional skills were not included in the model-visible skills list.' : 'Unexpected host failure' } }]
         : [{ type: 'error', message: notice === 'almost-retry' ? 'Reconnecting... arbitrary failure' : 'Reconnecting... 1/5 (stream disconnected)' }, ...(notice === 'retry-failed' ? [{ type: 'turn.failed' }] : [])] : []),
       { type: 'item.completed', item: { type: 'agent_message', text: 'Answer' } },
-      { type: 'turn.completed', usage: { input_tokens: 2000, cached_input_tokens: 1000, output_tokens: 20 } },
-    ].map((e) => JSON.stringify(e)).join('\n'), stderr: '', code: 0, timedOut: false, ms: 1 };
+      ...(hookTrust && notice === 'hook-trust-no-usage' ? [] : [{ type: 'turn.completed', usage: { input_tokens: 2000, cached_input_tokens: 1000, output_tokens: 20 } }]),
+    ].map((e) => JSON.stringify(e)).join('\n'), stderr: '', code: hookTrust && notice === 'hook-trust-failed' ? 1 : 0,
+      timedOut: hookTrust && notice === 'hook-trust-timeout', ms: 1 };
   });
   try {
     const study = main(['--run', '--study', 'c15', '--library', library, '--library-size', '2', '--repeats', '1', '--no-judge', '--out', out], { print: () => {}, env: { ...process.env, CODEX_HOME: home } });
@@ -407,10 +427,15 @@ it.skipIf(process.platform === 'win32').each(['budget', 'unexpected', 'retry', '
       expect(existsSync(join(out, 'rows.jsonl'))).toBe(false);
       return;
     }
-    if (notice !== 'budget' && notice !== 'retry') {
+    if (notice !== 'budget' && notice !== 'retry' && notice !== 'hook-trust') {
       await expect(study).rejects.toThrow('unexpected error');
-      expect(readJsonl<RunRow>(join(out, 'rows.jsonl'))).toHaveLength(1);
-      expect(manifests).toHaveLength(1);
+      const failedRows = readJsonl<RunRow>(join(out, 'rows.jsonl'));
+      const expected = notice.startsWith('hook-trust') && notice !== 'hook-trust-on-native-without-bypass' ? 2 : 1;
+      expect(failedRows).toHaveLength(expected);
+      expect(manifests).toHaveLength(expected);
+      expect(failedRows.at(-1)!.invalid).toContain('unexpected error');
+      expect(failedRows.at(-1)!.hookTrustNotices).toBe(notice === 'hook-trust-three-startup-notices' ? 3 : notice === 'hook-trust-after-turn-started' ? 1
+        : ['hook-trust-failed', 'hook-trust-timeout', 'hook-trust-no-usage', 'hook-trust-mixed'].includes(notice) ? 2 : 0);
       return;
     }
     await study;
@@ -418,10 +443,12 @@ it.skipIf(process.platform === 'win32').each(['budget', 'unexpected', 'retry', '
     expect(rows).toHaveLength(22);
     expect(new Set(manifests).size).toBe(1);
     expect(rows.every((r) => r.manifestHash === rows[0]!.manifestHash && r.corpusHash === rows[0]!.corpusHash && r.librarySize === 2 && !r.invalid)).toBe(true);
-    expect(rows.filter((r) => r.arm === 'native').every((r) => (notice === 'retry' ? r.skillsBudget === null : r.skillsBudget?.omitted === 888) && r.hook.invocations === 0)).toBe(true);
+    expect(rows.filter((r) => r.arm === 'native').every((r) => (notice === 'budget' ? r.skillsBudget?.omitted === 888 : r.skillsBudget === null) && r.hook.invocations === 0)).toBe(true);
     expect(rows.every((r) => r.totals.effectiveInput === 1100)).toBe(true);
     expect(rows.every((r) => r.codexRetries === (notice === 'retry' && r.arm === 'native' ? 1 : 0))).toBe(true);
+    expect(rows.every((r) => r.hookTrustNotices === (notice === 'hook-trust' && r.arm === 'loadout' ? 2 : 0))).toBe(true);
     expect(readFileSync(join(out, 'report.md'), 'utf8')).toContain(notice === 'retry' ? 'native: codexRetries 11' : 'native: codexRetries 0');
+    expect(readFileSync(join(out, 'report.md'), 'utf8')).toContain(notice === 'hook-trust' ? 'loadout: hookTrustNotices 22' : 'loadout: hookTrustNotices 0');
     expect(existsSync(join(out, 'verdicts.jsonl'))).toBe(false);
     expect(existsSync(join(out, 'INCOMPLETE'))).toBe(false);
     await expect(main(['--judge-only', out], { print: () => {} })).rejects.toThrow('tokens-only');

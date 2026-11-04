@@ -359,6 +359,9 @@ function codexRetryNotice(message: unknown): boolean {
   return !!match && (match[1] === undefined || Number(match[1]) <= Number(match[2]));
 }
 
+/** rust-v0.163.0 core/src/config/mod.rs: literal startup warning, rendered as an error item by exec's collect_warning. */
+const CODEX_HOOK_TRUST_NOTICE = '`--dangerously-bypass-hook-trust` is enabled. Enabled hooks may run without review for this invocation.';
+
 // --- Plan -------------------------------------------------------------------------------------
 
 export interface Options { hosts: Host[]; ids: string[]; repeats: number; models: Record<Host, string>; codexEffort?: string; maxTurns: number; timeoutS: number; codexHook: boolean; study?: 'c15'; librarySize?: number | 'all'; judge?: boolean; studyLibrary?: StudyLibrary }
@@ -459,7 +462,7 @@ export function planLines(o: Options, env: NodeJS.ProcessEnv = process.env, root
     lines.push(`PRECONDITION: ${CODEX_CLOUD_PRECONDITION}`);
     lines.push('PRECONDITION: CODEX_HOME/config.toml must be absent so preflight and exec use the same configuration. Before any paid turn, free skills/list on the measured cwd with the same HOME/CODEX_HOME must discover exactly the native manifest names and paths, and no non-builtin skill in loadout. System-scoped skills under CODEX_HOME/skills/.system must match, by name, file list and per-file content hash, the builtins initialized in fresh HOME/CODEX_HOME by the same Codex executable. Any discovery error or mismatch stops the study. scanLibrary(study-home/library) must match the same manifest names. No thread or turn is created.');
     lines.push('SELECTION: nine test prompts are hash-selected from request text; c1-debug-13 was selected earlier using Jev and judge results and contributes 2 of 20 pairs plus the only hidden-test gate. Report sensitivity excluding that fixture.');
-    lines.push('C15 retains C14 credential checks, warm-ups and cache-gap flags. Batch-stop rules tolerate documented Codex reconnect notices only on successful completion; codexRetries records their count. Jev costs are separate from host token metrics. Effective input = uncached input (including writes) x 1 + cached input x 0.1, a price-sheet assumption; output reported separately. --plan starts no child process and writes no files; paid runs and judging belong to the coordinator.');
+    lines.push('C15 retains C14 credential checks, warm-ups and cache-gap flags. Batch-stop rules tolerate documented Codex reconnect notices only on successful completion; codexRetries records their count. On successful loadout runs that pass --dangerously-bypass-hook-trust, at most two exact startup notices before the first turn.started are tolerated; hookTrustNotices records the observed count. Jev costs are separate from host token metrics. Effective input = uncached input (including writes) x 1 + cached input x 0.1, a price-sheet assumption; output reported separately. --plan starts no child process and writes no files; paid runs and judging belong to the coordinator.');
     return lines;
   }
   for (const p of [CODEX_CLOUD_PRECONDITION, CLAUDE_MANAGED_PRECONDITION, CLAUDE_SCRUB_PRECONDITION, CLAUDE_SWITCH_PRECONDITION]) lines.push(`PRECONDITION: ${p}`);
@@ -511,6 +514,7 @@ async function execute1(job: Job, prompt: string, spec: PromptSpec | undefined, 
   let usage: RunUsage | null = null;
   let skillsBudget: RunRow['skillsBudget'] = null;
   let codexRetries = 0;
+  let hookTrustNotices = 0;
   let codexProblem: string | undefined;
   try { usage = (job.host === 'claude' ? claudeUsage : codexUsage)(proc.stdout); } catch { /* checkRun says why */ }
   if (o.studyLibrary && job.host === 'codex') {
@@ -518,9 +522,14 @@ async function execute1(job: Job, prompt: string, spec: PromptSpec | undefined, 
       const parsed = stripCodexSkillsBudget(proc.stdout);
       skillsBudget = parsed.skillsBudget;
       const parsedEvents = events(parsed.stdout);
+      const successful = proc.code === 0 && !proc.timedOut && usage !== null;
+      const hookTrustNotice = (e: (typeof parsedEvents)[number]) => job.arm === 'loadout' && command.args.includes('--dangerously-bypass-hook-trust')
+        && e.type === 'item.completed' && e.item?.type === 'error' && e.item.message === CODEX_HOOK_TRUST_NOTICE;
       codexRetries = parsedEvents.filter((e) => e.type === 'error' && codexRetryNotice(e.message)).length;
-      if (parsedEvents.some((e) => e.type === 'turn.failed' || e.item?.type === 'error'
-        || e.type === 'error' && !(proc.code === 0 && !proc.timedOut && usage && codexRetryNotice(e.message)))) codexProblem = 'Codex reported an unexpected error; measurement invalid';
+      hookTrustNotices = parsedEvents.filter(hookTrustNotice).length;
+      const firstTurn = parsedEvents.findIndex((e) => e.type === 'turn.started');
+      if (parsedEvents.some((e, i) => e.type === 'turn.failed' || e.item?.type === 'error' && !(successful && hookTrustNotices <= 2 && i < firstTurn && hookTrustNotice(e))
+        || e.type === 'error' && !(successful && codexRetryNotice(e.message)))) codexProblem = 'Codex reported an unexpected error; measurement invalid';
     } catch {
       if (usage && !proc.timedOut) codexProblem = 'invalid Codex JSONL; measurement invalid';
     }
@@ -563,7 +572,7 @@ async function execute1(job: Job, prompt: string, spec: PromptSpec | undefined, 
     coldCacheRisk: requests.some((r) => (r.gapMs ?? 0) > CACHE_TTL_MS),
     toolCalls: tools.length, toolErrors: tools.filter((t) => t.endsWith('(failed)')).length, loadoutTools: [...new Set(tools.filter((t) => t.startsWith(`mcp__${SEARCH_SERVER}__`)))],
     skillsOpened: openedSkills(stream.events), hook, hiddenTest, wroteFile, ...(leak ? { leak } : {}), ...(streamWithheld ? { streamWithheld: 'token shape' as const } : {}),
-    ...(o.studyLibrary ? { librarySize: o.studyLibrary.librarySize, corpusHash: o.studyLibrary.corpusHash, manifestHash: o.studyLibrary.manifestHash, skillsBudget, codexRetries } : {}),
+    ...(o.studyLibrary ? { librarySize: o.studyLibrary.librarySize, corpusHash: o.studyLibrary.corpusHash, manifestHash: o.studyLibrary.manifestHash, skillsBudget, codexRetries, hookTrustNotices } : {}),
     // A Codex run that timed out reports no usage: it cannot count, but it is not a broken arm.
     ...(invalid ? { invalid } : !usage ? { invalid: proc.timedOut ? UNUSABLE[0] : UNUSABLE[1] } : {}),
   };

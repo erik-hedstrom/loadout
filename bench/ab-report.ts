@@ -87,6 +87,8 @@ export interface RunRow {
   manifestHash?: string;
   skillsBudget?: { descriptionsRemoved: boolean; omitted: number } | null;
   codexRetries?: number;
+  /** Exact bypass-flag warning items observed on configured loadout runs; failures still invalidate the row. */
+  hookTrustNotices?: number;
 }
 
 export interface Verdict {
@@ -277,6 +279,7 @@ function reportNative(rows: RunRow[], verdicts: Verdict[]): string {
   for (const arm of ['native', 'loadout']) {
     const runs = rows.filter((r) => r.arm === arm);
     out.push(`- ${arm}: codexRetries ${runs.length && runs.every((r) => r.codexRetries !== undefined) ? runs.reduce((n, r) => n + r.codexRetries!, 0) : 'not shown'} (including warm-up).`);
+    out.push(`- ${arm}: hookTrustNotices ${runs.length && runs.every((r) => r.hookTrustNotices !== undefined) ? runs.reduce((n, r) => n + r.hookTrustNotices!, 0) : 'not shown'} (including warm-up).`);
   }
   for (const r of rows.filter((r) => r.invalid || r.coldCacheRisk || r.timedOut || r.unreconciled.length)) out.push(`- ${r.id}: ${[r.invalid, r.coldCacheRisk && 'coldCacheRisk', r.timedOut && 'timed out', ...r.unreconciled].filter(Boolean).join('; ')}`);
   out.push('', 'Not shown: general quality retention, actual subscription cost, per-request Codex usage, other hosts/models, whole-library quality, and Jev dollars (record separately). Ten prompts and an assumed cached price do not establish population savings.', '');
