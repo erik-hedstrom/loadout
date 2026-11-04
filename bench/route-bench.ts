@@ -17,7 +17,7 @@
  *
  *   npx tsx bench/route-bench.ts [--sizes 1000,5000,20000] [--arms popular,bm25,hybrid,loadout] [--frontier 20]
  */
-import { assertNoSecrets, persistJson, heldSecrets } from './redact.js';
+import { assertNoSecrets, persistJson, heldSecrets, benchmarkFailure } from './redact.js';
 import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -45,6 +45,7 @@ import {
   type Row,
 } from './lib.js';
 
+try {
 const { values } = parseArgs({
   options: {
     sizes: { type: 'string', default: '1000,5000,20000' },
@@ -219,3 +220,4 @@ await pool(jobs, Number(values.concurrency), async ({ task, size }) => {
 
 assertNoSecrets(outDir, secrets);
 console.log(`rows: ${rowsFile}\nsummarise: npx tsx bench/tune.ts ${outDir}`);
+} catch (error) { benchmarkFailure(error); }

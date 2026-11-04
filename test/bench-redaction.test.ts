@@ -7,6 +7,9 @@ import { PassThrough } from 'node:stream';
 import { afterEach, expect, it, vi } from 'vitest';
 import { persistJson, redact } from '../bench/redact.js';
 
+// Import-driven harness tests retain rejection semantics; subprocess tests exercise the real CLI renderer.
+vi.mock('../bench/redact.js', async (original) => ({ ...await original<typeof import('../bench/redact.js')>(), benchmarkFailure: (error: unknown) => { throw error; } }));
+
 vi.mock('node:child_process', async (original) => ({
   ...await original<typeof import('node:child_process')>(), spawn: vi.fn(),
 }));

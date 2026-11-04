@@ -257,10 +257,10 @@ export async function modelJson<T>(prompt: string, schema: z.ZodType<T>, opts: {
   backend: string; model: string; system: string; out: string; effort?: string; secrets?: string[];
 }): Promise<{ output: T; costUsd: number | null } | null> {
   backendOf(opts.backend, opts.effort);
-  const secrets = [...heldSecrets(resolveApiKey(loadConfig())), ...(opts.secrets ?? [])];
+  const secrets = opts.secrets ?? heldSecrets(resolveApiKey(loadConfig()));
   const jsonSchema = z.toJSONSchema(schema, { target: 'draft-07' });
   if (opts.backend === 'claude') {
-    const res = await claudeJson<unknown>(prompt, jsonSchema, opts);
+    const res = await claudeJson<unknown>(prompt, jsonSchema, { ...opts, secrets });
     return { output: schema.parse(res.output), costUsd: res.costUsd };
   }
   if (opts.backend === 'files') {
@@ -333,7 +333,7 @@ export async function modelJson<T>(prompt: string, schema: z.ZodType<T>, opts: {
  * tools and settings are stripped so they do not pollute cost measurements.
  */
 export function claudeJson<T>(prompt: string, schema: object, opts: { model: string; system: string; timeoutMs?: number; secrets?: string[] }): Promise<ClaudeResult<T>> {
-  assertJudgePayload(prompt, opts.system, [...heldSecrets(resolveApiKey(loadConfig())), ...(opts.secrets ?? [])]);
+  assertJudgePayload(prompt, opts.system, opts.secrets ?? heldSecrets(resolveApiKey(loadConfig())));
   const args = [
     '-p',
     '--model', opts.model,

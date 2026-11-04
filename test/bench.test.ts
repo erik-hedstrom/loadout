@@ -8,6 +8,9 @@ import { afterAll, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { modelJson } from '../bench/lib.js';
 
+// Import-driven runs assert internal rejections; subprocess tests cover real diagnostic rendering.
+vi.mock('../bench/redact.js', async (original) => ({ ...await original<typeof import('../bench/redact.js')>(), benchmarkFailure: (error: unknown) => { throw error; } }));
+
 vi.mock('node:child_process', async (importOriginal) => ({
   ...await importOriginal<typeof import('node:child_process')>(), spawn: vi.fn(), execFileSync: vi.fn(),
 }));

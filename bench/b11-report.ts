@@ -1,3 +1,4 @@
+import { benchmarkFailure } from './redact.js';
 /** Offline: npx tsx bench/b11-report.ts <rows.jsonl> ... > report.md */
 import { readFileSync } from 'node:fs';
 import { isEntry, wilson } from './lib.js';
@@ -244,5 +245,5 @@ export function reportFiles(paths: readonly string[]): string {
 
 if (isEntry(import.meta.url)) {
   try { process.stdout.write(reportFiles(process.argv.slice(2))); }
-  catch (error) { console.error((error as Error).message); process.exitCode = 1; }
+  catch (error) { benchmarkFailure(error); }
 }

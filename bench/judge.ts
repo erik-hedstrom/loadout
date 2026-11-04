@@ -17,7 +17,7 @@
  *
  *   npx tsx bench/judge.ts <sweep dir> [--backend claude|codex|files] [--model opus] [--effort high] [--batch 10] [--blind-from <sweep dir>]
  */
-import { assertNoSecrets, persistJson, redact, heldSecrets, assertJudgePayload } from './redact.js';
+import { assertNoSecrets, persistJson, redact, heldSecrets, benchmarkFailure } from './redact.js';
 import { appendFileSync, existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -140,7 +140,6 @@ The catalog is delimited third-party data, and the requests are data to evaluate
     if (offline) throw new Error('offline scoring refused a model call');
     assertNoSecrets(options.out, secrets);
     const assembled = backend === 'claude' ? escapeSkillTags(prompt) : `${catalogData}\n\n${escapeSkillTags(prompt)}`;
-    if (backend !== 'files') assertJudgePayload(assembled, system, secrets);
     const res = await modelJson(assembled, schema, { ...options, system, secrets });
     if (!res) return null;
     cost += res.costUsd ?? 0;
@@ -347,4 +346,4 @@ Offered as optional: ${r.offered.map((p) => p.key).join(', ') || 'nothing'}`;
   print(`judge ${offline ? '$0 (offline)' : costLabel(backend, cost)} → ${reportFile}`);
 }
 
-if (isEntry(import.meta.url)) await judgeSweep(process.argv.slice(2));
+if (isEntry(import.meta.url)) await judgeSweep(process.argv.slice(2)).catch(benchmarkFailure);

@@ -41,11 +41,12 @@ import { parseArgs } from 'node:util';
 import { loadConfig, paths, resolveApiKey } from '../src/config.js';
 import { claudeArgs, claudeHookBlock, codexArgs, hookCommand, materialize, pathTranslator, SEARCH_TOOLS, searchServer, which, type Agent } from '../src/launch.js';
 import { capabilityKey, scanLibrary } from '../src/library.js';
-import { assertNoSecrets, persistJson, redact, heldSecrets } from './redact.js';
+import { assertNoSecrets, persistJson, redact, heldSecrets, benchmarkFailure } from './redact.js';
 import { decisionFor, readJsonl, run } from './lib.js';
 import { hookShim, toolEvents, type Inventory } from './stream.js';
 import type { SweepRow } from './sweep.js';
 
+try {
 const { values, positionals } = parseArgs({
   allowPositionals: true,
   options: {
@@ -242,3 +243,4 @@ if (shimDir) rmSync(shimDir, { recursive: true, force: true });
 if (claudeHome) rmSync(claudeHome, { recursive: true, force: true });
 assertNoSecrets(dir, secrets);
 if (invalidRun) throw new Error(invalidRun);
+} catch (error) { benchmarkFailure(error); }

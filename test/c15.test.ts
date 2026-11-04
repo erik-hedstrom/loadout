@@ -1,7 +1,7 @@
 import { mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { parse as yaml } from 'yaml';
 import { AB_MODELS, blockers, buildCommand, main, prepareStudyArm, preflightC15, readStudyLibrary, schedule, selectC15Prompts, assertTestPrompts, type Ctx, type Job } from '../bench/ab.js';
 import { readListingLibrary } from '../bench/listing.js';
@@ -10,12 +10,16 @@ import { report, type RunRow, type Verdict } from '../bench/ab-report.js';
 import { codexEffectiveInput } from '../bench/usage.js';
 import { judgePair } from '../bench/pairwise.js';
 import * as benchLib from '../bench/lib.js';
+import { credentialMatch } from '../bench/redact.js';
 import * as overhead from '../bench/overhead.js';
 import { spawnSync } from 'node:child_process';
 import { parse as toml } from 'smol-toml';
 import { scanLibrary } from '../src/library.js';
 
 const roots: string[] = [];
+// Hosted Windows runners supply PGPASSWORD=root; fixtures must not inherit that common-word credential.
+beforeEach(() => vi.stubEnv('PGPASSWORD', 'FAKE-c15-postgres-key'));
+afterEach(() => vi.unstubAllEnvs());
 const temp = () => { const p = mkdtempSync(join(tmpdir(), 'loadout-c15-test-')); roots.push(p); return p; };
 afterAll(() => roots.forEach((p) => rmSync(p, { recursive: true, force: true })));
 function source() {
@@ -341,7 +345,9 @@ it('judge-only redacts native skill names and C15 arm clues in both orders and p
     writeFileSync(join(dir, 'answer.md'), 'native-secret-skill .agents/skills/unobserved/SKILL.md find_tools load_skill mcp__loadout__find_tools loadout.find_tools loadout cd cd-only && cat SKILL.md\nloadout-ready payloadout');
   }
   const prompts: string[] = [];
-  vi.spyOn(benchLib, 'modelJson').mockImplementation(async (p) => {
+  vi.spyOn(benchLib, 'modelJson').mockImplementation(async (p, _schema, options) => {
+    expect(credentialMatch(p, options.secrets!)).toBeNull();
+    expect(credentialMatch(options.system, options.secrets!)).toBeNull();
     prompts.push(p);
     return { output: { winner: prompts.length === 1 ? 'first' : 'second', confidence: 'high', reasons: 'Correct' } } as any;
   });

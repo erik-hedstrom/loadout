@@ -23,7 +23,7 @@ const serverPath = join(import.meta.dirname, '../bench/mcp-fixture-server.ts');
 const jsonl = (...events: unknown[]) => events.map((e) => JSON.stringify(e)).join('\n');
 const never = async (): Promise<string> => { throw new Error('a host was started'); };
 const OAUTH_CANARY = 'b7-private-oauth-canary-never-in-output';
-beforeEach(() => vi.stubEnv('CLAUDE_CODE_OAUTH_TOKEN', OAUTH_CANARY));
+beforeEach(() => { vi.stubEnv('CLAUDE_CODE_OAUTH_TOKEN', OAUTH_CANARY); vi.stubEnv('PGPASSWORD', 'FAKE-b7-postgres-key'); });
 afterEach(() => vi.unstubAllEnvs());
 
 describe('fixture catalogues', () => {

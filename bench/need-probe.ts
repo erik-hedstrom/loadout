@@ -6,13 +6,14 @@
  *
  *   TYPESAFE_API_KEY=... npx tsx bench/need-probe.ts <route-bench results dir>
  */
-import { assertNoSecrets, persistJson, heldSecrets } from './redact.js';
+import { assertNoSecrets, persistJson, heldSecrets, benchmarkFailure } from './redact.js';
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { jevBaseUrl, loadConfig, resolveApiKey } from '../src/config.js';
 import { jevClient, type Question } from '../src/jev.js';
 import { loadCorpus, loadTasks, pool, readJsonl, RESULTS, splitOf, type Row } from './lib.js';
 
+try {
 const STATE_QUESTIONS: Record<string, string> = {
   // current
   need_procedure:
@@ -81,3 +82,4 @@ await pool(tasks, 4, async (task) => {
 });
 assertNoSecrets(out, secrets);
 console.log(`answers: ${out}/answers.jsonl  cost $${cost.toFixed(4)}`);
+} catch (error) { benchmarkFailure(error); }

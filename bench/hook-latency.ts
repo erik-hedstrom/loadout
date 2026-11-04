@@ -4,7 +4,7 @@
  * fake Jev, including replayed answers in the CLI subprocess (no Jev traffic).
  * Prompts omit session_id so repeat measurements neither reuse nor write state.
  */
-import { assertNoSecrets, persistJson, heldSecrets } from './redact.js';
+import { assertNoSecrets, persistJson, heldSecrets, benchmarkFailure } from './redact.js';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -58,6 +58,7 @@ export function replayPreload(replies: SystemOneResponse[], endpoint: string): s
 }
 
 if (isEntry(import.meta.url)) {
+  try {
   const { values } = parseArgs({ options: { limit: { type: 'string', default: '10' } } });
   const limit = Number(values.limit);
   const dev = readJsonl<{ id: string; request: string }>(join(DATA, 'requests.jsonl')).filter((r) => splitOf(r.id) === 'dev');
@@ -130,4 +131,5 @@ if (isEntry(import.meta.url)) {
   writeFileSync(join(dir, 'latency.json'), persistJson({ mode, node: process.version, limit, rows }, secrets) + '\n');
   assertNoSecrets(dir, secrets);
   console.log(`Raw samples: ${join(dir, 'latency.json')}`);
+  } catch (error) { benchmarkFailure(error); }
 }

@@ -1,5 +1,6 @@
 import { lstatSync, readFileSync, readdirSync } from 'node:fs';
 import { basename, join } from 'node:path';
+import { loadConfig, resolveApiKey } from '../src/config.js';
 
 /**
  * What Codex's login tokens (JWTs) and API keys look like; they can occur in third-party skill text and parsed metadata.
@@ -103,6 +104,17 @@ export function envSecrets(env: NodeJS.ProcessEnv = process.env): string[] {
 /** Resolve TypeSafe separately; always retain the full parent inventory even when a child receives a filtered environment. */
 export function heldSecrets(apiKey: string | undefined, env: NodeJS.ProcessEnv = process.env): string[] {
   return [...new Set([apiKey ?? '', ...envSecrets(), ...envSecrets(env)])].filter((value) => value.length >= 4);
+}
+
+/** The CLI boundary prints only a sanitized message, never Node's stack/cause/argv rendering. */
+export function benchmarkFailure(error: unknown): void {
+  let message = 'Benchmark failed; details suppressed.';
+  try {
+    const secrets = heldSecrets(resolveApiKey(loadConfig()));
+    message = redact(error instanceof Error ? error.message : typeof error === 'string' ? error : message, secrets);
+  } catch { /* Without the complete inventory, even an error about configuration must stay private. */ }
+  console.error(message);
+  process.exitCode = 1;
 }
 
 export const SKIP_DIRS = /[/\\](node_modules|\.git|\.venv|venv|__pycache__)([/\\]|$)/;

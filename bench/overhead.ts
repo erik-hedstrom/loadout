@@ -1,6 +1,6 @@
 /** B1: text-listing overhead, through official host CLIs. No model calls in --plan. */
 import { loadConfig, resolveApiKey } from '../src/config.js';
-import { assertNoSecrets, envSecrets, persistJson, redact, heldSecrets } from './redact.js';
+import { assertNoSecrets, envSecrets, persistJson, redact, heldSecrets, benchmarkFailure } from './redact.js';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { appendFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
@@ -579,6 +579,4 @@ export async function main(args: string[], deps: StudyDeps & { print?: (s: strin
     if (!values.plan) rmSync(root, { recursive: true, force: true });
   }
 }
-if (isEntry(import.meta.url)) {
-  main(process.argv.slice(2)).catch((error: unknown) => { console.error(error instanceof Error ? error.message : 'overhead failed'); process.exitCode = 1; });
-}
+if (isEntry(import.meta.url)) await main(process.argv.slice(2)).catch(benchmarkFailure);

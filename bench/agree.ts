@@ -1,3 +1,4 @@
+import { benchmarkFailure } from './redact.js';
 /**
  * Did a change move the router's decisions beyond run-to-run noise? Give the
  * sweep (bench/sweep.ts) from before the change and two sweeps of identical
@@ -12,6 +13,7 @@
  */
 import { exactSignTest, readJsonl, splitOf, wilson } from './lib.js';
 
+try {
 interface Row { id: string; loaded: { key: string }[]; warning?: string }
 
 const files = process.argv.slice(2);
@@ -45,3 +47,4 @@ for (const split of ['test', 'dev', 'all'] as const) {
 const perRequest = (m: Map<string, Row>) => ([...m.values()].reduce((t, r) => t + r.loaded.length, 0) / m.size).toFixed(2);
 const warned = [after1!, after2!].map((m) => [...m.values()].filter((r) => r.warning).length);
 console.log(`loads per request: before ${perRequest(before!)}, after ${perRequest(after1!)} and ${perRequest(after2!)}; rows with a warning after: ${warned.join(' and ')}`);
+} catch (error) { benchmarkFailure(error); }

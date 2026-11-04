@@ -6,7 +6,7 @@
  *
  * The split defaults to dev: tune on dev, report on test once (AGENTS.md).
  */
-import { assertNoSecrets, heldSecrets } from './redact.js';
+import { assertNoSecrets, heldSecrets, benchmarkFailure } from './redact.js';
 import { writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -155,6 +155,7 @@ export function needAudit(labelsFile: string, dirs: string[], split: 'dev' | 'te
 }
 
 if (isEntry(import.meta.url)) {
+  try {
   const { values, positionals } = parseArgs({ allowPositionals: true, options: { labels: { type: 'string' }, split: { type: 'string', default: 'dev' }, out: { type: 'string' } } });
   if (!values.labels || !positionals.length || !['dev', 'test'].includes(values.split!)) throw new Error('usage: need-audit.ts --labels <judge-blind.jsonl> [--split dev|test] [--out file] <sweep dir> ...');
   const report = needAudit(values.labels, positionals, values.split as 'dev' | 'test');
@@ -163,4 +164,5 @@ if (isEntry(import.meta.url)) {
     assertNoSecrets(dirname(values.out), heldSecrets(resolveApiKey(loadConfig())));
   }
   console.log(report);
+  } catch (error) { benchmarkFailure(error); }
 }

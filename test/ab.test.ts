@@ -862,11 +862,13 @@ describe('resuming and finishing a study', () => {
     const read = benchLib.readJsonl;
     const source = vi.spyOn(benchLib, 'readJsonl').mockImplementation((file) => file.endsWith('requests-c1.jsonl')
       ? [{ id: 'c1-web-14', request: Buffer.from(secret).toString('base64') }] as never : read(file));
-    const judge = vi.spyOn(benchLib, 'modelJson').mockResolvedValue({ output: { winner: 'first', confidence: 'high', reasons: 'safe' }, costUsd: 0 });
+    const judge = vi.spyOn(benchLib, 'modelJson');
+    const child = vi.spyOn(childProcess, 'spawn').mockImplementation(() => { throw new Error('FAKE: live judge must not run'); });
     try {
       await expect(main(['--judge-only', dir], { print: () => {} })).rejects.toThrow(/UNUSABLE.*judge payload/);
-      expect(judge).not.toHaveBeenCalled();
-    } finally { source.mockRestore(); judge.mockRestore(); }
+      expect(judge).toHaveBeenCalledOnce();
+      expect(child).not.toHaveBeenCalled();
+    } finally { source.mockRestore(); judge.mockRestore(); child.mockRestore(); }
   });
 
   it('--judge-only removes the INCOMPLETE marker only when every scheduled run has a row', async () => {

@@ -1,3 +1,4 @@
+import { benchmarkFailure } from './redact.js';
 /** Compare saved sweeps without routing or judging: npx tsx bench/stability.ts <dir> <dir> ... */
 import { join } from 'node:path';
 import { z } from 'zod';
@@ -68,4 +69,7 @@ export function stabilityReport(dirs: string[]): string {
   return lines.join('\n') + '\n';
 }
 
-if (isEntry(import.meta.url)) console.log(stabilityReport(process.argv.slice(2)));
+if (isEntry(import.meta.url)) {
+  try { console.log(stabilityReport(process.argv.slice(2))); }
+  catch (error) { benchmarkFailure(error); }
+}

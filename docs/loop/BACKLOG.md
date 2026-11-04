@@ -1771,6 +1771,16 @@ cost: $0; regressions use synthetic values and fake judges/providers only.
    paths and forms only. Files-backend batch digests hash redacted text and its
    public batch counter, never the original private prompt.
 
+Round 4: every benchmark CLI catches failures through `benchmarkFailure`;
+diagnostics print only a redacted message, never an Error object, stack or cause.
+If the full credential inventory cannot be resolved, diagnostic details are
+suppressed. Live judge checks reside at `modelJson`/`claudeJson`; a supplied full
+inventory preserves invalid-config tolerance for resumed A/B studies. The files
+backend redacts batches without refusing their inputs, consistently across callers.
+Windows CI fixtures override the runner's common-word `PGPASSWORD=root`; production
+still holds it under the four-character rule. B11 planning resolves the inventory
+without adopting an implicit library or calling a provider.
+
 **Residuals outside acceptance:** unknown/unlisted credential names, values under
 four characters, credentials only present in excluded credential files (other
 than the resolved TypeSafe key), unlisted transformations such as encryption or

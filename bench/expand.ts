@@ -1,3 +1,4 @@
+import { benchmarkFailure } from './redact.js';
 /**
  * Turn terse seed requests into the detailed prompts agents actually receive:
  * many users run their request through a model first ("improve this prompt"),
@@ -15,6 +16,7 @@ import { parseArgs } from 'node:util';
 import { backendOf, costLabel, DATA, modelFamily, modelJson, pool, readJsonl } from './lib.js';
 import { z } from 'zod';
 
+try {
 const { values, positionals } = parseArgs({
   allowPositionals: true,
   options: {
@@ -85,3 +87,4 @@ await pool(batches, Number(values.concurrency), async (batch) => {
   console.log(`expanded ${batch[0]!.id}…  ${costLabel(backend, cost)}`);
 });
 if (!pending) console.log(`done, ${costLabel(backend, cost)} → ${values.out}`);
+} catch (error) { benchmarkFailure(error); }

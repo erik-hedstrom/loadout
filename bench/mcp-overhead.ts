@@ -10,7 +10,7 @@ import { loadConfig, resolveApiKey } from '../src/config.js';
  * deferral may be claimed) share one process with `--no-session-persistence`, so no transcript lands in ~/.claude;
  * Codex gets one `--ephemeral` request.
  */
-import { assertNoSecrets, envSecrets, persistJson, heldSecrets } from './redact.js';
+import { assertNoSecrets, envSecrets, persistJson, heldSecrets, benchmarkFailure } from './redact.js';
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { homedir, tmpdir, userInfo } from 'node:os';
@@ -614,6 +614,4 @@ export async function main(args: string[], deps: { print?: (s: string) => void; 
     print(`Raw metrics: ${out}`);
   } finally { rmSync(root, { recursive: true, force: true }); }
 }
-if (isEntry(import.meta.url)) {
-  main(process.argv.slice(2)).catch((error: unknown) => { console.error(error instanceof Error ? error.message : 'mcp-overhead failed'); process.exitCode = 1; });
-}
+if (isEntry(import.meta.url)) await main(process.argv.slice(2)).catch(benchmarkFailure);

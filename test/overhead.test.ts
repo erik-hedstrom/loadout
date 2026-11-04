@@ -2,19 +2,22 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import * as fs from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
-import { afterAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { buildPlan, copyPack, execute, main, parseClaude, parseCodex, runStudy, summarize, parsePromptInput, validateFeatures, inspectCodex, preflight, DISABLED_FEATURES, type Command, type Plan } from '../bench/overhead.js';
 
 const temps: string[] = [];
+beforeEach(() => vi.stubEnv('PGPASSWORD', 'FAKE-overhead-postgres-key'));
+afterEach(() => vi.unstubAllEnvs());
 vi.mock('node:fs', async (original) => ({ ...await original<typeof import('node:fs')>() }));
 function temp() {
   const dir = mkdtempSync(join(tmpdir(), 'loadout-overhead-test-'));
   temps.push(dir);
   return dir;
 }
-afterAll(() => temps.forEach((dir) => rmSync(dir, { recursive: true, force: true })));
+// Removing the pack fixtures can exceed Vitest's 10 s hook default on a loaded Windows runner.
+afterAll(() => temps.forEach((dir) => rmSync(dir, { recursive: true, force: true })), 30_000);
 const jsonl = (...events: unknown[]) => events.map((e) => JSON.stringify(e)).join('\n');
 const claude = jsonl(
   { type: 'system', subtype: 'init', model: 'haiku-resolved', skills: ['b1-0000'], plugins: [{ name: 'b1' }], slash_commands: ['b1:command'], mcp_servers: [{ name: 'loadout', status: 'connected' }] },

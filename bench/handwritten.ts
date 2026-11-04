@@ -1,3 +1,4 @@
+import { benchmarkFailure } from './redact.js';
 /**
  * Hand-written requests against your real loadout library (~/.loadout or
  * LOADOUT_HOME). Each request lists the skills that count as a right answer.
@@ -13,6 +14,7 @@ import { scanLibrary, skillExcerpt } from '../src/library.js';
 import { route } from '../src/route.js';
 import { DATA, readJsonl } from './lib.js';
 
+try {
 interface Case { kind: 'niche' | 'several' | 'none' | 'mention'; accept: string[]; task: string }
 const cases = readJsonl<Case>(join(DATA, 'handwritten.jsonl'));
 const config = loadConfig();
@@ -35,3 +37,4 @@ for (const c of cases) {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${c.kind.padEnd(7)} need ${d.need?.toFixed(2) ?? ' -  '}  loaded: ${loaded.join(', ') || '—'}${injected.length ? `  injected: ${injected.join(', ')}` : ''}`);
 }
 console.log(`\n${pass}/${cases.length} pass on ${library.length} skills, $${cost.toFixed(4)}`);
+} catch (error) { benchmarkFailure(error); }

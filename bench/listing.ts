@@ -1,6 +1,6 @@
 import { loadConfig, resolveApiKey } from '../src/config.js';
 /** B12: native listing size arms and Claude's default-tools MCP pair. No host starts without --run. */
-import { assertNoSecrets, persistJson, redact, heldSecrets } from './redact.js';
+import { assertNoSecrets, persistJson, redact, heldSecrets, benchmarkFailure } from './redact.js';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { appendFileSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
@@ -276,8 +276,7 @@ if (isEntry(import.meta.url)) {
     startedRun = true;
     return runHost(command);
   } }).catch((error: unknown) => {
-    console.error(startedRun ? 'Listing study failed; check arguments, library and recorded status. Host details suppressed.'
+    benchmarkFailure(startedRun ? 'Listing study failed; check arguments, library and recorded status. Host details suppressed.'
       : error instanceof ValidationError ? error.message : 'Listing study could not start; check arguments and the library path. Details suppressed.');
-    process.exitCode = 1;
   });
 }

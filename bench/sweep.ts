@@ -9,7 +9,7 @@
  *
  *   npx tsx bench/sweep.ts [--requests bench/data/requests.jsonl] [--limit 50] [--seed]
  */
-import { assertNoSecrets, persistJson, heldSecrets } from './redact.js';
+import { assertNoSecrets, persistJson, heldSecrets, benchmarkFailure } from './redact.js';
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -55,6 +55,7 @@ function trimRaw({ candidates: _, ...raw }: RawRouting): Omit<RawRouting, 'candi
 }
 
 if (isEntry(import.meta.url)) {
+  try {
   const { values } = parseArgs({
     options: {
       requests: { type: 'string', default: join(DATA, 'requests.jsonl') },
@@ -105,4 +106,5 @@ if (isEntry(import.meta.url)) {
   });
   assertNoSecrets(dir, secrets);
   console.log(`done: ${done} decisions, $${cost.toFixed(4)}`);
+  } catch (error) { benchmarkFailure(error); }
 }

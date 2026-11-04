@@ -16,7 +16,7 @@
  * Text deliverables only (Markdown, code, JSON, CSV…): binaries are listed by
  * name but not compared. Runs use real subscriptions and take minutes each.
  */
-import { assertNoSecrets, credentialMatch, scanSecrets, persistJson, redact, heldSecrets, assertJudgePayload, copyWorkEntry } from './redact.js';
+import { assertNoSecrets, credentialMatch, scanSecrets, persistJson, redact, heldSecrets, copyWorkEntry, benchmarkFailure } from './redact.js';
 import { appendFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -31,6 +31,7 @@ import type { SweepRow } from './sweep.js';
 import { toolEvents } from './stream.js';
 import { events, tokenUsage, type TokenUsage } from './usage.js';
 
+try {
 const { values, positionals } = parseArgs({
   allowPositionals: true,
   options: {
@@ -102,8 +103,7 @@ for (const id of ids.filter((id) => !judged.has(id) && existsSync(join(out, id, 
   const files = { bare: deliverables(join(out, id, 'bare')), loadout: deliverables(join(out, id, 'loadout')) };
   const { winner, orders: [a, b] } = await judgePair(row.request, files, async (prompt) => {
     assertNoSecrets(out, secrets);
-    assertJudgePayload(prompt, JUDGE_SYSTEM, secrets);
-    const res = await claudeJson<Pref>(prompt, schema, { model: values.judge!, system: JUDGE_SYSTEM });
+    const res = await claudeJson<Pref>(prompt, schema, { model: values.judge!, system: JUDGE_SYSTEM, secrets });
     cost += res.costUsd;
     return { ...res.output, usage: res.usage, usageError: res.usageError };
   });
@@ -116,3 +116,4 @@ const count = (w: string) => verdicts.filter((v) => v.winner === w).length;
 print(`\nloadout better ${count('loadout')}, bare better ${count('bare')}, tie ${count('tie')}, split ${count('split')} (of ${verdicts.length}); judge $${cost.toFixed(2)}`);
 
 assertNoSecrets(out, secrets);
+} catch (error) { benchmarkFailure(error); }

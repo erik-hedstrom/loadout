@@ -1,5 +1,5 @@
 /** Cache-aware OpenCode study. See bench/README.md for the offline plan and explicit execution commands. */
-import { assertNoSecrets, persistJson, redact, heldSecrets } from './redact.js';
+import { assertNoSecrets, persistJson, redact, heldSecrets, benchmarkFailure } from './redact.js';
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -296,4 +296,4 @@ export async function main(args: string[]) {
   } finally { await Promise.all(endpoints.map(e => e.close())); rmSync(root, { recursive: true, force: true }); }
 }
 
-if (isEntry(import.meta.url)) main(process.argv.slice(2)).catch(error => { console.error(failureMessage(error)); process.exitCode = 1; });
+if (isEntry(import.meta.url)) main(process.argv.slice(2)).catch(error => { benchmarkFailure(failureMessage(error)); });

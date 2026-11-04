@@ -6,7 +6,7 @@
  *
  *   npx tsx bench/mismatch-probe.ts <judged sweep dir> [--blind-from <dir>]
  */
-import { assertNoSecrets, persistJson, redact, heldSecrets } from './redact.js';
+import { assertNoSecrets, persistJson, redact, heldSecrets, benchmarkFailure } from './redact.js';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -16,6 +16,7 @@ import { capabilityKey, scanLibrary } from '../src/library.js';
 import { auc, pool, readJsonl } from './lib.js';
 import type { SweepRow } from './sweep.js';
 
+try {
 const MISMATCH_QUESTIONS = {
   mismatch:
     'Does this skill depend on a specific product, platform, vendor or technology stack that the request does not mention and does not clearly involve?',
@@ -80,3 +81,4 @@ writeFileSync(join(dir, 'mismatch-probe.txt'), redact(lines.join('\n') + '\n', s
 writeFileSync(join(dir, 'mismatch-probe.jsonl'), obs.map((o) => persistJson(o, secrets)).join('\n') + '\n');
 assertNoSecrets(dir, secrets);
 console.log(redact(lines.join('\n'), secrets));
+} catch (error) { benchmarkFailure(error); }

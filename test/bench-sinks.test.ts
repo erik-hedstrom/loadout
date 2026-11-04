@@ -5,6 +5,8 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { fakeClient } from '../bench/hook-latency.js';
 import { envSecrets, persistJson } from '../bench/redact.js';
 
+vi.mock('../bench/redact.js', async (original) => ({ ...await original<typeof import('../bench/redact.js')>(), benchmarkFailure: (error: unknown) => { throw error; } }));
+
 const secret = 'FAKE-opaque-benchmark-key';
 const argv = process.argv;
 let root: string;
@@ -43,7 +45,7 @@ it.each(['content', 'filename', 'final message', 'unanticipated artifact', 'pare
   let calls = 0;
   vi.doMock('../src/launch.js', async (original) => ({ ...await original<typeof import('../src/launch.js')>(), which: () => 'fake-codex' }));
   vi.doMock('../bench/lib.js', async (original) => ({ ...await original<typeof import('../bench/lib.js')>(),
-    claudeJson: judge, run: async (_bin: string, _args: string[], cwd: string) => {
+    claudeJson: where === 'parent decision credential' ? (await original<typeof import('../bench/lib.js')>()).claudeJson : judge, run: async (_bin: string, _args: string[], cwd: string) => {
       const tainted = calls++ === 0;
       writeFileSync(join(cwd, tainted && where === 'filename' ? encoded : 'answer.txt'), tainted && where === 'content' ? encoded : 'safe');
       if (where === 'dependency links') {
@@ -59,6 +61,7 @@ it.each(['content', 'filename', 'final message', 'unanticipated artifact', 'pare
     },
   }));
   vi.spyOn(console, 'log').mockImplementation(() => {});
+  if (where === 'parent decision credential') vi.doMock('node:child_process', async (original) => ({ ...await original<typeof import('node:child_process')>(), spawn: () => { throw new Error('FAKE: live judge must not run'); } }));
   process.argv = [process.execPath, 'bench/outcome.ts', root, '--ids', 'fixture'];
   vi.resetModules();
   if (where === 'unanticipated artifact') await expect(import('../bench/outcome.js')).rejects.toThrow(/UNUSABLE.*unknown-writer.txt/);

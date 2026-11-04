@@ -5,6 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { afterEach, expect, it, vi } from 'vitest';
 import { z } from 'zod';
+import * as config from '../src/config.js';
 import { credentialMatch, envSecrets, heldSecrets, persistJson, scanSecrets } from '../bench/redact.js';
 import { copyOutputs, hiddenResult } from '../bench/ab.js';
 import { claudeJson, modelJson } from '../bench/lib.js';
@@ -32,6 +33,7 @@ it('uses explicit parent credential names, four-character minimum and name-only 
     PWD: '/working/dir', OLDPWD: '/old/dir', KEY_FILE: '/key/file', API_KEY_PATH: '/key/path', MAX_THINKING_TOKENS: '1024',
     MAX_MCP_OUTPUT_TOKENS: '000000000001024', NAMELESS: 'sk-' + 'FAKE'.repeat(8), API_KEY: 'abc', TOKEN: 'abcd' };
   expect(envSecrets(env)).toEqual(['hunter2', '/FAKE/long/slash/value', 'opaque7', 'fake-pwd', 'abcd']);
+  expect(envSecrets({ PGPASSWORD: 'root' })).toEqual(['root']);
   expect(persistJson({ hash: 'afe1024dead' }, envSecrets(env))).toBe('{"hash":"afe1024dead"}');
   vi.stubEnv('GITHUB_TOKEN', 'FAKE-parent-github-token');
   expect(heldSecrets('FAKE-resolved-typesafe', {})).toEqual(expect.arrayContaining(['FAKE-parent-github-token', 'FAKE-resolved-typesafe']));
@@ -126,10 +128,21 @@ it('checks the assembled live judge system when the private library is outside t
   mkdirSync(join(home, 'library', 'skills', 'safe'), { recursive: true });
   writeFileSync(join(home, 'library', 'skills', 'safe', 'SKILL.md'), `---\nname: safe\ndescription: ${secret}\n---\n`);
   writeFileSync(join(out, 'decisions.jsonl'), '{"id":"fixture","request":"safe","loaded":[],"offered":[],"shortlist":[],"ms":0,"costUsd":0}\n');
-  const ask = vi.fn(async () => { throw new Error('must not ask a live judge'); });
-  vi.doMock('../bench/lib.js', async (original) => ({ ...await original<typeof import('../bench/lib.js')>(), isEntry: () => false, modelJson: ask }));
-  vi.resetModules();
   const { judgeSweep } = await import('../bench/judge.js');
   await expect(judgeSweep([out, '--backend', 'claude'])).rejects.toThrow(/UNUSABLE.*judge payload/);
-  expect(ask).not.toHaveBeenCalled();
+});
+
+it('uses the supplied full inventory without reloading an invalid study configuration', async () => {
+  const out = temp(), home = temp(); vi.stubEnv('LOADOUT_HOME', home);
+  writeFileSync(join(home, 'config.json'), '{invalid FAKE-config');
+  vi.spyOn(console, 'log').mockImplementation(() => {});
+  const opts = { model: 'fake', system: 'safe', secrets: [secret], out };
+  await expect(modelJson(secret, z.object({ answer: z.string() }), { ...opts, backend: 'files' })).resolves.toBeNull();
+  expect(readFileSync(join(out, 'batches', '001.prompt.md'), 'utf8')).not.toContain(secret);
+  for (const backend of ['claude', 'codex']) await expect(modelJson(secret, z.object({ answer: z.string() }), { ...opts, backend })).rejects.toThrow(/UNUSABLE.*judge/);
+  expect(() => claudeJson(secret, {}, opts)).toThrow(/UNUSABLE.*judge/);
+  const load = vi.spyOn(config, 'loadConfig').mockReturnValue(config.DEFAULT_CONFIG);
+  vi.spyOn(config, 'resolveApiKey').mockReturnValue(secret);
+  await expect(modelJson(secret, z.object({ answer: z.string() }), { backend: 'claude', model: 'fake', system: 'safe', out })).rejects.toThrow(/UNUSABLE.*judge/);
+  expect(load).toHaveBeenCalledOnce();
 });

@@ -12,7 +12,7 @@
  * the cache writes to whichever arm ran first. So every host and arm starts with one recorded warm-up run (excluded from
  * the comparisons, reported as the cold start), and the measured runs alternate between the arms.
  */
-import { assertNoSecrets, credentialMatch, envSecrets, scanSecrets, CREDENTIAL_SHAPE, persistJson, redact, TOKEN_ANYWHERE, heldSecrets, assertJudgePayload, copyWorkEntry } from './redact.js';
+import { assertNoSecrets, credentialMatch, envSecrets, scanSecrets, CREDENTIAL_SHAPE, persistJson, redact, TOKEN_ANYWHERE, heldSecrets, copyWorkEntry, benchmarkFailure } from './redact.js';
 import { appendFileSync, copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
@@ -748,7 +748,6 @@ async function judgeAll(out: string, print: (s: string) => void, secrets: string
     const judge = JUDGES[host];
     const verdict = await judgePair(requests.find((r) => r.id === prompt)!.request, { [baseline]: bareFiles.text, loadout: loadoutFiles.text }, async (p) => {
       assertNoSecrets(out, secrets);
-      assertJudgePayload(p, JUDGE_SYSTEM, secrets);
       const res = await modelJson(p, PrefSchema, { backend: judge.backend, model: judge.model, system: JUDGE_SYSTEM, out, secrets });
       if (!res) throw new Error('the judge backend returned no answer');
       return res.output;
@@ -840,6 +839,4 @@ async function mainImpl(args: string[], print: (s: string) => void, env: NodeJS.
   return { out, complete: true };
 }
 
-if (isEntry(import.meta.url)) {
-  main(process.argv.slice(2)).catch((error: unknown) => { console.error(error instanceof Error ? error.message : 'ab failed'); process.exitCode = 1; });
-}
+if (isEntry(import.meta.url)) await main(process.argv.slice(2)).catch(benchmarkFailure);
