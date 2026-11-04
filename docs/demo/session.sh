@@ -17,6 +17,7 @@ if [[ $A5_MODE == dry-run ]]; then
   printf '       Return only the Markdown; do not write files.\n\n'
   printf 'No hook output or skill use is simulated in this preview.\n'
   sleep 25
+  printf '\n[Stub] Preview complete. The coordinator runs the real take.\n'
 else
   # Initial prompt in an interactive session (no -p), supported by the stock CLI.
   # It does not name a skill or ask Claude to pretend to load one.
