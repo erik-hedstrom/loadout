@@ -185,10 +185,13 @@ Left: Erik's one-time setup, that README change and the tag; a live
 
 **A5. Demo recording.**
 
-Status: free preparation in progress on `agent/a5-demo`. The scripts and
+Status: free preparation in draft [#81](https://github.com/erik-hedstrom/loadout/pull/81). The scripts and
 recording notes are in [docs/demo](../demo/README.md); no model or Jev call is
 part of preparation. The coordinator still runs and verifies the paid take,
 then adds its GIF to the README. The stub preview is not publication material.
+Free preview: 35.28-second GIF, 58,885 bytes. Windows-to-WSL hook/MCP checks
+passed. Keep the runtime on WSL's filesystem and shell scripts LF on checkout;
+agg's final-frame hold replaces terminal idle time, so verify the GIF's duration.
 
 Acceptance:
 - A `vhs` or asciinema script committed in `docs/demo/`.
