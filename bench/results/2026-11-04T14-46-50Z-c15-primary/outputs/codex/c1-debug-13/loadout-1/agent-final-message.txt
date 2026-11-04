@@ -1,0 +1,5 @@
+Fixed the menu event handling in [menu.js](<work>/menu.js). While open, it now listens for clicks and Escape on the document, ignores clicks inside the panel or on the toggle button, and removes the same handlers when it closes.
+
+Added regression cases in [menu.test.mjs](<work>/menu.test.mjs) for outside taps, Escape, and interactions inside the menu and on the button. No focus behavior was present to preserve or adjust.
+
+Verified with `npm test`; it passed.

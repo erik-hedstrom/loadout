@@ -1,0 +1,6 @@
+Created two deliverables in the folder:
+
+- [Sample business plan](<<work>/sample_business_plan.md>) — a clearly labeled fictional example, since no plan or data was attached.
+- [Assumptions register and test plan](<<work>/assumptions_assessment.md>) — ranked uncertainties, inexpensive tests with success thresholds and next decisions, and a spending gate.
+
+In the sample, demand, willingness to pay, retention, customer access, and delivery costs are the highest-priority unknowns. The sample evidence includes interview interest but no purchases, so it does not count that interest as proof of buying behavior.

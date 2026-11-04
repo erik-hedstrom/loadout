@@ -1,0 +1,6 @@
+Created both deliverables in the folder:
+
+- [Editable acquisition scorecard](<<work>/Acquisition_Target_Scorecard.xlsx>) — criteria, separate pass/hold/fail gates, formula-based scores and ranks, three fictional examples, and sensitivity scenarios.
+- [Screening guide](<<work>/Acquisition_Screening_Guide.md>) — scoring anchors, weight rationale, financial and uncertainty rules, worked value bridges, sensitivity interpretation, and a diligence checklist.
+
+Integration is scored as **ease**, so lower integration difficulty improves the score. The workbook’s formulas and example values were checked for consistency. LibreOffice and the spreadsheet libraries needed for the normal recalculation step were unavailable, so the workbook is set to recalculate when opened in a compatible spreadsheet app.

@@ -1,0 +1,11 @@
+Inflation is a general rise in prices across the economy over time. It doesn’t mean people are buying more things overall. It means that, on average, the same amount of money buys less than before.
+
+Here’s the apparent contradiction: prices depend on more than how many things people buy. They also depend on how much it costs to make and sell those things, and on how much is available.
+
+Imagine a grocery store sells 100 cartons of eggs each week, and shoppers still buy 100. If feed, energy, and transport get more expensive, the farm and store may raise the price to cover their higher costs. The number of cartons sold hasn’t gone up, but each carton costs more.
+
+Now imagine a disease reduces the number of eggs farms can supply. Shoppers still want about 100 cartons, but there are fewer to go around. The store may raise prices, and some shoppers may buy fewer eggs or choose something else. A **shortage** means there isn’t enough available to meet what people want at the current price.
+
+**Demand** is how much people want to buy at a given price; **supply** is how much sellers can provide. If demand rises relative to supply, prices may rise—even if the number actually sold stays the same. For example, more shoppers might want eggs, but farms can only provide the same 100 cartons. Higher prices can then limit purchases to what’s available. The final quantity sold may not change even though more people were trying to buy.
+
+But if only eggs become more expensive, that’s a price rise for one item, not necessarily **inflation**. Inflation is when prices rise broadly across many goods and services—such as groceries, rent, transport, and haircuts. A costly egg crop can contribute to inflation if it pushes up prices elsewhere, but by itself it may just be a change in the price of eggs.

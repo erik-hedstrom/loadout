@@ -1,0 +1,51 @@
+Lists and tuples both store multiple values in order. You can access each value by its position, starting at `0`.
+
+```python
+colors = ["red", "blue", "green"]  # list
+point = (3, 5)                    # tuple
+
+print(colors[0])  # red
+print(point[1])   # 5
+```
+
+The main difference is whether you can change the collection after creating it.
+
+A **list is mutable**: you can add, remove, or replace items.
+
+```python
+shopping = ["bread", "milk"]
+shopping.append("apples")
+shopping[0] = "oat bread"
+
+# ["oat bread", "milk", "apples"]
+```
+
+Lists are useful when the items might change, such as a shopping list, a to-do list, or scores you are still collecting.
+
+A **tuple is immutable**: once created, you cannot add, remove, or replace its items.
+
+```python
+location = (59.3, 18.1)  # latitude, longitude
+# location[0] = 60.0     # This raises an error
+```
+
+Tuples are useful for a fixed group of values that belong together, such as coordinates or an RGB color. A one-item tuple needs a comma:
+
+```python
+single_item = ("hello",)
+```
+
+Both lists and tuples:
+
+- Keep items in order and allow duplicates.
+- Can hold different kinds of values.
+- Let you access items by index, loop over them, and check their length with `len()`.
+
+One common misunderstanding: an immutable tuple does not make every object inside it immutable. For example, a tuple can contain a list, and that list can still change:
+
+```python
+record = ("Sam", ["reading", "cycling"])
+record[1].append("cooking")  # Allowed: the list inside changed
+```
+
+**Rule of thumb:** choose a list when the collection will change; choose a tuple when the collection is meant to stay fixed.

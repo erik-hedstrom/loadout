@@ -1,0 +1,8 @@
+| Week | Me | Partner |
+|---|---|---|
+| Week 1 | Groceries | Cleaning |
+| Week 2 | Cleaning | Groceries |
+| Week 3 | Groceries | Cleaning |
+| Week 4 | Cleaning | Groceries |
+
+After Week 4, repeat from Week 1. If you temporarily swap a task, trade back in a later week so each person still does each responsibility equally often.

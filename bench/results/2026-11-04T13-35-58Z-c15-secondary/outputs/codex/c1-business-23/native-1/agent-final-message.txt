@@ -1,0 +1,1 @@
+Created [interview-questions.md](<work>/interview-questions.md) with exactly five open-ended questions and a brief learning note for each. It distinguishes trying the software from adopting it in regular use.

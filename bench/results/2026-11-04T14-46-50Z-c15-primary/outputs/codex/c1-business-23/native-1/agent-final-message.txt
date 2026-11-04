@@ -1,0 +1,1 @@
+Created [interview-questions.md](<work>/interview-questions.md) with exactly five open-ended questions and a brief note on what each helps uncover. The questions distinguish stopping during a trial from stopping after adoption.

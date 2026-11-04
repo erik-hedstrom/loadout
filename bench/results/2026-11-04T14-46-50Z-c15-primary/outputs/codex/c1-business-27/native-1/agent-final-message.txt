@@ -1,0 +1,6 @@
+Created the framework and reusable blank scorecard:
+
+- [Acquisition screening framework](<work>/Acquisition_Screening_Framework.md) — screening gates, weighted criteria and scoring guidance, treatment of price and uncertainty, a fictional three-target comparison, sensitivity cases, and a diligence checklist.
+- [Scorecard template](<work>/Acquisition_Scorecard_Template.csv) — criterion rows with fields for ratings, evidence, confidence, assumptions, and diligence questions.
+
+The framework explains how to calculate the weighted scores and makes clear that a lower integration difficulty earns a higher rating. The fictional figures are explicitly labeled hypothetical.

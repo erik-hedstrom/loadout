@@ -1,0 +1,11 @@
+The apparent contradiction comes from mixing up **how much people buy** with **how much each thing costs**.
+
+Imagine a shop sells 100 loaves of bread a day. If bread’s price rises from €2 to €2.20, customers might still buy 100 loaves. The number of loaves sold hasn’t increased, but the money needed to buy them has. Prices can rise without people buying more stuff.
+
+Here’s how that can happen:
+
+- **Production costs rise.** If flour, electricity, transport, or wages cost more, a bakery may raise bread prices to cover its bills. If customers keep buying the same number of loaves, the higher price still sticks.
+- **There’s a shortage.** A bad harvest might leave fewer tomatoes available. If shoppers still want roughly the same amount, sellers may raise the price so the available tomatoes go to buyers willing to pay more. A **shortage** means there isn’t enough of something available to meet what people want at the current price.
+- **Demand rises compared with supply.** **Demand** means how much people want to buy; **supply** means how much sellers can provide. Demand can become stronger *relative to supply* even if the number bought doesn’t rise—for instance, if supply falls. The price may do the adjusting until the amount people want to buy matches what’s available.
+
+A price rise in one item is **not necessarily inflation**. If tomatoes become more expensive while most other prices stay about the same, that’s a tomato price increase. **Inflation** means prices are rising broadly across many goods and services over time. Economists measure it by tracking a basket of common purchases—such as food, rent, transport, and clothing—and seeing whether the basket gets more expensive overall.

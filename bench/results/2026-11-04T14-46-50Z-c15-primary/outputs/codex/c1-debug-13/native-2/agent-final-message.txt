@@ -1,0 +1,5 @@
+Fixed the menu event handling in [menu.js](<work>/menu.js:11). Outside taps and Escape now listen on the document while the menu is open. Both listeners use stable callbacks and are removed when the menu closes. Clicks on the button or inside the panel are ignored by the outside handler, and Escape returns focus to the button.
+
+Added checks in [menu.test.mjs](<work>/menu.test.mjs:39) for opening, outside-tap closing, Escape closing and focus restoration, and clicks inside the panel.
+
+Verified with `npm test`; it passed.

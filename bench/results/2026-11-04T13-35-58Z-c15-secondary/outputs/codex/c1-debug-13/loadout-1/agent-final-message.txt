@@ -1,0 +1,5 @@
+The menu was listening for outside clicks on the panel itself, so taps outside never reached the handler. Escape was listened for only on the button, and listener cleanup used new anonymous functions that could not remove the original listeners.
+
+I moved both listeners to the document while the menu is open. The click handler ignores events inside the panel or on the button, so menu interactions and button toggling still work. Escape closes the menu and returns focus to the button. The existing tests were extended to cover opening, outside taps, Escape from inside the menu, and clicks inside the panel.
+
+**Verification:** `npm test` passed.

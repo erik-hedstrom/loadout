@@ -1,0 +1,7 @@
+Created the framework and sample inputs in the folder:
+
+- [Scoring guide](<<work>/Acquisition_Scoring_Guide.md>) — gates, criteria and weights, financial assumptions, worked comparison, sensitivity checks, diligence process, and information checklist.
+- [Scorecard template](<<work>/Scorecard.csv>) — three fictional targets, editable scores and gates, and formulas for weighted scores and rank.
+- [Criteria and anchors](<<work>/Criteria.csv>) and [sensitivity cases](<<work>/Sensitivity.csv>).
+
+All figures and target details are explicitly hypothetical. The scorecard is CSV, which opens in spreadsheet software. I couldn’t create an `.xlsx` workbook because `openpyxl` is unavailable in the environment and Python virtual-environment support is missing.

@@ -1,0 +1,3 @@
+Created the sample review and assumptions register in [business-plan-assumptions-review.md](<work>/business-plan-assumptions-review.md).
+
+It ranks seven assumptions across demand, willingness to pay, customer access, feasibility, delivery costs, and retention, with an inexpensive test, success threshold, and next decision for each. The example plan is clearly marked as illustrative because no plan or source data was provided.

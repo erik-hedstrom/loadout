@@ -1,0 +1,6 @@
+Created both deliverables in the folder:
+
+- [Sample business plan](<<work>/sample_business_plan.md>)
+- [Assumptions register and testing order](<<work>/assumptions_register.md>)
+
+The example is explicitly synthetic: no plan or market evidence was provided. The register ranks the assumptions by impact and evidence strength, then proposes low-cost tests with success thresholds and next decisions. It puts problem evidence, paid commitments, and customer access ahead of substantial development spending.

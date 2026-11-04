@@ -1,0 +1,21 @@
+**Subject:** Request for API Documentation and Sandbox Access
+
+Hello [Vendor Name] team,
+
+I’m evaluating and planning a potential integration between [Your Company] and [Vendor Name]. Could you share your API documentation and information about sandbox access?
+
+In particular, please include:
+
+- Authentication requirements and available endpoints
+- Sample requests and responses
+- Rate limits
+- How to obtain sandbox credentials and test data
+- Any access prerequisites, fees, or other costs
+
+Please also let me know if there are additional materials or steps needed to evaluate the integration.
+
+Best,  
+[Your Name]  
+[Your Title]  
+[Your Company]  
+[Contact Information]

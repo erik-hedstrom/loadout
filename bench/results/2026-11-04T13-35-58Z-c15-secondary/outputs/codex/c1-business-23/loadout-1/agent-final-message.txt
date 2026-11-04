@@ -1,0 +1,1 @@
+Created [interview-guide.md](<work>/interview-guide.md) with exactly five open-ended questions and a brief note on what each helps you learn.

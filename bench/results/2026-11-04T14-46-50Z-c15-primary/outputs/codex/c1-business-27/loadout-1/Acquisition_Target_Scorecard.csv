@@ -1,0 +1,13 @@
+Dimension,Criterion,Weight percent,Northstar score,Juniper score,Keystone score,Notes
+Strategic fit,Market adjacency,10,5,4,3,"Higher is better; 1 weak, 3 adequate, 5 strong"
+Strategic fit,Capability / technology,9,4,5,3,""
+Strategic fit,Customer / channel access,8,4,3,5,""
+Strategic fit,Strategic durability,8,4,4,3,""
+Integration,Operating model compatibility,8,3,4,2,"5 = easiest to integrate"
+Integration,Systems / data compatibility,8,3,4,2,"5 = easiest to integrate"
+Integration,People / regulatory complexity,7,4,3,2,"5 = easiest to integrate"
+Integration,Execution capacity / time to value,7,3,4,2,"5 = easiest to integrate"
+Financial,Standalone cash generation,9,4,3,5,""
+Financial,Price / valuation discipline,10,3,4,2,""
+Financial,Synergy net value,9,4,3,5,"Risk-adjusted net synergy value after one-time integration costs"
+Financial,Downside resilience,7,3,4,2,""

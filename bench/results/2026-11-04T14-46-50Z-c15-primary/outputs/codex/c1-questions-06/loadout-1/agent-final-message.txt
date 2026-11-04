@@ -1,0 +1,69 @@
+A **list** and a **tuple** both hold several values in one variable. The main difference is whether you can change their contents after creating them.
+
+### Syntax
+
+Lists use square brackets:
+
+```python
+shopping = ["bread", "apples", "tea"]
+```
+
+Tuples usually use parentheses:
+
+```python
+coordinates = (59.3, 18.1)
+```
+
+A tuple can also be written without parentheses. The comma is what makes it a tuple:
+
+```python
+coordinates = 59.3, 18.1
+```
+
+For a tuple with just one item, include a trailing comma:
+
+```python
+single_item = ("tea",)
+```
+
+### Mutable and immutable
+
+A list is **mutable**: you can change, add, or remove items after creating it.
+
+```python
+shopping[0] = "rye bread"
+shopping.append("coffee")
+# ["rye bread", "apples", "tea", "coffee"]
+```
+
+A tuple is **immutable**: you cannot replace, add, or remove its items after creating it.
+
+```python
+coordinates[0] = 60.0  # TypeError
+```
+
+That makes a tuple useful for values you treat as a fixed group, such as a location’s latitude and longitude. A list suits a collection that changes, such as a shopping list or scores you keep updating.
+
+### What they have in common
+
+Both can hold multiple values, keep their order, and be looped over or indexed starting at 0:
+
+```python
+for item in shopping:
+    print(item)
+
+print(coordinates[0])  # 59.3
+```
+
+Both can contain values of different types, though in practice you’ll often use one kind of value in a collection.
+
+### A common misunderstanding
+
+A tuple prevents changing its *slots*, but it does not make every object inside it immutable. For example, a tuple can contain a list, and that list can still change:
+
+```python
+group = ("team A", ["Mina", "Leo"])
+group[1].append("Kai")  # Allowed
+```
+
+**Rule of thumb:** choose a list when the collection may change; choose a tuple when the group should stay fixed.
