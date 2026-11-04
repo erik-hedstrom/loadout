@@ -3,8 +3,9 @@
 ## Problem
 
 Installed skill listings add context even when the skills are irrelevant.
-What that cost in Claude Code and Codex, as measured by B1, is summarised in
-the [README](README.md).
+What that cost in Claude Code and Codex, as measured by
+[B12](bench/RESULTS.md#b12-results-2026-10-28-what-installed-skills-cost-per-request-on-current-hosts),
+is summarised in the [README](README.md).
 
 **loadout aims to decouple library size from per-request cost.**
 [Jev](https://typesafe.ai/blog/introducing-system-one-models-and-jev) picks a
@@ -74,7 +75,7 @@ flowchart TB
     host -->|"prompt or task + repo signals"| routing
     LA -->|"attaches it when search is on (default)"| MS
     XH -->|"bundled .mcp.json"| MS
-    CH -.->|"optional, added by the user"| MS
+    CH -->|"bundled .mcp.json"| MS
     MS -->|"find_tools: goal and keywords + repo signals"| routing
     MS -->|"load_skill"| LS
     MS -->|"server_tools, call_server_tool"| GW
@@ -157,9 +158,9 @@ literal, atomic questions; every decision rule is code (`decide()` in
    library no larger than that goes whole. Local and free: the library is
    embedded once (new skills at `loadout add`); how long that takes is
    not shown. On the synthetic benchmark the embeddings added
-   nothing; on realistic, detailed requests they kept the judge's best skill in
-   the candidates 87% of the time vs 80% for BM25 alone, because long prompts
-   dilute keyword scores (see [bench/RESULTS.md](bench/RESULTS.md), v4).
+   nothing; on v4's 315 realistic, detailed requests they kept the judge's best
+   skill in the candidates 87% of the time vs 80% for BM25 alone
+   ([v4](bench/RESULTS.md#v4-2026-10-06-realistic-requests-on-the-real-library-judged)).
 2. **Wide request.** All in one call, evaluated in parallel:
    - `pick`: one Choice over the candidates plus `no_skill_needed`. Its
      probabilities are relative, which separates lookalikes.
@@ -194,7 +195,8 @@ literal, atomic questions; every decision rule is code (`decide()` in
      pick ≥ 0.5, close share ≥ 0.8, P(exact) ≥ 0.95). On the
      [v3 synthetic rows](bench/RESULTS.md#injection), it fires on 77% of rows
      with a gold skill; 99.0% of all injections are gold (99.5% on rows with
-     one). On [v4 realistic requests](bench/RESULTS.md#v4-2026-10-06-realistic-requests-on-the-real-library-judged),
+     one). These rows reuse tasks at multiple library sizes.
+     On [v4 realistic requests](bench/RESULTS.md#v4-2026-10-06-realistic-requests-on-the-real-library-judged),
      84% (67–93, 95% Wilson interval) of injected skills are useful on test.
 5. **Mentions override.** A skill in the whole library, not only the
    candidates, that the user explicitly names is loaded and injected (unless
@@ -206,8 +208,8 @@ literal, atomic questions; every decision rule is code (`decide()` in
      /pdf"), and plain prose.
    - If several installed skills share the name, the one the router rated best
      is used, and it replaces the other copies.
-6. **Tell the agent where to look**, without forcing it (TypeSafe's measured
-   wording), via `--append-system-prompt` for Claude Code. Codex gets it in the
+6. **Tell the agent where to look**, without forcing it, via
+   `--append-system-prompt` for Claude Code. Codex gets it in the
    prompt only when no skill is loaded or offered; otherwise the prompt lists
    the loaded skills, then the offered ones under "Also available if needed".
    Without Jev (no key, `--lexical`, `"router": "lexical"`, or Jev down) the
@@ -243,20 +245,23 @@ Cost per decision: **$0.00082**, 0.95 s on the
 [v3 synthetic 20,000-skill test](bench/RESULTS.md#test-split); the cost on
 realistic requests is in the
 [v4 results](bench/RESULTS.md#v4-2026-10-06-realistic-requests-on-the-real-library-judged).
-Measured limits (2026-10-05): no per-request question cap below 200, state
-billed once, Choice capped at 255 options, 64k-token context.
 
 Things that did not work, and why they are not used:
 - **One yes/no question per candidate (v1).** Scores came back compressed
-  (gold ≈ 0.95, the best wrong candidate on a no-skill task ≈ 0.935), so no
+  (gold ≈ 0.95, the best wrong candidate on a no-skill task ≈ 0.935;
+  [v1 findings](bench/RESULTS.md#findings)), so no
   threshold could separate them; v1 loaded ~9 skills per task and loaded
-  something on 80% of tasks that needed nothing.
+  something on most tasks that needed nothing, on v2's synthetic test split
+  ([v2 comparison](bench/RESULTS.md#headline-20000-skill-library-test-split)).
 - **Request-only "is this named/specialised?" questions.** `need_named`
-  scored 0.958 on gold tasks and 0.946 on no-skill tasks (AUC 0.77): every
-  request names *something*. Replaced by the per-candidate specificity
-  question. Alternatives proposed in review ("prescribed steps not given",
+  scored 0.958 on gold tasks and 0.946 on no-skill tasks
+  ([v3](bench/RESULTS.md#v3-2026-10-06-specificity-gate-injection-mentions));
+  its AUC was 0.77: every request names *something*. Replaced by the
+  per-candidate specificity question. Alternatives proposed in review ("prescribed steps not given",
   "project convention not given", "calls an external service") separated
-  worse (AUC 0.83–0.88) than the current pair (0.97 each).
+  worse (AUC 0.83–0.88) than the current pair (0.97 each), on all 199
+  synthetic tasks
+  ([question comparison](bench/RESULTS.md#need-questions-compared-all-199-tasks-one-jev-request-each-0013)).
 
 ### Search server (`loadout mcp`)
 
@@ -375,8 +380,10 @@ prompt, which shows the server, tool and arguments.
 
 ### Prompt hook
 
-The settings-file hook and the earlier hook-only plugin have separate
-measurements ([RESULTS](bench/RESULTS.md#do-agents-use-what-they-are-given)).
+The settings-file hook, the earlier hook-only plugin and the current plugin
+with its MCP server have separate measurements
+([earlier arms](bench/RESULTS.md#do-agents-use-what-they-are-given),
+[D13](bench/RESULTS.md#the-plugin-with-its-mcp-server-d13-2026-11-03)).
 Both plugins now carry `loadout mcp`, because the hook's context points to its
 `load_skill`. The hook's context varies with the prompt; the server's tool
 definitions are in every request ([cost](docs/mcp.md#cost-and-privacy)).

@@ -9,8 +9,8 @@ and Node 22.12+. What was checked in which host: [hosts.md](hosts.md).
 
 The server's tool definitions are a fixed part of every request; the hook's
 context is not fixed, it varies with the prompt. The server's cost is in
-[mcp.md](mcp.md#cost-and-privacy); the hook's per-prompt context, and the
-plugin's effect on Claude Code session start, are not measured
+[mcp.md](mcp.md#cost-and-privacy); the hook's per-prompt token cost on those
+hosts, and the plugin's effect on Claude Code session start, are not measured
 ([RESULTS](../bench/RESULTS.md#b12-results-2026-10-28-what-installed-skills-cost-per-request-on-current-hosts)).
 
 The hook cannot see which MCP servers its host has, so it always assumes

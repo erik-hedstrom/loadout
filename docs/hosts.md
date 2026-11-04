@@ -48,9 +48,11 @@ Notes:
    `claude mcp list` with the plugin installed into a throwaway Claude home and
    `loadout` from `npm link` showed `plugin:loadout:loadout ... Connected`, and
    `Failed to connect` with `loadout` off PATH (Claude Code 2.1.308,
-   2026-11-01; no model call). Not yet checked: a live Claude Code session
-   that opens a skill through the plugin. The bench's plugin arm for that is
-   written and not yet run.
+   2026-11-01; no model call). D13 then measured 10 headless plugin sessions
+   on Claude Code 2.1.316, Sonnet 5.5, WSL behind Windows: 3 opened a skill
+   the judge lists as useful (Wilson 95%: 11–60%). Interactive sessions are
+   not measured
+   ([RESULTS](../bench/RESULTS.md#the-plugin-with-its-mcp-server-d13-2026-11-03)).
 5. The same plugin as the CLI. Erik's check is backlog D10.
 6. `loadout setup codex` prints marketplace and plugin install commands for
    Codex CLI. The `loadout-codex` plugin carries `loadout hook codex` and
