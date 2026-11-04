@@ -96,8 +96,15 @@ after observing a boundary, as already documented for agent rows. It retains
 both Codex quota windows and unchanged production deadlines. Driver details
 and raw offline output remain outside Git in `C15-DRIVER-HANDOFF.md` and
 `offline-verification.txt`.
+Codex `modelJson` suppresses stderr and reports only `codex exited 1` on
+failure. The driver now reads free Codex quota after a failed judge launch,
+including inline judging after all primary rows. Exhausted or unavailable
+quota uses the existing capped pause/retry path; allowed quota preserves a
+persistent STOP for a genuine nonlimit failure. A fake-only regression first
+reproduced eight failures for the suppressed-error case, then passed with the
+quota-evidence check. No judge stderr is exposed or interpreted as evidence.
 `bash verify-offline.sh` ran both `test-c15.sh` and
-`mutation-check-c15.sh`: **139 passed, 0 failed; 3 mutations killed, 0
+`mutation-check-c15.sh`: **150 passed, 0 failed; 4 mutations killed, 0
 survived or invalid; aggregate exit 0**. Encoding: 8 private files checked,
 zero CRLF/BOM failures. Initial driver fixtures timed out after adding the
 20 verdict quota reads; only fake-test timeouts were raised (60-second launch,
