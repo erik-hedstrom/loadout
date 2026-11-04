@@ -202,8 +202,13 @@ export async function doctor(config: Config, client: (apiKey: string) => SystemO
         // The plugin key's 0:0 is the handler's position in plugins/loadout-codex/hooks/hooks.json (a test pins it).
         // Inline keys start with the config path: Codex canonicalizes a set CODEX_HOME (utils/home-dir
         // find_codex_home_from_env, Windows verbatim prefix stripped) and uses the default ~/.codex as is.
-        // A hook position means config.toml was read, so the folder exists for realpath.
-        const keyHome = hook.length && process.env.CODEX_HOME ? realpathSync.native(codexHome) : codexHome;
+        let keyHome = codexHome;
+        try {
+          if (hook.length && process.env.CODEX_HOME) keyHome = realpathSync.native(codexHome);
+        } catch {
+          // CODEX_HOME can disappear after the config read; keep diagnostics running without exposing its contents.
+          return { broken: join(codexHome, 'config.toml') };
+        }
         const keys = [
           ...(plugin ? ['loadout-codex@loadout:hooks/hooks.json:user_prompt_submit:0:0'] : []),
           ...hook.map((position) => `${resolve(keyHome, 'config.toml')}:user_prompt_submit:${position}`),
@@ -231,7 +236,7 @@ export async function doctor(config: Config, client: (apiKey: string) => SystemO
     },
   ];
   const attachments = hosts.map((h) => ({ host: h, state: h.attached() }));
-  const anyAttached = attachments.some(({ state }) => 'on' in state && state.on);
+  const anyAttached = attachments.some(({ host, state }) => onPath(host.bin) && 'on' in state && state.on);
   for (const { host: h, state } of attachments) {
     // doctor runs no binary found through an empty or relative PATH entry.
     const bin = onPath(h.bin);
