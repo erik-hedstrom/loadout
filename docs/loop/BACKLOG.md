@@ -541,7 +541,7 @@ Decisions for Erik:
 | C8 | P0 | Skill use with the hook-only plugin | Claude | local | done ([#25](https://github.com/erik-hedstrom/loadout/pull/25)): headless, the hook injected a skill's text in 6 of 10; Claude opened 0 of 10, none of the 4 it was only pointed to (D13) |
 | C9 | P1 | Host-model fallback router when there is no TypeSafe key | Claude (design) | cloud (code) + local (bench) | todo |
 | C10 | P2 | Bench quick fixes: sequential outcome judge, tier fixed across arms, stale A2 number | Claude | cloud | done ([#40](https://github.com/erik-hedstrom/loadout/pull/40)) |
-| C15 | P0 | Same library natively versus through loadout: task tokens, caching and retained quality | Codex (harness) + coordinator (runs) | local | done on Codex: harness ([#69](https://github.com/erik-hedstrom/loadout/pull/69)), hook-trust notice ([#83](https://github.com/erik-hedstrom/loadout/pull/83)), results ([#PR](https://github.com/erik-hedstrom/loadout/pull/PR)): quality screen passed, median 6,225 effective input tokens saved per run at 250 skills ([RESULTS](../../bench/RESULTS.md#c15-results-2026-11-04-the-same-library-natively-and-through-loadout-on-codex)); the Claude arm waits on E12 |
+| C15 | P0 | Same library natively versus through loadout: task tokens, caching and retained quality | Codex (harness) + coordinator (runs) | local | done on Codex: harness ([#69](https://github.com/erik-hedstrom/loadout/pull/69)), hook-trust notice ([#83](https://github.com/erik-hedstrom/loadout/pull/83)), results ([#85](https://github.com/erik-hedstrom/loadout/pull/85)): quality screen passed, median 6,225 effective input tokens saved per run at 250 skills ([RESULTS](../../bench/RESULTS.md#c15-results-2026-11-04-the-same-library-natively-and-through-loadout-on-codex)); the Claude arm waits on E12 |
 | C14 | P1 | A/B pilot: three prompts with and without loadout in the stock CLIs, tokens (cached apart from uncached) and quality | Claude (harness) + Erik (runs) | cloud (harness) + local (runs) | Codex done: harness ([#47](https://github.com/erik-hedstrom/loadout/pull/47)), first pilot and measurement fixes ([#64](https://github.com/erik-hedstrom/loadout/pull/64)), rerun recorded (2026-10-26): loadout added uncached input tokens against a bare setup; the Claude arm waits on E12 |
 
 **C13. Pure-Jev baseline without more model spend.**
@@ -850,7 +850,7 @@ Why: C14 compares against bare and cannot show replacement savings. B12
 measures fixed native listing cost, including Codex's budget truncation;
 A6 prints how to hide adopted native listings. C15 compares the same library
 served natively and through loadout on real C1 test tasks, with caching and
-quality included. Status: **done on Codex: harness ([#69](https://github.com/erik-hedstrom/loadout/pull/69)), hook-trust notice ([#83](https://github.com/erik-hedstrom/loadout/pull/83)), results ([#PR](https://github.com/erik-hedstrom/loadout/pull/PR)); the Claude arm waits on E12**.
+quality included. Status: **done on Codex: harness ([#69](https://github.com/erik-hedstrom/loadout/pull/69)), hook-trust notice ([#83](https://github.com/erik-hedstrom/loadout/pull/83)), results ([#85](https://github.com/erik-hedstrom/loadout/pull/85)); the Claude arm waits on E12**.
 A Codex review of `4866e8a..27e572a` is owed before the paid study runs.
 
 Acceptance:
