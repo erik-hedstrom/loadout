@@ -157,12 +157,7 @@ export function stripCodexSkillsBudget(stdout: string) {
 export function parseListingUsage(host: Host, stdout: string) {
   if (host === 'codex') {
     const { stdout: filtered, skillsBudget } = stripCodexSkillsBudget(stdout);
-    const es = events(filtered);
     const usage = parseCodex(filtered);
-    const u = es.find((e) => e.type === 'turn.completed').usage;
-    usage.cacheCreation = u.cache_write_input_tokens === undefined ? 0 : counter(u.cache_write_input_tokens, 'cache_write_input_tokens');
-    if (usage.cacheCreation > usage.uncached) throw new Error('cache write exceeds uncached input');
-    usage.uncached -= usage.cacheCreation;
     return { skillsBudget, version: null, model: null, initSkills: null, initProbeSkills: null, ambientPlugins: null, probePluginLoaded: null,
       initTools: null, toolSearch: null, loadoutTools: null, loadoutConnected: null, usage: { input: usage.input, uncached: usage.uncached, cacheCreation: usage.cacheCreation, cacheRead: usage.cacheRead, output: usage.output } };
   }

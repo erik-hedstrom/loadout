@@ -1,15 +1,29 @@
 import { counter, events } from './usage.js';
+import { readdirSync } from 'node:fs';
+import { JEV_USAGE_MARKER } from '../src/jev-usage.js';
+import { readConfined } from '../src/library.js';
 
 export interface JevRunUsage {
-  calls: number;
-  attempts: number;
+  calls: number | null;
+  attempts: number | null;
   inputTokens: number | null;
   outputTokens: number | null;
   usageMissing: boolean;
   /** Configured input-price estimate for observed input only, never a total bill. Output has no configured price. */
-  reportedInputCostUsd: number;
+  reportedInputCostUsd: number | null;
   /** Unknown when usage is incomplete or nonzero output is unpriced. */
   costUsd: number | null;
+}
+
+/** A capture failure must not discard the host row that has already been paid for. */
+export function readJevUsage(dir: string, requiredSources: ('hook' | 'router')[]): JevRunUsage {
+  try {
+    const files = readdirSync(dir).filter((name) => name !== JEV_USAGE_MARKER);
+    if (!files.length || files.some((name) => !/^jev-[a-f0-9-]+\.jsonl$/.test(name))) throw new Error();
+    return jevRunUsage(files.sort().map((name) => readConfined(dir, name, 4096)).join('\n'), requiredSources);
+  } catch {
+    return { calls: null, attempts: null, inputTokens: null, outputTokens: null, usageMissing: true, reportedInputCostUsd: null, costUsd: null };
+  }
 }
 
 export function jevRunUsage(text: string, requiredSources: ('hook' | 'router')[] = []): JevRunUsage {

@@ -32,7 +32,8 @@ import { assertTemporary, claudeIsolation, cli, execute, inspectCodex, validateF
 import { deliverableFiles, deliverables, JUDGE_MAX_BYTES, judgePair, JUDGE_SYSTEM, NOTE, PrefSchema, type Arm } from './pairwise.js';
 import { hookShim, toolEvents, type Event, type HookExecution, type Inventory } from './stream.js';
 import { claudeUsage, codexUsage, codexEffectiveInput, effectiveInput, events, sumUsage, type RunUsage } from './usage.js';
-import { jevRunUsage } from './jev-usage.js';
+import { readJevUsage } from './jev-usage.js';
+import { JEV_USAGE_MARKER, JEV_USAGE_MARKER_TEXT } from '../src/jev-usage.js';
 
 const ARMS: Arm[] = ['bare', 'loadout'];
 /** Held-out C1 test rows where all three 2026-10-16 Jev reruns loaded the same set and the C1 judge rated a loaded skill useful: one copy, one document, one code task. */
@@ -489,9 +490,10 @@ async function execute1(job: Job, prompt: string, spec: PromptSpec | undefined, 
   const id = jobId(job);
   const marker = join(ctx.shimDir, `${id.replace(/\//g, '_')}.invocations`);
   const capture = `${marker}.out`;
-  const jevFile = `${marker}.jev`;
-  writeFileSync(jevFile, '', { mode: 0o600 });
-  ctx = { ...ctx, env: { ...ctx.env, LOADOUT_BENCH_JEV_USAGE: jevFile } };
+  const jevDir = `${marker}.jev`;
+  mkdirSync(jevDir, { mode: 0o700 });
+  writeFileSync(join(jevDir, JEV_USAGE_MARKER), JEV_USAGE_MARKER_TEXT, { flag: 'wx', mode: 0o600 });
+  ctx = { ...ctx, env: { ...ctx.env, LOADOUT_BENCH_JEV_USAGE: jevDir } };
   writeFileSync(marker, '');
   writeFileSync(capture, '');
   writeFileSync(`${capture}.err`, '');
@@ -535,22 +537,26 @@ async function execute1(job: Job, prompt: string, spec: PromptSpec | undefined, 
   const broken = codexProblem ?? checkRun(job, { usage, hooks: stream.hooks, inventory: stream.inventory, failedBeforeModel, hookInvocations: hook.invocations, hookExits: marks.filter((l) => l.startsWith('exit ')).map((l) => Number(l.slice(5))), keywordRouted: routedByKeyword(capturedRaw, hookStderr, stream.events),
     uncountedContext: stream.hooks.filter((h) => h.context).length - marks.filter((l) => l === 'context').length, pluginDir: join(REPO, 'plugins', 'loadout'), codexHook: o.codexHook, requestedModel: o.models[job.host] });
 
-  // Request gaps: since this host and arm last made a request (completion to completion inside a run, which counts the request's
-  // own time; the run's start for request 1). Over five minutes the provider's default cache entry may have expired.
+  // Match the previous main request and its timestamp from the same row. The
+  // boundary gap uses run start; later gaps include the request's own duration.
   const before = previous.filter((r) => r.host === job.host && r.arm === job.arm && !r.invalid);
-  const lastDone = before.length ? Math.max(...before.map((r) => Date.parse(r.requests.at(-1)?.at ?? r.endedAt))) : null;
-  let prevAt = lastDone;
-  let previousMain: RunUsage['requests'][number] | undefined;
+  const last = before.flatMap((row) => {
+    const request = [...row.requests].reverse().find((r) => !r.subagent);
+    const at = Date.parse(request?.at ?? row.endedAt);
+    return request && Number.isFinite(at) ? [{ request, at }] : [];
+  }).sort((a, b) => a.at - b.at).at(-1);
+  let prevAt = last?.at ?? null;
+  let previousMain: RunUsage['requests'][number] | undefined = last?.request;
+  let firstMain = true;
   const risks: (boolean | null)[] = [];
-  const requests = (usage?.requests ?? []).map((r, i) => {
+  const requests = (usage?.requests ?? []).map((r) => {
     const at = r.at ? Date.parse(r.at) : null;
-    const gapMs = r.subagent || prevAt === null ? null : (i === 0 ? startedAt : at ?? endedAt) - prevAt;
-    if (!r.subagent) prevAt = at ?? endedAt;
+    const gapMs = r.subagent || prevAt === null ? null : (firstMain ? startedAt : at ?? endedAt) - prevAt;
+    if (!r.subagent) { prevAt = at ?? endedAt; firstMain = false; }
     const lifetime = cacheLifetimeMs(job.host, previousMain);
     if (!r.subagent) risks.push(gapMs === null || lifetime === null ? null : gapMs > lifetime);
-    const previousInput = !r.subagent && previousMain ? previousMain.uncached + previousMain.cacheWrite + previousMain.cacheRead : null;
     if (!r.subagent) previousMain = r;
-    return { ...r, gapMs, latencyMs: null, timestampSource: r.at ? 'host' as const : 'unavailable' as const, previousInput };
+    return { ...r, gapMs };
   });
   const total = sumUsage(requests);
   const invalid = leak ? CREDENTIAL_IN_OUTPUT : broken;
@@ -567,7 +573,8 @@ async function execute1(job: Job, prompt: string, spec: PromptSpec | undefined, 
     id, host: job.host, arm: job.arm, prompt: job.prompt, repeat: job.repeat, warmup: job.warmup, seq: job.seq,
     startedAt: new Date(startedAt).toISOString(), endedAt: new Date(endedAt).toISOString(), ms: endedAt - startedAt,
     captureVersion: 1, requestCount: usage?.granularity === 'request' ? requests.length : null,
-    jev: job.arm === 'loadout' ? jevRunUsage(readFileSync(jevFile, 'utf8'), job.host === 'codex' && !o.codexHook ? ['router'] : ['hook', 'router']) : null,
+    cacheWriteAvailable: requests.every((r) => r.cacheWriteAvailable !== false),
+    jev: job.arm === 'loadout' ? readJevUsage(jevDir, job.host === 'codex' && !o.codexHook ? ['router'] : ['hook', 'router']) : null,
     hostVersion: usage?.version ?? versions[job.host] ?? null, requestedModel: o.models[job.host], model: usage?.model ?? null, exit: proc.code, timedOut: proc.timedOut, stop: stream.result?.subtype ?? null,
     granularity: usage?.granularity ?? 'request', requests,
     totals: { ...total, effectiveInput: job.host === 'claude' && requests.length ? requests.reduce((n, r) => n + effectiveInput(r), 0) : o.studyLibrary && requests.length ? codexEffectiveInput(total) : null, costUsd: usage?.costUsd ?? null, turns: usage?.turns ?? null },

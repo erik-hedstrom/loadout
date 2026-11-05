@@ -30,6 +30,7 @@ export interface RunRow {
   jev?: JevRunUsage | null;
   captureVersion?: 1;
   requestCount?: number | null;
+  cacheWriteAvailable?: boolean;
   hostVersion: string | null;
   requestedModel: string;
   /** From the stream; null where the host does not report it (Codex). */
@@ -95,8 +96,9 @@ const cacheShare = (r: RunRow) => {
 };
 const triple = (rs: RequestUsage[]) => {
   const mean = (f: (r: RequestUsage) => number) => (rs.length ? rs.reduce((n, r) => n + f(r), 0) / rs.length : null);
-  const v = [mean((r) => r.uncached), mean((r) => r.cacheWrite), mean((r) => r.cacheRead)];
-  return v.every((x) => x === null) ? 'not shown' : v.map((x) => num(x ?? 0)).join(' / ');
+  const known = rs.every((r) => r.cacheWriteAvailable !== false);
+  const v = [known ? mean((r) => r.uncached) : null, known ? mean((r) => r.cacheWrite) : null, mean((r) => r.cacheRead)];
+  return v.every((x) => x === null) ? 'not shown' : v.map((x) => x === null ? 'not shown' : num(x)).join(' / ');
 };
 
 export function report(rows: RunRow[], verdicts: Verdict[], secrets: string[]): string {
@@ -118,7 +120,8 @@ export function report(rows: RunRow[], verdicts: Verdict[], secrets: string[]): 
     const rs = cell(rows, host, prompt, arm);
     if (!rs.length) continue;
     const hidden = rs.filter((r) => r.hiddenTest);
-    out.push(`| ${host} | ${prompt} | ${arm} | ${rs.length} | ${show(spread(rs.map((r) => r.totals.uncached)))} | ${show(spread(rs.map((r) => r.totals.cacheWrite)))} | ${show(spread(rs.map((r) => r.totals.cacheRead)))} | ${show(spread(rs.map((r) => r.totals.output)))} | ${show(spread(rs.flatMap((r) => cacheShare(r) === null ? [] : [cacheShare(r)!])), percent)} | ${show(spread(rs.flatMap((r) => (r.totals.effectiveInput === null ? [] : [r.totals.effectiveInput]))))} | ${show(spread(rs.flatMap((r) => (r.totals.costUsd === null ? [] : [r.totals.costUsd]))), usd)} | ${show(spread(rs.flatMap((r) => (r.totals.turns === null ? [] : [r.totals.turns]))))} | ${show(spread(rs.map((r) => r.ms)), secs)} | ${hidden.length ? `${hidden.filter((r) => r.hiddenTest!.passed).length} of ${hidden.length}` : '—'} | ${arm === 'loadout' ? judged(host, prompt) : ''} | ${rs.every((r) => r.wroteFile !== undefined) ? `${rs.filter((r) => r.wroteFile).length} of ${rs.length}` : 'not shown'} |`);
+    const splitKnown = rs.every((r) => r.cacheWriteAvailable !== false);
+    out.push(`| ${host} | ${prompt} | ${arm} | ${rs.length} | ${splitKnown ? show(spread(rs.map((r) => r.totals.uncached))) : 'not shown'} | ${splitKnown ? show(spread(rs.map((r) => r.totals.cacheWrite))) : 'not shown'} | ${show(spread(rs.map((r) => r.totals.cacheRead)))} | ${show(spread(rs.map((r) => r.totals.output)))} | ${show(spread(rs.flatMap((r) => cacheShare(r) === null ? [] : [cacheShare(r)!])), percent)} | ${show(spread(rs.flatMap((r) => (r.totals.effectiveInput === null ? [] : [r.totals.effectiveInput]))))} | ${show(spread(rs.flatMap((r) => (r.totals.costUsd === null ? [] : [r.totals.costUsd]))), usd)} | ${show(spread(rs.flatMap((r) => (r.totals.turns === null ? [] : [r.totals.turns]))))} | ${show(spread(rs.map((r) => r.ms)), secs)} | ${hidden.length ? `${hidden.filter((r) => r.hiddenTest!.passed).length} of ${hidden.length}` : '—'} | ${arm === 'loadout' ? judged(host, prompt) : ''} | ${rs.every((r) => r.wroteFile !== undefined) ? `${rs.filter((r) => r.wroteFile).length} of ${rs.length}` : 'not shown'} |`);
   }
 
   out.push('', '## 2. loadout − bare (mean of the repeats; negative is cheaper)', '',
@@ -128,8 +131,9 @@ export function report(rows: RunRow[], verdicts: Verdict[], secrets: string[]): 
     const [b, l] = [cell(rows, host, prompt, 'bare'), cell(rows, host, prompt, 'loadout')];
     if (!b.length || !l.length) continue;
     const mean = (rs: RunRow[], f: (r: RunRow) => number | null) => { const xs = rs.flatMap((r) => (f(r) === null ? [] : [f(r)!])); return xs.length ? xs.reduce((a, c) => a + c, 0) / xs.length : null; };
+    const splitKnown = [...b, ...l].every((r) => r.cacheWriteAvailable !== false);
     const delta = (f: (r: RunRow) => number | null, g: (n: number) => string = (n) => (n > 0 ? '+' : '') + num(n)) => { const [x, y] = [mean(l, f), mean(b, f)]; return x === null || y === null ? 'not shown' : g(x - y); };
-    out.push(`| ${host} | ${prompt} | ${delta((r) => r.totals.uncached)} | ${delta((r) => r.totals.cacheWrite)} | ${delta((r) => r.totals.cacheRead)} | ${delta((r) => r.totals.output)} | ${delta((r) => r.totals.effectiveInput)} | ${delta((r) => r.totals.costUsd, (n) => `${n > 0 ? '+' : '-'}$${Math.abs(n).toFixed(2)}`)} | ${show(spread(l.map((r) => r.hook.contextChars)))} | ${[...new Set(l.flatMap((r) => r.hook.listed))].join(', ') || '—'} / ${[...new Set(l.flatMap((r) => r.hook.injected))].join(', ') || '—'} / ${[...new Set(l.flatMap((r) => r.skillsOpened))].join(', ') || '—'} |`);
+    out.push(`| ${host} | ${prompt} | ${splitKnown ? delta((r) => r.totals.uncached) : 'not shown'} | ${splitKnown ? delta((r) => r.totals.cacheWrite) : 'not shown'} | ${delta((r) => r.totals.cacheRead)} | ${delta((r) => r.totals.output)} | ${delta((r) => r.totals.effectiveInput)} | ${delta((r) => r.totals.costUsd, (n) => `${n > 0 ? '+' : '-'}$${Math.abs(n).toFixed(2)}`)} | ${show(spread(l.map((r) => r.hook.contextChars)))} | ${[...new Set(l.flatMap((r) => r.hook.listed))].join(', ') || '—'} / ${[...new Set(l.flatMap((r) => r.hook.injected))].join(', ') || '—'} / ${[...new Set(l.flatMap((r) => r.skillsOpened))].join(', ') || '—'} |`);
   }
 
   out.push('', '## 3. Request 1 against requests 2+ (per request, uncached / write / read)', '',
@@ -148,7 +152,7 @@ export function report(rows: RunRow[], verdicts: Verdict[], secrets: string[]): 
     const w = rows.filter((r) => r.host === host && r.arm === arm && r.warmup && !r.invalid);
     const m = measured(rows).filter((r) => r.host === host && r.arm === arm);
     if (!w.length) continue;
-    const run = (rs: RunRow[]) => triple(rs.map((r) => ({ uncached: r.totals.uncached, cacheWrite: r.totals.cacheWrite, cacheRead: r.totals.cacheRead }) as RequestUsage));
+    const run = (rs: RunRow[]) => triple(rs.map((r) => ({ uncached: r.totals.uncached, cacheWrite: r.totals.cacheWrite, cacheRead: r.totals.cacheRead, cacheWriteAvailable: r.cacheWriteAvailable }) as RequestUsage));
     out.push(`| ${host} | ${arm} | ${host === 'claude' ? triple(w.flatMap((r) => r.requests.slice(0, 1))) : 'not shown'} | ${host === 'claude' ? triple(m.flatMap((r) => r.requests.slice(0, 1))) : 'not shown'} | ${run(w)} | ${run(m)} |`);
   }
 
@@ -174,11 +178,11 @@ function captureColumns(rows: RunRow[]): string {
   if (!captured.length) return '';
   const lines = ['', '## F2 capture columns', '',
     'Jev input estimate uses the configured input rate; unreported usage and unpriced output keep complete cost unknown. No host-plus-Jev total is calculated. Request latency is not shown: these buffered host streams provide no request-start timing. A cache gap is not evidence of expiry.', '',
-    '| Run | Requests | Jev calls | Attempts | Jev input | Jev output | Usage missing | Input estimate USD | Complete Jev estimate USD |',
-    '| --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: |'];
+    '| Run | Requests | Jev calls | Attempts | Jev input | Jev output | Usage missing | Input estimate USD | Complete Jev estimate USD | Cache gap |',
+    '| --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: | --- |'];
   for (const r of captured) {
     const j = r.jev;
-    lines.push(`| ${r.id} | ${r.requestCount ?? 'not shown (turn total)'} | ${j?.calls ?? 'n/a'} | ${j?.attempts ?? 'n/a'} | ${j?.inputTokens ?? 'not shown'} | ${j?.outputTokens ?? 'not shown'} | ${j?.usageMissing ?? 'n/a'} | ${j ? j.reportedInputCostUsd.toFixed(9) : 'n/a'} | ${j?.costUsd === null || j === null || j === undefined ? 'not shown' : j.costUsd.toFixed(9)} |`);
+    lines.push(`| ${r.id} | ${r.requestCount ?? 'not shown (turn total)'} | ${j ? j.calls ?? 'not shown' : 'n/a'} | ${j ? j.attempts ?? 'not shown' : 'n/a'} | ${j?.inputTokens ?? 'not shown'} | ${j?.outputTokens ?? 'not shown'} | ${j?.usageMissing ?? 'n/a'} | ${j ? j.reportedInputCostUsd?.toFixed(9) ?? 'not shown' : 'n/a'} | ${j?.costUsd === null || j === null || j === undefined ? 'not shown' : j.costUsd.toFixed(9)} | ${r.coldCacheRisk === true ? 'flagged' : r.coldCacheRisk === false ? 'clear' : 'unknown'} |`);
   }
   return lines.join('\n') + '\n';
 }
@@ -192,7 +196,7 @@ function reportNative(rows: RunRow[], verdicts: Verdict[]): string {
     'Effective input = uncached input x 1 + cache write x 1 + cached input x 0.1. The 0.1 multiplier is a fixed price-sheet assumption ([OpenAI pricing](https://developers.openai.com/api/docs/pricing)), not verified Luna subscription billing. Output tokens and Jev costs are separate. Positive native minus loadout means input savings for loadout.', '',
     '| Prompt | Repeat | Arm | Uncached | Cache write | Cached | Output | Effective input | Tool calls | Skills opened | Hook context chars | skillsBudget |',
     '| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | ---: | --- |'];
-  for (const r of measuredRows) out.push(`| ${r.prompt} | ${r.repeat} | ${r.arm} | ${num(r.totals.uncached)} | ${num(r.totals.cacheWrite)} | ${num(r.totals.cacheRead)} | ${num(r.totals.output)} | ${metric(codexEffectiveInput(r.totals))} | ${r.toolCalls} | ${r.skillsOpened.join(', ') || 'none observed'} | ${r.hook.contextChars} | ${r.skillsBudget === undefined ? 'not shown' : JSON.stringify(r.skillsBudget)} |`);
+  for (const r of measuredRows) out.push(`| ${r.prompt} | ${r.repeat} | ${r.arm} | ${r.cacheWriteAvailable === false ? 'not shown' : num(r.totals.uncached)} | ${r.cacheWriteAvailable === false ? 'not shown' : num(r.totals.cacheWrite)} | ${num(r.totals.cacheRead)} | ${num(r.totals.output)} | ${metric(codexEffectiveInput(r.totals))} | ${r.toolCalls} | ${r.skillsOpened.join(', ') || 'none observed'} | ${r.hook.contextChars} | ${r.skillsBudget === undefined ? 'not shown' : JSON.stringify(r.skillsBudget)} |`);
   out.push('', '## Paired native minus loadout', '',
     '| Prompt | Repeat | Uncached delta | Write delta | Cached delta | Output delta | Effective input delta |',
     '| --- | ---: | ---: | ---: | ---: | ---: | ---: |');
@@ -220,7 +224,7 @@ function reportNative(rows: RunRow[], verdicts: Verdict[]): string {
     const native = ns[0]!, loadout = ls[0]!;
     const delta = codexEffectiveInput(native.totals) - codexEffectiveInput(loadout.totals);
     pairs.push({ native, loadout, delta });
-    out.push(`| ${native.prompt} | ${native.repeat} | ${num(native.totals.uncached - loadout.totals.uncached)} | ${num(native.totals.cacheWrite - loadout.totals.cacheWrite)} | ${num(native.totals.cacheRead - loadout.totals.cacheRead)} | ${num(native.totals.output - loadout.totals.output)} | ${metric(delta)} |`);
+    out.push(`| ${native.prompt} | ${native.repeat} | ${native.cacheWriteAvailable === false || loadout.cacheWriteAvailable === false ? 'not shown' : num(native.totals.uncached - loadout.totals.uncached)} | ${native.cacheWriteAvailable === false || loadout.cacheWriteAvailable === false ? 'not shown' : num(native.totals.cacheWrite - loadout.totals.cacheWrite)} | ${num(native.totals.cacheRead - loadout.totals.cacheRead)} | ${num(native.totals.output - loadout.totals.output)} | ${metric(delta)} |`);
   }
   const pairedSummary = (xs: number[]) => {
     if (!xs.length) return 'not shown';
@@ -268,7 +272,7 @@ function reportNative(rows: RunRow[], verdicts: Verdict[]): string {
   out.push(`Sensitivity excluding c1-debug-13: paired effective-input ${pairedSummary(sensitivityPairs.map((p) => p.delta))}; ${sensitivityJudged.length ? `loadout wins ${sensitivityJudged.filter((v) => v.winner === 'loadout').length}, native wins (loadout loses) ${sensitivityJudged.filter((v) => v.winner === 'native').length}, ties ${sensitivityJudged.filter((v) => v.winner === 'tie').length}, splits ${sensitivityJudged.filter((v) => v.winner === 'split').length}` : 'quality not shown (unjudged)'}. The fixture was previously selected using Jev and judge results; the primary screen is unchanged.`);
   out.push("Blindness limitation: a skill's own template can still reveal the arm despite redaction. The judge sees saved files and final responses, not independent quality evidence.");
   out.push('', '## Cold starts and provenance', '');
-  for (const r of rows.filter((r) => r.warmup)) out.push(`- ${r.id}: uncached ${num(r.totals.uncached)}, write ${num(r.totals.cacheWrite)}, cached ${num(r.totals.cacheRead)}, output ${num(r.totals.output)}; ${r.invalid ?? 'valid'}.`);
+  for (const r of rows.filter((r) => r.warmup)) out.push(`- ${r.id}: uncached ${r.cacheWriteAvailable === false ? 'not shown' : num(r.totals.uncached)}, write ${r.cacheWriteAvailable === false ? 'not shown' : num(r.totals.cacheWrite)}, cached ${num(r.totals.cacheRead)}, output ${num(r.totals.output)}; ${r.invalid ?? 'valid'}.`);
   for (const manifest of new Set(rows.map((r) => JSON.stringify({ librarySize: r.librarySize, corpusHash: r.corpusHash, manifestHash: r.manifestHash })))) out.push(`- ${manifest}`);
   for (const arm of ['native', 'loadout']) {
     const runs = rows.filter((r) => r.arm === arm);

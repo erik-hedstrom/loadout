@@ -318,6 +318,8 @@ export interface Row {
   toolsListed: number | null; mcpToolsListed: number | null; toolSearchListed: boolean | null; canaryFound: boolean | null;
   /** Whole host invocation, including startup and the unmeasured canary; absent on legacy rows. */
   runMs?: number;
+  /** Absent on historical rows; false means write/uncached buckets are not reported. */
+  cacheWriteAvailable?: boolean;
 }
 
 /**
@@ -535,7 +537,7 @@ export async function runStudy(plan: Plan, out: string, deps: Deps = {}): Promis
       return { host: r.arm.host, kind: r.arm.kind, config: r.arm.config ?? null, toolSearch: r.arm.toolSearch ?? null, repeat: r.repeat, turn: i + 1,
         model: session?.model ?? null, requestedModel: MODELS[r.arm.host], hostVersion, input: u.input, uncached: u.uncached, cacheCreation: u.cacheCreation, cacheRead: u.cacheRead, output: u.output,
         mcp: session?.inventory.mcp ?? null, ambientHash: hash, toolsListed: session?.tools.length ?? null, mcpToolsListed: session?.tools.filter((t) => t.startsWith('mcp__')).length ?? null,
-        toolSearchListed: session ? session.tools.includes('ToolSearch') : null, canaryFound: found, runMs };
+        toolSearchListed: session ? session.tools.includes('ToolSearch') : null, canaryFound: found, runMs, cacheWriteAvailable: u.cacheWriteAvailable !== false };
     });
     for (const row of made) { rows.push(row); appendFileSync(join(out, 'rows.jsonl'), persistJson(row, secrets) + '\n'); }
   }
@@ -575,6 +577,7 @@ export function sessionRollups(rows: Row[]) {
     host: rs[0]!.host, kind: rs[0]!.kind, config: rs[0]!.config, toolSearch: rs[0]!.toolSearch, repeat: rs[0]!.repeat,
     granularity: rs[0]!.host === 'claude' ? 'request' as const : 'turn' as const,
     measuredRows: rs.length,
+    cacheWriteAvailable: rs.every((r) => r.cacheWriteAvailable !== false),
     input: rs.reduce((n, r) => n + r.input, 0), uncached: rs.reduce((n, r) => n + r.uncached, 0),
     cacheCreation: rs.reduce((n, r) => n + r.cacheCreation, 0), cacheRead: rs.reduce((n, r) => n + r.cacheRead, 0), output: rs.reduce((n, r) => n + r.output, 0),
     runMs: rs[0]!.runMs ?? null,
@@ -588,7 +591,7 @@ export function summarize(rows: Row[], notes: string[] = []): string {
     '| --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |'];
   for (const r of rows) {
     const base = rows.find((b) => b.host === r.host && b.kind === 'baseline' && b.repeat === r.repeat && b.turn === r.turn);
-    lines.push(`| ${r.host} | ${r.kind} | ${r.config ?? ''} | ${r.toolSearch ?? ''} | ${reading(r)} | ${r.repeat} | ${r.turn} | ${r.input} | ${base ? r.input - base.input : 'unavailable'} | ${r.uncached} | ${r.cacheCreation} | ${r.cacheRead} | ${r.toolsListed === null ? 'n/a' : `${r.toolsListed} (${r.mcpToolsListed})`} | ${r.toolSearchListed ?? 'n/a'} |`);
+    lines.push(`| ${r.host} | ${r.kind} | ${r.config ?? ''} | ${r.toolSearch ?? ''} | ${reading(r)} | ${r.repeat} | ${r.turn} | ${r.input} | ${base ? r.input - base.input : 'unavailable'} | ${r.cacheWriteAvailable === false ? 'not shown' : r.uncached} | ${r.cacheWriteAvailable === false ? 'not shown' : r.cacheCreation} | ${r.cacheRead} | ${r.toolsListed === null ? 'n/a' : `${r.toolsListed} (${r.mcpToolsListed})`} | ${r.toolSearchListed ?? 'n/a'} |`);
   }
   if (rows.some((r) => r.kind === 'native' && r.config === 'n20' && r.toolSearch === 'default' && !r.toolSearchListed)) lines.push('Tool search was not listed for native default at n20: this model or host has none here, so those rows are "all loaded", not deferred.');
   lines.push(...notes);
@@ -596,7 +599,7 @@ export function summarize(rows: Row[], notes: string[] = []): string {
     lines.push('', 'Session rollups: measured requests only (Codex: turn totals); run ms includes startup and the unmeasured canary.',
       '| Host | Arm | Config | Tool search | Repeat | Granularity | Measured rows | Input | Uncached | Cache creation | Cache read | Output | Run ms |',
       '| --- | --- | --- | --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |');
-    for (const s of sessionRollups(rows)) lines.push(`| ${s.host} | ${s.kind} | ${s.config ?? ''} | ${s.toolSearch ?? ''} | ${s.repeat} | ${s.granularity} | ${s.measuredRows} | ${s.input} | ${s.uncached} | ${s.cacheCreation} | ${s.cacheRead} | ${s.output} | ${s.runMs === null ? 'not shown' : Math.round(s.runMs)} |`);
+    for (const s of sessionRollups(rows)) lines.push(`| ${s.host} | ${s.kind} | ${s.config ?? ''} | ${s.toolSearch ?? ''} | ${s.repeat} | ${s.granularity} | ${s.measuredRows} | ${s.input} | ${s.cacheWriteAvailable ? s.uncached : 'not shown'} | ${s.cacheWriteAvailable ? s.cacheCreation : 'not shown'} | ${s.cacheRead} | ${s.output} | ${s.runMs === null ? 'not shown' : Math.round(s.runMs)} |`);
   }
   lines.push('Codex has one request per session (a second turn needs a persisted session), and exec reports no tool list: whether it deferred is not shown. Sessions per arm are few: report ranges, not intervals. Tokens, not money. Not measured: tool use through the gateway beyond the canary lookup, output quality, other models.');
   return lines.join('\n');

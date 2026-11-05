@@ -25,8 +25,6 @@ export interface SystemOneResponse {
   usage: { input_tokens: number; output_tokens: number };
   /** Local count of replaced key shapes, once per logical request (not per retry). */
   redactions?: number;
-  /** Legacy routing counters default to zero; accounting must treat absent/invalid usage as unknown. */
-  usageMissing?: boolean;
 }
 
 export interface SystemOneClient {
@@ -85,7 +83,6 @@ export function validateResponse(body: unknown, questions: Record<string, Questi
     model: typeof model === 'string' ? model : 'unknown',
     answers: answers!,
     usage: { input_tokens: finite(usage?.input_tokens), output_tokens: finite(usage?.output_tokens) },
-    ...(![usage?.input_tokens, usage?.output_tokens].every((v) => Number.isSafeInteger(v) && (v as number) >= 0) ? { usageMissing: true } : {}),
   };
 }
 

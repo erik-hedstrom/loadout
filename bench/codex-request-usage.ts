@@ -4,13 +4,11 @@ import { counter } from './usage.js';
 export interface CodexRequest {
   n: number;
   at: string | null;
-  timestampSource: 'host' | 'unavailable';
   input: number;
   uncached: number | null;
   cacheRead: number;
   cacheWrite: number | null;
   output: number;
-  previousInput: number | null;
 }
 
 /** token_count and app-server updates can repeat on rate-limit notifications.
@@ -18,7 +16,6 @@ export interface CodexRequest {
 export function codexRequests(text: string, source: 'rollout' | 'app-server', threadId: string) {
   const requests: CodexRequest[] = [], unreconciled: string[] = [];
   let previous: number[] = [0, 0, 0], lastSignature: string | undefined;
-  let previousInput: number | null = null;
   let matchedSession = source === 'app-server';
   const lines = text.trim().split(/\r?\n/).filter(Boolean);
   try {
@@ -55,7 +52,6 @@ export function codexRequests(text: string, source: 'rollout' | 'app-server', th
       if (current.some((n, j) => n - previous[j]! !== values[j])) {
         unreconciled.push('usage increment does not match last request');
         previous = current;
-        previousInput = null;
         continue;
       }
       previous = current;
@@ -63,10 +59,9 @@ export function codexRequests(text: string, source: 'rollout' | 'app-server', th
       const cacheWrite = writeValue === undefined ? null : counter(writeValue, 'Codex write');
       if (cacheWrite !== null && cacheWrite + values[1]! > values[0]!) throw new Error();
       const at = source === 'rollout' && typeof e.timestamp === 'string' && Number.isFinite(Date.parse(e.timestamp)) ? e.timestamp : null;
-      requests.push({ n: requests.length + 1, at, timestampSource: at === null ? 'unavailable' : 'host', input: values[0]!,
+      requests.push({ n: requests.length + 1, at, input: values[0]!,
         uncached: cacheWrite === null ? null : values[0]! - values[1]! - cacheWrite, cacheRead: values[1]!, cacheWrite,
-        output: values[2]!, previousInput });
-      previousInput = values[0]!;
+        output: values[2]! });
     }
     if (!matchedSession || !requests.length) unreconciled.push('no request usage for the requested session');
     return { requests, unreconciled };

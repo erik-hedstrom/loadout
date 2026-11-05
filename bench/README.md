@@ -340,13 +340,7 @@ Commit raw results after inspecting them for credentials and private content.
 
 ## A/B pilot (C14)
 
-F2's offline capture prototype adds nullable Jev accounting and request timing
-metadata to new rows; its channel/source decisions and live validation remain
-pending. Request duration is **not shown**: the existing buffered streams have
-no request-start timestamp. Existing reports can read historical rows without
-these fields. B7 now rolls its measured token rows up by session and records
-whole-run milliseconds (including the canary); its session shapes remain
-unchanged. See [capture notes](../docs/loop/F2-CAPTURE.md).
+[F2 capture design and limits](../docs/loop/F2-CAPTURE.md).
 
 ```bash
 npx tsx bench/ab.ts                                                  # the plan, the estimate and what each host may write; $0
