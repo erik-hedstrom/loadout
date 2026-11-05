@@ -62,7 +62,8 @@ codex plugin marketplace add erik-hedstrom/loadout && codex plugin add loadout-c
 - **Host checks:** Claude Code's Quickstart, including the marketplace install,
   was walked once in a fresh home on 2026-11-03. Codex's plugin hook ran and
   injected text in `codex exec`; in live model turns the hook is measured only
-  when attached through config flags (C15), and the plugin path is untested
+  when attached through config flags ([C15](bench/RESULTS.md#c15-results-2026-11-04-the-same-library-natively-and-through-loadout-on-codex)), and the plugin path is
+  untested
   ([D2 walk](docs/loop/BACKLOG.md); [hosts](docs/hosts.md)).
 
 After adoption, [hide the native listings with the printed snippets](docs/library.md#skills)
@@ -116,9 +117,11 @@ All numbers, caveats and negative results: [bench/RESULTS.md](bench/RESULTS.md).
   ([pilot](bench/RESULTS.md#is-the-work-better-outcome-pilot-2026-10-07)).
 - **Same library, natively and through loadout (C15, Codex `gpt-6-luna`):**
   with a 250-skill library, loadout used less effective input in 16 of 20
-  paired runs, a median of 6,225 tokens per run (cached input weighted 0.1),
-  the cost of listing the 250 skills natively. One spreadsheet prompt went
-  the other way in both repeats. The preregistered quality screen passed
+  paired runs, a median of 6,225 tokens per run (cached input weighted 0.1;
+  range −55,897.8 to +33,997), which matches the measured cost of listing the
+  250 skills natively
+  ([B12](bench/RESULTS.md#b12-results-2026-10-28-what-installed-skills-cost-per-request-on-current-hosts)).
+  One spreadsheet prompt went the other way in both repeats. The preregistered quality screen passed
   (loadout won 7 pairs, lost 4, tied 4, split 5). That is ten prompts on one
   model and host, so retained quality, Claude and subscription cost are not
   shown ([C15](bench/RESULTS.md#c15-results-2026-11-04-the-same-library-natively-and-through-loadout-on-codex)).
