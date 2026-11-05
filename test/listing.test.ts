@@ -269,3 +269,40 @@ it('refuses unsafe writer names and existing destination files', () => {
   expect(() => writeProbeSkills([{ name: 'safe', description: 'second' }], root)).toThrow();
   expect(readFileSync(join(root, 'skills', 'safe', 'SKILL.md'), 'utf8')).toContain('first');
 });
+
+
+it('redacts parent GitHub credentials in B12 metadata even though child env excludes them', async () => {
+  const secret = 'FAKE-listing-client-key';
+  vi.stubEnv('GITHUB_TOKEN', secret);
+  const out = join(temp(), 'redacted');
+  const printed: string[] = [];
+  await main(['--library', library(), '--host', 'claude', '--run', '--out', out, '--claude-model', secret], {
+    print: (text) => printed.push(text), run: async (command) => {
+      let stdout = command.args.includes('--version') ? '2.1.308' : claude.replace('resolved-haiku', secret);
+      if (!command.args.includes('--version')) {
+        const es = stdout.split('\n').map((line) => JSON.parse(line));
+        const plugin = command.args[command.args.indexOf('--plugin-dir') + 1];
+        const entries = command.args.includes('--plugin-dir') ? readdirSync(join(plugin!, 'skills')) : [];
+        es[0].skills = entries.map((name) => `lst:${name}`);
+        es[0].plugins = entries.length ? [{ name: 'lst' }] : [];
+        stdout = jsonl(...es);
+      }
+      return { stdout, exit: 0, durationMs: 1, failure: null };
+    },
+  });
+  const saved = readFileSync(join(out, 'rows.jsonl'), 'utf8');
+  expect(saved).not.toContain(secret); expect(saved).toContain('<credential>');
+  expect(printed.join('\n')).not.toContain(secret); expect(printed.join('\n')).toContain('<credential>');
+});
+
+it('gates unanticipated B12 artifacts before finishing', async () => {
+  const secret = 'FAKE-listing-gate-token', out = join(temp(), 'gated');
+  vi.stubEnv('CLAUDE_CODE_CLIENT_KEY', secret);
+  let initialized = false;
+  await expect(main(['--library', library(), '--host', 'codex', '--run', '--out', out], {
+    print: () => {}, run: async (command) => {
+      if (!initialized) { initialized = true; writeFileSync(join(out, 'unknown-writer.txt'), secret.replaceAll('-', '%2d')); }
+      return { stdout: command.args.includes('--version') ? 'codex-cli 0.163.0' : codex, exit: 0, durationMs: 1, failure: null };
+    },
+  })).rejects.toThrow(/UNUSABLE.*unknown-writer/);
+});

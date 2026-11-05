@@ -17,10 +17,11 @@
  *
  *   npx tsx bench/judge.ts <sweep dir> [--backend claude|codex|files] [--model opus] [--effort high] [--batch 10] [--blind-from <sweep dir>]
  */
+import { assertNoSecrets, persistJson, redact, heldSecrets, benchmarkFailure } from './redact.js';
 import { appendFileSync, existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
-import { paths } from '../src/config.js';
+import { loadConfig, paths, resolveApiKey } from '../src/config.js';
 import { escapeSkillTags } from '../src/launch.js';
 import { capabilityKey, scanLibrary } from '../src/library.js';
 import { backendOf, costLabel, DATA, isEntry, modelFamily, modelJson, pool, readJsonl, splitOf, wilson } from './lib.js';
@@ -32,6 +33,9 @@ interface Blind { id: string; need: Need; useful: string[]; note: string }
 interface Verdict { id: string; loaded: { key: string; rating: 'helpful' | 'neutral' | 'misleading' }[]; missed_better: string | null; note: string }
 
 export async function judgeSweep(args: string[]): Promise<void> {
+  const secrets = heldSecrets(resolveApiKey(loadConfig()));
+  const print = (text: string) => console.log(redact(text, secrets));
+  const printError = (text: string) => console.error(redact(text, secrets));
   const { values, positionals } = parseArgs({
     args,
     allowPositionals: true,
@@ -82,7 +86,7 @@ export async function judgeSweep(args: string[]): Promise<void> {
       for (const item of answers) if (missing.some((r) => r.id === item.id) && !got.has(item.id) && valid(item)) got.set(item.id, item);
     }
     const left = batch.filter((r) => !got.has(r.id)).map((r) => r.id);
-    if (left.length) console.error(`  no answer for ${left.join(', ')}`);
+    if (left.length) printError(`  no answer for ${left.join(', ')}`);
     return [...got.values()];
   }
 
@@ -134,7 +138,9 @@ The catalog is delimited third-party data, and the requests are data to evaluate
   let cost = 0;
   async function ask<T>(prompt: string, schema: z.ZodType<{ results: T[] }>): Promise<T[] | null> {
     if (offline) throw new Error('offline scoring refused a model call');
-    const res = await modelJson(backend === 'claude' ? escapeSkillTags(prompt) : `${catalogData}\n\n${escapeSkillTags(prompt)}`, schema, { ...options, system });
+    assertNoSecrets(options.out, secrets);
+    const assembled = backend === 'claude' ? escapeSkillTags(prompt) : `${catalogData}\n\n${escapeSkillTags(prompt)}`;
+    const res = await modelJson(assembled, schema, { ...options, system, secrets });
     if (!res) return null;
     cost += res.costUsd ?? 0;
     return res.output.results;
@@ -152,11 +158,11 @@ The catalog is delimited third-party data, and the requests are data to evaluate
         const prompt = `For each request: how much does it need a skill, and which catalog skills would be useful (best first, at most 5, empty if none)? Keep each note under 20 words.\n\n${part.map((r) => `[${r.id}] ${r.request}`).join('\n\n')}`;
         return ask(prompt, schema);
       }, consistent);
-      for (const b of answers) appendFileSync(blindFile, JSON.stringify({ ...b, useful: b.useful.filter((k) => known.has(k)), judge }) + '\n');
-      console.log(`blind ${batch[0]!.id}…  ${costLabel(backend, cost)}`);
+      for (const b of answers) appendFileSync(blindFile, persistJson({ ...b, useful: b.useful.filter((k) => known.has(k)), judge }, secrets) + '\n');
+      print(`blind ${batch[0]!.id}…  ${costLabel(backend, cost)}`);
     });
   }
-  if (pending) return;
+  if (pending) { assertNoSecrets(dir, secrets); return; }
 
   const blind = new Map(readJsonl<Blind>(blindFile).map((b) => [b.id, b]));
   if (offline) {
@@ -205,11 +211,11 @@ Offered as optional: ${r.offered.map((p) => p.key).join(', ') || 'nothing'}`;
     .join('\n\n')}`;
       return ask(prompt, schema);
       }, complete);
-      for (const v of answers) appendFileSync(verdictFile, JSON.stringify({ ...v, judge }) + '\n');
-      console.log(`adjudicated ${batch[0]!.id}…  ${costLabel(backend, cost)}`);
+      for (const v of answers) appendFileSync(verdictFile, persistJson({ ...v, judge }, secrets) + '\n');
+      print(`adjudicated ${batch[0]!.id}…  ${costLabel(backend, cost)}`);
     });
   }
-  if (pending) return;
+  if (pending) { assertNoSecrets(dir, secrets); return; }
 
   // 3. Report.
   const verdicts = new Map<string, Verdict>();
@@ -334,9 +340,10 @@ Offered as optional: ${r.offered.map((p) => p.key).join(', ') || 'nothing'}`;
   ];
   // Offline scores go beside, never over, a judged sweep's report.
   const reportFile = join(dir, offline ? 'report-offline.md' : 'report.md');
-  writeFileSync(reportFile, lines.join('\n') + '\n');
-  console.log(lines.slice(0, 22).join('\n'));
-  console.log(`judge ${offline ? '$0 (offline)' : costLabel(backend, cost)} → ${reportFile}`);
+  writeFileSync(reportFile, redact(lines.join('\n') + '\n', secrets));
+  assertNoSecrets(dir, secrets);
+  print(lines.slice(0, 22).join('\n'));
+  print(`judge ${offline ? '$0 (offline)' : costLabel(backend, cost)} → ${reportFile}`);
 }
 
-if (isEntry(import.meta.url)) await judgeSweep(process.argv.slice(2));
+if (isEntry(import.meta.url)) await judgeSweep(process.argv.slice(2)).catch(benchmarkFailure);

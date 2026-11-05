@@ -7,6 +7,8 @@
  *
  *   npx tsx bench/tune.ts <results dir> [--v1 <old results dir>]
  */
+import { assertNoSecrets, heldSecrets, benchmarkFailure } from './redact.js';
+import { loadConfig, resolveApiKey } from '../src/config.js';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -14,6 +16,7 @@ import { decide, type FitMeasure, type Policy } from '../src/route.js';
 import type { Capability } from '../src/types.js';
 import { readJsonl, splitOf, wilson, type Row } from './lib.js';
 
+try {
 const { values, positionals } = parseArgs({ allowPositionals: true, options: { v1: { type: 'string' } } });
 const dir = positionals[0];
 if (!dir) throw new Error('usage: tune.ts <results dir> [--v1 <dir>]');
@@ -197,4 +200,6 @@ lines.push('', 'Gold share is a lower bound on precision: in a 20,000-skill libr
 const md = lines.join('\n') + '\n';
 writeFileSync(join(dir, 'summary.md'), md);
 writeFileSync(join(dir, 'tuned.json'), JSON.stringify(chosen.map((c) => ({ budget: c.budget, policy: c.policy, dev: c.dev })), null, 2));
+assertNoSecrets(dir, heldSecrets(resolveApiKey(loadConfig())));
 console.log(md);
+} catch (error) { benchmarkFailure(error); }

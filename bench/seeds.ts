@@ -1,3 +1,4 @@
+import { benchmarkFailure } from './redact.js';
 /**
  * Generate held-out requests without supplying any skill-library content.
  *
@@ -9,6 +10,7 @@ import { parseArgs } from 'node:util';
 import { z } from 'zod';
 import { backendOf, costLabel, modelFamily, modelJson, readJsonl } from './lib.js';
 
+try {
 const CATEGORIES = [
   { category: 'web', count: 24, gloss: 'Creating and improving websites and browser-based experiences.' },
   { category: 'backend', count: 19, gloss: 'Building server-side behavior, storing information and handling requests.' },
@@ -99,3 +101,4 @@ for (const { category, count, gloss } of CATEGORIES) {
   console.log(`generated ${category}  ${costLabel(backend, cost)}`);
 }
 if (!pending) console.log(`done, ${costLabel(backend, cost)} → ${values.out}`);
+} catch (error) { benchmarkFailure(error); }

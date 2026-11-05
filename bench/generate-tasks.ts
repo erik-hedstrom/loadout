@@ -1,3 +1,4 @@
+import { benchmarkFailure } from './redact.js';
 /**
  * Generate benchmark tasks: for each sampled skill, a realistic request a
  * developer would type into a coding agent where that skill would help,
@@ -10,6 +11,7 @@ import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { claudeJson, DATA, loadCorpus, pool, readJsonl, rng, sample, type CorpusSkill, type Task } from './lib.js';
 
+try {
 const { values } = parseArgs({
   options: {
     model: { type: 'string', default: 'sonnet' },
@@ -164,3 +166,4 @@ tasks.forEach((t, i) => (t.id = `t${String(i + 1).padStart(3, '0')}`));
 
 writeFileSync(join(DATA, 'tasks.jsonl'), tasks.map((t) => JSON.stringify(t)).join('\n') + '\n');
 console.log(`wrote ${tasks.length} tasks (${leaked} dropped for leaking the skill name), generation cost $${cost.toFixed(3)}`);
+} catch (error) { benchmarkFailure(error); }

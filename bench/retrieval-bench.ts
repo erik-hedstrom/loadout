@@ -1,3 +1,4 @@
+import { benchmarkFailure } from './redact.js';
 /**
  * Prefilter recall: how often each retriever ranks the gold skill within the
  * top K, per library size. No API calls; embeddings are computed locally and
@@ -11,6 +12,7 @@ import { EmbeddingStore } from '../src/embed.js';
 import { hybridRank } from '../src/retrieve.js';
 import { DATA, hashSeed, loadCorpus, loadTasks, rng, sample } from './lib.js';
 
+try {
 const { values } = parseArgs({ options: { sizes: { type: 'string', default: '1000,5000,20000' } } });
 const SIZES = values.sizes!.split(',').map(Number);
 const KS = [1, 5, 10, 50, 100, 150, 200, 254];
@@ -56,3 +58,4 @@ for (const size of SIZES) {
     console.log(`| ${name} | ${KS.map((k) => `${((100 * rs.filter((r) => r <= k).length) / rs.length).toFixed(0)}%`).join(' | ')} |`);
   }
 }
+} catch (error) { benchmarkFailure(error); }

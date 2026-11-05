@@ -41,7 +41,7 @@ printf '%s\\n' '{"type":"step_finish","part":{"tokens":{"total":12,"input":10,"o
     vi.spyOn(config, 'resolveApiKey').mockReturnValue('synthetic-test-key');
     vi.spyOn(jev, 'jevClient').mockReturnValue({ ask: async () => { throw new Error('fake provider unavailable'); } });
   });
-  afterEach(() => { vi.restoreAllMocks(); rmSync(root, { recursive: true, force: true }); });
+  afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); rmSync(root, { recursive: true, force: true }); });
   const missingPasta = (spawnSync('pasta', ['--version'], { env: { PATH: '/usr/bin:/bin' } }).error as NodeJS.ErrnoException | undefined)?.code === 'ENOENT';
   const networkTest = (name: string, body: () => Promise<void>) => it(name, async ctx => {
     if (missingPasta) ctx.skip('pasta (passt) is not installed; CI installs passt');
@@ -70,13 +70,21 @@ printf '%s\\n' '{"type":"step_finish","part":{"tokens":{"total":12,"input":10,"o
     await main(a);
     expect(JSON.parse(vi.mocked(console.log).mock.calls[0]![0])).toMatchObject({ tasks: 3, taskCounts: { plain: 1, 'skill-needle': 1, 'mcp-needle': 1 }, runs: 3 });
   });
-  it('plans without consulting ambient configuration when no library is supplied', async () => {
+  it('resolves the inventory and redacts planning output without provider calls or an implicit library', async () => {
+    // A synthetic credential overlapping a public mode proves that the inventory reaches the planning sink.
+    vi.stubEnv('DB_PASSWORD', 'plan');
+    const execute = vi.spyOn(sandbox, 'executeSandbox');
     const a = args('bare', [task('plan')], '0');
     a[a.indexOf('--run')] = '--plan';
     a.splice(a.indexOf('--library'), 2);
     await main(a);
-    expect(JSON.parse(vi.mocked(console.log).mock.calls[0]![0]).library).toBeNull();
-    expect(config.loadConfig).not.toHaveBeenCalled();
+    const printed = vi.mocked(console.log).mock.calls[0]![0];
+    expect(JSON.parse(printed)).toMatchObject({ library: null, mode: '<credential>' });
+    expect(printed).not.toContain('synthetic-test-key');
+    expect(config.loadConfig).toHaveBeenCalledOnce();
+    expect(config.resolveApiKey).toHaveBeenCalledOnce();
+    expect(jev.jevClient).not.toHaveBeenCalled();
+    expect(execute.mock.calls.every(([, argv]) => !argv.includes('run'))).toBe(true);
   });
   networkTest('persists a provider usage cap promptly and stops before another session', async () => {
     const start = Date.now();

@@ -7,7 +7,8 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CREDENTIAL_SHAPE, persistJson, redact, report, type RunRow, type Verdict } from '../bench/ab-report.js';
+import { report, type RunRow, type Verdict } from '../bench/ab-report.js';
+import { CREDENTIAL_SHAPE, persistJson, redact } from '../bench/redact.js';
 import { deliverables, JUDGE_MAX_BYTES, judgePair } from '../bench/pairwise.js';
 import { AB_MODELS, blockers, buildCommand, checkRun, copyOutputs, hiddenResult, hookFacts, main, openedSkills, planLines, promptText, provenance, redactNames, refuseOtherSettings, refuseStopped, routedByKeyword, runEnv, schedule, scrub, type Ctx, type Evidence, type Job, type Options } from '../bench/ab.js';
 import { DEFAULT_CONFIG } from '../src/config.js';
@@ -823,7 +824,7 @@ describe('resuming and finishing a study', () => {
     expect(existsSync(join(dir, 'INCOMPLETE'))).toBe(true);
   });
 
-  it('redacts legacy report text at the report sink without changing measurements', async () => {
+  it('rejects legacy credential-bearing artifacts before judging and still redacts report text', async () => {
     const held = 'synthetic-held-secret';
     const shape = `sk-${'x'.repeat(24)}`;
     const home = temp('loadout-ab-report-home-');
@@ -833,14 +834,41 @@ describe('resuming and finishing a study', () => {
     const dir = study(rows);
     writeFileSync(join(dir, 'verdicts.jsonl'), JSON.stringify({ host: 'claude', prompt: 'p1', repeat: 1, winner: 'tie', judge: { backend: 'codex', model: 'test' }, redactions: { bare: 0, loadout: 0 } }) + '\n');
     try {
-      await main(['--judge-only', dir], { print: () => {} });
-      const text = readFileSync(join(dir, 'report.md'), 'utf8');
+      await expect(main(['--judge-only', dir], { print: () => {} })).rejects.toThrow(/UNUSABLE.*rows.jsonl/);
+      const text = report(rows, [], [held]);
       expect(text).not.toContain(held);
       expect(text).not.toContain(shape);
       expect(text).toContain('<credential>');
       expect(text).toContain('1,100');
       expect(text).toContain('41,000');
     } finally { vi.unstubAllEnvs(); }
+  });
+
+  it('gates unknown artifacts before sending outputs to the A/B judge', async () => {
+    const secret = 'FAKE-ab-directory-gate';
+    vi.stubEnv('TYPESAFE_API_KEY', secret);
+    const dir = study([row({ id: 'bare', prompt: 'c1-web-14' }), row({ id: 'loadout', prompt: 'c1-web-14', arm: 'loadout' })]);
+    writeFileSync(join(dir, 'unknown-writer.txt'), secret.replaceAll('-', '%2d'));
+    const judge = vi.spyOn(benchLib, 'modelJson').mockResolvedValue({ output: { winner: 'first', confidence: 'high', reasons: 'fake' }, costUsd: 0 });
+    try {
+      await expect(main(['--judge-only', dir], { print: () => {} })).rejects.toThrow(/UNUSABLE.*unknown-writer/);
+      expect(judge).not.toHaveBeenCalled();
+    } finally { judge.mockRestore(); }
+  });
+
+  it('refuses a parent request credential in the fully assembled judge-only payload', async () => {
+    const secret = 'FAKE-parent-judge-request'; vi.stubEnv('DB_PASSWORD', secret);
+    const dir = study([row({ id: 'bare', prompt: 'c1-web-14' }), row({ id: 'loadout', prompt: 'c1-web-14', arm: 'loadout' })]);
+    const read = benchLib.readJsonl;
+    const source = vi.spyOn(benchLib, 'readJsonl').mockImplementation((file) => file.endsWith('requests-c1.jsonl')
+      ? [{ id: 'c1-web-14', request: Buffer.from(secret).toString('base64') }] as never : read(file));
+    const judge = vi.spyOn(benchLib, 'modelJson');
+    const child = vi.spyOn(childProcess, 'spawn').mockImplementation(() => { throw new Error('FAKE: live judge must not run'); });
+    try {
+      await expect(main(['--judge-only', dir], { print: () => {} })).rejects.toThrow(/UNUSABLE.*judge payload/);
+      expect(judge).toHaveBeenCalledOnce();
+      expect(child).not.toHaveBeenCalled();
+    } finally { source.mockRestore(); judge.mockRestore(); child.mockRestore(); }
   });
 
   it('--judge-only removes the INCOMPLETE marker only when every scheduled run has a row', async () => {
@@ -861,6 +889,12 @@ describe('public text sinks', () => {
   const shape = `sk-${'x'.repeat(24)}`;
   const jwt = 'eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ1c2VyIn0.c2lnbmF0dXJl';
   const text = `${held} ${held} ${shape} ${jwt}`;
+
+  it('redacts opaque inherited credentials at the A/B public error sink', async () => {
+    const token = 'FAKE-inherited-github-token';
+    await expect(main(['--hosts', token], { env: { GITHUB_TOKEN: token } }))
+      .rejects.toThrow('unknown value <credential>');
+  });
 
   it('redacts a token whatever precedes it, while the deliverable stop rule skips kebab-case identifiers', () => {
     expect(redact(`mcp__loadout__${shape} key${shape} \\n${shape} (${jwt})`, [])).toBe('mcp__loadout__<credential> key<credential> \\n<credential> (<credential>)');
@@ -938,6 +972,7 @@ describe('credential screening before persistence', () => {
     ...['binary', 'node_modules', '.env', 'path', 'stdout', 'stderr', 'hook', 'hook stderr', 'final message'].map((where) => ({ when, where, kind: 'held' })),
     ...['binary', 'node_modules', '.env', 'excluded path', 'stderr', 'hook', 'hook stderr', 'stdout', 'deliverable text', 'deliverable path', 'final message'].map((where) => ({ when, where, kind: 'shape' })),
   ]);
+  cases.push({ when: 'warmup', where: 'stdout', kind: 'encoded' });
   cases.push({ when: 'measured code', where: '.env', kind: 'held' });
   cases.push({ when: 'measured', where: 'shaped filename', kind: 'held' });
   // `nested` is JSON text inside a JSON string (an MCP result quoting JSON): a literal backslash-n before the token.
@@ -970,11 +1005,11 @@ describe('credential screening before persistence', () => {
     vi.spyOn(overhead, 'cli').mockReturnValue({ bin: process.execPath, prefix: [script] });
     vi.spyOn(mcpOverhead, 'refusedFiles').mockReturnValue([]);
     vi.spyOn(benchLib, 'modelJson').mockResolvedValue({ output: { winner: 'first', confidence: 'high', reasons: `synthetic-held-secret \nsk-${'x'.repeat(24)} \tsk-${'x'.repeat(24)}` }, costUsd: 0 });
-    const secret = kind === 'held' ? 'synthetic-held-secret' : `sk-${'x'.repeat(24)}`;
+    const secret = kind === 'held' ? 'synthetic-held-secret' : kind === 'encoded' ? 'synthetic%2dheld%2dsecret' : `sk-${'x'.repeat(24)}`;
     const lead = prefix ? leads[prefix]! : '';
     const value = lead + secret;
     const target = when === 'warmup' ? 0 : 2;
-    const stops = kind === 'held' || (when !== 'warmup' && (where === 'final message' || where.startsWith('deliverable')));
+    const stops = kind === 'held' && where !== 'node_modules' || kind === 'encoded' || (when !== 'warmup' && (where === 'final message' || where.startsWith('deliverable')));
     let runs = 0;
     vi.spyOn(benchLib, 'run').mockImplementation(async (_bin, _args, work) => {
       const tainted = runs++ === target;
@@ -1023,11 +1058,11 @@ describe('credential screening before persistence', () => {
       const rows = readFileSync(join(out, 'rows.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l) as RunRow);
       expect(rows).toHaveLength(stops ? target + 1 : 4);
       const row = rows[target]!;
-      expect(row.invalid).toBe(stops ? 'credential in output' : undefined);
+      expect(row.invalid).toBe(stops ? 'UNUSABLE: credential in output' : undefined);
       expect(row.hiddenTest).toBeNull();
       expect(row.totals).toMatchObject({ uncached: 9000, cacheRead: 52000, output: 2300 });
       if (where === 'shaped filename') expect(row.leak?.file).toBe('<credential>.md');
-      expect(row.leak?.rule).toBe(stops ? kind === 'held' ? 'held secret' : 'token shape' : undefined);
+      expect(row.leak?.rule).toBe(stops ? kind === 'held' || kind === 'encoded' ? 'held secret' : 'token shape' : undefined);
       if (stops && where.includes('path')) expect(row.leak?.file).toBe('<credential-bearing path>');
       if (stops && kind === 'shape' && where === 'final message') expect(row.leak?.file).toBe('agent-final-message.txt');
       const withheld = !stops && ['stdout', 'final message'].includes(where);
@@ -1252,10 +1287,10 @@ if (args.includes('--output-schema')) {
     const args = ['--hosts', 'claude', '--repeats', '1', '--ids', 'c1-web-14'];
     const { code, text } = await start(args);
     expect(code).toBe(1);
-    expect(text).toContain('claude/loadout/warmup/0: credential in output');
+    expect(text).toContain('claude/loadout/warmup/0: UNUSABLE: credential in output');
     const rows = rowsOf();
     // The loadout warm-up is screened too and ends the batch before measured runs.
-    expect(rows.map((r) => [r.id, r.invalid])).toEqual([['claude/bare/warmup/0', undefined], ['claude/loadout/warmup/0', 'credential in output']]);
+    expect(rows.map((r) => [r.id, r.invalid])).toEqual([['claude/bare/warmup/0', undefined], ['claude/loadout/warmup/0', 'UNUSABLE: credential in output']]);
     expect(existsSync(join(out, 'INCOMPLETE'))).toBe(true);
     expect(existsSync(join(out, 'outputs', 'claude', 'c1-web-14', 'loadout-1'))).toBe(false);
     const everything = (readdirSync(out, { recursive: true }) as string[]).filter((f) => statSync(join(out, f)).isFile() && !/^streams[/\\]/.test(f)).map((f) => readFileSync(join(out, f), 'utf8')).join('\n');

@@ -1,18 +1,23 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import * as fs from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
-import { join, relative } from 'node:path';
-import { afterAll, describe, expect, it } from 'vitest';
+import { basename, dirname, join, relative, resolve, sep } from 'node:path';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { buildPlan, copyPack, execute, main, parseClaude, parseCodex, runStudy, summarize, parsePromptInput, validateFeatures, inspectCodex, preflight, DISABLED_FEATURES, type Command, type Plan } from '../bench/overhead.js';
 
 const temps: string[] = [];
+beforeEach(() => vi.stubEnv('PGPASSWORD', 'FAKE-overhead-postgres-key'));
+afterEach(() => vi.unstubAllEnvs());
+vi.mock('node:fs', async (original) => ({ ...await original<typeof import('node:fs')>() }));
 function temp() {
   const dir = mkdtempSync(join(tmpdir(), 'loadout-overhead-test-'));
   temps.push(dir);
   return dir;
 }
-afterAll(() => temps.forEach((dir) => rmSync(dir, { recursive: true, force: true })));
+// Removing the pack fixtures can exceed Vitest's 10 s hook default on a loaded Windows runner.
+afterAll(() => temps.forEach((dir) => rmSync(dir, { recursive: true, force: true })), 30_000);
 const jsonl = (...events: unknown[]) => events.map((e) => JSON.stringify(e)).join('\n');
 const claude = jsonl(
   { type: 'system', subtype: 'init', model: 'haiku-resolved', skills: ['b1-0000'], plugins: [{ name: 'b1' }], slash_commands: ['b1:command'], mcp_servers: [{ name: 'loadout', status: 'connected' }] },
@@ -420,4 +425,69 @@ describe('text-only configurations', () => {
     expect(raw + free).not.toContain('SECRET');
     expect(rows.find((r) => r.host === 'codex')!.agentsPresent).toBe(true);
   });
+});
+
+
+it('redacts inherited credentials in B1 rows and preflight inventories', async () => {
+  const secret = 'FAKE-overhead-token';
+  vi.stubEnv('LOADOUT_HOME', temp()); vi.stubEnv('TYPESAFE_API_KEY', secret);
+  try {
+    const plan = buildPlan(fixture(), temp()), out = temp(), deps = fakeStudy(plan);
+    const { rows, offline } = await runStudy(plan, out, {
+      run: async (command, host) => (await deps.run(command, host)).replaceAll('"ambient"', JSON.stringify(secret)),
+      inspect: async (command) => { const found = await deps.inspect(command); return { ...found, tools: [...found.tools, secret] }; },
+    });
+    expect(summarize(rows, offline, [secret])).not.toContain(secret);
+    expect(summarize(rows, offline, [secret])).toContain('<credential>');
+    for (const file of ['rows.jsonl', 'preflight.jsonl']) {
+      const saved = readFileSync(join(out, file), 'utf8');
+      expect(saved).not.toContain(secret); expect(saved).toContain('<credential>');
+    }
+  } finally { vi.unstubAllEnvs(); }
+});
+
+
+it('redacts inherited credentials in B1 printed plan paths', async () => {
+  const library = fixture(), secret = 'FAKE-overhead-plan-token', base = join(temp(), secret);
+  mkdirSync(base);
+  for (const name of ['TMP', 'TEMP', 'TMPDIR']) vi.stubEnv(name, base);
+  vi.stubEnv('LOADOUT_HOME', base); vi.stubEnv('TYPESAFE_API_KEY', secret);
+  try {
+    const printed: string[] = [];
+    await main(['--plan', '--library', library], { print: (text) => printed.push(text) });
+    expect(printed.join('\n')).not.toContain(secret);
+    expect(printed.join('\n')).toContain('<credential>');
+  } finally { vi.unstubAllEnvs(); }
+});
+
+it('gates unanticipated B1 artifacts before finishing', async () => {
+  const secret = 'FAKE-overhead-gate-token', out = temp(), plan = buildPlan(fixture(), temp());
+  vi.stubEnv('LOADOUT_HOME', temp()); vi.stubEnv('TYPESAFE_API_KEY', secret);
+  try {
+    writeFileSync(join(out, 'unknown-writer.txt'), secret.replaceAll('-', '%2d'));
+    await expect(runStudy(plan, out, fakeStudy(plan))).rejects.toThrow(/UNUSABLE.*unknown-writer/);
+  } finally { vi.unstubAllEnvs(); }
+});
+
+it('gates a late B1 report artifact at the script completion boundary', async () => {
+  const secret = 'FAKE-overhead-late-token', library = fixture(), plan = buildPlan(library, temp()), fake = fakeStudy(plan);
+  vi.stubEnv('LOADOUT_HOME', temp()); vi.stubEnv('TYPESAFE_API_KEY', secret);
+  const resultRoot = resolve(import.meta.dirname, '..', 'bench', 'results'), before = new Set(readdirSync(resultRoot));
+  let out: string | undefined;
+  const write = fs.writeFileSync;
+  const spy = vi.spyOn(fs, 'writeFileSync').mockImplementation((...args: Parameters<typeof writeFileSync>) => {
+    write(...args);
+    if (basename(String(args[0])) === 'summary.md') { out = dirname(String(args[0])); write(join(out, 'unknown-writer.txt'), secret.replaceAll('-', '%2d')); }
+  });
+  const mapped = (command: Command, host: 'claude' | 'codex') => ({ ...command, cwd: plan.calls.find((c) => c.host === host && c.configuration === basename(command.cwd))!.command.cwd });
+  try {
+    await expect(main(['--library', library], { print: () => {}, run: (command, host) => fake.run(mapped(command, host), host), inspect: (command) => fake.inspect(mapped(command, 'codex')) }))
+      .rejects.toThrow(/UNUSABLE.*unknown-writer/);
+  } finally {
+    spy.mockRestore(); vi.unstubAllEnvs();
+    if (out) {
+      expect(resolve(out).startsWith(resultRoot + sep) && !before.has(basename(out))).toBe(true);
+      rmSync(out, { recursive: true, force: true });
+    }
+  }
 });
