@@ -46,7 +46,8 @@ null for missing writes. Jev's legacy zero projection now carries
 The cache-share formatter now emits `<100%` for a partial hit that would
 round to 100%, and `not shown` for a zero denominator. These two corrections
 can change historical edge-case formatting. The C14 rerun and a legacy
-C15-shaped report reproduce the base reporter byte-for-byte in tests.
+C15-shaped report reproduce main's pinned `ecb8fe3` reporter byte-for-byte in
+tests, including its existing hook-trust notice provenance.
 
 B7 rollups sum the existing measured rows only; the unmeasured canary is
 excluded from tokens and request count. Run duration includes startup,
@@ -77,3 +78,18 @@ the journal environment name was forwarded without capture being enabled;
 conditional forwarding fixed it. Its A/B/F2 recheck passed 160 tests with
 10 platform skips. Full-matrix CI and both reviews are pending the
 coordinator; no reviewer was started by the implementer. Cost: $0.
+
+CI follow-up (2026-11-05): the POSIX stand-in test still expected identical
+environment names after excluding the key/home; it now explicitly checks
+that the journal variable reaches only loadout. The legacy native report
+fixture had been generated from #77's older branch, while GitHub tests the
+merged PR tree containing main's two `hookTrustNotices` provenance lines.
+Replacing only the reporter with the merge-tree version reproduced the exact
+CI hash mismatch. The branch now preserves those existing main fields, and
+the fixture was regenerated from main `ecb8fe3`, recording its source commit.
+No newline/path normalization or production protocol change was needed;
+`.gitattributes` does not apply to these fixture paths. Both full affected
+suites passed in an isolated WSL copy with Linux dependencies and CI's exact
+Node 24.22.1: 170 tests passed. No paid calls were made.
+Windows `npm test -- --maxWorkers=2` also passed 1,365 tests with 130 platform
+skips, and `npm run typecheck` passed after these fixes.

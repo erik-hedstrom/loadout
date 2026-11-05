@@ -1252,9 +1252,11 @@ if (args.includes('--output-schema')) {
     const calls = callsOf();
     for (const host of ['claude', 'codex']) {
       const [bare, loadout] = ['bare', 'loadout'].map((arm) => calls.filter((c) => c.host === host).find((c) => (host === 'claude' ? c.args.includes('--plugin-dir') : c.args.some((a) => a.startsWith('mcp_servers.'))) === (arm === 'loadout'))!);
-      expect(bare!.env.filter((n) => !['TYPESAFE_API_KEY', 'LOADOUT_HOME'].includes(n))).toEqual(loadout!.env.filter((n) => !['TYPESAFE_API_KEY', 'LOADOUT_HOME'].includes(n)));
+      expect(bare!.env.filter((n) => !['TYPESAFE_API_KEY', 'LOADOUT_HOME', 'LOADOUT_BENCH_JEV_USAGE'].includes(n))).toEqual(loadout!.env.filter((n) => !['TYPESAFE_API_KEY', 'LOADOUT_HOME', 'LOADOUT_BENCH_JEV_USAGE'].includes(n)));
       expect(bare!.env).not.toContain('TYPESAFE_API_KEY');
       expect(loadout!.env).toContain('TYPESAFE_API_KEY');
+      expect(bare!.env).not.toContain('LOADOUT_BENCH_JEV_USAGE');
+      expect(loadout!.env).toContain('LOADOUT_BENCH_JEV_USAGE');
     }
     expect(calls.filter((c) => c.host === 'claude').every((c) => c.env.includes('CLAUDE_CODE_OAUTH_TOKEN'))).toBe(true);
     expect(calls.filter((c) => c.host === 'codex').every((c) => !c.env.includes('CLAUDE_CODE_OAUTH_TOKEN'))).toBe(true);
