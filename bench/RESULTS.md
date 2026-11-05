@@ -317,15 +317,17 @@ flowchart LR
 
 **Headline (ship-bar item 3): on Codex with `gpt-6-luna`, serving the same
 250-skill library through loadout instead of natively lowered paired
-effective input in 16 of 20 pairs, by a median of 6,225 tokens per run (range
-−55,897.8 to +33,997), under the preregistered assumption that cached input
+effective input in 16 of 20 pairs; the median over all 20 pairs is 6,225
+tokens per run (range −55,897.8 to +33,997), under the preregistered assumption that cached input
 costs 0.1 of uncached. The preregistered quality screen passed: loadout won
 7 pairs, lost 4, tied 4 and split 5 (loadout-loses rate 4/20, Wilson 95%
 8–42%), and the hidden test passed in 2 of 2 runs in each arm. This is a
 screen on ten prompts, one model and one host, not proof that quality is
 retained.**
 
-The method above was applied as written. WSL, Codex CLI 0.163.0, requested
+The method above was applied as written, except that Jev cost is not recorded
+(the rows count hook invocations) and the bucket sums below exclude the
+warm-ups, whose buckets are in each report. WSL, Codex CLI 0.163.0, requested
 model `gpt-6-luna`, medium effort, from a checkout at `ecb8fe3` (#83). Library:
 corpus `8af233e3…b09a2`; primary manifest `c265c28c…78318` (250 skills);
 secondary manifest equal to the corpus (all 1,235 valid skills). Every row of
@@ -344,9 +346,7 @@ Raw files, without raw streams: primary
 [report](results/2026-11-04T14-46-50Z-c15-primary/report.md) (per-run buckets);
 secondary [rows](results/2026-11-04T13-35-58Z-c15-secondary/rows.jsonl),
 [outputs](results/2026-11-04T13-35-58Z-c15-secondary/outputs/) and
-[report](results/2026-11-04T13-35-58Z-c15-secondary/report.md). An
-independent, uncommitted script recomputed every number below from the rows
-and verdicts; all agree with the harness reports.
+[report](results/2026-11-04T13-35-58Z-c15-secondary/report.md).
 
 ### Primary: 250 skills, two repeats
 
@@ -448,12 +448,10 @@ is unchanged.
   10 loadout runs. `codexRetries` 0; `hookTrustNotices` 22 for loadout (2 per
   run), 0 for native. No `coldCacheRisk` flags.
 
-**Limits.** n=20 is a screening rule, not proof of non-inferiority; the
-repeats of ten prompts are not independent population samples, and nine
-hash-selected prompts plus one earlier-selected fixture are not a random
-sample. One host (Codex), one model (Luna), SKILL.md-only sanitized bodies,
-and an assumed cached-input weight, not a measured bill. A skill's own
-template can still reveal the arm to the judge.
+**Limits.** The [preregistered limits](#c15-method-preregistered) apply. In
+addition, the repeats of ten prompts are not independent population samples,
+and nine hash-selected prompts plus one earlier-selected fixture are not a
+random sample.
 
 **Not shown:** quality on Claude or with other models; whole-library quality;
 actual subscription cost; per-request Codex usage; savings over a population
@@ -462,7 +460,9 @@ and 11 in the secondary, not Jev cost).
 
 Spend: 64 Codex `gpt-6-luna` runs (42 primary, 22 secondary, warm-ups
 included) on subscription quota; 40 Opus judge calls on the subscription;
-Jev not recorded in the rows.
+Jev not recorded in the rows. The two discarded launches added three warm-up
+attempts: one failed before any usage, and two completed (9,832 uncached and
+22,784 cached tokens together).
 
 ## C14 method: three prompts with and without loadout
 

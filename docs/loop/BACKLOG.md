@@ -851,7 +851,8 @@ measures fixed native listing cost, including Codex's budget truncation;
 A6 prints how to hide adopted native listings. C15 compares the same library
 served natively and through loadout on real C1 test tasks, with caching and
 quality included. Status: **done on Codex: harness ([#69](https://github.com/erik-hedstrom/loadout/pull/69)), hook-trust notice ([#83](https://github.com/erik-hedstrom/loadout/pull/83)), results ([#85](https://github.com/erik-hedstrom/loadout/pull/85)); the Claude arm waits on E12**.
-A Codex review of `4866e8a..27e572a` is owed before the paid study runs.
+A fresh Codex review of `4866e8a..27e572a`, together with #70, approved it
+with no findings before the paid study ran.
 
 Acceptance:
 - Extend `bench/ab.ts` with opt-in `native,loadout` arms and deterministic
@@ -884,8 +885,8 @@ skills; discovery needs exact name/path sets under the measured homes.
 Escaping can expand a valid source past loadout's manifest limit. Counts
 alone do not establish the planned sample or a completed hidden test.
 The fixture's earlier Jev/judge selection needs disclosure and sensitivity.
-Review fixes and tests address these gates; re-review and the paid study
-remain with the coordinator. Implementation, tests and free probes cost $0.
+Review fixes and tests address these gates; the re-review and the paid study
+have since run (Status above). Implementation, tests and free probes cost $0.
 Round 3: the builtin check now covers every file in each builtin directory,
 and macOS CI failed because the clean-home cwd was not resolved past the
 linked tmpdir.
