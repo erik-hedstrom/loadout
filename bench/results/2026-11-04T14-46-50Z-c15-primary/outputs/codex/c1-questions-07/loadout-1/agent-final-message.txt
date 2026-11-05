@@ -1,0 +1,15 @@
+The contradiction is that **a price can rise even if people buy the same amount**. The number of things sold and the price of each thing are different: a shop might sell the same number of loaves of bread but charge more for each one.
+
+Imagine a grocery shop sells 100 loaves a day. If flour, electricity, or delivery becomes more expensive, baking and selling each loaf costs more. The shop may raise its price to cover those costs. Customers still buy 100 loaves—perhaps because they need them, or because they have not changed their habits—but they now spend more in total.
+
+A **shortage** can also push a price up. A shortage means there isn’t enough of something available for everyone who wants it at the current price. If a poor harvest leaves fewer apples for sale, shoppers may compete for them, and sellers may charge more. The number of apples actually bought could stay the same or even fall; the higher price reflects that apples have become harder to get.
+
+Prices depend on **demand relative to supply**:
+
+- **Demand** is how much people want to buy at different prices.
+- **Supply** is how much sellers can provide at different prices.
+- If supply falls while demand stays about the same, prices may rise.
+- If demand rises while supply can’t keep up, prices may rise too.
+- Even if the amount ultimately sold doesn’t increase, a higher price can balance what buyers want with what sellers can provide.
+
+A rise in the price of apples alone is a **change in one item’s price**. **Inflation** means prices are rising broadly across the economy—for example, groceries, rent, transport, and services—not just that one product has become more expensive. One item getting pricier can contribute to inflation, but by itself it isn’t the same as economy-wide inflation.

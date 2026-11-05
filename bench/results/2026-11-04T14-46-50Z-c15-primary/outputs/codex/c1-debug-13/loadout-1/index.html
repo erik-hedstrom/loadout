@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Site menu</title>
+</head>
+<body>
+  <header>
+    <button id="menu-button" type="button" aria-controls="menu-panel" aria-expanded="false">Menu</button>
+    <nav id="menu-panel" hidden>
+      <a href="/">Home</a>
+      <a href="/pricing">Pricing</a>
+      <a href="/contact">Contact</a>
+    </nav>
+  </header>
+  <main><p>Page content.</p></main>
+  <script type="module">
+    import { createMenu } from './menu.js';
+    createMenu({
+      doc: document,
+      button: document.getElementById('menu-button'),
+      panel: document.getElementById('menu-panel'),
+    });
+  </script>
+</body>
+</html>

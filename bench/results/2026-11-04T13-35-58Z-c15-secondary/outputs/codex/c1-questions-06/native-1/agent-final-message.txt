@@ -1,0 +1,79 @@
+## Lists and tuples
+
+Both **lists** and **tuples** hold several values in one variable. The main difference is whether you can change their contents after creating them.
+
+### Syntax
+
+A list uses square brackets:
+
+```python
+shopping_list = ["apples", "bread", "tea"]
+```
+
+A tuple usually uses parentheses:
+
+```python
+coordinates = (59.3, 18.1)
+```
+
+Parentheses are optional in many cases, but they make tuples easy to recognize. For a tuple with just one item, include a comma:
+
+```python
+one_item = ("apple",)
+```
+
+Without the comma, `("apple")` is just a string in parentheses.
+
+### Lists are mutable
+
+**Mutable** means you can change a list after creating it: add, remove, or replace items.
+
+```python
+shopping_list.append("coffee")
+shopping_list[0] = "pears"
+
+print(shopping_list)  # ["pears", "bread", "tea", "coffee"]
+```
+
+Lists are handy when the collection may change, such as a to-do list or the players currently in a game.
+
+### Tuples are immutable
+
+**Immutable** means you cannot add, remove, or replace a tuple’s items after creating it.
+
+```python
+coordinates = (59.3, 18.1)
+# coordinates[0] = 60.0  # Raises a TypeError
+```
+
+Tuples suit a fixed group of related values, such as a location’s latitude and longitude, or an RGB color:
+
+```python
+rgb_color = (255, 120, 0)
+```
+
+### What they have in common
+
+You can loop over either type, find an item by its position (starting at `0`), and ask how many items it contains:
+
+```python
+for item in ("apples", "bread"):
+    print(item)
+
+print(len(["apples", "bread"]))  # 2
+```
+
+Both can also contain values of different types, though keeping related values together usually makes code easier to understand.
+
+### A common misunderstanding
+
+A tuple’s immutability prevents changing which items it contains. It does **not** make every object inside it immutable. For example, if a tuple contains a list, that list can still change:
+
+```python
+items = (["apples"], "bread")
+items[0].append("pears")  # The list inside the tuple changes
+```
+
+## Rule of thumb
+
+Use a **list** when you expect the collection to change. Use a **tuple** when it represents a fixed group of values.

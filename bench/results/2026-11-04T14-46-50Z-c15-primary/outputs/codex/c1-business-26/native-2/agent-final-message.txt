@@ -1,0 +1,3 @@
+Created the discussion draft: [sales-support-operating-agreement.md](<work>/sales-support-operating-agreement.md).
+
+It maps ownership and information exchange across the customer lifecycle, sets escalation triggers and response targets, and includes a renewal-risk scenario, shared metrics, churn classification guidance, and review cadence. It assumes the AE owns renewals and calls out decisions the team leads should confirm before adopting it.

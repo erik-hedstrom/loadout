@@ -1,0 +1,6 @@
+Created two deliverables in the folder:
+
+- [Acquisition_Screening_Guide.md](<work>/Acquisition_Screening_Guide.md) — gates, weighted criteria, scoring rules, financial logic, fictional comparison, sensitivity checks, and a diligence checklist.
+- [Acquisition_Target_Scorecard.csv](<work>/Acquisition_Target_Scorecard.csv) — editable criteria, suggested weights, and the three fictional targets’ scores.
+
+I couldn’t create an Excel workbook because the spreadsheet library is missing and network access prevented installing it. The CSV includes the inputs; the guide gives the weighted-score formula. All sample figures are explicitly hypothetical.

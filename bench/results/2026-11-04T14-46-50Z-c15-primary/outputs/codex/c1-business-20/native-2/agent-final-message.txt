@@ -1,0 +1,3 @@
+Created the illustrative sample plan, assumptions register, and recommended testing order in [business-assumptions-review.md](<work>/business-assumptions-review.md).
+
+The sample is clearly labeled: no evidence about your actual business was provided, so its product, market, pricing, and thresholds are hypothetical. The tests prioritize real customer behavior—especially paid pilots, measured delivery costs, and renewals—over stated interest.

@@ -1,0 +1,6 @@
+Created two deliverables in the folder:
+
+- [Illustrative sample business plan](<<work>/sample_business_plan.md>) — a fictional SMS reminder service for physiotherapy clinics, with invented details clearly labeled.
+- [Assumptions register and test plan](<<work>/assumptions_register.md>) — ranked uncertainties, evidence gaps, low-cost tests, success thresholds, next decisions, and a recommended testing order.
+
+The sample currently has no behavioral evidence, so its demand, pricing, access, feasibility, cost, and retention assumptions remain unvalidated. Share your actual plan summary and I can replace the example with a tailored register.

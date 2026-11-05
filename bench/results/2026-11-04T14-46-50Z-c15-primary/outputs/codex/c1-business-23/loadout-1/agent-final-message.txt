@@ -1,0 +1,14 @@
+1. **What was happening in your business when you first decided to try or adopt the inventory software?**  
+   *Helps identify the circumstances and needs that prompted adoption.*
+
+2. **Thinking about a typical workday while you were using it, how did the software fit into the way you handled inventory tasks?**  
+   *Helps reveal where it fit into or disrupted daily work.*
+
+3. **Can you describe a time when the software caused a problem or fell short for you?**  
+   *Helps surface specific difficulties that may have contributed to stopping.*
+
+4. **How did the decision to stop using it come about?**  
+   *Helps understand who was involved, what shaped the decision, and whether they had adopted it or only tried it.*
+
+5. **What do you use now to manage inventory, and how did you come to use that approach?**  
+   *Helps learn what replaced the software, if anything, and why.*

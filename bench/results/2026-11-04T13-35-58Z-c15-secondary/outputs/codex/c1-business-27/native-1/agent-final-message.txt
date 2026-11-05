@@ -1,0 +1,6 @@
+Created two deliverables:
+
+- [Acquisition target screening framework](<<work>/acquisition_target_scorecard.md>) — screening gates, weighted criteria, scoring guidance, uncertainty and double-counting rules, a worked comparison of three fictional targets, sensitivity checks, and a diligence checklist.
+- [Reusable scorecard template](<<work>/acquisition_scorecard_template.csv>) — criteria, weights, and fields for scores, confidence, ranges, and evidence.
+
+The worked example ranks Beacon first under the default weights, with Aster second and Cinder third. The sensitivity checks show how a price change or weaker synergy evidence can alter that order.

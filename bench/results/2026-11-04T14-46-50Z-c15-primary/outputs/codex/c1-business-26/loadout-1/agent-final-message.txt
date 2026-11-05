@@ -1,0 +1,3 @@
+Created the discussion draft at [sales-support-operating-agreement.md](<work>/sales-support-operating-agreement.md).
+
+It maps ownership and information handoffs across the customer lifecycle, proposes escalation levels and response targets, includes a worked renewal-risk scenario, and defines shared metrics and an evidence-based churn review. It assumes Sales owns commercial renewals and flags the renewal owner, Sev 1 coverage, and response targets for the team leads to confirm.

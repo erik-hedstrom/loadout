@@ -1,0 +1,11 @@
+The key is that **prices can rise even if people aren’t buying more**. Inflation doesn’t require everyone to buy extra things. It can happen when the same amount of money is chasing goods that have become harder or more expensive to provide—or when the mix of what people buy changes.
+
+Imagine a grocery store that sells 100 loaves of bread a day. If flour, electricity, or delivery costs go up, the bakery may raise the price of each loaf to cover its higher costs. The store could still sell 100 loaves. The **quantity bought** hasn’t increased, but the **price per loaf** has.
+
+A shortage can push prices up too. If bad weather means the store receives only 80 loaves while shoppers still want about 100, there are fewer loaves to go around. The bakery or store may raise the price, and some shoppers may buy less or switch to another food. A shortage means there’s less available than people would like to buy at the current price.
+
+Prices also depend on **demand relative to supply**. Demand is how much people want to buy at a given price; supply is how much sellers can provide. Demand doesn’t have to rise for prices to rise: if supply falls, the balance changes. And even when the total number of items people buy stays the same, they may shift toward items that are scarce or costlier to produce, putting upward pressure on those prices.
+
+A rise in the price of bread is a price increase for one item. **Inflation** means prices are rising broadly across many goods and services over time, so the same amount of money buys less overall. If only bread gets more expensive while most other prices stay about the same, that’s not usually called economy-wide inflation. If groceries, rent, transport, and many other costs rise together, that’s inflation.
+
+So there’s no contradiction: **the total amount people buy can stay flat while prices rise**, because sellers may face higher costs, goods may be scarcer, or demand may be high compared with the supply available.

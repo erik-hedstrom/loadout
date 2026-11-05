@@ -545,7 +545,7 @@ Decisions for Erik:
 | C8 | P0 | Skill use with the hook-only plugin | Claude | local | done ([#25](https://github.com/erik-hedstrom/loadout/pull/25)): headless, the hook injected a skill's text in 6 of 10; Claude opened 0 of 10, none of the 4 it was only pointed to (D13) |
 | C9 | P1 | Host-model fallback router when there is no TypeSafe key | Claude (design) | cloud (code) + local (bench) | todo |
 | C10 | P2 | Bench quick fixes: sequential outcome judge, tier fixed across arms, stale A2 number | Claude | cloud | done ([#40](https://github.com/erik-hedstrom/loadout/pull/40)) |
-| C15 | P0 | Same library natively versus through loadout: task tokens, caching and retained quality | Codex (harness) + coordinator (runs) | local | harness merged ([#69](https://github.com/erik-hedstrom/loadout/pull/69)); hook-trust notice tolerated ([#83](https://github.com/erik-hedstrom/loadout/pull/83)); study not rerun; no valid study result |
+| C15 | P0 | Same library natively versus through loadout: task tokens, caching and retained quality | Codex (harness) + coordinator (runs) | local | done on Codex: harness ([#69](https://github.com/erik-hedstrom/loadout/pull/69)), hook-trust notice ([#83](https://github.com/erik-hedstrom/loadout/pull/83)), results ([#85](https://github.com/erik-hedstrom/loadout/pull/85)): quality screen passed, median 6,225 effective input tokens saved per run at 250 skills ([RESULTS](../../bench/RESULTS.md#c15-results-2026-11-04-the-same-library-natively-and-through-loadout-on-codex)); the Claude arm waits on E12 |
 | C14 | P1 | A/B pilot: three prompts with and without loadout in the stock CLIs, tokens (cached apart from uncached) and quality | Claude (harness) + Erik (runs) | cloud (harness) + local (runs) | Codex done: harness ([#47](https://github.com/erik-hedstrom/loadout/pull/47)), first pilot and measurement fixes ([#64](https://github.com/erik-hedstrom/loadout/pull/64)), rerun recorded (2026-10-26): loadout added uncached input tokens against a bare setup; the Claude arm waits on E12 |
 
 **C13. Pure-Jev baseline without more model spend.**
@@ -854,8 +854,9 @@ Why: C14 compares against bare and cannot show replacement savings. B12
 measures fixed native listing cost, including Codex's budget truncation;
 A6 prints how to hide adopted native listings. C15 compares the same library
 served natively and through loadout on real C1 test tasks, with caching and
-quality included. Status: **harness merged ([#69](https://github.com/erik-hedstrom/loadout/pull/69)); hook-trust notice tolerated ([#83](https://github.com/erik-hedstrom/loadout/pull/83)); study not rerun; no valid study result**.
-A Codex review of `4866e8a..27e572a` is owed before the paid study runs.
+quality included. Status: **done on Codex: harness ([#69](https://github.com/erik-hedstrom/loadout/pull/69)), hook-trust notice ([#83](https://github.com/erik-hedstrom/loadout/pull/83)), results ([#85](https://github.com/erik-hedstrom/loadout/pull/85)); the Claude arm waits on E12**.
+A fresh Codex review of `4866e8a..27e572a`, together with #70, approved it
+with no findings before the paid study ran.
 
 Acceptance:
 - Extend `bench/ab.ts` with opt-in `native,loadout` arms and deterministic
@@ -880,14 +881,16 @@ Acceptance:
 
 [Preregistered method and fixed quality rule](../../bench/RESULTS.md#c15-method-preregistered).
 [Commands](../../bench/README.md#native-library-comparison-c15).
-Savings and quality retention: **not shown**. Round 1 reviews at `806a2d1`
+[Results](../../bench/RESULTS.md#c15-results-2026-11-04-the-same-library-natively-and-through-loadout-on-codex):
+the screen passed (loadout won 7, lost 4, tied 4, split 5 of 20 pairs);
+general quality retention is not shown. Round 1 reviews at `806a2d1`
 requested changes. Learnings: ignore-user-config does not hide native home
 skills; discovery needs exact name/path sets under the measured homes.
 Escaping can expand a valid source past loadout's manifest limit. Counts
 alone do not establish the planned sample or a completed hidden test.
 The fixture's earlier Jev/judge selection needs disclosure and sensitivity.
-Review fixes and tests address these gates; re-review and the paid study
-remain with the coordinator. Implementation, tests and free probes cost $0.
+Review fixes and tests address these gates; the re-review and the paid study
+have since run (Status above). Implementation, tests and free probes cost $0.
 Round 3: the builtin check now covers every file in each builtin directory,
 and macOS CI failed because the clean-home cwd was not resolved past the
 linked tmpdir.
@@ -904,7 +907,12 @@ records observed matches (including invalid runs) and reports per-arm totals
 including warm-ups; historical rows show not recorded counts as "not shown".
 Other errors, near matches, native-arm notices and failed runs remain invalid.
 The two failed launch folders are uncommitted evidence under the private
-C15 state directory; no valid C15 result is shown.
+C15 state directory and hold no measurement.
+
+2026-11-04 results: learning: the median saving equals the fixed native
+listing cost (the warm-ups differ by 6,225 uncached tokens, as in B12), while
+what the agent did moved single pairs from −55,898 to +33,997 tokens;
+loadout's MCP tools were called in 0 of 30 loadout runs.
 
 **C14. A/B pilot.** Erik, 2026-10-19: test three prompts with and without
 loadout, evaluate the output and compare token use; he asked about tokens in,

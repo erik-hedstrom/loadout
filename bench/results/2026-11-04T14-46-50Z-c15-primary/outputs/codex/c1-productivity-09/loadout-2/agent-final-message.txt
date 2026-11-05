@@ -1,0 +1,8 @@
+| Week | Groceries | Cleaning |
+|---|---|---|
+| Week 1 | You | Partner |
+| Week 2 | Partner | You |
+| Week 3 | You | Partner |
+| Week 4 | Partner | You |
+
+After Week 4, repeat from Week 1. For a temporary swap, trade the same responsibility between you for that week, then switch back to the rotation; keep track of any extra duties and trade them back later so the workload stays balanced.

@@ -1,0 +1,3 @@
+Fixed the menu listeners in [menu.js](<work>/menu.js). The outside-click handler now listens on the document and ignores taps inside the panel or on the toggle button. Escape also listens on the document. Closing removes both listeners using the same callback references used to add them.
+
+Added regression coverage for opening, tapping inside the panel, tapping outside, and pressing Escape in [menu.test.mjs](<work>/menu.test.mjs). `npm test` passed. The existing menu has no focus management, so I left focus behavior unchanged.

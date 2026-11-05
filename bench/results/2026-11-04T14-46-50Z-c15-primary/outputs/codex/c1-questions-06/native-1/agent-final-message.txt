@@ -1,0 +1,82 @@
+A **list** and a **tuple** both hold several values in order. The main difference is whether you can change their contents after creating them.
+
+### Syntax
+
+Lists use square brackets:
+
+```python
+shopping_list = ["apples", "bread", "tea"]
+```
+
+Tuples usually use parentheses:
+
+```python
+coordinates = (12, 5)
+```
+
+A one-item tuple needs a comma:
+
+```python
+one_item = ("tea",)
+```
+
+Without the comma, `("tea")` is just the string `"tea"` in parentheses.
+
+### Mutable lists
+
+A list is **mutable**, which means you can change it after creating it: add, remove, or replace items.
+
+```python
+shopping_list.append("coffee")
+shopping_list[0] = "pears"
+
+print(shopping_list)  # ['pears', 'bread', 'tea', 'coffee']
+```
+
+Lists are useful when the collection may change, such as a to-do list or the names of people who have signed up for an event.
+
+### Immutable tuples
+
+A tuple is **immutable**, which means you cannot add, remove, or replace its items after creating it.
+
+```python
+coordinates = (12, 5)
+# coordinates[0] = 20  # This would raise a TypeError
+```
+
+Tuples suit groups of values that belong together and should stay fixed, such as a point on a map or a date:
+
+```python
+date = (2026, 11, 4)  # year, month, day
+```
+
+### What they have in common
+
+Both lists and tuples:
+
+- Keep items in a specific order.
+- Can hold different kinds of values.
+- Let you access items by position, starting at `0`.
+- Can be used in a `for` loop.
+
+```python
+for item in ("apples", "bread"):
+    print(item)
+
+print(("apples", "bread")[0])  # apples
+```
+
+### A note about immutability
+
+A tuple cannot have its items replaced, but it can contain a **mutable object**, such as a list. That inner list can still change:
+
+```python
+group = (["Mina", "Jo"], "guests")
+group[0].append("Sam")
+
+print(group)  # (['Mina', 'Jo', 'Sam'], 'guests')
+```
+
+### Rule of thumb
+
+Choose a **list** when you expect to change the collection. Choose a **tuple** when the collection represents a fixed group of values.

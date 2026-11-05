@@ -1,0 +1,57 @@
+## Lists and tuples
+
+Both lists and tuples store several values in order. You can access items by their position, starting at index `0`, and they can hold different types of values.
+
+```python
+colors = ["red", "green", "blue"]   # list
+point = (3, 5)                      # tuple
+
+print(colors[0])  # red
+print(point[1])   # 5
+```
+
+### Lists: changeable collections
+
+A list is **mutable**, which means you can change it after creating it: add, remove, or replace items.
+
+```python
+shopping_list = ["bread", "milk"]
+shopping_list.append("apples")
+shopping_list[0] = "rye bread"
+
+print(shopping_list)  # ['rye bread', 'milk', 'apples']
+```
+
+Choose a list when the contents may change—for example, a shopping list, a queue of tasks, or scores you’re still collecting.
+
+### Tuples: fixed collections
+
+A tuple is **immutable**: once created, you can’t add, remove, or replace its items.
+
+```python
+screen_size = (1920, 1080)
+# screen_size[0] = 1280  # Error: tuple items cannot be reassigned
+```
+
+Choose a tuple for a small, fixed group of values that belong together, such as a screen’s width and height, a location’s coordinates, or a date’s year, month, and day.
+
+A one-item tuple needs a comma:
+
+```python
+one_item = ("hello",)
+```
+
+Without the comma, `("hello")` is just a string in parentheses.
+
+### A common misunderstanding
+
+Tuple immutability applies to the tuple’s items themselves. If an item is a mutable object, that object can still change:
+
+```python
+record = ("Sam", ["reading", "cycling"])
+record[1].append("cooking")  # Allowed: the list inside the tuple changed
+```
+
+The tuple still points to the same list; it’s the list’s contents that changed.
+
+**Rule of thumb:** Use a list when you expect the collection to change. Use a tuple when its items should stay fixed as a group.

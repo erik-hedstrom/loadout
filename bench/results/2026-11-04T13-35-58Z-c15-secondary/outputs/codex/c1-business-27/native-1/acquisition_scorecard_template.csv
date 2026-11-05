@@ -1,0 +1,13 @@
+Target,As of,Screen result,Criterion,Dimension,Dimension weight,Within-dimension weight,Score 1-5,Confidence,Score range,Evidence/source,Notes
+,,Pass/Fail/Hold,Strategic adjacency,Strategic,0.35,0.30,,,,,
+,,Pass/Fail/Hold,Capability gap filled,Strategic,0.35,0.25,,,,,
+,,Pass/Fail/Hold,Market/customer access,Strategic,0.35,0.25,,,,,
+,,Pass/Fail/Hold,Differentiation/durability,Strategic,0.35,0.20,,,,,
+,,Pass/Fail/Hold,Systems/process compatibility (ease),Integration ease,0.30,0.30,,,,,
+,,Pass/Fail/Hold,Talent/culture/leadership (ease),Integration ease,0.30,0.25,,,,,
+,,Pass/Fail/Hold,Operating/regulatory integration (ease),Integration ease,0.30,0.25,,,,,
+,,Pass/Fail/Hold,Dependencies/separation (ease),Integration ease,0.30,0.20,,,,,
+,,Pass/Fail/Hold,Price/valuation discipline,Financial,0.35,0.25,,,,,
+,,Pass/Fail/Hold,Standalone cash generation/returns,Financial,0.35,0.30,,,,,
+,,Pass/Fail/Hold,Net synergy value/capture confidence,Financial,0.35,0.20,,,,,
+,,Pass/Fail/Hold,Downside resilience,Financial,0.35,0.25,,,,,

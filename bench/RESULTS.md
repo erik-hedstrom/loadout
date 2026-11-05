@@ -202,7 +202,8 @@ backlog, B7).
 
 ## C15 method (preregistered)
 
-Preregistered 2026-10-30, before any C15 run. Results: **not shown**.
+Preregistered 2026-10-30, before any C15 run. Results:
+[C15 results](#c15-results-2026-11-04-the-same-library-natively-and-through-loadout-on-codex).
 C14 adds loadout to bare; C15 instead replaces a native library, the state
 that [A6](../docs/loop/BACKLOG.md) helps users adopt. B12 measures listing
 cost but cannot establish retained quality on real tasks.
@@ -311,6 +312,157 @@ flowchart LR
   credential redaction apply unchanged. C15 tolerates documented Codex reconnect
   notices when the run completes successfully, recording their count; other
   batch-stop rules remain unchanged.
+
+## C15 results (2026-11-04): the same library natively and through loadout on Codex
+
+**Headline (ship-bar item 3): on Codex with `gpt-6-luna`, serving the same
+250-skill library through loadout instead of natively lowered paired
+effective input in 16 of 20 pairs; the median over all 20 pairs is 6,225
+tokens per run (range −55,897.8 to +33,997), under the preregistered assumption that cached input
+costs 0.1 of uncached. The preregistered quality screen passed: loadout won
+7 pairs, lost 4, tied 4 and split 5 (loadout-loses rate 4/20, Wilson 95%
+8–42%), and the hidden test passed in 2 of 2 runs in each arm. This is a
+screen on ten prompts, one model and one host, not proof that quality is
+retained.**
+
+The method above was applied as written, except that Jev cost is not recorded
+(the rows count hook invocations) and the bucket sums below exclude the
+warm-ups, whose buckets are in each report. WSL, Codex CLI 0.163.0, requested
+model `gpt-6-luna`, medium effort, from a checkout at `ecb8fe3` (#83). Library:
+corpus `8af233e3…b09a2`; primary manifest `c265c28c…78318` (250 skills);
+secondary manifest equal to the corpus (all 1,235 valid skills). Every row of
+each study shares one size, corpus and manifest; no key is duplicated and no
+row is invalid. Claude Opus judged the Codex outputs blind in both orders
+(cross-family). The secondary ran first (13:35Z), the primary second
+(14:46Z). Two earlier launches stopped at their warm-ups: the first found a
+different Codex binary on a non-login `PATH`, the second hit the hook-trust
+startup notice that #83 now tolerates. Their folders are not committed and
+hold no measurement.
+
+Raw files, without raw streams: primary
+[rows](results/2026-11-04T14-46-50Z-c15-primary/rows.jsonl),
+[verdicts](results/2026-11-04T14-46-50Z-c15-primary/verdicts.jsonl),
+[outputs](results/2026-11-04T14-46-50Z-c15-primary/outputs/) and
+[report](results/2026-11-04T14-46-50Z-c15-primary/report.md) (per-run buckets);
+secondary [rows](results/2026-11-04T13-35-58Z-c15-secondary/rows.jsonl),
+[outputs](results/2026-11-04T13-35-58Z-c15-secondary/outputs/) and
+[report](results/2026-11-04T13-35-58Z-c15-secondary/report.md).
+
+### Primary: 250 skills, two repeats
+
+Effective input, native minus loadout (positive: loadout used less), and the
+both-orders verdict of each pair. Codex reports thread totals, not individual
+requests.
+
+| Prompt | Repeat 1 | Repeat 2 | Median | Verdicts (1, 2) |
+|---|---:|---:|---:|---|
+| c1-questions-06 | +6,225 | −1,032.6 | +2,596.2 | split, loadout |
+| c1-business-26 | +9,367.4 | −1,787.8 | +3,789.8 | native, split |
+| c1-documents-22 | +10,257 | +7,837.8 | +9,047.4 | loadout, native |
+| c1-integrations-06 | +6,225 | +4,550.2 | +5,387.6 | tie, tie |
+| c1-business-27 | −17,363.6 | −55,897.8 | −36,630.7 | loadout, loadout |
+| c1-questions-07 | +6,225 | +6,225 | +6,225 | split, loadout |
+| c1-business-23 | +11,084 | +6,225 | +8,654.5 | native, split |
+| c1-business-20 | +4,819.6 | +8,508.4 | +6,664 | split, loadout |
+| c1-productivity-09 | +6,938.2 | +1,617 | +4,277.6 | tie, tie |
+| c1-debug-13 | +33,997 | +11,777.2 | +22,887.1 | loadout, native |
+
+All 20 pairs: median +6,225, range −55,897.8 to +33,997; 16 positive, 4
+negative.
+
+- **Quality screen: passes.** 20 of 20 pairs have both orders; no pair or
+  judgment is missing. Loadout wins 7, native wins (loadout loses) 4, ties 4,
+  splits 5. Losses minus wins is −3, within the limit of 2. Loadout-loses rate
+  4/20 (20%, Wilson 95% 8–42%). Hidden test (`c1-debug-13`, 8 tests): passed
+  in both repeats in both arms. One verdict (`c1-business-27` repeat 2)
+  redacted one loadout term.
+- **Where the median comes from.** Both warm-ups used 11,392 cached tokens;
+  native used 8,054 uncached and loadout 1,829, a difference of 6,225. Five
+  measured pairs (no tool calls, equal cache reads) differ by exactly that
+  amount. It matches B12's Codex listing cost at 250 skills
+  ([+6,226](#b12-results-2026-10-28-what-installed-skills-cost-per-request-on-current-hosts)).
+  In the other pairs the agent's own work varied, and two repeats cannot
+  separate a loadout effect from run-to-run variation.
+- **Against loadout.** `c1-business-27` (a spreadsheet task) used more input
+  through loadout in both repeats (−17,363.6 and −55,897.8); in repeat 2
+  loadout made 10 tool calls to native's 2. Loadout won both of those pairs.
+  Output tokens: native 31,895, loadout 42,925 in total; `c1-business-27`'s
+  two pairs account for 11,567 more through loadout, and the other 18 pairs
+  for 537 fewer.
+- **Raw buckets, 20 measured runs per arm (sums).** Native: uncached 241,193,
+  cache write 0, cached 1,084,032, output 31,895. Loadout: uncached 189,284,
+  cache write 0, cached 945,152, output 42,925.
+- **Tool use.** Native: 30 tool calls in 11 runs (10 failed). Loadout: 32 in
+  8 runs (8 failed); loadout's MCP tools (`find_tools`, `load_skill`) were
+  called in 0 runs. Skills opened: native `process-doc` (`c1-business-26`
+  repeat 1) and `xlsx` (`c1-business-27` repeat 1); loadout `xlsx`
+  (`c1-business-27` repeat 2), by reading its SKILL.md.
+- **Hook context.** The hook ran once per loadout run and added context in 6
+  of 20: `c1-business-26` (3,519 characters, `process-doc` injected),
+  `c1-business-27` (716, `xlsx` listed) and `c1-business-20` (1,056,
+  `product-brainstorming` and `interview-me` listed), the same in both
+  repeats.
+- **Notices.** Codex's skills-budget notice: none in either arm at 250 skills.
+  `codexRetries`: 0 in both arms. `hookTrustNotices`: 42 for loadout (2 per
+  run, warm-up included, the tolerated `--dangerously-bypass-hook-trust`
+  warning from #83), 0 for native.
+- **Warm-ups and cache risk.** One valid warm-up per arm, excluded from the
+  pairs. One measured run carries `coldCacheRisk`: native
+  `c1-questions-07` repeat 2, which started more than five minutes after the
+  native arm's previous request (loadout's 313-second `c1-business-27` run
+  came between them). Its tokens equal repeat 1's (8,177 uncached, 11,392
+  cached).
+
+**Sensitivity without `c1-debug-13`** (18 pairs; the fixture was selected
+earlier using Jev and judge results): median +6,225, range −55,897.8 to
++11,084; loadout wins 6, native wins 3, ties 4, splits 5. The primary screen
+is unchanged.
+
+### Secondary: all 1,235 valid skills, one repeat, tokens only
+
+| Prompt | Native minus loadout |
+|---|---:|
+| c1-questions-06 | +6,745 |
+| c1-business-26 | +3,965.2 |
+| c1-documents-22 | +6,745 |
+| c1-integrations-06 | +63.4 |
+| c1-business-27 | −9,319.4 |
+| c1-questions-07 | +6,745 |
+| c1-business-23 | +8,261.8 |
+| c1-business-20 | −2,536.8 |
+| c1-productivity-09 | +8,242.6 |
+| c1-debug-13 | +9,517.2 |
+
+- 10 pairs: median +6,745, range −9,319.4 to +9,517.2; 8 positive, 2
+  negative. Unjudged: quality is not shown. The hidden test passed in the one
+  run of each arm.
+- Every native run, warm-up included, carried Codex's skills-budget notice:
+  descriptions removed, 888 skills left out of the model-visible list. The
+  warm-ups differ by 6,745 uncached tokens (native 8,566, loadout 1,821; both
+  11,392 cached), next to B12's +6,744 at 1,235 skills.
+- Raw sums, 10 measured runs per arm. Native: uncached 101,906, cache write 0,
+  cached 564,864, output 17,173. Loadout: uncached 57,909, cache write 0,
+  cached 620,544, output 21,382. Tool calls: native 16 in 5 runs, loadout 21
+  in 5 runs; loadout's MCP tools called in 0 runs; one skill opened, by
+  loadout (`idea-refine`, `c1-business-20`). The hook added context in 4 of
+  10 loadout runs. `codexRetries` 0; `hookTrustNotices` 22 for loadout (2 per
+  run), 0 for native. No `coldCacheRisk` flags.
+
+**Limits.** The [preregistered limits](#c15-method-preregistered) apply. In
+addition, the repeats of ten prompts are not independent population samples,
+and nine hash-selected prompts plus one earlier-selected fixture are not a
+random sample.
+
+**Not shown:** quality on Claude or with other models; whole-library quality;
+actual subscription cost; per-request Codex usage; savings over a population
+of tasks; Jev dollars (the rows record hook invocations, 21 in the primary
+and 11 in the secondary, not Jev cost).
+
+Spend: 64 Codex `gpt-6-luna` runs (42 primary, 22 secondary, warm-ups
+included) on subscription quota; 40 Opus judge calls on the subscription;
+Jev not recorded in the rows. The two discarded launches added three warm-up
+attempts: one failed before any usage, and two completed (9,832 uncached and
+22,784 cached tokens together).
 
 ## C14 method: three prompts with and without loadout
 

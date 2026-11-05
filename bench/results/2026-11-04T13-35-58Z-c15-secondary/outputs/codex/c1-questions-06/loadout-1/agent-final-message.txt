@@ -1,0 +1,67 @@
+A **list** and a **tuple** both hold several values in order.
+
+```python
+shopping = ["apples", "bread", "milk"]  # list
+coordinates = (59.3, 18.1)              # tuple
+```
+
+Use square brackets `[]` for a list and parentheses `()` for a tuple. Both can hold different kinds of values, and you can get an item by its position. Positions start at `0`:
+
+```python
+shopping[0]    # "apples"
+coordinates[1] # 18.1
+```
+
+### Lists can change
+
+A list is **mutable**, which means you can change it after creating it. You can replace an item, add items, or remove them:
+
+```python
+shopping[0] = "pears"
+shopping.append("tea")
+```
+
+That makes lists useful for things that may change, like a shopping list, a to-do list, or scores collected during a game.
+
+### Tuples cannot be changed
+
+A tuple is **immutable**: after creating it, you cannot replace, add, or remove its items.
+
+```python
+coordinates = (59.3, 18.1)
+# coordinates[0] = 60.0  # Error: tuples don't support item assignment
+```
+
+Tuples are handy for a fixed group of related values, such as a location’s latitude and longitude, or a date’s year, month, and day.
+
+A one-item tuple needs a comma so Python knows it is a tuple:
+
+```python
+one_item = ("hello",)
+```
+
+Without the comma, `("hello")` is just a string in parentheses.
+
+### A note about immutability
+
+A tuple’s *slots* cannot be changed, but an object stored in a slot might still be mutable. For example, you can’t replace the list inside this tuple, but you can change that list:
+
+```python
+example = ([1, 2], "fixed")
+example[0].append(3)  # Works: changes the inner list
+```
+
+### What they have in common
+
+Lists and tuples are both **ordered sequences**. You can get their length with `len(...)`, loop through their items, and check whether they contain a value:
+
+```python
+len(coordinates)  # 2
+
+for value in coordinates:
+    print(value)
+
+18.1 in coordinates  # True
+```
+
+**Rule of thumb:** choose a list when the collection may change; choose a tuple when the collection represents a fixed group of values.

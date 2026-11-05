@@ -1,0 +1,3 @@
+Created the discussion draft at [customer-outcomes-operating-agreement.md](<work>/customer-outcomes-operating-agreement.md).
+
+It maps ownership and information exchange across the six stages, assumes Sales owns renewals, and defines escalation triggers, severity targets, coordination, disagreement decisions, shared metrics, and churn-cause categories. It also includes a sample risk scenario and review cadence.

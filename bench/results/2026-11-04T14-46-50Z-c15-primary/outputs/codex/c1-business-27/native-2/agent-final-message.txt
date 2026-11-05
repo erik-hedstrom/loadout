@@ -1,0 +1,3 @@
+Created the reusable framework, scorecard, fictional three-target comparison, gate screens, uncertainty and double-counting guidance, and sensitivity checks in [acquisition_target_scorecard.md](<work>/acquisition_target_scorecard.md).
+
+All example figures are explicitly hypothetical. I did not run tests.

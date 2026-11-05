@@ -1,0 +1,5 @@
+The root cause was incorrect listener placement and cleanup in [menu.js](<work>/menu.js): outside-tap handling listened on the panel, Escape handling listened on the button, and cleanup used a different function reference from the one registered.
+
+Both handlers now listen on the document and are removed using their original references. Taps inside the panel or on the button are ignored by the outside-tap handler, so menu interactions still work. I added tests in [menu.test.mjs](<work>/menu.test.mjs) for opening, inside taps, outside taps, and Escape from elsewhere in the document. No focus-management behavior existed in this implementation, so I left it unchanged.
+
+Verified with `npm test`: it passed.

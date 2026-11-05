@@ -296,7 +296,8 @@ are then routed and judged as above, with `--requests bench/data/requests-c1.jso
 Preregistered before any run: [C15 method](RESULTS.md#c15-method-preregistered).
 The same sanitized SKILL.md-only library is installed natively or served by
 loadout. This is the replacement comparison C14's bare baseline cannot make.
-Codex only; Claude-host execution remains blocked on E12. No result yet.
+Codex only; Claude-host execution remains blocked on E12.
+[Results](RESULTS.md#c15-results-2026-11-04-the-same-library-natively-and-through-loadout-on-codex).
 
 From WSL, using the dedicated logged-in Codex home without global instructions:
 

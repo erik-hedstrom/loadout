@@ -1,0 +1,6 @@
+I created a clearly labeled sample plan and an assumptions register with prioritized risks, low-cost tests, success thresholds, and next decisions.
+
+- [Sample business plan](<work>/sample_business_plan.md)
+- [Assumptions assessment and testing order](<work>/assumptions_assessment.md)
+
+The sample concerns a dental-clinic appointment waitlist service. Its assumptions and thresholds are illustrative; replace them with your plan and evidence before using them to make investment decisions.

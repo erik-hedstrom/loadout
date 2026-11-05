@@ -31,7 +31,7 @@ for usage and [DESIGN.md](DESIGN.md) for the architecture.
 - **Main snapshot (2026-11-02):** `86683d4`. It includes the Claude Code
   plugin carrying the MCP server (D13, #72; re-run completed in #76, compared
   in #79), the npm package and release workflow (A4, E5, #71), review follow-ups (#73), the
-  C15 harness and preregistration (#69; the study has not run), the follow-ups
+  C15 harness and preregistration (#69; the study ran later, #85), the follow-ups
   (#68, #70), A6's paste-ready audit adoption snippets (#66), B12's
   current-host listing harness and results (#67), the C14 A/B harness (#47)
   and its measurement fixes (#64, #65), B11's OpenCode harness (#57) and
@@ -63,9 +63,11 @@ All numbers, caveats, raw-result links and recorded costs are in
   does not establish an improvement. [C14's rerun with the measurement fixes](bench/RESULTS.md#c14-rerun-2026-10-26-codex-luna-with-the-fixes)
   compares loadout with a setup that has no skills: loadout added uncached
   input tokens on all three prompts and won the one prompt where it opened skills.
-- **Not run:** [C15's study](bench/RESULTS.md#c15-method-preregistered)
-  (the same library natively and through loadout, on Codex); only its harness
-  and preregistration exist. Savings and quality retention are not shown.
+- **Screened on Codex:** [C15](bench/RESULTS.md#c15-results-2026-11-04-the-same-library-natively-and-through-loadout-on-codex)
+  served the same 250-skill library natively and through loadout. Loadout used
+  less effective input in 16 of 20 pairs (median 6,225 tokens per run, the
+  fixed native listing cost) and passed the preregistered quality screen on
+  ten prompts. Quality retention in general, Jev cost and Claude are not shown.
 - **Not shown:** [B7's configured-MCP overhead study](bench/RESULTS.md#b7-method-not-run-yet-what-configured-mcp-servers-cost-per-request)
   has not run; [model-tier choice](bench/RESULTS.md#threats-to-validity)
   is not evaluated. [B11's completed replacement pilot](bench/RESULTS.md#b11-replacement-pilot-2026-10-23-completed-2026-10-26)
@@ -78,12 +80,11 @@ All numbers, caveats, raw-result links and recorded costs are in
    [BACKLOG](docs/loop/BACKLOG.md#v01-ship-bar): a clean npm install, a live
    README walk in stock `claude` and `codex`, C15's headline, and a GIF.
    Items outside it wait until after v0.1.
-2. **C15** (the same library natively and through loadout, on Codex) has its
-   harness and preregistration merged (#69) and has not run. A Codex review of
-   the harness is owed before the paid study. C14 compared only against bare
-   ([rerun](bench/RESULTS.md#c14-rerun-2026-10-26-codex-luna-with-the-fixes)).
-   The Claude arm waits on a tool-less Codex judge (E12), so Claude quality
-   stays not shown until cross-model validation.
+2. **C15** (the same library natively and through loadout, on Codex) ran
+   ([results](bench/RESULTS.md#c15-results-2026-11-04-the-same-library-natively-and-through-loadout-on-codex),
+   #85); the README headline follows from it. The Claude arm waits on a
+   tool-less Codex judge (E12), so Claude quality stays not shown until
+   cross-model validation.
    [Method](bench/RESULTS.md#c15-method-preregistered);
    [commands](bench/README.md#native-library-comparison-c15).
 3. **The npm release** (A4, E5): Erik creates the `npm-release` environment and

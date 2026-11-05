@@ -1,0 +1,3 @@
+Created the draft agreement at [customer-retention-operating-agreement.md](<work>/customer-retention-operating-agreement.md).
+
+It covers stage-by-stage ownership and information exchange, escalation triggers and response targets, dispute resolution, a sample risk scenario, shared metrics, churn classification, and a review cadence. It assumes Sales owns commercial renewals; the leads can confirm or change that in the review checklist.

@@ -1,0 +1,1 @@
+Created the rotation table and repeat/swap rule in [grocery-cleaning-rotation.md](<work>/grocery-cleaning-rotation.md).

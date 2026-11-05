@@ -1,0 +1,6 @@
+Case,Strategic weight,Integration weight,Financial weight,Northstar financial score override,Interpretation
+Base,40%,25%,35%,,Harbor leads narrowly on listed scores: Harbor 4.05; Northstar 3.87
+Strategic emphasis,55%,20%,25%,,Northstar improves relative to Harbor because its strategic score is higher
+Integration-first,25%,50%,25%,,Harbor leads more clearly due to easier integration
+Financial-first,25%,20%,55%,,Northstar improves if its value and financial score survive diligence
+Northstar downside,40%,25%,35%,2.5,Northstar falls further; recalculate total with financial score at 2.5

@@ -1,0 +1,5 @@
+**Root cause:** Outside taps were handled by a click listener on the panel, which never sees clicks outside it. Escape was handled only on the toggle button, so pressing Escape elsewhere had no effect. Cleanup also passed a new function instead of the registered callback, leaving listeners attached.
+
+I moved both handlers to the document, excluded clicks inside the panel and on the toggle, and removed listeners with their original callbacks. Escape closes the menu and returns focus to the toggle. Clicks inside the panel still work normally.
+
+Added coverage for opening, inside clicks, outside clicks, and Escape. `npm test` passes. `git diff --check` could not run because this folder is not a Git repository.

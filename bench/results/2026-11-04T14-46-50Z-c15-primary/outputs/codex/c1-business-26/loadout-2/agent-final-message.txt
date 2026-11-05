@@ -1,0 +1,3 @@
+Created the discussion draft at [customer-lifecycle-operating-agreement.md](<work>/customer-lifecycle-operating-agreement.md).
+
+It maps owners and information exchange across the six lifecycle stages, sets escalation triggers and response targets, and includes a sample at-risk customer scenario, shared metrics, a churn classification rubric, and review cadence. It assumes Sales owns renewals and flags that assumption for the team leads to confirm.

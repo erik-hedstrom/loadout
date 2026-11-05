@@ -1,0 +1,16 @@
+Dimension,Criterion,Within-dimension weight,Score 1 anchor,Score 3 anchor,Score 5 anchor
+Strategic fit,Market / customer adjacency,25%,Little overlap or unclear demand,Some shared segments or credible cross-sell,Direct fit with validated customer need and access
+Strategic fit,Capability / technology fit,25%,Capability redundant or obsolete,Useful capability with material gaps,Distinctive capability fills a priority gap
+Strategic fit,Competitive positioning,20%,Weakens position or invites retaliation,Neutral to modest advantage,Creates durable differentiated position
+Strategic fit,Strategic alignment / execution,15%,Conflicts with strategy or leadership bandwidth,Plausible; requires tradeoffs,Directly advances approved strategy; clear owner
+Strategic fit,Regulatory / portfolio fit,15%,Severe unresolved constraint,Manageable approvals or portfolio overlap,Low friction; strengthens portfolio
+Integration ease,Systems / data complexity,25%,Fragmented, undocumented, incompatible,Some interfaces and migration work,Documented, compatible, low migration burden
+Integration ease,Operating model / process fit,20%,Core processes conflict; major redesign,Several process differences; manageable,Processes and controls align closely
+Integration ease,People / culture / retention,20%,High attrition or key-person dependency,Manageable retention and culture risks,Leadership aligned; retention plan credible
+Integration ease,Legal / regulatory integration,15%,Complex separation, licenses, or approvals,Some material work,Straightforward legal structure and approvals
+Integration ease,Integration capacity / cost certainty,20%,No capacity; large uncertain cost,Plan and funding plausible,Named team; tested plan; costs bounded
+Financial attractiveness,Risk-adjusted value vs. price,40%,Price materially exceeds supportable value,Value roughly supports price with limited headroom,Material headroom after downside and costs
+Financial attractiveness,Cash flow quality / durability,20%,Volatile, concentrated, or low quality,Mixed but underwritable,Recurring, diversified, resilient cash flows
+Financial attractiveness,Capital intensity / working capital,15%,High ongoing needs or hidden liabilities,Moderate requirements,Low and predictable ongoing capital needs
+Financial attractiveness,Downside resilience,15%,Severe impairment in plausible downside,Downside survivable with mitigations,Strong protection / limited downside loss
+Financial attractiveness,Funding / returns fit,10%,Breaks leverage or return constraints,Near hurdle; tradeoffs needed,Clears approved return and funding hurdles

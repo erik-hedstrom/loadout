@@ -1,0 +1,1 @@
+Created the ready-to-send draft: [vendor-api-documentation-and-sandbox-request.md](<work>/vendor-api-documentation-and-sandbox-request.md).

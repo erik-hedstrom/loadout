@@ -1,0 +1,3 @@
+Created the discussion draft: [shared-customer-ownership-agreement.md](<work>/shared-customer-ownership-agreement.md).
+
+It maps ownership and handoffs across the customer lifecycle, sets escalation levels and response targets, includes a sample renewal-risk scenario, proposes shared metrics, and gives a review process for distinguishing preventable, external, mixed, and unknown churn. It assumes Account Sales owns commercial renewals and flags that team coverage and any Customer Success role should be confirmed by the leads.

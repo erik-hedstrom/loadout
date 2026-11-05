@@ -1,0 +1,9 @@
+An **appendix** usually contains extra material that supports or expands on the report, such as a table of detailed survey results. An **annex** often contains supporting material that stands more on its own, such as a signed policy or a technical specification.
+
+That distinction isn’t universal: organizations and style guides use the terms differently. Since you haven’t provided a required naming convention, either label can work.
+
+**Simple rule:** Use *appendix* for material that extends the report; use *annex* for a self-contained supporting document. Pick one term and use it consistently.
+
+For multiple sections, label them in order—**Appendix A, Appendix B** (or **Annex A, Annex B**)—give each a clear title, and refer to them by the same labels in the report text.
+
+To recommend the best term, I’d want to know what the extra material is, whether it was created for this report or exists as a separate document, and whether your organization or audience has a preferred style guide.
