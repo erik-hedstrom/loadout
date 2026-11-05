@@ -8,13 +8,15 @@ not. With 50 skills installed (real names and descriptions), Claude Code
 **8,049 input tokens** to each request and Codex 0.163 (gpt-6-luna) 4,484.
 At 1,235 skills Claude Code added 15,030, and Codex removed every
 description and left 888 skills out of its list. loadout's own search tools
-added 158 tokens per request in Claude Code with its default tool search. These are single requests in
-fresh sessions; whole sessions are not measured
+added 158 tokens per request in Claude Code with its default tool search.
+The skill arms removed built-in tools; the search-tool arm kept them, so this
+is not a matched comparison. These are single requests in fresh sessions;
+whole sessions are not measured
 ([B12](bench/RESULTS.md#b12-results-2026-10-28-what-installed-skills-cost-per-request-on-current-hosts)).
 
 loadout keeps your skills in a separate library, and a prompt hook in Claude
-Code or Codex adds the ones predicted to fit each substantive prompt. A cheap
-model (TypeSafe's [Jev](https://typesafe.ai/blog/introducing-system-one-models-and-jev))
+Code or Codex adds the ones predicted to fit each substantive prompt.
+TypeSafe's [Jev](https://typesafe.ai/blog/introducing-system-one-models-and-jev)
 makes the prediction, for about $0.001 per routing decision on the v4
 benchmark's requests
 ([RESULTS](bench/RESULTS.md#v4-2026-10-06-realistic-requests-on-the-real-library-judged)).
@@ -57,12 +59,20 @@ codex plugin marketplace add erik-hedstrom/loadout && codex plugin add loadout-c
 - **After step 3,** `loadout doctor` checks the key (one Jev call when Jev
   routing is on and a key is found), library, index and hosts, and prints a
   fix for each gap.
+- **Host checks:** Claude Code's Quickstart, including the marketplace install,
+  was walked once in a fresh home on 2026-11-03. Codex's hook ran and injected
+  text in `codex exec`, but a live model turn is untested
+  ([D2 walk](docs/loop/BACKLOG.md); [hosts](docs/hosts.md)).
 
 After adoption, [hide the native listings with the printed snippets](docs/library.md#skills)
 so loadout's hook and `load_skill` replace them.
 
 Then start `claude` or `codex` as usual. Latency and setup details:
 [the hook plugins](docs/hook.md).
+In Claude Code, use `claude --debug-file /tmp/loadout-debug.log` and look for
+`<skill_relevance>` or `<skill ` in the hook output; prompts no library skill
+fits add nothing, so no marker appears
+([debug log](https://code.claude.com/docs/en/hooks#debug-hooks)).
 
 **Privacy:** with a key set, the hook sends the text of each prompt event
 except short follow-ups such as "yes" or "go on", in every project, to
@@ -79,25 +89,32 @@ All numbers, caveats and negative results: [bench/RESULTS.md](bench/RESULTS.md).
   gpt-6.1-sol; provenance unverified) against a 1,262-skill library, judged
   by Claude Opus: a useful skill was loaded for 73% (62–81) of the requests
   that need one; 64% (55–72) of loaded skills were useful and 7% (4–13) would
-  mislead; these two intervals ignore within-request correlation
+  mislead (95% Wilson intervals; the last two ignore within-request correlation)
   ([C1](bench/RESULTS.md#c1-2026-10-08-new-held-out-requests)). On C1's general
   business requests it loaded too readily.
-- **Agents use what they get,** in headless runs capped at 4 minutes
-  (Claude Code on Sonnet 5.5, also capped at 8 turns; Codex on gpt-6.1-sol):
-  when the launcher loaded a skill, Claude Code opened one in 9 of 10 sessions
+- **With the current Claude Code plugin and its MCP server,** Claude opened
+  a skill the judge lists as useful in 3 of 10 sessions (Wilson 95%: 11–60%). The hook
+  also injected full skill text in 6 of 10 (31–83%); whether it was followed
+  is not shown. These were headless runs on Claude Code 2.1.316, Sonnet 5.5,
+  WSL behind Windows, capped at 8 turns and 4 minutes. With C8's hook-only
+  plugin, Claude opened none (0 of 10, 0–28%); with the settings hook and search,
+  6 of 10 (31–83%). The intervals overlap and the setup changed, so no
+  difference is established
+  ([D13](bench/RESULTS.md#the-plugin-with-its-mcp-server-d13-2026-11-03)).
+- **Earlier launcher and settings-hook runs,** also headless and capped at
+  4 minutes (Claude Code on Sonnet 5.5, also capped at 8 turns; Codex on
+  gpt-6.1-sol): when the launcher loaded a skill, Claude Code opened one in
+  9 of 10 sessions
   (Wilson 95%: 60–98%) and Codex in 11 of 11 (74–100%). With the search tool,
   useful-skill use in Claude Code went from 2 of 10 (6–51%) to 6 of 10
   (31–83%) sessions when the prompt hook was added from settings.json
   ([RESULTS](bench/RESULTS.md#do-agents-use-what-they-are-given)).
-  The Claude Code plugin before it carried the MCP server (hook only) injected
-  full skill text in 6 of 10 sessions
-  (31–83%); no library skill was opened (0–28%; headless, WSL behind Windows,
-  where folder reads were not permitted). Whether the injected text was
-  followed is not shown ([same study](bench/RESULTS.md#do-agents-use-what-they-are-given)).
 - **Better work: not shown.** In an 8-request, nominally blind pilot with
   Codex (gpt-6.1-sol, 6-minute cap), where the loadout arm got the judge's
-  top skill, it won 4 (22–78%), lost 3 (14–69%) and split 1 (2–47%)
+  top skill, it won 4, lost 3 and split 1 (Wilson 95%: 22–78%, 14–69%, 2–47%)
   ([pilot](bench/RESULTS.md#is-the-work-better-outcome-pilot-2026-10-07)).
+  A same-library comparison on Codex (C15) is preregistered and has not run
+  yet ([method](bench/RESULTS.md#c15-method-preregistered)).
 - **Search tools:** their token cost (measured only in the first request of
   fresh Claude Code sessions) and how often agents used them:
   [library search](docs/mcp.md#cost-and-privacy).

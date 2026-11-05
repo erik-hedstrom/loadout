@@ -24,7 +24,8 @@ Erik, 2026-10-31. v0.1 ships when all of these hold:
 2. A live README walk in stock `claude` and `codex`.
 3. C15's headline, on Codex, whatever it shows. Claude quality is not shown, or
    marked unverified, until cross-model validation.
-4. Every number traced to [RESULTS](../../bench/RESULTS.md).
+4. Every number traced to [RESULTS](../../bench/RESULTS.md) (documentation
+   audit done: [#84](https://github.com/erik-hedstrom/loadout/pull/84)).
 5. A GIF (A5).
 
 Cut until after v0.1: B7, B9, C2, C7, D3, E3, F1, F5, launcher-only work and
@@ -57,7 +58,7 @@ None open on 2026-11-02.
 |---|---|---|---|---|---|
 | A2 | P0 | `loadout audit`: what your installed skills cost you | Claude | cloud | done ([PR #3](https://github.com/erik-hedstrom/loadout/pull/3)) |
 | A6 | P0 | Paste-ready host hide snippets after `audit --adopt` | Codex | cloud | done ([#66](https://github.com/erik-hedstrom/loadout/pull/66)) |
-| A1 | P0 | README rewrite around the problem, 3-command quickstart, GIF | Claude | cloud | partial ([#28](https://github.com/erik-hedstrom/loadout/pull/28)): README merged; the GIF waits on A5 |
+| A1 | P0 | README rewrite around the problem, 3-command quickstart, GIF | Claude | cloud | partial ([#28](https://github.com/erik-hedstrom/loadout/pull/28)): README merged; ship-bar number trace and README pass done ([#84](https://github.com/erik-hedstrom/loadout/pull/84)); the GIF waits on A5 |
 | A3 | P1 | `loadout init` wizard + starter packs | Codex | cloud | done ([#30](https://github.com/erik-hedstrom/loadout/pull/30)) |
 | A4 | P1 | npm package under an available name + release workflow | Claude (Codex quota out) | cloud + erik | blocked: the first release waits on Erik's steps; code merged ([#71](https://github.com/erik-hedstrom/loadout/pull/71)), nothing published |
 | A5 | P1 | Demo recording (route, launch, hook) | Claude | local | todo (after A1) |
@@ -140,6 +141,9 @@ Launcher, library, hook and MCP details belong in `docs/launcher.md`,
 hold the security model and router. Keep C8's hook-only plugin results
 distinct from the settings-hook-plus-search result: following injected text
 and better outcomes remain not shown.
+
+Ship-bar item 4 audit: [#84](https://github.com/erik-hedstrom/loadout/pull/84).
+Keep hook delivery, skill opens and task outcomes as separate claims.
 
 **A3. `loadout init` wizard and starter packs.**
 
@@ -1027,7 +1031,7 @@ Left: the Claude arm (blocked on E12).
 | D15 | P0 | MCP discovery: make library MCP servers findable and usable through the search server | Claude | cloud + local | in progress: code and tests merged in [#39](https://github.com/erik-hedstrom/loadout/pull/39); the live check is left |
 | D17 | P1 | `loadout mcp` ready within Codex's MCP start-up grace | Claude | local (measure) + cloud (fix) | done ([#43](https://github.com/erik-hedstrom/loadout/pull/43)): WSL install advice in the README; `required = true` in the `--windows` TOML, not in the plugin (see below); measured 2026-10-15: under 1 s from ext4, 6–7 s from `/mnt/c` |
 | D12 | P0 | Codex: install the hook and search as one step, if Codex allows it | Codex | local | done ([#23](https://github.com/erik-hedstrom/loadout/pull/23)): `plugins/loadout-codex` through `.agents/plugins/marketplace.json`; install checked offline; the hook still needs `/hooks` trust; the live run is D2 |
-| D13 | P0 | The plugin must be able to open what its hook routes to | Claude | cloud + local | done ([#72](https://github.com/erik-hedstrom/loadout/pull/72), [#76](https://github.com/erik-hedstrom/loadout/pull/76), [#79](https://github.com/erik-hedstrom/loadout/pull/79)): the initial sweep's blind Opus lists score 3 of 10 useful opens (11–60), against the hook's 6 of 10, search's 2 of 10 and C8's plugin 0 of 10; no new judge call ($0). Intervals overlap; the setup differs ([RESULTS](../../bench/RESULTS.md#the-plugin-with-its-mcp-server-d13-2026-11-03)). Review Lows: [#75](https://github.com/erik-hedstrom/loadout/pull/75), merged; evidence references corrected in [#82](https://github.com/erik-hedstrom/loadout/pull/82) |
+| D13 | P0 | The plugin must be able to open what its hook routes to | Claude | cloud + local | done ([#72](https://github.com/erik-hedstrom/loadout/pull/72), [#76](https://github.com/erik-hedstrom/loadout/pull/76), [#79](https://github.com/erik-hedstrom/loadout/pull/79)): [v4's first-run blind Opus lists](../../bench/RESULTS.md#v4-2026-10-06-realistic-requests-on-the-real-library-judged) score 3 of 10 useful opens (11–60), against the hook's 6 of 10, search's 2 of 10 and C8's plugin 0 of 10; no new judge call ($0). Intervals overlap; the setup differs ([RESULTS](../../bench/RESULTS.md#the-plugin-with-its-mcp-server-d13-2026-11-03)). Review Lows: [#75](https://github.com/erik-hedstrom/loadout/pull/75), merged; evidence references corrected in [#82](https://github.com/erik-hedstrom/loadout/pull/82) |
 | D14 | P1 | Codex plugin forwards LOADOUT_HOME | Claude | cloud | done ([#36](https://github.com/erik-hedstrom/loadout/pull/36)): Codex gives a stdio MCP server only its default variables plus `env_vars`, so the plugin's `loadout mcp` ignored a custom `LOADOUT_HOME` (and a `"router": "lexical"` profile in it); now forwarded. A relative `LOADOUT_HOME` is now refused (on Windows, anything but a drive-qualified path, so no drive-relative, UNC or device path) and an empty one ignored; the `HOME` (or `USERPROFILE`) fallback must pass the same check. So the working directory or a remote share cannot become the config. An absolute value, including a mapped network drive, is trusted: a project settings `env` that sets one comes from settings that can already run their own hooks. The config the home points to cannot redirect the key (Erik, 2026-10-19): a `jev.baseUrl` other than api.typesafe.ai is refused unless `TYPESAFE_BASE_URL` names the URL. It still chooses `apiKeyFile`, whose content then reaches only that URL, which is why the home must not come from the working directory either. Checked against the Codex source only, not a live run |
 | D16 | P1 | Warn when the hook runs without a TypeSafe key | Claude | cloud | done ([#27](https://github.com/erik-hedstrom/loadout/pull/27)): once per session, as a `systemMessage`, which Claude Code and Codex both show |
 | D18 | P1 | The hook and `load_skill` can offer `load_skill` only, with no folder | Codex | cloud | partial ([#54](https://github.com/erik-hedstrom/loadout/pull/54)): load_skill-only offer merged; C2 dropping its folder-hint limit waits on Erik |
@@ -1516,7 +1520,7 @@ Acceptance:
   differences in
   [RESULTS](../../bench/RESULTS.md#the-plugin-with-its-mcp-server-d13-2026-11-03)).
   Comparison done ([#79](https://github.com/erik-hedstrom/loadout/pull/79)):
-  the initial sweep's blind Opus useful lists,
+  [v4's first-run blind Opus lists](../../bench/RESULTS.md#v4-2026-10-06-realistic-requests-on-the-real-library-judged),
   on identical request texts, reproduce the hook's 6 of 10 and search's 2
   of 10 and score D13 at 3 of 10 (11–60). Both plugin arms' six injections
   are also on their request's useful list. No new judge call ran ($0).
