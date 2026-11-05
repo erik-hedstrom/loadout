@@ -48,3 +48,27 @@ Per-request Codex capture remains a follow-up: the outcome runner inherits
 `CODEX_HOME` rather than creating a benchmark-owned home, so it does not read
 rollouts there. App-server token updates or rollout `token_count` events from
 a benchmark-owned home need a separate choice and implementation.
+
+## Synthetic Codex fixtures (F2)
+
+`codex-rollout-0.163.0.jsonl` and `codex-app-server-0.163.0.jsonl` are
+**synthetic**, source-shaped fixtures, not live captures. Their contracts
+are pinned to openai/codex `rust-v0.163.0`, `protocol/src/protocol.rs`
+(`TokenUsageInfo`) and `app-server-protocol/src/protocol/v2/thread.rs`
+(`ThreadTokenUsageUpdatedNotification`). The rollout fixture repeats an
+event, includes an info-null update, omits one write counter and includes
+irrelevant private-looking fields to check projection. No Codex home is
+read by either parser. Live validation and source approval remain pending.
+
+## Legacy report pin
+
+`legacy-report-hashes.json` records its `reporterCommit`: main's `ecb8fe3`
+reporter, including its existing `hookTrustNotices` provenance lines. It hashes
+reports regenerated from the committed C14 rerun rows/verdicts and from those
+same rows projected to legacy native/loadout shapes. This tests formatting
+compatibility without reading or changing the active C15 study.
+To regenerate, materialize `git show <reporterCommit>:bench/ab-report.ts` as a
+temporary sibling module, import its `report()`, and SHA-256 the unmodified
+UTF-8 outputs for both inputs (native projection: bare becomes native,
+`librarySize: 250`, empty verdicts). No line-ending/path normalization or
+runtime-dependent re-pinning is involved.

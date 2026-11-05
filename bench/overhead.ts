@@ -40,6 +40,7 @@ interface Call {
 export interface Plan { calls: Call[]; blockers: string[]; root: string }
 interface Inventory { skills: string[]; plugins: string[]; slashCommands: string[]; mcp: { name: string; status: string }[]; agents: string[] | null }
 export interface Usage {
+  cacheWriteAvailable?: boolean;
   input: number; uncached: number; cacheCreation: number; cacheRead: number; output: number;
   model: string | null; inventory: Inventory | null;
   modelUsage?: Record<string, Record<string, number>>;
@@ -274,7 +275,7 @@ export function parseClaude(stdout: string): Usage {
 }
 /** A tool result as the host sent it: `isError` from its tool_result block, `content` the blocks, each with its type and its text or tool_name. */
 export interface ToolCall { name: string; input: unknown; isError: boolean; content: { type: string; text?: string; tool_name?: string }[] }
-export interface ClaudeSession { inventory: Inventory; tools: string[]; version: string; model: string | null; turns: Pick<Usage, 'input' | 'uncached' | 'cacheCreation' | 'cacheRead' | 'output'>[]; calls: ToolCall[] | null }
+export interface ClaudeSession { inventory: Inventory; tools: string[]; version: string; model: string | null; turns: Pick<Usage, 'input' | 'uncached' | 'cacheCreation' | 'cacheRead' | 'output' | 'cacheWriteAvailable'>[]; calls: ToolCall[] | null }
 /**
  * One process, several turns (stream-json input). The first `measured` turns must use no tool; each one's counters
  * come from its own assistant message, the per-request usage (a result's usage may be cumulative), and a later turn's
@@ -334,8 +335,10 @@ export function parseCodex(stdout: string): Usage {
   const u = turns[0].usage;
   const input = counter(u?.input_tokens, 'input_tokens');
   const cacheRead = counter(u?.cached_input_tokens, 'cached_input_tokens');
-  if (cacheRead > input) throw new Error('cached input exceeds input');
-  return { input, uncached: input - cacheRead, cacheCreation: 0, cacheRead, output: counter(u?.output_tokens, 'output_tokens'), model: null, inventory: null };
+  const cacheCreation = counter(u?.cache_write_input_tokens ?? 0, 'cache_write_input_tokens');
+  if (cacheRead + cacheCreation > input) throw new Error('cached input exceeds input');
+  return { input, uncached: input - cacheRead - cacheCreation, cacheCreation, cacheRead, output: counter(u?.output_tokens, 'output_tokens'), model: null, inventory: null,
+    ...(u?.cache_write_input_tokens == null ? { cacheWriteAvailable: false } : {}) };
 }
 
 export function execute(command: Command): Promise<string> {

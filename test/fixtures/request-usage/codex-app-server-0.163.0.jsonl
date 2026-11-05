@@ -1,0 +1,1 @@
+{"method": "thread/tokenUsage/updated", "params": {"threadId": "fixture-thread", "turnId": "discard", "tokenUsage": {"last": {"inputTokens": 1200, "cachedInputTokens": 1024, "outputTokens": 10}, "total": {"inputTokens": 1200, "cachedInputTokens": 1024, "outputTokens": 10}}}}

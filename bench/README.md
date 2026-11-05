@@ -341,6 +341,8 @@ Commit raw results after inspecting them for credentials and private content.
 
 ## A/B pilot (C14)
 
+[F2 capture design and limits](../docs/loop/F2-CAPTURE.md).
+
 ```bash
 npx tsx bench/ab.ts                                                  # the plan, the estimate and what each host may write; $0
 CLAUDE_CODE_OAUTH_TOKEN=... npx tsx bench/ab.ts --run [--repeats 2] [--hosts claude,codex] [--ids c1-web-14,c1-apps-08,c1-debug-13] [--out <dir>]

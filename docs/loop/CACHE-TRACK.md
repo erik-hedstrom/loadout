@@ -112,6 +112,8 @@ Each goal maps to backlog items, which hold the acceptance criteria.
 
 ## Host caching rules
 
+[F2 capture design and current limits](F2-CAPTURE.md).
+
 Retrieved 2026-10-22 from the providers' documentation. Recheck them before a write-up.
 - **Anthropic** caches the exact prefix in the order tools, system, messages. Cache writes cost 1.25× input for
   5 minutes or 2× for 1 hour. Reads usually cost 0.1×, and 0.05× on Opus and Sonnet 5.5

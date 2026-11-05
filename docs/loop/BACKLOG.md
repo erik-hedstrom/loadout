@@ -2231,11 +2231,12 @@ with the core (section C). Changes to the shared contract follow
 | ID | P | Task | Agent | Lane | Status |
 |---|---|---|---|---|---|
 | B11 | P1 | OpenCode session cost and task checks with automatic prompt caching | Codex | local | partial ([#57](https://github.com/erik-hedstrom/loadout/pull/57)): harness and dataset merged; replacement pilot complete ([#63](https://github.com/erik-hedstrom/loadout/pull/63)); the 792-session study is not completed |
-| F1 | P1 | Prefix continuity on real hosts: loadout keeps the cached prefix turn after turn | Codex | local | todo (after F2) |
-| F2 | P1 | Session-cost capture: Jev cost and latency columns, B7 session rollup and shapes, Codex outcome per-request usage (Claude per-request capture is in `ab.ts`) | Codex | local | todo (Codex usage source is Erik's open decision; new B7 session shapes need his approval) |
+| F1 | P1 | Prefix continuity on real hosts: loadout keeps the cached prefix turn after turn | Codex | local | partial: protocol planned in [F2 notes](F2-CAPTURE.md); no host measured; source, budget and Claude-arm decisions pending |
+| F2 | P1 | Session-cost capture: Jev cost and latency columns, B7 session rollup and shapes, Codex outcome per-request usage (Claude per-request capture is in `ab.ts`) | Codex | local | partial ([#86](https://github.com/erik-hedstrom/loadout/pull/86), stacks on #77): offline prototype; source/channel approval and live work pending ([design and limits](F2-CAPTURE.md)) |
 | F3 | P2 | Shorter constant MCP text and fewer discovery requests, at unchanged task success | Codex | local | todo (Claude columns exist in `ab.ts`, but its Claude host is blocked on E12 for judged runs; Codex per-request waits on F2's decision) |
 | F4 | P2 | `loadout audit` reports cache-aware cost from measured numbers | Codex | cloud | todo (after B11, F1) |
 | F5 | P3 | Start-up and path variability: Codex first-request tools, launcher session paths | Codex | local | todo |
+| F6 | P3 | Investigate opt-in compression of fresh MCP tool results (Headroom follow-up) | Codex | erik | proposal only; architecture approval required |
 
 **B11. OpenCode cache and outcome study.** [PR #57](https://github.com/erik-hedstrom/loadout/pull/57) merged the harness, the 72-task dataset
 and historical pilots; [#63](https://github.com/erik-hedstrom/loadout/pull/63) recorded the completed replacement pilot

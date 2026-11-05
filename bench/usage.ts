@@ -28,6 +28,8 @@ export interface RequestUsage {
   reasoning: number | null;
   /** Made inside a subagent (Claude's `parent_tool_use_id`): billed, but not the main thread's request 1 or 2+. */
   subagent: boolean;
+  /** False marks the legacy numeric projection when the host omitted write usage. */
+  cacheWriteAvailable?: boolean;
 }
 
 export interface RunUsage {
@@ -134,8 +136,12 @@ export function codexUsage(stdout: string): RunUsage {
   if (cacheRead + cacheWrite > input) throw new Error('cached input exceeds input');
   return {
     granularity: 'turn',
-    requests: [{ n: 1, at: null, model: null, uncached: input - cacheRead - cacheWrite, cacheWrite, cacheRead, output: counter(last.output_tokens, 'output_tokens'), cacheWrite5m: null, cacheWrite1h: null, reasoning: Number.isSafeInteger(last.reasoning_output_tokens) ? last.reasoning_output_tokens : null, subagent: false }],
-    costUsd: null, turns: null, model: null, version: null, unreconciled: [], modelUsage: null,
+    requests: [{ n: 1, at: null, model: null, uncached: input - cacheRead - cacheWrite, cacheWrite, cacheRead, output: counter(last.output_tokens, 'output_tokens'), cacheWrite5m: null, cacheWrite1h: null, reasoning: Number.isSafeInteger(last.reasoning_output_tokens) ? last.reasoning_output_tokens : null, subagent: false,
+      ...(last.cache_write_input_tokens == null ? { cacheWriteAvailable: false } : {}) }],
+    // Keep the legacy numeric projection for existing consumers, but never let its
+    // default zero masquerade as an observed write counter on a new run.
+    costUsd: null, turns: null, model: null, version: null,
+    unreconciled: last.cache_write_input_tokens == null ? ['cacheWrite not reported (legacy projection uses zero)'] : [], modelUsage: null,
   };
 }
 

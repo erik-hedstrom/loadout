@@ -1220,6 +1220,53 @@ if (args.includes('--output-schema')) {
     return { dir, out, start, rowsOf, calls };
   };
 
+  it.each([
+    { name: 'long 5m gap', gap: 360_000, five: 50, hour: 0, risk: true },
+    { name: 'short 5m gap', gap: 60_000, five: 50, hour: 0, risk: false },
+    { name: 'mixed-lifetime gap', gap: 60_000, five: 25, hour: 25, risk: null },
+  ])('preserves the cross-run cache boundary through execute1: $name', async ({ gap, five, hour, risk }) => {
+    const { dir, out, start, rowsOf } = stage();
+    const scriptFile = join(dir, 'claude.mjs');
+    writeFileSync(scriptFile, readFileSync(scriptFile, 'utf8').replace('output_tokens: o })',
+      'output_tokens: o, cache_creation: { ephemeral_5m_input_tokens: w, ephemeral_1h_input_tokens: 0 } })'));
+    const args = ['--hosts', 'claude', '--repeats', '1', '--ids', 'c1-web-14'];
+    const first = await start(args); expect(first.code, first.text).toBe(0);
+    const rows = rowsOf().filter((r) => r.id !== 'claude/bare/c1-web-14/1');
+    const previous = rows.find((r) => r.id === 'claude/bare/warmup/0')!;
+    const main = previous.requests[previous.requests.length - 1]!;
+    main.at = new Date(Date.now() - gap).toISOString();
+    main.cacheWrite5m = five; main.cacheWrite1h = hour;
+    // A later child request must not become the parent's boundary or lifetime.
+    previous.requests.push({ ...main, at: new Date(Date.now() + 3600_000).toISOString(), subagent: true, cacheWrite5m: null, cacheWrite1h: null });
+    writeFileSync(join(out, 'rows.jsonl'), rows.map((r) => JSON.stringify(r)).join('\n') + '\n');
+    const resumed = await start(args); expect(resumed.code, resumed.text).toBe(0);
+    const measured = rowsOf().find((r) => r.id === 'claude/bare/c1-web-14/1')!;
+    expect(measured.invalid).toBeUndefined();
+    expect(measured.coldCacheRisk).toBe(risk);
+    expect(measured.requests[0]!.gapMs).toBeGreaterThanOrEqual(gap);
+    expect(measured.requestCount).toBe(2); expect(measured.jev).toBeNull();
+  });
+
+  it.each([false, true])('retains execute1 host usage with malformed Jev capture=%s', async (malformed) => {
+    const { dir, start, rowsOf } = stage();
+    const file = join(dir, 'claude.mjs');
+    const capture = malformed ? 'private-malformed' : [
+      { type: 'ready', source: 'hook' }, { type: 'ready', source: 'router' }, { type: 'call' }, { type: 'start' },
+      { type: 'finish', inputTokens: 100, outputTokens: 0, price: 0.1 },
+    ].map((e) => JSON.stringify(e)).join('\n');
+    writeFileSync(file, readFileSync(file, 'utf8').replace('const mcp = ',
+      `if (plugin) writeFileSync(process.env.LOADOUT_BENCH_JEV_USAGE + '/jev-0.jsonl', ${JSON.stringify(capture)});\n  const mcp = `));
+    const result = await start(['--hosts', 'claude', '--repeats', '1', '--ids', 'c1-web-14']);
+    expect(result.code, result.text).toBe(0);
+    for (const row of rowsOf()) {
+      expect(row.invalid).toBeUndefined(); expect(row.requestCount).toBe(2);
+      expect(row.totals.cacheRead).toBe(11000);
+      expect(row.jev).toEqual(row.arm === 'bare' ? null : malformed
+        ? { calls: null, attempts: null, inputTokens: null, outputTokens: null, usageMissing: true, reportedInputCostUsd: null, costUsd: null }
+        : { calls: 1, attempts: 1, inputTokens: 100, outputTokens: 0, usageMissing: false, reportedInputCostUsd: 0.00001, costUsd: 0.00001 });
+    }
+  });
+
   it('records warm-ups apart from interleaved measured runs, one hook call per loadout run, and no credential', async () => {
     const { dir, out, start, rowsOf, calls: callsOf } = stage();
     const { code, text } = await start(['--repeats', '1', '--ids', 'c1-web-14,c1-debug-13']);
@@ -1252,9 +1299,11 @@ if (args.includes('--output-schema')) {
     const calls = callsOf();
     for (const host of ['claude', 'codex']) {
       const [bare, loadout] = ['bare', 'loadout'].map((arm) => calls.filter((c) => c.host === host).find((c) => (host === 'claude' ? c.args.includes('--plugin-dir') : c.args.some((a) => a.startsWith('mcp_servers.'))) === (arm === 'loadout'))!);
-      expect(bare!.env.filter((n) => !['TYPESAFE_API_KEY', 'LOADOUT_HOME'].includes(n))).toEqual(loadout!.env.filter((n) => !['TYPESAFE_API_KEY', 'LOADOUT_HOME'].includes(n)));
+      expect(bare!.env.filter((n) => !['TYPESAFE_API_KEY', 'LOADOUT_HOME', 'LOADOUT_BENCH_JEV_USAGE'].includes(n))).toEqual(loadout!.env.filter((n) => !['TYPESAFE_API_KEY', 'LOADOUT_HOME', 'LOADOUT_BENCH_JEV_USAGE'].includes(n)));
       expect(bare!.env).not.toContain('TYPESAFE_API_KEY');
       expect(loadout!.env).toContain('TYPESAFE_API_KEY');
+      expect(bare!.env).not.toContain('LOADOUT_BENCH_JEV_USAGE');
+      expect(loadout!.env).toContain('LOADOUT_BENCH_JEV_USAGE');
     }
     expect(calls.filter((c) => c.host === 'claude').every((c) => c.env.includes('CLAUDE_CODE_OAUTH_TOKEN'))).toBe(true);
     expect(calls.filter((c) => c.host === 'codex').every((c) => !c.env.includes('CLAUDE_CODE_OAUTH_TOKEN'))).toBe(true);

@@ -32,6 +32,8 @@ import { assertTemporary, claudeIsolation, cli, execute, inspectCodex, validateF
 import { deliverableFiles, deliverables, JUDGE_MAX_BYTES, judgePair, JUDGE_SYSTEM, NOTE, PrefSchema, type Arm } from './pairwise.js';
 import { hookShim, toolEvents, type Event, type HookExecution, type Inventory } from './stream.js';
 import { claudeUsage, codexUsage, codexEffectiveInput, effectiveInput, events, sumUsage, type RunUsage } from './usage.js';
+import { readJevUsage } from './jev-usage.js';
+import { JEV_USAGE_MARKER, JEV_USAGE_MARKER_TEXT } from '../src/jev-usage.js';
 
 const ARMS: Arm[] = ['bare', 'loadout'];
 /** Held-out C1 test rows where all three 2026-10-16 Jev reruns loaded the same set and the C1 judge rated a loaded skill useful: one copy, one document, one code task. */
@@ -99,8 +101,19 @@ const CODEX_EFFORTS = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max
 /** Cross-family (AGENTS.md): Codex outputs are judged by Claude, Claude outputs by Codex. */
 const JUDGES: Record<Host, { backend: 'claude' | 'codex'; model: string }> = { claude: { backend: 'codex', model: 'gpt-6.1-sol' }, codex: { backend: 'claude', model: 'opus' } };
 /** Beyond the allowlist, only the loadout arm gets these: the hook and the MCP server read the key, endpoint and home. */
-const LOADOUT_ENV = ['TYPESAFE_API_KEY', 'TYPESAFE_BASE_URL', 'LOADOUT_HOME'];
-const CACHE_TTL_MS = 5 * 60_000;
+const LOADOUT_ENV = ['TYPESAFE_API_KEY', 'TYPESAFE_BASE_URL', 'LOADOUT_HOME', 'LOADOUT_BENCH_JEV_USAGE'];
+// Verified 2026-11-04: Claude Code can write 5m or 1h entries; use an
+// observed TTL split, not its login's assumed billing mode.
+// https://code.claude.com/docs/en/prompt-caching
+// OpenAI documents 30m/12h for GPT-5.6+ and other retention for older models,
+// but exec usage does not expose the selected policy: Codex TTL is unknown.
+// https://developers.openai.com/api/docs/guides/prompt-caching
+export function cacheLifetimeMs(host: Host, previous?: RunUsage['requests'][number]): number | null {
+  if (host !== 'claude' || !previous) return null;
+  if ((previous.cacheWrite5m ?? 0) > 0 && previous.cacheWrite1h === 0) return 5 * 60_000;
+  if ((previous.cacheWrite1h ?? 0) > 0 && previous.cacheWrite5m === 0) return 60 * 60_000;
+  return null;
+}
 const FIXTURES = join(DATA, 'ab-fixtures');
 const REPO = resolve(DATA, '..', '..');
 
@@ -153,11 +166,12 @@ const { disableAllHooks: _hooksOff, ...CLAUDE_AB_SETTINGS } = CLAUDE_SETTINGS;
 const claudeServer = (env: NodeJS.ProcessEnv) => {
   const server = searchServer(false);
   if (env.TYPESAFE_BASE_URL) server.env = { ...server.env, TYPESAFE_BASE_URL: env.TYPESAFE_BASE_URL };
+  if (env.LOADOUT_BENCH_JEV_USAGE) server.env = { ...server.env, LOADOUT_BENCH_JEV_USAGE: env.LOADOUT_BENCH_JEV_USAGE };
   return server;
 };
 // An empty run cwd cannot resolve a bare `--import tsx`. Do not inherit an ambient LOADOUT_HOME in the hook command.
 const studyLoadoutArgv = () => [process.execPath, '--import', import.meta.resolve('tsx'), fileURLToPath(new URL('../src/cli.ts', import.meta.url))];
-const codexServer = (home?: string) => ({ ...(home ? { command: process.execPath, args: [...studyLoadoutArgv().slice(1), 'mcp'], env: { LOADOUT_HOME: home } } : searchServer(false)), required: true, env_vars: ['TYPESAFE_API_KEY', 'TYPESAFE_BASE_URL'], tools: Object.fromEntries(SEARCH_TOOLS.map((t) => [t, { approval_mode: 'approve' }])) });
+const codexServer = (home?: string, journal?: string) => ({ ...(home ? { command: process.execPath, args: [...studyLoadoutArgv().slice(1), 'mcp'], env: { LOADOUT_HOME: home } } : searchServer(false)), required: true, env_vars: ['TYPESAFE_API_KEY', 'TYPESAFE_BASE_URL', ...(journal ? ['LOADOUT_BENCH_JEV_USAGE'] : [])], tools: Object.fromEntries(SEARCH_TOOLS.map((t) => [t, { approval_mode: 'approve' }])) });
 const CODEX_HOOK = [{ hooks: [{ type: 'command', command: 'loadout hook codex', timeout: 30 }] }];
 /** Codex features off in an arm: no plugins and no skill MCP installs anywhere, and no hooks unless this is the loadout arm with its hook. */
 const featuresOff = (arm: Arm, codexHook: boolean) => ['plugins', 'skill_mcp_dependency_install', ...(arm === 'loadout' && codexHook ? [] : ['hooks'])];
@@ -188,7 +202,7 @@ export function buildCommand(job: Job, prompt: string, ctx: Ctx): Command {
   const args = ['exec', '--json', '--ephemeral', '--ignore-user-config', '--ignore-rules', '--skip-git-repo-check', '-s', 'workspace-write', '-m', ctx.models.codex,
     ...(ctx.codexEffort === undefined ? [] : ['-c', `model_reasoning_effort=${ctx.codexEffort}`]),
     ...featuresOff(job.arm, ctx.codexHook).flatMap((f) => ['--disable', f]),
-    ...(job.arm === 'loadout' ? ['-c', `mcp_servers.${SEARCH_SERVER}=${toToml(codexServer(ctx.studyHome))}`] : job.arm === 'native' ? ['-c', 'mcp_servers={}'] : []),
+    ...(job.arm === 'loadout' ? ['-c', `mcp_servers.${SEARCH_SERVER}=${toToml(codexServer(ctx.studyHome, env.LOADOUT_BENCH_JEV_USAGE))}`] : job.arm === 'native' ? ['-c', 'mcp_servers={}'] : []),
     ...(hook ? ['--dangerously-bypass-hook-trust', '-c', `hooks.UserPromptSubmit=${toToml(CODEX_HOOK)}`] : []), prompt];
   return { bin: binary.bin, args: [...binary.prefix, ...args], cwd: ctx.work, env };
 }
@@ -479,6 +493,10 @@ async function execute1(job: Job, prompt: string, spec: PromptSpec | undefined, 
   const id = jobId(job);
   const marker = join(ctx.shimDir, `${id.replace(/\//g, '_')}.invocations`);
   const capture = `${marker}.out`;
+  const jevDir = `${marker}.jev`;
+  mkdirSync(jevDir, { mode: 0o700 });
+  writeFileSync(join(jevDir, JEV_USAGE_MARKER), JEV_USAGE_MARKER_TEXT, { flag: 'wx', mode: 0o600 });
+  ctx = { ...ctx, env: { ...ctx.env, LOADOUT_BENCH_JEV_USAGE: jevDir } };
   writeFileSync(marker, '');
   writeFileSync(capture, '');
   writeFileSync(`${capture}.err`, '');
@@ -528,15 +546,25 @@ async function execute1(job: Job, prompt: string, spec: PromptSpec | undefined, 
   const broken = codexProblem ?? checkRun(job, { usage, hooks: stream.hooks, inventory: stream.inventory, failedBeforeModel, hookInvocations: hook.invocations, hookExits: marks.filter((l) => l.startsWith('exit ')).map((l) => Number(l.slice(5))), keywordRouted: routedByKeyword(capturedRaw, hookStderr, stream.events),
     uncountedContext: stream.hooks.filter((h) => h.context).length - marks.filter((l) => l === 'context').length, pluginDir: join(REPO, 'plugins', 'loadout'), codexHook: o.codexHook, requestedModel: o.models[job.host] });
 
-  // Request gaps: since this host and arm last made a request (completion to completion inside a run, which counts the request's
-  // own time; the run's start for request 1). Over five minutes the provider's default cache entry may have expired.
+  // Match the previous main request and its timestamp from the same row. The
+  // boundary gap uses run start; later gaps include the request's own duration.
   const before = previous.filter((r) => r.host === job.host && r.arm === job.arm && !r.invalid);
-  const lastDone = before.length ? Math.max(...before.map((r) => Date.parse(r.requests.at(-1)?.at ?? r.endedAt))) : null;
-  let prevAt = lastDone;
-  const requests = (usage?.requests ?? []).map((r, i) => {
+  const last = before.flatMap((row) => {
+    const request = [...row.requests].reverse().find((r) => !r.subagent);
+    const at = Date.parse(request?.at ?? row.endedAt);
+    return request && Number.isFinite(at) ? [{ request, at }] : [];
+  }).sort((a, b) => a.at - b.at).at(-1);
+  let prevAt = last?.at ?? null;
+  let previousMain: RunUsage['requests'][number] | undefined = last?.request;
+  let firstMain = true;
+  const risks: (boolean | null)[] = [];
+  const requests = (usage?.requests ?? []).map((r) => {
     const at = r.at ? Date.parse(r.at) : null;
-    const gapMs = prevAt === null ? null : (i === 0 ? startedAt : at ?? endedAt) - prevAt;
-    prevAt = at ?? endedAt;
+    const gapMs = r.subagent || prevAt === null ? null : (firstMain ? startedAt : at ?? endedAt) - prevAt;
+    if (!r.subagent) { prevAt = at ?? endedAt; firstMain = false; }
+    const lifetime = cacheLifetimeMs(job.host, previousMain);
+    if (!r.subagent) risks.push(gapMs === null || lifetime === null ? null : gapMs > lifetime);
+    if (!r.subagent) previousMain = r;
     return { ...r, gapMs };
   });
   const total = sumUsage(requests);
@@ -553,11 +581,14 @@ async function execute1(job: Job, prompt: string, spec: PromptSpec | undefined, 
   return {
     id, host: job.host, arm: job.arm, prompt: job.prompt, repeat: job.repeat, warmup: job.warmup, seq: job.seq,
     startedAt: new Date(startedAt).toISOString(), endedAt: new Date(endedAt).toISOString(), ms: endedAt - startedAt,
+    captureVersion: 1, requestCount: usage?.granularity === 'request' ? requests.length : null,
+    cacheWriteAvailable: requests.every((r) => r.cacheWriteAvailable !== false),
+    jev: job.arm === 'loadout' ? readJevUsage(jevDir, job.host === 'codex' && !o.codexHook ? ['router'] : ['hook', 'router']) : null,
     hostVersion: usage?.version ?? versions[job.host] ?? null, requestedModel: o.models[job.host], model: usage?.model ?? null, exit: proc.code, timedOut: proc.timedOut, stop: stream.result?.subtype ?? null,
     granularity: usage?.granularity ?? 'request', requests,
     totals: { ...total, effectiveInput: job.host === 'claude' && requests.length ? requests.reduce((n, r) => n + effectiveInput(r), 0) : o.studyLibrary && requests.length ? codexEffectiveInput(total) : null, costUsd: usage?.costUsd ?? null, turns: usage?.turns ?? null },
     unreconciled: usage?.unreconciled ?? [], modelUsage: usage?.modelUsage ?? null,
-    coldCacheRisk: requests.some((r) => (r.gapMs ?? 0) > CACHE_TTL_MS),
+    coldCacheRisk: risks.includes(true) ? true : risks.includes(null) || !risks.length ? null : false,
     toolCalls: tools.length, toolErrors: tools.filter((t) => t.endsWith('(failed)')).length, loadoutTools: [...new Set(tools.filter((t) => t.startsWith(`mcp__${SEARCH_SERVER}__`)))],
     skillsOpened: openedSkills(stream.events), hook, hiddenTest, wroteFile, ...(leak ? { leak } : {}), ...(streamWithheld ? { streamWithheld: 'token shape' as const } : {}),
     ...(o.studyLibrary ? { librarySize: o.studyLibrary.librarySize, corpusHash: o.studyLibrary.corpusHash, manifestHash: o.studyLibrary.manifestHash, skillsBudget, codexRetries, hookTrustNotices } : {}),
