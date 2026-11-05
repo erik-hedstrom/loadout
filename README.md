@@ -60,8 +60,10 @@ codex plugin marketplace add erik-hedstrom/loadout && codex plugin add loadout-c
   routing is on and a key is found), library, index and hosts, and prints a
   fix for each gap.
 - **Host checks:** Claude Code's Quickstart, including the marketplace install,
-  was walked once in a fresh home on 2026-11-03. Codex's hook ran and injected
-  text in `codex exec`, but a live model turn is untested
+  was walked once in a fresh home on 2026-11-03. Codex's plugin hook ran and
+  injected text in `codex exec`; in live model turns the hook is measured only
+  when attached through config flags ([C15](bench/RESULTS.md#c15-results-2026-11-04-the-same-library-natively-and-through-loadout-on-codex)), and the plugin path is
+  untested
   ([D2 walk](docs/loop/BACKLOG.md); [hosts](docs/hosts.md)).
 
 After adoption, [hide the native listings with the printed snippets](docs/library.md#skills)
@@ -98,8 +100,8 @@ All numbers, caveats and negative results: [bench/RESULTS.md](bench/RESULTS.md).
   is not shown. These were headless runs on Claude Code 2.1.316, Sonnet 5.5,
   WSL behind Windows, capped at 8 turns and 4 minutes. With C8's hook-only
   plugin, Claude opened none (0 of 10, 0–28%); with the settings hook and search,
-  6 of 10 (31–83%). The intervals overlap and the setup changed, so no
-  difference is established
+  6 of 10 (31–83%). The plugin's interval overlaps both, and the setup
+  changed, so no difference from either is established
   ([D13](bench/RESULTS.md#the-plugin-with-its-mcp-server-d13-2026-11-03)).
 - **Earlier launcher and settings-hook runs,** also headless and capped at
   4 minutes (Claude Code on Sonnet 5.5, also capped at 8 turns; Codex on
@@ -113,8 +115,16 @@ All numbers, caveats and negative results: [bench/RESULTS.md](bench/RESULTS.md).
   Codex (gpt-6.1-sol, 6-minute cap), where the loadout arm got the judge's
   top skill, it won 4, lost 3 and split 1 (Wilson 95%: 22–78%, 14–69%, 2–47%)
   ([pilot](bench/RESULTS.md#is-the-work-better-outcome-pilot-2026-10-07)).
-  A same-library comparison on Codex (C15) is preregistered and has not run
-  yet ([method](bench/RESULTS.md#c15-method-preregistered)).
+- **Same library, natively and through loadout (C15, Codex `gpt-6-luna`):**
+  with a 250-skill library, loadout used less effective input in 16 of 20
+  paired runs, a median of 6,225 tokens per run (cached input weighted 0.1;
+  range −55,897.8 to +33,997), which matches the measured cost of listing the
+  250 skills natively
+  ([B12](bench/RESULTS.md#b12-results-2026-10-28-what-installed-skills-cost-per-request-on-current-hosts)).
+  One spreadsheet prompt went the other way in both repeats. The preregistered quality screen passed
+  (loadout won 7 pairs, lost 4, tied 4, split 5). That is ten prompts on one
+  model and host, so retained quality, Claude and subscription cost are not
+  shown ([C15](bench/RESULTS.md#c15-results-2026-11-04-the-same-library-natively-and-through-loadout-on-codex)).
 - **Search tools:** their token cost (measured only in the first request of
   fresh Claude Code sessions) and how often agents used them:
   [library search](docs/mcp.md#cost-and-privacy).

@@ -15,8 +15,9 @@ flowchart LR
   fixtures["Synthetic Codex source fixtures"] --> parser["Offline parser; no home discovery"]
 ```
 
-The cross-process Jev channel is an offline prototype pending Erik's channel
-decision. `LOADOUT_BENCH_JEV_USAGE`, forwarded to the hook and MCP, names a
+The cross-process Jev channel is an offline prototype of the channel Erik
+chose on 2026-11-05 (a per-run private journal); an environment-propagation
+canary has not run. `LOADOUT_BENCH_JEV_USAGE`, forwarded to the hook and MCP, names a
 private run directory containing a harness marker. Each event creates a new
 record using exclusive creation; no existing file is opened for writing. It does not change
 their prompt output or tool schemas. No product CLI command was added.
@@ -62,8 +63,9 @@ excluded from tokens and request count. Run duration includes startup,
 measured turns and the canary. Codex's legacy single-turn row remains a turn
 total, not evidence of individual model requests.
 
-The session-shape plan and source decision remain proposals pending Erik's
-approval. No B7 shape extension is implemented; B7 remains after v0.1.
+Erik chose the Codex source on 2026-11-05: one dedicated benchmark
+`CODEX_HOME`, reading only the exact thread's rollout; that reader is not
+implemented. The session-shape plan remains a proposal pending Erik's approval. No B7 shape extension is implemented; B7 remains after v0.1.
 F1's plan uses at least five persistent user turns per on/off arm, compares
 on against off at the provider's reporting granularity, and treats provider
 misses without established causes as unknown. It requires per-turn MCP-ready

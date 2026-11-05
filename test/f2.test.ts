@@ -230,7 +230,7 @@ describe('legacy C14/C15 report compatibility and missing cache shares', () => {
     const usage = codexUsage('{"type":"turn.completed","usage":{"input_tokens":100,"cached_input_tokens":20,"output_tokens":1}}');
     const base = rows.find((r) => !r.warmup)!;
     const row: RunRow = { ...base, prompt: 'missing-write', requests: usage.requests.map((r) => ({ ...r, gapMs: null })),
-      totals: { ...base.totals, uncached: 80, cacheWrite: 0, cacheRead: 20 }, cacheWriteAvailable: usage.requests[0]!.cacheWriteAvailable };
+      totals: { ...base.totals, uncached: 80, cacheWrite: 0, cacheRead: 20 } };
     expect(report([row], [], [])).toContain('| codex | missing-write | loadout | 1 | not shown | not shown | 20 |');
     expect(report([{ ...row, arm: 'native', librarySize: 250 }], [], [])).toContain('| missing-write | 1 | native | not shown | not shown | 20 |');
   });
