@@ -30,7 +30,6 @@ export interface RunRow {
   jev?: JevRunUsage | null;
   captureVersion?: 1;
   requestCount?: number | null;
-  cacheWriteAvailable?: boolean;
   hostVersion: string | null;
   requestedModel: string;
   /** From the stream; null where the host does not report it (Codex). */
@@ -94,6 +93,8 @@ const cacheShare = (r: RunRow) => {
   const input = r.totals.uncached + r.totals.cacheWrite + r.totals.cacheRead;
   return input > 0 ? r.totals.cacheRead / input : null;
 };
+/** A run's uncached/write split is known only when every request reported its cache writes. */
+const writeKnown = (r: RunRow) => r.requests.every((q) => q.cacheWriteAvailable !== false);
 const triple = (rs: RequestUsage[]) => {
   const mean = (f: (r: RequestUsage) => number) => (rs.length ? rs.reduce((n, r) => n + f(r), 0) / rs.length : null);
   const known = rs.every((r) => r.cacheWriteAvailable !== false);
@@ -120,7 +121,7 @@ export function report(rows: RunRow[], verdicts: Verdict[], secrets: string[]): 
     const rs = cell(rows, host, prompt, arm);
     if (!rs.length) continue;
     const hidden = rs.filter((r) => r.hiddenTest);
-    const splitKnown = rs.every((r) => r.cacheWriteAvailable !== false);
+    const splitKnown = rs.every(writeKnown);
     out.push(`| ${host} | ${prompt} | ${arm} | ${rs.length} | ${splitKnown ? show(spread(rs.map((r) => r.totals.uncached))) : 'not shown'} | ${splitKnown ? show(spread(rs.map((r) => r.totals.cacheWrite))) : 'not shown'} | ${show(spread(rs.map((r) => r.totals.cacheRead)))} | ${show(spread(rs.map((r) => r.totals.output)))} | ${show(spread(rs.flatMap((r) => cacheShare(r) === null ? [] : [cacheShare(r)!])), percent)} | ${show(spread(rs.flatMap((r) => (r.totals.effectiveInput === null ? [] : [r.totals.effectiveInput]))))} | ${show(spread(rs.flatMap((r) => (r.totals.costUsd === null ? [] : [r.totals.costUsd]))), usd)} | ${show(spread(rs.flatMap((r) => (r.totals.turns === null ? [] : [r.totals.turns]))))} | ${show(spread(rs.map((r) => r.ms)), secs)} | ${hidden.length ? `${hidden.filter((r) => r.hiddenTest!.passed).length} of ${hidden.length}` : '—'} | ${arm === 'loadout' ? judged(host, prompt) : ''} | ${rs.every((r) => r.wroteFile !== undefined) ? `${rs.filter((r) => r.wroteFile).length} of ${rs.length}` : 'not shown'} |`);
   }
 
@@ -131,7 +132,7 @@ export function report(rows: RunRow[], verdicts: Verdict[], secrets: string[]): 
     const [b, l] = [cell(rows, host, prompt, 'bare'), cell(rows, host, prompt, 'loadout')];
     if (!b.length || !l.length) continue;
     const mean = (rs: RunRow[], f: (r: RunRow) => number | null) => { const xs = rs.flatMap((r) => (f(r) === null ? [] : [f(r)!])); return xs.length ? xs.reduce((a, c) => a + c, 0) / xs.length : null; };
-    const splitKnown = [...b, ...l].every((r) => r.cacheWriteAvailable !== false);
+    const splitKnown = [...b, ...l].every(writeKnown);
     const delta = (f: (r: RunRow) => number | null, g: (n: number) => string = (n) => (n > 0 ? '+' : '') + num(n)) => { const [x, y] = [mean(l, f), mean(b, f)]; return x === null || y === null ? 'not shown' : g(x - y); };
     out.push(`| ${host} | ${prompt} | ${splitKnown ? delta((r) => r.totals.uncached) : 'not shown'} | ${splitKnown ? delta((r) => r.totals.cacheWrite) : 'not shown'} | ${delta((r) => r.totals.cacheRead)} | ${delta((r) => r.totals.output)} | ${delta((r) => r.totals.effectiveInput)} | ${delta((r) => r.totals.costUsd, (n) => `${n > 0 ? '+' : '-'}$${Math.abs(n).toFixed(2)}`)} | ${show(spread(l.map((r) => r.hook.contextChars)))} | ${[...new Set(l.flatMap((r) => r.hook.listed))].join(', ') || '—'} / ${[...new Set(l.flatMap((r) => r.hook.injected))].join(', ') || '—'} / ${[...new Set(l.flatMap((r) => r.skillsOpened))].join(', ') || '—'} |`);
   }
@@ -152,7 +153,7 @@ export function report(rows: RunRow[], verdicts: Verdict[], secrets: string[]): 
     const w = rows.filter((r) => r.host === host && r.arm === arm && r.warmup && !r.invalid);
     const m = measured(rows).filter((r) => r.host === host && r.arm === arm);
     if (!w.length) continue;
-    const run = (rs: RunRow[]) => triple(rs.map((r) => ({ uncached: r.totals.uncached, cacheWrite: r.totals.cacheWrite, cacheRead: r.totals.cacheRead, cacheWriteAvailable: r.cacheWriteAvailable }) as RequestUsage));
+    const run = (rs: RunRow[]) => triple(rs.map((r) => ({ uncached: r.totals.uncached, cacheWrite: r.totals.cacheWrite, cacheRead: r.totals.cacheRead, cacheWriteAvailable: writeKnown(r) }) as RequestUsage));
     out.push(`| ${host} | ${arm} | ${host === 'claude' ? triple(w.flatMap((r) => r.requests.slice(0, 1))) : 'not shown'} | ${host === 'claude' ? triple(m.flatMap((r) => r.requests.slice(0, 1))) : 'not shown'} | ${run(w)} | ${run(m)} |`);
   }
 
@@ -196,7 +197,7 @@ function reportNative(rows: RunRow[], verdicts: Verdict[]): string {
     'Effective input = uncached input x 1 + cache write x 1 + cached input x 0.1. The 0.1 multiplier is a fixed price-sheet assumption ([OpenAI pricing](https://developers.openai.com/api/docs/pricing)), not verified Luna subscription billing. Output tokens and Jev costs are separate. Positive native minus loadout means input savings for loadout.', '',
     '| Prompt | Repeat | Arm | Uncached | Cache write | Cached | Output | Effective input | Tool calls | Skills opened | Hook context chars | skillsBudget |',
     '| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | ---: | --- |'];
-  for (const r of measuredRows) out.push(`| ${r.prompt} | ${r.repeat} | ${r.arm} | ${r.cacheWriteAvailable === false ? 'not shown' : num(r.totals.uncached)} | ${r.cacheWriteAvailable === false ? 'not shown' : num(r.totals.cacheWrite)} | ${num(r.totals.cacheRead)} | ${num(r.totals.output)} | ${metric(codexEffectiveInput(r.totals))} | ${r.toolCalls} | ${r.skillsOpened.join(', ') || 'none observed'} | ${r.hook.contextChars} | ${r.skillsBudget === undefined ? 'not shown' : JSON.stringify(r.skillsBudget)} |`);
+  for (const r of measuredRows) out.push(`| ${r.prompt} | ${r.repeat} | ${r.arm} | ${!writeKnown(r) ? 'not shown' : num(r.totals.uncached)} | ${!writeKnown(r) ? 'not shown' : num(r.totals.cacheWrite)} | ${num(r.totals.cacheRead)} | ${num(r.totals.output)} | ${metric(codexEffectiveInput(r.totals))} | ${r.toolCalls} | ${r.skillsOpened.join(', ') || 'none observed'} | ${r.hook.contextChars} | ${r.skillsBudget === undefined ? 'not shown' : JSON.stringify(r.skillsBudget)} |`);
   out.push('', '## Paired native minus loadout', '',
     '| Prompt | Repeat | Uncached delta | Write delta | Cached delta | Output delta | Effective input delta |',
     '| --- | ---: | ---: | ---: | ---: | ---: | ---: |');
@@ -224,7 +225,7 @@ function reportNative(rows: RunRow[], verdicts: Verdict[]): string {
     const native = ns[0]!, loadout = ls[0]!;
     const delta = codexEffectiveInput(native.totals) - codexEffectiveInput(loadout.totals);
     pairs.push({ native, loadout, delta });
-    out.push(`| ${native.prompt} | ${native.repeat} | ${native.cacheWriteAvailable === false || loadout.cacheWriteAvailable === false ? 'not shown' : num(native.totals.uncached - loadout.totals.uncached)} | ${native.cacheWriteAvailable === false || loadout.cacheWriteAvailable === false ? 'not shown' : num(native.totals.cacheWrite - loadout.totals.cacheWrite)} | ${num(native.totals.cacheRead - loadout.totals.cacheRead)} | ${num(native.totals.output - loadout.totals.output)} | ${metric(delta)} |`);
+    out.push(`| ${native.prompt} | ${native.repeat} | ${!writeKnown(native) || !writeKnown(loadout) ? 'not shown' : num(native.totals.uncached - loadout.totals.uncached)} | ${!writeKnown(native) || !writeKnown(loadout) ? 'not shown' : num(native.totals.cacheWrite - loadout.totals.cacheWrite)} | ${num(native.totals.cacheRead - loadout.totals.cacheRead)} | ${num(native.totals.output - loadout.totals.output)} | ${metric(delta)} |`);
   }
   const pairedSummary = (xs: number[]) => {
     if (!xs.length) return 'not shown';
@@ -272,7 +273,7 @@ function reportNative(rows: RunRow[], verdicts: Verdict[]): string {
   out.push(`Sensitivity excluding c1-debug-13: paired effective-input ${pairedSummary(sensitivityPairs.map((p) => p.delta))}; ${sensitivityJudged.length ? `loadout wins ${sensitivityJudged.filter((v) => v.winner === 'loadout').length}, native wins (loadout loses) ${sensitivityJudged.filter((v) => v.winner === 'native').length}, ties ${sensitivityJudged.filter((v) => v.winner === 'tie').length}, splits ${sensitivityJudged.filter((v) => v.winner === 'split').length}` : 'quality not shown (unjudged)'}. The fixture was previously selected using Jev and judge results; the primary screen is unchanged.`);
   out.push("Blindness limitation: a skill's own template can still reveal the arm despite redaction. The judge sees saved files and final responses, not independent quality evidence.");
   out.push('', '## Cold starts and provenance', '');
-  for (const r of rows.filter((r) => r.warmup)) out.push(`- ${r.id}: uncached ${r.cacheWriteAvailable === false ? 'not shown' : num(r.totals.uncached)}, write ${r.cacheWriteAvailable === false ? 'not shown' : num(r.totals.cacheWrite)}, cached ${num(r.totals.cacheRead)}, output ${num(r.totals.output)}; ${r.invalid ?? 'valid'}.`);
+  for (const r of rows.filter((r) => r.warmup)) out.push(`- ${r.id}: uncached ${!writeKnown(r) ? 'not shown' : num(r.totals.uncached)}, write ${!writeKnown(r) ? 'not shown' : num(r.totals.cacheWrite)}, cached ${num(r.totals.cacheRead)}, output ${num(r.totals.output)}; ${r.invalid ?? 'valid'}.`);
   for (const manifest of new Set(rows.map((r) => JSON.stringify({ librarySize: r.librarySize, corpusHash: r.corpusHash, manifestHash: r.manifestHash })))) out.push(`- ${manifest}`);
   for (const arm of ['native', 'loadout']) {
     const runs = rows.filter((r) => r.arm === arm);

@@ -10,7 +10,7 @@ yet.
 | Claude Code CLI | verified [1] | untested [2] | verified [3] | verified [4] | untested |
 | Claude desktop app, Code tab | not supported | not supported | untested [5] | untested | untested |
 | Claude Desktop (chat) | not supported | not supported | not supported | untested | untested |
-| Codex CLI | verified [1] | untested [2] | untested [6] | verified [4, 7] | untested |
+| Codex CLI | verified [1] | untested [2] | verified [6] | verified [4, 7] | untested |
 | Codex tab of the ChatGPT desktop app, T3 Code | not supported | not supported | untested [6] | untested | untested |
 | Cursor | not supported | not supported | not supported | untested | untested |
 | OpenCode | not supported | not supported | not supported | untested | untested |
@@ -66,8 +66,13 @@ Notes:
    `untrusted`: trust it with `/hooks` before routing prompts. In the
    [D2 README walk](loop/BACKLOG.md) on 2026-11-03 (Codex 0.163.0, fresh WSL
    home), `codex exec` ran the hook and injected skill text, then stopped at
-   the model call because that home had no login. A live model turn is
-   untested. There is no tested setup path for the
+   the model call because that home had no login. In C15 (2026-11-04, Codex
+   0.163.0, `gpt-6-luna`, headless `codex exec`), the hook was attached with
+   `-c hooks.UserPromptSubmit=…` and `--dangerously-bypass-hook-trust`; it ran
+   once in every loadout run and added context in 6 of 20 primary runs
+   ([RESULTS](../bench/RESULTS.md#c15-results-2026-11-04-the-same-library-natively-and-through-loadout-on-codex)).
+   The plugin-installed hook in a live model turn is untested. There is no
+   tested setup path for the
    Codex tab of the ChatGPT desktop app or T3 Code yet: plugin support is
    untested, and setup no longer prints native TOML for these hosts.
 7. The launcher attached the server with `-c mcp_servers.…` (2026-10-06,
